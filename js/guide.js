@@ -520,8 +520,17 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       // 패널·편집기가 열리며 레이아웃이 바뀌므로 다음 프레임에 위치를 계산한다.
       requestAnimationFrame(() => requestAnimationFrame(place)); next.focus();
     };
-    const endTour = () => { tourActive = false; overlay.hidden = true; $("helpToggle")?.focus(); };
-    const startTour = () => { if(dialog.open) dialog.close(); tourActive = true; overlay.hidden = false; showStep(0); };
+    // 투어는 설명을 위해 편집기·설정 패널을 열고 닫으므로, 시작 전 화면(편집기 열림·패널 표시·패널 탭)을 기억했다가 끝나면 되돌린다.
+    let beforeTour = null;
+    const uiState = () => ({editor:!$("studioDock").hidden, panelHidden:document.body.classList.contains("panel-hidden"), tab:document.querySelector("#panelTabs [aria-selected=\"true\"]")?.dataset.tab});
+    const restoreUi = state => {
+      if(!state) return;
+      if(state.editor && $("studioDock").hidden) studio.open(); else if(!state.editor && !$("studioDock").hidden) studio.close();
+      if(state.panelHidden !== document.body.classList.contains("panel-hidden")) $("panelToggle").click();
+      if(state.tab) document.querySelector(`#panelTabs [data-tab="${state.tab}"]`)?.click();
+    };
+    const endTour = () => { if(!tourActive) return; tourActive = false; overlay.hidden = true; const state = beforeTour; beforeTour = null; restoreUi(state); $("helpToggle")?.focus(); };
+    const startTour = () => { if(dialog.open) dialog.close(); if(!tourActive) beforeTour = uiState(); tourActive = true; overlay.hidden = false; showStep(0); };
     listen(prev, "click", () => showStep(step - 1));
     listen(next, "click", () => step === TOUR.length - 1 ? endTour() : showStep(step + 1));
     listen(skip, "click", endTour);

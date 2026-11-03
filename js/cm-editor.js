@@ -349,6 +349,12 @@ import * as Features from "./cm-glsl-features.js";
     return {
       update:() => { CM.closeCompletion(view); updateStatus(view.state); updateFunctions(); },
       goToLine, showFind, setDiagnostics, registerCommands, openPalette, view:() => view,
+      // 접힌 블록 목록([from, to]). studio가 패스를 바꿀 때 패스별로 보관했다가 돌아오면 다시 접는다.
+      getFolds:() => { const list = []; CM.foldedRanges(view.state).between(0, view.state.doc.length, (from, to) => { list.push([from, to]); }); return list; },
+      setFolds:list => {
+        const length = view.state.doc.length, effects = (list || []).filter(([from, to]) => from >= 0 && from < to && to <= length).map(([from, to]) => CM.foldEffect.of({from, to}));
+        if(effects.length) view.dispatch({effects});
+      },
       dispose:() => {
         ac.abort(); features.dispose(); view.destroy(); host.remove(); palette.remove(); frame?.classList.remove("is-codemirror");
         for(const name of ["value","selectionStart","selectionEnd","selectionDirection","scrollTop","scrollLeft","setSelectionRange","select","focus","blur","setRangeText"]) delete textarea[name];

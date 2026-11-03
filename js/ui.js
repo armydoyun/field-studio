@@ -202,7 +202,8 @@
       }
       scroll.scrollTop=tabScroll.get(tab)||0; if(tab === "uniforms") renderUniforms();
     }; listen($("studioParameters"),"click",()=>{
-      if(window.matchMedia("(max-width:820px)").matches)window.shaderStudio?.close();document.body.classList.remove("panel-hidden");syncPanel();setActiveTab("uniforms");focusSearch();
+      // 좁은 화면에서 패널은 편집기 위에 겹쳐 열리므로 편집기를 닫지 않는다. 패널을 닫으면 편집하던 화면으로 그대로 돌아간다.
+      document.body.classList.remove("panel-hidden");syncPanel();setActiveTab("uniforms");focusSearch();
     }); const tabButtons = [...document.querySelectorAll("#panelTabs [data-tab]")];
     for(const button of tabButtons) listen(button, "click", () => setActiveTab(button.dataset.tab)); listen($("panelTabs"), "keydown", event => {
       if(!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

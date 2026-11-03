@@ -81,7 +81,8 @@
       renderer.setFpsLimit(s.fpsLimit);renderer.setResolutionScale(s.resolutionScale);
       renderer.setMaxPixels(s.maxPixels);renderer.setDebugHeatmap(s.debugHeatmap);
       renderer.setRaymarchSettings(data.raymarch);
-      document.body.classList.toggle("panel-hidden",data.panelHidden);document.dispatchEvent(new Event("shader-settings-applied"));save();
+      // panelHidden은 Pack 형식 호환을 위해 검증·저장만 한다. 패널 표시는 이 기기의 화면 배치이므로 프로젝트를 열어도 바꾸지 않는다.
+      document.dispatchEvent(new Event("shader-settings-applied"));save();
     }; const reset = () => {
       if(available&&!migrationBlocked)errorMessage="";
       renderer.setFpsLimit(defaults.fpsLimit); renderer.setResolutionScale(defaults.resolutionScale);

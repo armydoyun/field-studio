@@ -313,6 +313,9 @@ void main() {
                 btn.textContent = name === "Image" ? "Image" : `Buffer ${name}`; btn.title = `${name} 패스 편집 (Alt+PageUp/Down)`;
         btn.addEventListener("click",() => select(name));parent.append(btn);
       }
+      // 탭이 많아 가로로 넘치면 선택한 탭이 보이도록 탭 줄을 민다.
+      const active=parent.querySelector?.(".is-active"),box=parent.getBoundingClientRect?.(),tab=active?.getBoundingClientRect?.();
+      if(box&&tab&&box.width>0){if(tab.left<box.left)parent.scrollLeft-=box.left-tab.left;else if(tab.right>box.right)parent.scrollLeft+=tab.right-box.right;}
       for(const name of views.keys())if(name!=="Image"&&!find(name))views.delete(name);
       $("studioCode").setAttribute("aria-labelledby",`studioTab-${selected}`);$("studioAdd").disabled=project.passes.length>=8;
       const p = find(selected), idx = project.passes.findIndex(pass=>pass.name===selected);
@@ -339,11 +342,22 @@ void main() {
         $("studioPassSummary").textContent = `${selected} · ${parts.join(" · ")}`;
       }
     };
-    const renderEditor = () => { renderTabs(); renderChannels(); const area=$("studioCode"),source=activeSource()||"",view=views.get(selected);area.value=source;
-      const caret=view?.source===source?view.caret:[0,0,"none"],scroll=view?.source===source?view.scroll:[0,0];area.setSelectionRange(caret[0],caret[1],caret[2]);area.scrollTop=scroll[0];area.scrollLeft=scroll[1];syncDiagnostics();editor.update();renderGraph(); };
+    // 편집기에 지금 표시 중인 패스. 같은 패스의 소스가 그대로면 문서를 다시 넣지 않아 커서·스크롤·접힌 블록·검색 상태를 지킨다.
+    // 다른 패스로 바뀔 때만 나가는 패스의 화면 상태를 views에 보관하고, 들어오는 패스의 상태(소스가 같을 때)를 되살린다.
+    let shown = null;
+    const renderEditor = () => { renderTabs(); renderChannels(); const area=$("studioCode"),source=activeSource()||"";
+      if(shown!==selected||area.value!==source) {
+        if(shown!==null&&shown!==selected&&(shown==="Image"||find(shown)))views.set(shown,{source:area.value,...cursorState(),folds:editor.getFolds?.()||[]});
+        const view=views.get(selected),keep=view?.source===source;area.value=source;
+        const caret=keep?view.caret:[0,0,"none"],scroll=keep?view.scroll:[0,0];area.setSelectionRange(caret[0],caret[1],caret[2]);
+        if(keep&&view.folds?.length)editor.setFolds?.(view.folds);area.scrollTop=scroll[0];area.scrollLeft=scroll[1];shown=selected;
+      }
+      syncDiagnostics();editor.update();renderGraph(); };
     const select = name => {
-      if(name !== "Image" && !find(name)) return; if(name === selected) return; rememberEditor();views.set(selected,{source:activeSource(),...cursorState()}); selected = name; renderEditor(); checkpoint.selected=selected;preview();
-    }; const normalizeDependencies = () => {
+      if(name !== "Image" && !find(name)) return; if(name === selected) return; rememberEditor(); selected = name; renderEditor(); checkpoint.selected=selected;preview();rememberTab();
+    };
+    // 고른 패스 탭은 새로 고침 뒤에도 이어지도록 저장된 프로젝트의 selected만 갱신한다(소스는 실행 성공 때만 저장).
+    const rememberTab = () => {try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;const data=JSON.parse(raw);if(data?.version!==1||data.selected===selected)return;data.selected=selected;localStorage.setItem(STORAGE_KEY,JSON.stringify(data));}catch(_){}}; const normalizeDependencies = () => {
       const changed=[];for(const p of project.passes) for(const [channel,ref] of Object.entries(p.channels)) {
         if(ref.frame === "current" && !validCurrent(p.name,ref.buffer)){changed.push(`${p.name}.iChannel${channel} ← ${ref.buffer}`);p.channels[channel] = {...ref,frame:"previous"};}
       }return changed;
@@ -383,9 +397,11 @@ void main() {
       const applied=apply(target.users);if(applied&&!same(current.users,target.users))document.dispatchEvent(new Event("shader-settings-applied"));navigatingHistory=false;checkpoint=historyState();editTime=0;syncHistory();return true;
     }; const confirmReplace = () => !dirty || ask({title:"미적용 변경사항",message:"아직 실행하지 않은 GLSL 수정 내용이 있습니다. 계속하면 변경사항을 잃을 수 있어요.",ok:"계속",danger:true});
     const adoptProject = (next,tab="Image") => {
-      clearChange();views.clear();project=copy(next);selected=tab==="Image"||find(tab)?tab:"Image";dirty=false;clearError();clearDraft();
-      renderEditor();recordEdit(false,true);Object.assign(checkpoint,{selected,...cursorState()});preview();saveLocal();
+      clearChange();views.clear();shown=null;project=copy(next);selected=tab==="Image"||find(tab)?tab:"Image";dirty=false;clearError();clearDraft();
+      renderEditor();recordEdit(false,true);Object.assign(checkpoint,{selected,...cursorState()});preview();saveLocal();revealCode();
     };
+    // 옆 배치의 도구 서랍은 코드를 덮으므로, 서랍에서 예제·파일로 프로젝트를 바꾸면 서랍을 닫아 새 코드를 보여 준다.
+    const revealCode = () => {if(splitRight())closeToolsDrawer();};
     const replaceProject = (next,users=[]) => {
       try {rememberEditor();checkpoint=historyState();renderer.applyPortable(next,users);adoptProject(next);
         // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
@@ -409,7 +425,7 @@ void main() {
     }); const open = () => {
       openState = true; $("studioDock").hidden = false; $("studioResize").hidden = expanded;
       $("studioToggle").setAttribute("aria-label","셰이더 편집기 닫기");$("studioToggle").setAttribute("aria-expanded","true");
-      if(window.matchMedia("(max-width:820px)").matches) {document.body.classList.add("panel-hidden");document.dispatchEvent(new Event("shader-panel-changed"));}$("studioCode").focus({preventScroll:true});
+      if(window.matchMedia("(max-width:820px)").matches) {document.body.classList.add("panel-hidden");document.dispatchEvent(new Event("shader-panel-changed"));}$("studioCode").focus({preventScroll:true});saveWorkspace();
     }; // 재생 버튼은 아이콘(정지 중이면 ▶)과 접근 가능한 이름으로 상태를 알린다. 집중 모드에서는 복귀 후 재생 여부를 고른다.
     const syncPauseButton = () => {
       const button=$("studioPause"), playing=expanded?resumeAfterMaximize:renderer.getStats().running;
@@ -422,7 +438,7 @@ void main() {
       $("studioResize").hidden=expanded;$("studioMaximize").setAttribute("aria-pressed",String(expanded));
       syncPauseButton();
     }; const close = () => {if(expanded)maximize();openState=false;$("studioDock").hidden=true;
-      $("studioResize").hidden=true;$("stage").classList.remove("studio-maximized"); $("studioToggle").setAttribute("aria-label","셰이더 편집기 열기");$("studioToggle").setAttribute("aria-expanded","false");$("studioToggle").focus();};
+      $("studioResize").hidden=true;$("stage").classList.remove("studio-maximized"); $("studioToggle").setAttribute("aria-label","셰이더 편집기 열기");$("studioToggle").setAttribute("aria-expanded","false");$("studioToggle").focus();saveWorkspace();};
     const responsiveHeight = () => window.matchMedia("(max-width:600px), (max-height:650px)").matches?75:55;
     const setDockHeight = (value, persist = true) => {dockHeight=Math.max(25,Math.min(85,value));$("studioDock").style.setProperty("--studio-height",`${dockHeight}%`);
       if(layout==="bottom")$("studioResize").setAttribute("aria-valuenow",String(Math.round(dockHeight)));
@@ -649,7 +665,7 @@ void main() {
       try {if(file.size>JSON_LIMIT)throw new Error("JSON 파일은 16MiB 이하여야 합니다.");
         const check=beginLoad(),text=await file.text();check();const data=JSON.parse(text);if(data.version!==1)throw new Error("지원하지 않는 프로젝트 형식입니다.");
         if(await confirmReplace()) {check();const next=validateProject(data.project),count=detachMissing(next);
-          if(setProject(next)&&count)setStatus(`${count}개 이미지 연결이 해제됐습니다. 원본 이미지를 다시 가져오세요.`,"is-dirty");} }
+          const ok=setProject(next);if(ok)revealCode();if(ok&&count)setStatus(`${count}개 이미지 연결이 해제됐습니다. 원본 이미지를 다시 가져오세요.`,"is-dirty");} }
       catch(error) { showError(error); }finally {event.target.value="";}
     }); on($("studioExportPack"),"click",event=>runFile(event.currentTarget,"Pack 준비 중…",exportPack));on($("studioImportPack"),"click",()=>$("studioPackFile").click());
     on($("studioPackFile"),"change",async event=>{
@@ -696,19 +712,25 @@ void main() {
       if(event.repeat||event.ctrlKey||event.metaKey||event.altKey||event.isComposing) return;
       if(event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
       if(event.key.toLowerCase()==="e") {event.preventDefault();toggle();}
-    }); on(document,"fullscreenchange",()=>{if(document.fullscreenElement)close();});
-    const workspaceKey="webgl.shader-studio.workspace.v1",groups=["studioInputs","studioFiles","studioStarters","studioImages","studioDependencies","studioInspector","studioCodeTools"];
-    const saveWorkspace=()=>{try{localStorage.setItem(workspaceKey,JSON.stringify({toolsHidden:$("studioTools").hidden,open:Object.fromEntries(groups.map(id=>[id,$(id).open]))}));}catch(_){}};
+    }); on(document,"fullscreenchange",()=>{
+      // 전체화면은 렌더링만 보여 주므로 편집기를 닫고, 전체화면을 마치면 열려 있던 편집기(집중 모드 포함)를 되돌린다.
+      if(document.fullscreenElement){if(openState){afterFullscreen={expanded};close();}}
+      else if(afterFullscreen){const state=afterFullscreen;afterFullscreen=null;if(!openState){open();if(state.expanded&&!expanded)maximize();}}
+    });let afterFullscreen=null;
+    let workspaceReady=false;const workspaceKey="webgl.shader-studio.workspace.v1",groups=["studioInputs","studioFiles","studioStarters","studioImages","studioDependencies","studioInspector","studioCodeTools"];
+    // editor: 편집기 열림 상태 — 새로 고침해도 편집하던 화면으로 돌아온다(전체화면 중에는 전체화면 전 상태를 남긴다).
+    const saveWorkspace=()=>{if(!workspaceReady)return;try{localStorage.setItem(workspaceKey,JSON.stringify({toolsHidden:$("studioTools").hidden,editor:afterFullscreen?true:openState,open:Object.fromEntries(groups.map(id=>[id,$(id).open]))}));}catch(_){}};
     setDockHeight(dockHeight,false);setDockWidth(dockWidth,false);applyLayout();
     // 창 크기를 바꾸면(화면 분할 등) 사용자가 정하지 않은 높이·배치는 새 크기의 기본값으로 다시 맞춘다.
     on(window,"resize",()=>{
       if(!heightChosen&&dockHeight!==responsiveHeight())setDockHeight(responsiveHeight(),false);
       const fit=fitLayout();if(!layoutChosen&&layout!==fit){layout=fit;applyLayout();if(splitRight())closeToolsDrawer();}
     });$("studioTools").hidden=window.matchMedia("(max-width:600px)").matches||layout==="right";
-    try{const state=JSON.parse(localStorage.getItem(workspaceKey)||"{}");if(typeof state?.toolsHidden==="boolean")$("studioTools").hidden=state.toolsHidden;for(const id of groups)if(typeof state?.open?.[id]==="boolean")$(id).open=state.open[id];}catch(_){}
+    let reopenEditor=false;try{const state=JSON.parse(localStorage.getItem(workspaceKey)||"{}");if(typeof state?.toolsHidden==="boolean")$("studioTools").hidden=state.toolsHidden;for(const id of groups)if(typeof state?.open?.[id]==="boolean")$(id).open=state.open[id];reopenEditor=state?.editor===true;}catch(_){}
     // 옆 배치에서 도구는 코드를 덮는 서랍이므로, 아래 배치에서 저장된 "도구 표시" 상태와 관계없이 닫힌 채로 시작한다.
     if(splitRight())$("studioTools").hidden=true;
     for(const id of groups)on($(id),"toggle",saveWorkspace);$("studioToolsToggle").setAttribute("aria-expanded",String(!$("studioTools").hidden));renderEditor();restore();loadDraft(savedDraft);undoStack.length=redoStack.length=0;checkpoint=historyState();syncHistory();
+    workspaceReady=true;if(reopenEditor)open();
     const removeAllPasses = () => proceed(confirmReplace(),()=>setProject({image:renderer.getFragmentSource(),passes:[],imageChannels:{}}));
     // 갤러리 등 외부 예제: 미적용 변경 확인 → 코드·버퍼·파라미터 일괄 교체(Undo 가능).
     const loadExample = (next,users=[]) => startProject(next,users);
