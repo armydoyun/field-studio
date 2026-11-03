@@ -6,6 +6,7 @@ import * as Snippets from "./snippets.js";
 import * as Course from "./course.js";
 import * as Reference from "./glsl-reference.js";
 import * as Highlight from "./glsl-highlight.js";
+import * as SnippetPreview from "./snippet-preview.js";
   // 블록 형식: {p}, {list:[…]}, {steps:[…]}, {table:{head, rows}}, {code, title, insert?:true}, {keys:[[설명, 키]…]},
   //            {note}, {actions:[{label, run:"tour"|"gallery"|"topic:<id>"|"example:<id>"}]}
   const TOPICS = [
@@ -266,6 +267,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       const extra = plan.added.length ? ` (+ ${plan.added.join(", ")} 함께)` : "", reused = plan.skipped.length ? ` · 기존 ${plan.skipped.join(", ")} 사용` : "";
       if(studio.insertCode({global:plan.globals.map(entry => entry.code).join("\n\n"), main:plan.mainCode || "", note:`코드 조각 삽입: ${item.title}${extra}${reused} · Ctrl+Z로 되돌리기`})) dialog.close();
     };
+    const previews = SnippetPreview.create({plan:Snippets.plan});
     const snippetCard = item => {
       const figure = element("figure", "guide-code snippet-card"), bar = element("figcaption"), head = element("span", "snippet-head");
       head.append(element("strong", "", item.title), element("small", "", item.desc));
@@ -276,7 +278,14 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       const insert = element("button", "guide-insert", item.replace ? "패스 교체" : "삽입"); insert.type = "button";
       insert.title = item.replace ? "현재 편집 중인 패스 전체를 이 코드로 바꿉니다" : "필요한 함수와 함께 편집기에 넣습니다";
       insert.addEventListener("click", () => insertItem(item, insert));
-      bar.append(head, tags, copy, insert); figure.append(bar, codeBlock(item.code)); return figure;
+      bar.append(head, tags, copy, insert);
+      // 미리보기가 있는 조각은 코드 왼쪽에 결과 그림을 붙인다(한 프레임에 하나씩 그려 넣음).
+      if(previews.has(item.id)) {
+        const body = element("div", "snippet-body"), frame = element("div", "snippet-preview"), canvas = element("canvas");
+        canvas.width = SnippetPreview.WIDTH; canvas.height = SnippetPreview.HEIGHT; canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", `${item.title} 결과 미리보기`);
+        frame.append(canvas); body.append(frame, codeBlock(item.code)); figure.append(bar, body); previews.draw(item, canvas);
+      } else figure.append(bar, codeBlock(item.code));
+      return figure;
     };
     const renderLibrary = () => {
       const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -542,5 +551,5 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     });
     listen(window, "resize", place);
     listen($("galleryTour"), "click", () => { $("gallery")?.close(); startTour(); });
-    return {open, show, startTour, dispose:() => { controller.abort(); overlay.remove(); }};
+    return {open, show, startTour, dispose:() => { controller.abort(); overlay.remove(); previews.dispose(); }};
   }; export {mount};

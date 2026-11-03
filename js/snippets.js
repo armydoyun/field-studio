@@ -122,7 +122,7 @@ float randPCG(uvec2 p, uint seed) {
     return mix(mix(uhash21(i0), uhash21(vec2(i1.x, i0.y)), u.x),
                mix(uhash21(vec2(i0.x, i1.y)), uhash21(i1), u.x), u.y);
 }`},
-      {id:"gradientNoise", title:"gradientNoise (2D)", desc:"퍼린 계열 그래디언트 노이즈, 대략 -1~1. 값 노이즈보다 덜 각짐", requires:["uhash22"], code:`float gradientNoise(vec2 p) {
+      {id:"gradientNoise", title:"gradientNoise (2D)", desc:"퍼린 계열 그래디언트 노이즈, 평균 0 · 대부분 -0.75~0.75 (드물게 ±1). 값 노이즈보다 덜 각짐. 0~1로 쓰려면 n * 0.5 + 0.5", requires:["uhash22"], code:`float gradientNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);   // quintic
     float n00 = dot(uhash22(i) * 2.0 - 1.0, f);
@@ -150,7 +150,7 @@ float simplexNoise(vec2 v) {
     vec3 g = vec3(a0.x * x0.x + h.x * x0.y, a0.yz * x12.xz + h.yz * x12.yw);
     return 130.0 * dot(m, g);
 }`},
-      {id:"fbm", title:"fbm", desc:"여러 옥타브를 겹친 프랙털 노이즈, 0~1. 구름·지형", requires:["valueNoise"], code:`float fbm(vec2 p) {
+      {id:"fbm", title:"fbm", desc:"여러 옥타브를 겹친 프랙털 노이즈, 0~1 (대부분 0.15~0.85). 구름·지형. 대비가 약하면 smoothstep(0.2, 0.8, f)", requires:["valueNoise"], code:`float fbm(vec2 p) {
     float value = 0.0, amplitude = 0.5;
     const mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);   // 옥타브마다 회전해 격자 결을 숨긴다
     for (int i = 0; i < 6; i++) {
@@ -160,7 +160,7 @@ float simplexNoise(vec2 v) {
     }
     return value;
 }`},
-      {id:"fbmGradient", title:"fbmGradient", desc:"그래디언트 노이즈 fbm, 대략 -1~1. 값 노이즈 fbm보다 매끄럽고 덜 각짐", requires:["gradientNoise"], code:`float fbmGradient(vec2 p) {
+      {id:"fbmGradient", title:"fbmGradient", desc:"그래디언트 노이즈 fbm, 평균 0 · 대부분 -0.45~0.45 (드물게 ±0.65). 값 노이즈 fbm보다 매끄럽고 덜 각짐. 0~1로 쓰려면 f + 0.5", requires:["gradientNoise"], code:`float fbmGradient(vec2 p) {
     float value = 0.0, amplitude = 0.5;
     const mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
     for (int i = 0; i < 6; i++) {
@@ -170,7 +170,7 @@ float simplexNoise(vec2 v) {
     }
     return value;
 }`},
-      {id:"turbulence", title:"turbulence", desc:"|노이즈|를 겹친 난류, 0~1. 불꽃·연기·대리석 결", requires:["gradientNoise"], code:`float turbulence(vec2 p) {
+      {id:"turbulence", title:"turbulence", desc:"|노이즈|를 겹친 난류, 0 이상 · 대부분 0~0.5 (평균 약 0.2). 불꽃·연기·대리석 결. 0~1로 쓰려면 smoothstep(0.0, 0.5, t)", requires:["gradientNoise"], code:`float turbulence(vec2 p) {
     float value = 0.0, amplitude = 0.5;
     for (int i = 0; i < 6; i++) {
         value += amplitude * abs(gradientNoise(p));
@@ -179,13 +179,13 @@ float simplexNoise(vec2 v) {
     }
     return value;
 }`},
-      {id:"curlNoise", title:"curlNoise (2D)", desc:"발산 없는 흐름 벡터장. 입자·잉크가 소용돌이치며 흐르게 (모이거나 흩어지지 않음)", requires:["gradientNoise"], code:`vec2 curlNoise(vec2 p) {
+      {id:"curlNoise", title:"curlNoise (2D)", desc:"발산 없는 흐름 벡터장. 입자·잉크가 소용돌이치며 흐르게 (모이거나 흩어지지 않음). 벡터 길이는 대부분 0~2.5", requires:["gradientNoise"], code:`vec2 curlNoise(vec2 p) {
     const float e = 0.01;
     float dx = gradientNoise(p + vec2(e, 0.0)) - gradientNoise(p - vec2(e, 0.0));
     float dy = gradientNoise(p + vec2(0.0, e)) - gradientNoise(p - vec2(0.0, e));
     return vec2(dy, -dx) / (2.0 * e);   // 스칼라장의 기울기를 90° 돌린 것
 }`},
-      {id:"ridged", title:"ridgedFbm", desc:"능선형 프랙털. 산맥·번개·균열 느낌", requires:["gradientNoise"], code:`float ridgedFbm(vec2 p) {
+      {id:"ridged", title:"ridgedFbm", desc:"능선형 프랙털, 대부분 0.25~0.9 (밝은 쪽이 능선). 산맥·번개·균열 느낌", requires:["gradientNoise"], code:`float ridgedFbm(vec2 p) {
     float value = 0.0, amplitude = 0.5;
     for (int i = 0; i < 5; i++) {
         float n = 1.0 - abs(gradientNoise(p));
@@ -195,7 +195,7 @@ float simplexNoise(vec2 v) {
     }
     return value;
 }`},
-      {id:"domainWarp", title:"domainWarp", desc:"fbm으로 좌표를 비틀어 유체·대리석 같은 흐름 만들기", requires:["fbm"], code:`float domainWarp(vec2 p, float t) {
+      {id:"domainWarp", title:"domainWarp", desc:"fbm으로 좌표를 비틀어 유체·대리석 같은 흐름 만들기, 0~1 (대부분 0.15~0.8)", requires:["fbm"], code:`float domainWarp(vec2 p, float t) {
     vec2 q = vec2(fbm(p + vec2(0.0, t * 0.1)), fbm(p + vec2(5.2, 1.3)));
     vec2 r = vec2(fbm(p + 4.0 * q + vec2(1.7, 9.2) + t * 0.15), fbm(p + 4.0 * q + vec2(8.3, 2.8)));
     return fbm(p + 4.0 * r);
@@ -223,7 +223,7 @@ float simplexNoise(vec2 v) {
     float d = mix(uhash13(i + vec3(0, 1, 1)), uhash13(i + vec3(1, 1, 1)), u.x);
     return mix(mix(a, b, u.y), mix(c, d, u.y), u.z);
 }`},
-      {id:"gradientNoise3", title:"gradientNoise3 (3D 퍼린)", desc:"3D 그래디언트(퍼린) 노이즈, 대략 -1~1. 값 노이즈보다 결이 고름", requires:["uhash33"], code:`float gradientNoise3(vec3 p) {
+      {id:"gradientNoise3", title:"gradientNoise3 (3D 퍼린)", desc:"3D 그래디언트(퍼린) 노이즈, 평균 0 · 대부분 -0.65~0.65. 값 노이즈보다 결이 고름. 0~1로 쓰려면 n * 0.5 + 0.5", requires:["uhash33"], code:`float gradientNoise3(vec3 p) {
     vec3 i = floor(p), f = fract(p);
     vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);   // quintic
     // 격자 꼭짓점 8개의 무작위 기울기와 꼭짓점→점 벡터의 내적을 삼선형 보간
@@ -268,7 +268,7 @@ float simplexNoise3(vec3 v) {
     m = m * m;
     return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }`},
-      {id:"fbm3", title:"fbm3 (3D fbm)", desc:"3D 프랙털 노이즈, 0~1. 구름 밀도·암석 표면·흐르는 연기", requires:["valueNoise3"], code:`float fbm3(vec3 p) {
+      {id:"fbm3", title:"fbm3 (3D fbm)", desc:"3D 프랙털 노이즈, 0~1 (대부분 0.2~0.8). 구름 밀도·암석 표면·흐르는 연기", requires:["valueNoise3"], code:`float fbm3(vec3 p) {
     float value = 0.0, amplitude = 0.5;
     const mat3 rot = mat3(0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64);   // 옥타브마다 회전
     for (int i = 0; i < 5; i++) {
@@ -278,7 +278,7 @@ float simplexNoise3(vec3 v) {
     }
     return value / 0.96875;   // 5옥타브 진폭 합으로 나눠 0~1로
 }`},
-      {id:"fbm3Simplex", title:"fbm3Simplex", desc:"심플렉스 기반 3D fbm, 대략 -1~1. 더 매끄럽지만 조금 무거움", requires:["simplex3"], code:`float fbm3Simplex(vec3 p) {
+      {id:"fbm3Simplex", title:"fbm3Simplex", desc:"심플렉스 기반 3D fbm, 평균 0 · 대부분 -0.6~0.6. 더 매끄럽지만 조금 무거움", requires:["simplex3"], code:`float fbm3Simplex(vec3 p) {
     float value = 0.0, amplitude = 0.5;
     for (int i = 0; i < 5; i++) {
         value += amplitude * simplexNoise3(p);
@@ -287,7 +287,7 @@ float simplexNoise3(vec3 v) {
     }
     return value;
 }`},
-      {id:"ridged3", title:"ridgedFbm3", desc:"3D 능선 프랙털, 0~1. 산 표면·용암 균열", requires:["gradientNoise3"], code:`float ridgedFbm3(vec3 p) {
+      {id:"ridged3", title:"ridgedFbm3", desc:"3D 능선 프랙털, 대부분 0.3~0.9. 산 표면·용암 균열", requires:["gradientNoise3"], code:`float ridgedFbm3(vec3 p) {
     float value = 0.0, amplitude = 0.5;
     for (int i = 0; i < 5; i++) {
         float n = 1.0 - abs(gradientNoise3(p));
@@ -297,7 +297,7 @@ float simplexNoise3(vec3 v) {
     }
     return value;
 }`},
-      {id:"turbulence3", title:"turbulence3", desc:"3D 난류, 0~1. 불꽃·연기를 시간축으로 흘리기 좋음", requires:["gradientNoise3"], code:`float turbulence3(vec3 p) {
+      {id:"turbulence3", title:"turbulence3", desc:"3D 난류, 0 이상 · 대부분 0~0.45 (평균 약 0.17). 불꽃·연기를 시간축으로 흘리기 좋음. 0~1로 쓰려면 smoothstep(0.0, 0.45, t)", requires:["gradientNoise3"], code:`float turbulence3(vec3 p) {
     float value = 0.0, amplitude = 0.5;
     for (int i = 0; i < 5; i++) {
         value += amplitude * abs(gradientNoise3(p));
@@ -320,7 +320,7 @@ float simplexNoise3(vec3 v) {
     }
     return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), uhash13(id));
 }`},
-      {id:"domainWarp3", title:"domainWarp3", desc:"3D fbm으로 좌표를 비튼 흐름 (t = 시간). 2D 화면에선 p = vec3(uv, 0)", requires:["fbm3"], code:`float domainWarp3(vec3 p, float t) {
+      {id:"domainWarp3", title:"domainWarp3", desc:"3D fbm으로 좌표를 비튼 흐름 (t = 시간), 0~1 (대부분 0.2~0.8). 2D 화면에선 p = vec3(uv, 0)", requires:["fbm3"], code:`float domainWarp3(vec3 p, float t) {
     vec3 q = vec3(fbm3(p + vec3(0.0, 0.0, t)), fbm3(p + vec3(5.2, 1.3, 2.8)), fbm3(p + vec3(1.7, 9.2, t * 0.5)));
     return fbm3(p + 3.0 * q);
 }`},
@@ -733,7 +733,7 @@ vec2 cellUv = fract(grid) - 0.5;    // 칸 안의 -0.5~0.5 좌표`},
       {id:"pixelate", title:"픽셀화", desc:"좌표를 큰 픽셀 단위로 끊기 (레트로·모자이크)", scope:"main", code:`float pixelSize = 8.0;
 vec2 pixelUv = (floor(gl_FragCoord.xy / pixelSize) + 0.5) * pixelSize / uResolution;`},
       {id:"mouseUv", title:"마우스 좌표 (중심 기준)", desc:"uMouse를 uv와 같은 공간으로 (밖이면 0)", scope:"main", code:`vec2 mouse = uMouse.x < 0.0 ? vec2(0.0) : (2.0 * uMouse.xy - uResolution) / uResolution.y;`},
-      {id:"hexGrid", title:"육각 격자", desc:"벌집 타일. xy = 칸 중심 기준 좌표, zw = 칸 id (hash21(id)로 칸마다 다른 값)", code:`vec4 hexGrid(vec2 p) {
+      {id:"hexGrid", title:"육각 격자", desc:"벌집 타일. xy = 칸 중심 기준 좌표, zw = 칸 id (uhash21(id)로 칸마다 다른 값)", code:`vec4 hexGrid(vec2 p) {
     const vec2 s = vec2(1.0, 1.7320508);
     vec4 hc = floor(vec4(p, p - vec2(0.5, 1.0)) / s.xyxy) + 0.5;
     vec4 h = vec4(p - hc.xy * s, p - (hc.zw + 0.5) * s);

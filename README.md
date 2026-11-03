@@ -41,6 +41,7 @@ js/
   gallery.js          # 예제 갤러리·첫 실행 안내
   annotations.js      # GLSL 주석 @range/@color 파서 (README_파라미터_버퍼_업데이트.md)
   snippets.js         # GLSL 코드 조각 라이브러리(16범주 · 의존성 정보 · 실수/정수 해시) — 조각 추가는 여기 CATEGORIES에
+  snippet-preview.js  # 코드 조각 결과 미리보기(조각 id → 그림 함수 PREVIEWS · 공용 WebGL2 컨텍스트) — 새 조각의 그림은 여기에
   guide.js            # 앱 내장 가이드(주제·검색·코드 삽입)·UI 둘러보기·문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리
   pass-manager.js
   texture-input.js

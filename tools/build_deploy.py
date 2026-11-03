@@ -9,7 +9,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'js'
 OUT = ROOT / 'deploy'
-MODULES = ['gpu-diagnostics', 'pass-manager', 'texture-input', 'renderer', 'shader', 'glsl-highlight', 'glsl-language', 'codemirror', 'cm-glsl-features', 'cm-editor', 'annotations', 'studio', 'ui', 'input', 'settings', 'profiler', 'gallery', 'snippets', 'course', 'glsl-reference', 'guide', 'main']
+MODULES = ['gpu-diagnostics', 'pass-manager', 'texture-input', 'renderer', 'shader', 'glsl-highlight', 'glsl-language', 'codemirror', 'cm-glsl-features', 'cm-editor', 'annotations', 'studio', 'ui', 'input', 'settings', 'profiler', 'gallery', 'snippets', 'snippet-preview', 'course', 'glsl-reference', 'guide', 'main']
 # 미리 번들링해 저장소에 넣은 서드파티 모듈(tools/codemirror/build.mjs가 생성). 클래스의 `static define(` 메서드가 있어 AMD 흔적 검사에서만 제외한다.
 VENDOR = {'codemirror'}
 IMPORT = re.compile(r'^import (\* as ([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)) from "\./([a-z-]+)\.js";\s*$', re.M)

@@ -4,6 +4,7 @@ from esm_for_browser import load_modules
 #  · 입문 과정: 예제·풀이 셰이더와 생명 게임 프로젝트
 #  · 코드 조각: plan()으로 모은 의존 조각과 함께, 전역 조각은 빈 main 옆에, main 조각은 main 안에, 패스 교체 조각은 단독으로
 #  · 기본 장면·Ray Marching·버퍼 예제(Studio 소유)
+#  · 코드 조각 미리보기: 가이드 카드에 붙는 그림 셰이더가 모두 컴파일되고 실제로 그려지는지
 # 예전 실수 해시(Hoskins 0.1031 상수, fract(sin)) 가 예제에 남아 있지 않은지도 확인한다.
 import os,re
 from pathlib import Path
@@ -35,7 +36,7 @@ with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,
         args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
     page=browser.new_page(viewport={'width':1280,'height':800});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.set_content(html);load_modules(page,root,['shader','gallery','course','snippets'])
+    page.set_content(html);load_modules(page,root,['shader','gallery','course','snippets','snippet-preview'])
     n=[0]
     def check(cond,label):
         assert cond,label;n[0]+=1;print('PASS',f'{n[0]:02d}',label,flush=True)
@@ -107,6 +108,22 @@ with sync_playwright() as p:
     check(len(snippet_sources)==len(items) and not failures,f'all {len(items)} snippets compile with their dependencies: {failures}')
     users=[i['id'] for i in items if i['category'] not in ('hash',) and re.search(r'(?<![\w.])hash(11|21|22|13|33|31|32)\s*\(',i['code'])]
     check(not users,f'no snippet outside the float-hash category calls the old float hashes: {users}')
+
+    # ---- 코드 조각 미리보기 ----
+    preview=page.evaluate('''() => { const S = __testModules.snippets, P = __testModules["snippet-preview"], ids = new Set(S.ALL.map(i => i.id));
+      const keys = Object.keys(P.PREVIEWS), unknown = keys.filter(id => !ids.has(id)), failures = [];
+      for(const id of keys) { const log = (() => { const src = P.source(S.ALL.find(i => i.id === id), S.plan); const gl = window.__gl ??= document.createElement("canvas").getContext("webgl2");
+        const sh = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(sh, src); gl.compileShader(sh); const ok = gl.getShaderParameter(sh, gl.COMPILE_STATUS), info = gl.getShaderInfoLog(sh); gl.deleteShader(sh); return ok ? "" : info; })();
+        if(log) failures.push(`${id}: ${log.slice(0, 200)}`); }
+      // 렌더러로 실제로 그려 보고, 한 가지 색으로만 칠해진(=사실상 실패한) 그림이 없는지 본다.
+      const pv = P.create({plan:S.plan}), flat = [];
+      for(const id of keys) { const c = pv.render(S.ALL.find(i => i.id === id)); if(!c) { flat.push(id + " (no image)"); continue; }
+        const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let min = 255, max = 0; for(let i = 0; i < d.length; i += 4) { const v = d[i] + d[i + 1] + d[i + 2]; if(v < min) min = v; if(v > max) max = v; }
+        if(max - min < 24) flat.push(id); }
+      pv.dispose(); return {count:keys.length, unknown, failures, flat}; }''')
+    check(not preview['unknown'],f"every preview belongs to an existing snippet: {preview['unknown']}")
+    check(preview['count']>=140 and not preview['failures'],f"all {preview['count']} snippet previews compile: {preview['failures']}")
+    check(not preview['flat'],f"every preview draws a picture, not a flat colour: {preview['flat']}")
     check(errors==[],f'no page exceptions: {errors}')
     print(f'PASS all {n[0]} example compile checks')
     browser.close()
