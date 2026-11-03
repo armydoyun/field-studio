@@ -8,7 +8,7 @@ for(const m of html.replace(/<!--[\s\S]*?-->/g,'').matchAll(/<(\/?)([A-Za-z][\w-
  if(!voids.has(name)&&!/\/\s*$/.test(attrs))stack.push(name);
 }
 assert.equal(stack.length,0,'Unclosed HTML tags');
-for(const id of ['studioChannels','studioExportPack','studioImportPack','studioExamplePipeline','studioExampleFeedback','studioTextureList','studioPixelReadout'])assert(ids.get(id)?.includes('details'),'Disclosed control missing: '+id);
+for(const id of ['studioChannels','studioExportPack','studioImportPack','studioReset','studioTextureList','studioPixelReadout'])assert(ids.get(id)?.includes('details'),'Disclosed control missing: '+id);
 // 찾아 바꾸기는 ⋯ 메뉴(편집)로 옮겨졌다. 툴바의 검색 버튼·Ctrl+H·명령 팔레트로 계속 열 수 있다.
 for(const id of ['studioFind','studioGoto','studioFunctions','studioComplete'])assert(!ids.get(id)?.includes('details'),'Primary navigation hidden: '+id);
 for(const id of ['studioReplace','studioOpenGLSL','studioSaveGLSL','studioSampleUV','studioIndent','studioZoomIn'])assert(ids.get(id)?.includes('details'),'Secondary tool missing: '+id);

@@ -31,7 +31,7 @@ import * as Snippets from "./snippets.js";
       renderer = Renderer.createRenderer(canvas, Shader, message => {
         status.textContent = message; if(message) console.warn(message);
       });
-      input = Input.mount(canvas,renderer,Shader.orbitHome); // 카메라 Uniform은 Starter가 등록할 때만 사용한다.
+      input = Input.mount(canvas,renderer,Shader.orbitHome); // 카메라 Uniform은 Ray Marching 예제가 등록할 때만 사용한다.
       settings = Settings.mount(renderer); settings.load(); // 저장 설정의 사용자 Uniform 복원
       await renderer.restoreTextures(); // 프로젝트 채널 연결을 복원하기 전에 이미지 파일을 복구한다.
       ui = UI.mount(renderer, input, settings); studio = Studio.mount(renderer, Shader, settings, {lookup, builtins, snippets:{items:libraryItems, plan:Snippets.plan}}); profiler = Profiler.mount(renderer); gallery = Gallery.mount({studio, Shader}); guide = Guide.mount({studio, gallery}); renderer.start(); status.textContent = "";

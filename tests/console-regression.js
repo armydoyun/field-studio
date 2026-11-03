@@ -28,7 +28,7 @@
     try { r.setRaymarchSettings({maxSteps:2048, surfaceEpsilon:0.005}); } catch(error) {invalid = true;}
     assert(invalid && r.getRaymarchSettings().surfaceEpsilon === 0.0005, "잘못된 설정은 원자적으로 거부");
     assert(!document.getElementById("rayMaxSteps") && !document.getElementById("debugHeatmap"),"Render 패널 전용 옵션 제거");
-    assert(document.getElementById("studioExampleRaymarch"),"Ray Marching Starter 버튼");
+    assert(!document.getElementById("studioExampleRaymarch") && !document.getElementById("studioStarters") && typeof window.shaderStudio.exampleRaymarch === "function","편집기 서랍의 옛 시작 예제는 제거 · Ray Marching은 갤러리/API로 계속 제공");
     r.setRaymarchSettings(baseRay);
     const stats = r.getStats();
     r.setDebugHeatmap(!stats.debugHeatmap);

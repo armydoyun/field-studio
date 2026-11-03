@@ -657,8 +657,7 @@ void main() {
     on($("studioWrap"),"change",event=>{setPassOption("wrap",event.target.value,"clamp");schedule();apply();});
     on($("studioMip"),"change",event=>{setPassOption("mipmap",event.target.checked,false);schedule();apply();});
     on($("studioLive"),"change",()=>{if(!$("studioLive").checked && timer) {clearTimeout(timer);timer=null;} else if(dirty) schedule();});
-    on($("studioExampleRaymarch"),"click",exampleRaymarch);on($("studioExampleFeedback"),"click",exampleFeedback);on($("studioExamplePipeline"),"click",examplePipeline);
-    on($("studioReset"),"click",()=>proceed(confirmReplace(),()=>ask({title:"장면 초기화",message:"모든 편집 패스와 Custom Uniform을 초기화하고 기본 셰이더 아트 화면으로 돌아갈까요?",ok:"초기화",danger:true}).then(ok=>ok&&replaceProject({image:original,passes:[],imageChannels:{}}))));
+    on($("studioReset"),"click",()=>proceed(confirmReplace(),()=>ask({title:"새 프로젝트",message:"모든 편집 패스와 Custom Uniform을 지우고 기본 셰이더 아트 장면으로 새로 시작할까요? Undo로 되돌릴 수 있습니다.",ok:"새로 시작",danger:true}).then(ok=>ok&&replaceProject({image:original,passes:[],imageChannels:{}}))));
     on($("studioExport"),"click",exportJSON); on($("studioImport"),"click",()=>$("studioImportFile").click());
     on($("studioImportFile"),"change",async event=>{
       const file=event.target.files?.[0];if(!file)return;
@@ -717,7 +716,7 @@ void main() {
       if(document.fullscreenElement){if(openState){afterFullscreen={expanded};close();}}
       else if(afterFullscreen){const state=afterFullscreen;afterFullscreen=null;if(!openState){open();if(state.expanded&&!expanded)maximize();}}
     });let afterFullscreen=null;
-    let workspaceReady=false;const workspaceKey="webgl.shader-studio.workspace.v1",groups=["studioInputs","studioFiles","studioStarters","studioImages","studioDependencies","studioInspector","studioCodeTools"];
+    let workspaceReady=false;const workspaceKey="webgl.shader-studio.workspace.v1",groups=["studioInputs","studioFiles","studioImages","studioDependencies","studioInspector","studioCodeTools"];
     // editor: 편집기 열림 상태 — 새로 고침해도 편집하던 화면으로 돌아온다(전체화면 중에는 전체화면 전 상태를 남긴다).
     const saveWorkspace=()=>{if(!workspaceReady)return;try{localStorage.setItem(workspaceKey,JSON.stringify({toolsHidden:$("studioTools").hidden,editor:afterFullscreen?true:openState,open:Object.fromEntries(groups.map(id=>[id,$(id).open]))}));}catch(_){}};
     setDockHeight(dockHeight,false);setDockWidth(dockWidth,false);applyLayout();
@@ -800,7 +799,7 @@ void main() {
       press("집중 모드 전환","studioMaximize"), press("편집기 배치 바꾸기 (오른쪽 ↔ 아래)","studioLayout"), press("편집기 닫기","studioHide","E"),
       press("코드 조각 모음 열기","studioSnippets"), press("파라미터 패널 열기","studioParameters"), press("도움말 · 단축키","studioHelp","?"),
       press(".frag 파일로 저장","studioSaveGLSL"), press(".frag 파일 열기","studioOpenGLSL"), press("전체 프로젝트 저장 (Pack)","studioExportPack"), press("Pack 열기","studioImportPack"),
-      press("이미지 파일 불러오기","studioTextureAdd"), press("기본 Shader Art로 새로 시작","studioReset")]);
+      press("이미지 파일 불러오기","studioTextureAdd"), press("새 프로젝트 (기본 장면)","studioReset")]);
     return {open,close,toggle,apply,setProject,getPlaybackState,togglePlayback,loadFromRenderer,removeAllPasses,exampleRaymarch,examplePipeline,exampleFeedback,loadExample,insertSnippet,insertCode,getEditorSource:()=>$("studioCode").value,
       undo:()=>historyMove(true),redo:()=>historyMove(false),getProject:()=>copy(project),exportPack,importPack,dispose:()=>{
         disposed=true;if(timer)clearTimeout(timer);if(draftTimer)clearTimeout(draftTimer);

@@ -149,9 +149,9 @@ await test('Fullscreen hides the editor and restores it (with focus mode) afterw
  f.studio.close();f.document.fullscreenElement=n('stage');await f.document.dispatchEvent({type:'fullscreenchange'});
  f.document.fullscreenElement=null;await f.document.dispatchEvent({type:'fullscreenchange'});assert.equal(n('studioDock').hidden,true,'a closed editor stays closed');
 });
-await test('Starting a project from the side-layout tools drawer closes the drawer over the code',async(f,n)=>{
+await test('Starting a project in the side layout closes the tools drawer over the code',async(f,n)=>{
  f.studio.open();if(n('studioTools').hidden)await n('studioToolsToggle').click();assert.equal(n('studioTools').hidden,false);
- assert(await n('studioExamplePipeline').click()!==false);assert.equal(f.studio.getProject().passes.length,2);assert.equal(n('studioTools').hidden,true);
+ assert(await f.studio.examplePipeline()!==false);assert.equal(f.studio.getProject().passes.length,2);assert.equal(n('studioTools').hidden,true);
 },false,{'webgl.shader-studio.layout.v1':JSON.stringify({layout:'right'})});
 console.log(`Workspace UX: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
 })();

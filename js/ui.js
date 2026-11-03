@@ -138,7 +138,7 @@
       const count=userList.children.length; $("uniformResults").textContent=search ? `${items.length}개 중 ${count}개 표시` : "";
       if(!count) {
         const hint=element("div");hint.className="uniform-empty";
-        hint.textContent=search ? "검색 결과가 없습니다. 이름이나 타입을 확인하세요." : "아직 파라미터가 없습니다. 위에서 추가하거나 Starter로 시작하세요.";userList.append(hint);
+        hint.textContent=search ? "검색 결과가 없습니다. 이름이나 타입을 확인하세요." : "아직 파라미터가 없습니다. 위에서 추가하거나 갤러리 예제로 시작하세요.";userList.append(hint);
       }
     }; listen($("undoUniform"),"click",()=>attempt(()=>{
       if(!deletedUniform)return;const {name,type,value,options}=deletedUniform;
