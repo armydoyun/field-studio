@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#14171d">
+    <meta name="description" content="브라우저에서 WebGL2 · GLSL ES 3.00 셰이더를 작성하고 실시간으로 확인하는 오프라인 셰이더 스튜디오.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314171d'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%238f86ff'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23ffb35c'/%3E%3C/svg%3E">
     <title>FIELD Studio — WebGL2 Shader Workspace</title>
     <link rel="stylesheet" href="./style.css">
 </head>
@@ -58,7 +60,7 @@
                     </section>
 
                     <section class="control-section">
-                        <div class="section-heading"><h2>버퍼 미리보기</h2><span class="section-note">MULTI-PASS</span></div>
+                        <div class="section-heading"><h2>버퍼 미리보기 <button type="button" class="guide-hint" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법">?</button></h2><span class="section-note">MULTI-PASS</span></div>
                         <div class="field"><label for="bufferPreview">출력 선택</label>
                             <select id="bufferPreview"><option value="">Image · 최종 렌더링</option></select>
                             <p id="bufferInfo" class="help">등록된 버퍼가 없습니다. 아래 예제로 A/B 패스를 확인할 수 있습니다.</p>
@@ -76,7 +78,7 @@
                     <div class="view-intro"><span class="section-index">02 / SHADER PARAMETERS</span><h1>파라미터</h1><p>이 프로젝트에서 사용하는 값을 한곳에서 조절합니다.</p></div>
                     <div class="uniform-search-wrap"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="uniformSearch" type="search" placeholder="이름 또는 타입으로 검색" autocomplete="off" spellcheck="false" aria-label="Uniform 검색"><kbd>/</kbd></div>
                     <section class="control-section uniform-section">
-                        <div class="section-heading"><h2>프로젝트 파라미터</h2><span id="uniformCount" class="count-badge">0</span></div>
+                        <div class="section-heading"><h2>프로젝트 파라미터 <button type="button" class="guide-hint" data-guide="params" aria-label="파라미터·어노테이션 가이드" title="파라미터·어노테이션 사용법">?</button></h2><span id="uniformCount" class="count-badge">0</span></div>
                         <p class="help section-description">값은 즉시 반영됩니다. Starter를 선택하면 해당 예제의 파라미터로 교체됩니다.</p>
                         <p id="uiError" role="alert" aria-live="polite"></p>
                         <details id="uniformEditor">
@@ -84,9 +86,9 @@
                                                         <form id="uniformForm">
                                 <div class="field"><label for="uniformName">GLSL 이름</label><input id="uniformName" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="uStrength" spellcheck="false" autocomplete="off" required></div>
                                 <div class="field"><label for="uniformType">타입</label><select id="uniformType"><optgroup label="Scalar"><option value="float">float</option><option value="int">int</option><option value="uint">uint</option><option value="bool">bool</option></optgroup><optgroup label="Vector"><option value="vec2">vec2</option><option value="vec3">vec3</option><option value="vec4">vec4</option><option value="ivec2">ivec2</option><option value="ivec3">ivec3</option><option value="ivec4">ivec4</option><option value="uvec2">uvec2</option><option value="uvec3">uvec3</option><option value="uvec4">uvec4</option><option value="bvec2">bvec2</option><option value="bvec3">bvec3</option><option value="bvec4">bvec4</option></optgroup><optgroup label="Matrix"><option value="mat2">mat2</option><option value="mat3">mat3</option><option value="mat4">mat4</option></optgroup></select></div>
-                                <div class="field"><label for="uniformValue">초기 값</label><input id="uniformValue" value="0.5" required><select id="uniformBoolValue" aria-label="bool 초기 값" hidden><option value="false">false · 꺼짐</option><option value="true">true · 켜짐</option></select><p id="uniformValueHelp" class="help">숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.</p></div>
-                                <div id="rangeFields" class="field"><div class="section-heading"><label>Slider range <span class="field-hint">Optional</span></label></div>
-                                    <div class="range-grid"><div><label for="uniformMin">Min</label><input id="uniformMin" type="number" step="any" placeholder="0"></div><div><label for="uniformMax">Max</label><input id="uniformMax" type="number" step="any" placeholder="1"></div><div><label for="uniformStep">Step</label><input id="uniformStep" type="number" step="any" placeholder="0.01"></div></div>
+                                <div class="field"><label for="uniformValue">초기 값</label><input id="uniformValue" value="0.5" required><select id="uniformBoolValue" aria-label="bool 초기 값" hidden><option value="false">false · 꺼짐</option><option value="true">true · 켜짐</option></select><p id="uniformValueHelp" class="help">숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.</p><label id="uniformColorField" class="uniform-color-toggle" hidden><input id="uniformColor" type="checkbox"> 색상 선택기로 표시 (값 0~1)</label></div>
+                                <div id="rangeFields" class="field" role="group" aria-labelledby="rangeFieldsLabel"><div class="section-heading"><span id="rangeFieldsLabel" class="field-legend">슬라이더 범위 <span class="field-hint">선택 사항</span></span></div>
+                                    <div class="range-grid"><div><label for="uniformMin">최소</label><input id="uniformMin" type="number" step="any" placeholder="0" inputmode="decimal"></div><div><label for="uniformMax">최대</label><input id="uniformMax" type="number" step="any" placeholder="1" inputmode="decimal"></div><div><label for="uniformStep">간격</label><input id="uniformStep" type="number" step="any" placeholder="0.01" inputmode="decimal"></div></div>
                                 </div>
                                 <div class="uniform-form-actions"><button id="uniformCancel" type="button">취소</button><button id="uniformCreate" class="primary" type="submit">추가하고 적용 <span aria-hidden="true">↗</span></button></div>
                             </form>
@@ -95,14 +97,14 @@
                         <p id="uniformResults" class="help" role="status"></p>
                         <div id="uniformList" class="uniform-list"></div>
                         <p class="help uniform-footnote">선언은 자동 생성됩니다. 실제 화면에 반영하려면 GLSL에서 해당 변수를 참조해야 합니다.</p>
-                        <details class="builtin-reference"><summary>내장 Uniform 참조</summary><p class="help">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl></details>
+                        <details class="builtin-reference"><summary>내장 Uniform 참조</summary><p class="help">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
                     </section>
                 </div>
 
                 <div id="view-profile" class="panel-view" role="tabpanel" aria-labelledby="tab-profile" data-panel="profile" hidden>
                     <div class="view-intro"><span class="section-index">03 / PROFILER</span><h1>성능 · 디버그</h1><p>프레임 시간과 패스별 GPU 시간, 셰이더가 실제로 사용하는 Uniform을 실시간으로 확인합니다.</p></div>
                     <section class="control-section">
-                        <div class="section-heading"><h2>프레임 타임라인</h2><label class="profile-toggle" title="EXT_disjoint_timer_query_webgl2 기반 패스별 GPU 시간 측정"><input id="profileGpuTiming" type="checkbox" checked> GPU 타이머</label></div>
+                        <div class="section-heading"><h2>프레임 타임라인 <button type="button" class="guide-hint" data-guide="debug" aria-label="디버깅·성능 가이드" title="그래프·지표 읽는 법">?</button></h2><label class="profile-toggle" title="EXT_disjoint_timer_query_webgl2 기반 패스별 GPU 시간 측정"><input id="profileGpuTiming" type="checkbox" checked> GPU 타이머</label></div>
                         <div id="profileKpis" class="profile-kpis" aria-live="off"></div>
                         <canvas id="profileChart" class="profile-chart" aria-label="최근 프레임 시간 그래프"></canvas>
                         <div class="profile-legend"><span data-series="gpu">GPU</span><span data-series="cpu">CPU</span><span data-series="frame">프레임</span><button id="profileReset" type="button">지우기</button></div>
@@ -113,7 +115,17 @@
                         <div id="profilePasses" class="profile-passes"></div>
                     </section>
                     <section class="control-section">
-                        <div class="section-heading"><h2>Uniform 진단</h2><span id="profileUniformCount" class="count-badge">0</span></div>
+                        <div class="section-heading"><h2>버퍼 뷰어 <button type="button" class="guide-hint" data-guide="debug" aria-label="버퍼 뷰어 가이드" title="버퍼 뷰어 사용법">?</button></h2><span class="section-note">LIVE</span></div>
+                        <p class="help section-description">썸네일을 누르면 뷰포트에 해당 버퍼(출력)를 표시합니다. 다시 누르면 Image로 돌아갑니다.</p>
+                        <div id="profileBuffers" class="profile-buffers"></div>
+                        <div class="profile-view-controls">
+                            <div id="profileChannel" class="profile-segment" role="group" aria-label="표시 채널"><button type="button" data-channel="0" aria-pressed="true">RGB</button><button type="button" data-channel="1" aria-pressed="false">R</button><button type="button" data-channel="2" aria-pressed="false">G</button><button type="button" data-channel="3" aria-pressed="false">B</button><button type="button" data-channel="4" aria-pressed="false">A</button></div>
+                            <label class="profile-exposure" title="HDR·작은 값 확인용 노출 배율 (미리보기·썸네일에만 적용)">노출 <input id="profileExposure" type="range" min="-8" max="8" step="0.5" value="0"><output id="profileExposureLabel">×1</output></label>
+                        </div>
+                        <output id="profilePixel" class="studio-pixel-readout profile-pixel">버퍼를 선택하고 뷰포트 위에 포인터를 올리면 그 위치의 실제 값을 읽습니다.</output>
+                    </section>
+                    <section class="control-section">
+                        <div class="section-heading"><h2>Uniform 진단 <button type="button" class="guide-hint" data-guide="uniforms" aria-label="내장 Uniform 가이드" title="내장 Uniform 목록">?</button></h2><span id="profileUniformCount" class="count-badge">0</span></div>
                         <p class="help section-description">드라이버가 최적화로 제거하지 않은 활성 Uniform입니다. <b>미등록</b> 항목은 값이 항상 0이므로 <b>등록</b>해서 파라미터로 조절하세요.</p>
                         <p id="profileUniformStatus" class="profile-status" role="status"></p>
                         <div id="profileUniforms" class="profile-uniforms"></div>
@@ -192,41 +204,52 @@
             </div><!-- /renderViewport -->
             <div id="studioResize" class="studio-resizer" role="separator" aria-label="편집기 높이 조절" aria-orientation="horizontal" tabindex="0" aria-valuemin="25" aria-valuemax="85" aria-valuenow="55" title="드래그 또는 ↑↓로 높이 조절 · Home/End · 두 번 클릭해 기본 높이 복원" hidden><span></span></div>
             <section id="studioDock" class="studio-dock" aria-label="셰이더 및 버퍼 편집기" hidden>
+                <!-- 1줄: 패스 탭 · 실행 · 창 도구. 버퍼 설정은 버퍼를 고를 때만 아래 한 줄 요약으로 나타난다. -->
                 <header class="studio-top">
-                    <div id="studioPassTabs" class="studio-pass-tabs" role="tablist" aria-label="셰이더 패스"></div>
+                    <div class="studio-tabs">
+                        <div id="studioPassTabs" class="studio-pass-tabs" role="tablist" aria-label="셰이더 패스"></div>
+                        <button id="studioAdd" type="button" class="glyph-icon icon-plus studio-add" aria-label="버퍼 패스 추가" title="새 버퍼 패스 추가 (최대 8개)"></button>
+                    </div>
                     <div class="studio-window-tools" role="group" aria-label="편집기 창 조작">
-                        <button id="studioToolsToggle" type="button" aria-controls="studioTools" aria-expanded="true" title="프로젝트·채널 도구 표시/숨기기">도구</button>
-                        <button id="studioHelp" type="button" title="편집기 도움말 및 단축키 (?)" aria-haspopup="dialog" aria-controls="quickHelp">? Help</button>
-                        <button id="studioAdd" type="button" title="새 버퍼 패스 추가 (최대 8개)">+ Buffer</button>
-                        <button id="studioPause" type="button" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택">Ⅱ Pause</button>
-                        <button id="studioResetFrames" type="button" title="시간·프레임 카운터와 피드백 버퍼 데이터 초기화">↻ Reset</button>
-                        <button id="studioLayout" type="button" aria-pressed="false" aria-label="편집기 배치 전환" title="편집기를 캔버스 오른쪽에 나란히 배치" class="glyph-icon icon-layout"></button>
+                        <div class="studio-run-tools" role="group" aria-label="실행과 편집 이력">
+                            <button id="studioUndo" type="button" class="glyph-icon icon-undo" aria-label="되돌리기" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled></button>
+                            <button id="studioRedo" type="button" class="glyph-icon icon-redo" aria-label="다시 실행" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled></button>
+                            <label class="studio-live" title="코드를 고치면 0.9초 뒤 자동으로 적용"><input id="studioLive" type="checkbox" checked> 자동</label>
+                            <button id="studioRun" type="button" class="studio-primary" title="현재 GLSL/채널 설정을 적용 (Ctrl+Enter 또는 Ctrl+S)">▶ 실행 <span>Ctrl+↵</span></button>
+                        </div>
+                        <span class="studio-tool-sep" aria-hidden="true"></span>
+                        <button id="studioPause" type="button" class="glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
+                        <button id="studioResetFrames" type="button" class="glyph-icon icon-reset" aria-label="시간 초기화" title="시간·프레임 카운터와 피드백 버퍼 데이터 초기화"></button>
+                        <button id="studioToolsToggle" type="button" class="glyph-icon icon-sidebar" aria-controls="studioTools" aria-expanded="true" aria-label="도구 서랍" title="입력 채널·프로젝트 파일·예제·이미지 도구 표시/숨기기"></button>
                         <button id="studioMaximize" type="button" aria-pressed="false" aria-label="집중 모드 전환" title="집중 모드 · 미리보기를 일시정지하고 코드 영역 확대" class="glyph-icon icon-expand"></button>
                         <button id="studioHide" type="button" title="셰이더 편집기 닫기 (E)" aria-label="편집기 닫기" class="glyph-icon icon-close"></button>
                     </div>
                 </header>
-                <div class="studio-actions">
-                    <div id="studioPassTools" class="studio-pass-tools">
-                        <button id="studioUp" type="button" aria-label="패스를 앞으로 이동" title="선택한 버퍼의 실행 순서를 앞으로 이동" class="glyph-icon icon-up"></button>
-                        <button id="studioDown" type="button" aria-label="패스를 뒤로 이동" title="선택한 버퍼의 실행 순서를 뒤로 이동" class="glyph-icon icon-down"></button>
-                        <span id="studioPassImpact" class="studio-pass-impact" hidden></span>
-                        <button id="studioDuplicate" type="button" title="현재 버퍼와 연결 설정 복제">Duplicate</button>
-                        <button id="studioRemove" type="button" title="선택한 버퍼 삭제 (Image는 삭제 불가)">Delete</button>
-                        <label id="studioFormatField">Format <select id="studioFormat"><option value="rgba8">RGBA8</option><option value="rgba16f">RGBA16F</option><option value="rgba32f">RGBA32F</option></select></label>
-                        <label id="studioScaleField">Scale <select id="studioScale"><option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option><option value="0.125">12.5%</option></select></label>
+                <details id="studioPassTools" class="studio-pass-settings">
+                    <summary><span class="studio-pass-settings-label">버퍼 설정</span><span id="studioPassSummary" class="studio-pass-summary"></span></summary>
+                    <div class="studio-pass-settings-body">
+                        <div class="studio-pass-fields">
+                            <label id="studioFormatField" title="RGBA8 = 일반 색 · 16F/32F = 음수·1 초과 값(시뮬레이션·HDR)">형식 <select id="studioFormat"><option value="rgba8">RGBA8</option><option value="rgba16f">RGBA16F</option><option value="rgba32f">RGBA32F</option></select></label>
+                            <label id="studioScaleField" title="화면 비율 또는 고정 해상도. 고정 크기는 시뮬레이션 상태 저장에 적합합니다.">크기 <select id="studioScale"><optgroup label="화면 비율"><option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option><option value="0.125">12.5%</option></optgroup><optgroup label="고정 해상도"><option value="size:64x64">64×64</option><option value="size:256x256">256×256</option><option value="size:512x512">512×512</option><option value="size:1024x1024">1024×1024</option></optgroup></select></label>
+                            <label id="studioOutputsField" title="출력 수(MRT). GLSL에서 layout(location = N) out vec4 로 각 출력에 씁니다.">출력 수 <select id="studioOutputs"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+                            <label id="studioFilterField" title="이 버퍼를 다른 패스에서 읽을 때의 필터">필터 <select id="studioFilter"><option value="linear">Linear</option><option value="nearest">Nearest</option></select></label>
+                            <label id="studioWrapField" title="이 버퍼를 읽을 때 0~1 밖 좌표 처리">가장자리 <select id="studioWrap"><option value="clamp">Clamp</option><option value="repeat">Repeat</option><option value="mirror">Mirror</option></select></label>
+                            <label id="studioMipField" class="studio-pass-check" title="렌더링할 때마다 밉맵을 생성합니다. textureLod/블러에 사용 (메모리 +33%)"><input id="studioMip" type="checkbox"> 밉맵</label>
+                        </div>
+                        <div class="studio-pass-actions">
+                            <button id="studioUp" type="button" aria-label="패스를 앞으로 이동" title="선택한 버퍼의 실행 순서를 앞으로 이동" class="glyph-icon icon-up"></button>
+                            <button id="studioDown" type="button" aria-label="패스를 뒤로 이동" title="선택한 버퍼의 실행 순서를 뒤로 이동" class="glyph-icon icon-down"></button>
+                            <button id="studioDuplicate" type="button" title="현재 버퍼와 연결 설정 복제">복제</button>
+                            <button id="studioRemove" type="button" class="studio-danger" title="선택한 버퍼 삭제 (Image는 삭제 불가)">삭제</button>
+                            <span id="studioPassImpact" class="studio-pass-impact" hidden></span>
+                            <button type="button" class="guide-link" data-guide="buffers" title="형식·크기·출력 수·필터·가장자리·밉맵 설명">설정 설명 →</button>
+                        </div>
                     </div>
-                    <div class="studio-run-tools">
-                        <button id="studioParameters" type="button" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 ↗</button>
-                        <label class="studio-live"><input id="studioLive" type="checkbox" checked> Auto</label>
-                        <button id="studioUndo" type="button" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled>↶ Undo</button>
-                        <button id="studioRedo" type="button" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled>↷ Redo</button>
-                        <button id="studioRun" type="button" class="studio-primary" title="현재 GLSL/채널 설정을 적용 (Ctrl+Enter 또는 Ctrl+S)">▶ Run <span>Ctrl+Enter</span></button>
-                    </div>
-                </div>
+                </details>
                 <div class="studio-main">
                     <aside id="studioTools" class="studio-patchbay" aria-label="프로젝트 및 패스 도구">
                         <details id="studioInputs" class="studio-group" open><summary id="studioInputsTitle">Image · 입력 채널</summary><div class="studio-group-body">
-                            <p class="studio-hint">선택한 패스의 iChannel0–3 입력입니다. current는 앞선 패스, previous는 직전 프레임을 읽습니다.</p>
+                            <p class="studio-hint">선택한 패스의 iChannel0–3 입력입니다. current는 앞선 패스, previous는 직전 프레임을 읽습니다. <button type="button" class="guide-link" data-guide="buffers">연결 규칙 자세히 →</button></p>
                             <div id="studioChannels"></div><p id="studioChannelRules" class="studio-hint"></p>
                         </div></details>
                         <details id="studioFiles" class="studio-group" open><summary>프로젝트 파일</summary><div class="studio-group-body">
@@ -259,42 +282,60 @@
                         </div></details>
                     </aside>
                     <div class="studio-code-pane">
-                        <div class="studio-code-label"><span id="studioCodeTitle">편집 · Image.frag</span><span id="studioPreviewTarget" class="studio-preview-target">미리보기 · Image</span><span id="studioState" class="studio-state" role="status" data-state="applied">실행 반영됨</span></div>
-                        <div class="studio-editor-tools" role="toolbar" aria-label="검색과 코드 탐색">
-                            <button id="studioFind" title="GLSL 코드 검색 (Ctrl+F)">Find</button>
-                            <button id="studioReplace" title="GLSL 코드 검색·치환 (Ctrl+H)">Replace</button>
-                            <button id="studioGoto" title="지정한 GLSL 줄 번호로 이동 (Ctrl+G)">Go to line</button>
-                            <select id="studioFunctions" aria-label="현재 GLSL 함수 정의로 이동" title="현재 패스의 함수 목록에서 정의 위치로 이동"><option>ƒ Functions</option></select>
-                            <button id="studioComplete" title="GLSL 이름 자동 완성 (Ctrl+Space)">Complete</button>
+                        <!-- 코드 머리줄: 파일 이름·상태 | 함수 이동·검색·줄 이동·자동 완성·코드 조각·더보기 메뉴 -->
+                        <div class="studio-code-label">
+                            <span id="studioCodeTitle">Image.frag</span><span id="studioState" class="studio-state" role="status" data-state="applied">실행 반영됨</span><span id="studioPreviewTarget" class="studio-preview-target">미리보기 · Image</span>
+                            <div class="studio-editor-tools" role="toolbar" aria-label="검색과 코드 탐색">
+                                <select id="studioFunctions" aria-label="현재 GLSL 함수 정의로 이동" title="현재 패스의 함수 목록에서 정의 위치로 이동"><option>ƒ 함수</option></select>
+                                <button id="studioFind" type="button" class="glyph-icon icon-search" aria-label="검색" title="코드 검색 (Ctrl+F) · 치환 Ctrl+H"></button>
+                                <button id="studioGoto" type="button" class="glyph-icon icon-goto" aria-label="줄 번호로 이동" title="줄 번호로 이동 (Ctrl+G)"></button>
+                                <button id="studioComplete" type="button" class="glyph-icon icon-complete" aria-label="자동 완성" title="이름 자동 완성 (Ctrl+Space)"></button>
+                                <button id="studioSnippets" type="button" class="glyph-icon icon-snippet" data-guide="snippets" aria-label="코드 조각" title="코드 조각 모음에서 함수 삽입 (노이즈·SDF·색…)"></button>
+                                <details id="studioCodeTools" class="studio-menu">
+                                    <summary class="glyph-icon icon-more" aria-label="편집기 메뉴" title="파일 · 삽입 · 표시 설정 · 배치"></summary>
+                                    <div class="studio-menu-panel" role="group" aria-label="편집기 메뉴">
+                                        <button id="studioPaletteOpen" type="button" class="studio-menu-palette" title="모든 명령을 이름으로 검색해 실행 · @ 함수·변수로 이동 · : 줄 번호">명령 팔레트… <kbd>Ctrl+Shift+P</kbd></button>
+                                        <p class="studio-menu-title">편집</p>
+                                        <button id="studioReplace" type="button" title="코드 검색·치환 (Ctrl+H)">찾아 바꾸기 <kbd>Ctrl+H</kbd></button>
+                                        <button id="studioSampleUV" type="button" title="texture(iChannel0, uv) 샘플 코드 삽입">텍스처 읽기 코드 삽입 <kbd>texture</kbd></button>
+                                        <button id="studioSamplePixel" type="button" title="texelFetch(iChannel0, 정수 픽셀 좌표, 0) 삽입">픽셀 정확히 읽기 코드 삽입 <kbd>texelFetch</kbd></button>
+                                        <p class="studio-menu-title">파일 · 현재 패스만</p>
+                                        <button id="studioOpenGLSL" type="button" title="현재 패스의 GLSL 소스를 파일에서 열기">.frag 파일 열기…</button>
+                                        <button id="studioSaveGLSL" type="button" title="현재 GLSL만 .frag 파일로 저장">.frag 파일로 저장</button>
+                                        <input id="studioGLSLFile" type="file" accept=".frag,.glsl,.fs,text/plain" hidden>
+                                        <span id="studioExportState" class="studio-menu-note" title="브라우저에 마지막으로 다운로드를 요청한 파일입니다. 파일 저장 완료나 이후 변경사항의 포함을 보장하지 않습니다.">파일 · 이 세션에서 내보내기 요청 없음</span>
+                                        <p class="studio-menu-title">표시</p>
+                                        <div class="studio-menu-row"><span>글자 크기</span><span class="studio-stepper"><button id="studioZoomOut" type="button" aria-label="글자 작게" title="편집기 글씨 크기 -1">A−</button><span id="studioFontSize">12px</span><button id="studioZoomIn" type="button" aria-label="글자 크게" title="편집기 글씨 크기 +1">A+</button></span></div>
+                                        <label class="studio-menu-row" title="Tab 키로 넣을 공백 수"><span>들여쓰기</span><select id="studioIndent" aria-label="들여쓰기 공백 수"><option value="4">공백 4</option><option value="2">공백 2</option></select></label>
+                                        <button id="studioLineWrap" type="button" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
+                                        <p class="studio-menu-title">창</p>
+                                        <button id="studioLayout" type="button" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>
+                                        <button id="studioParameters" type="button" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 패널 열기</button>
+                                        <button id="studioHelp" type="button" title="편집기 도움말 및 단축키 (?)" aria-haspopup="dialog" aria-controls="quickHelp">도움말 · 단축키 <kbd>?</kbd></button>
+                                    </div>
+                                </details>
+                            </div>
                         </div>
-                        <details id="studioCodeTools" class="studio-code-tools"><summary>파일 · 샘플 코드 · 표시 설정</summary><div class="studio-editor-tools">
-                            <button id="studioOpenGLSL" title="현재 패스의 GLSL 소스를 파일에서 열기">Open GLSL</button>
-                            <button id="studioSaveGLSL" title="현재 GLSL만 .frag 파일로 저장">Save GLSL</button>
-                            <input id="studioGLSLFile" type="file" accept=".frag,.glsl,.fs,text/plain" hidden>
-                            <button id="studioSampleUV" title="texture(iChannel0, uv) 샘플 코드 삽입">UV sample</button>
-                            <button id="studioSamplePixel" title="texelFetch(iChannel0, 정수 픽셀 좌표, 0) 삽입">Texel</button>
-                            <label title="Tab 키로 넣을 공백 수">Tab <select id="studioIndent" aria-label="들여쓰기 공백 수"><option value="4">4</option><option value="2">2</option></select></label>
-                            <button id="studioWrap" aria-pressed="false" title="긴 GLSL 줄을 편집기 폭에 맞춰 줄바꿈">Wrap</button>
-                            <button id="studioZoomOut" title="편집기 글씨 크기 -1">A−</button>
-                            <span id="studioFontSize">12px</span>
-                            <button id="studioZoomIn" title="편집기 글씨 크기 +1">A+</button>
-                        </div></details>
                         <div id="studioFindPanel" class="studio-find-panel" hidden>
                             <div class="studio-find-row"><input id="studioFindQuery" placeholder="현재 패스에서 검색" aria-label="검색어"><span id="studioFindCount">0 results</span>
                                 <button id="studioFindPrev" title="이전 검색 결과 (Shift+F3)" class="glyph-icon icon-up" type="button" aria-label="이전 검색 결과"></button><button id="studioFindNext" title="다음 검색 결과 (F3)" class="glyph-icon icon-down" type="button" aria-label="다음 검색 결과"></button><button id="studioFindClose" aria-label="검색 닫기" title="검색 닫기 (Esc)" class="glyph-icon icon-close"></button></div>
                             <div id="studioReplaceRow" class="studio-find-row" hidden><input id="studioReplaceValue" placeholder="바꿀 텍스트" aria-label="치환할 텍스트"><button id="studioReplaceOne" title="현재 검색 결과 하나만 바꾸기">Replace</button><button id="studioReplaceAll" title="검색 결과 전체 바꾸기">Replace all</button></div>
                         </div>
-                        <div class="studio-editor-frame"><pre id="studioLines" class="studio-gutter" aria-hidden="true"></pre><div class="studio-code-surface"><pre id="studioHighlight" aria-hidden="true"></pre><textarea id="studioCode" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" aria-label="GLSL Fragment Shader 코드" wrap="off"></textarea><div id="studioCompletion" class="studio-completion" role="listbox" aria-label="GLSL 자동 완성 후보" hidden></div></div></div>
-                        <div class="studio-editor-status"><span id="studioCursor">Ln 1, Col 1</span><span>Enter 자동 들여쓰기 &nbsp;|&nbsp; Ctrl+Space 자동 완성 &nbsp;|&nbsp; Ctrl+S 실행</span></div>
+                        <div class="studio-editor-frame"><pre id="studioLines" class="studio-gutter" aria-hidden="true"></pre><div class="studio-code-surface"><pre id="studioHighlight" aria-hidden="true"></pre><textarea id="studioCode" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" aria-label="GLSL Fragment Shader 코드" wrap="off" aria-describedby="studioSignature"></textarea><div id="studioCompletion" class="studio-completion" role="listbox" aria-label="GLSL 자동 완성 후보" hidden></div></div>
+                            <!-- 커서가 함수 이름·호출 안에 있으면 시그니처와 설명을 보여준다(내장 함수 + 이 패스의 함수). -->
+                            <div id="studioSignature" class="studio-signature" role="status" aria-live="polite" hidden></div>
+                        </div>
                     </div>
                 </div>
                 <div id="studioDraft" class="studio-draft" hidden><span>복구 가능한 미적용 편집본이 있습니다.</span><button id="studioDraftRestore" title="저장된 미적용 편집본 복구">편집본 복구</button><button id="studioDraftDiscard" title="미적용 편집본 버리기">버리기</button></div>
                 <div id="studioChangeNotice" class="studio-change-notice" hidden><span id="studioChangeText" role="status"></span><button id="studioChangeUndo" type="button">변경 되돌리기</button></div>
-                <div class="studio-persistence" aria-label="소스 보관 및 내보내기 상태"><span id="studioStorageState" data-state="none" role="status" title="브라우저 보관은 소스와 채널 구성에 관한 상태입니다. 파라미터·설정·이미지까지 파일로 보관하려면 Pack을 내보내세요.">소스 · 브라우저 보관 전</span><span id="studioExportState" title="브라우저에 마지막으로 다운로드를 요청한 파일입니다. 파일 저장 완료나 이후 변경사항의 포함을 보장하지 않습니다.">파일 · 이 세션에서 내보내기 요청 없음</span></div>
                 <div id="studioDiagnostics" class="studio-diagnostics" hidden></div>
+                <!-- 상태 줄 하나: 메시지 | 오류 펼치기 | 브라우저 보관 상태 | 커서 위치 -->
                 <footer class="studio-bottom">
-                    <span id="studioMessage" role="status">준비됨 · 코드를 편집하고 Run으로 적용하세요.</span>
+                    <span id="studioMessage" role="status">준비됨 · 코드를 편집하면 자동으로 적용됩니다.</span>
                     <button id="studioErrorToggle" type="button" hidden title="GLSL 컴파일러의 전체 오류 메시지 펼치기">전체 오류 보기</button>
+                    <span id="studioStorageState" class="studio-storage" data-state="none" role="status" title="브라우저 보관은 소스와 채널 구성에 관한 상태입니다. 파라미터·설정·이미지까지 파일로 보관하려면 Pack을 내보내세요.">소스 · 브라우저 보관 전</span>
+                    <span id="studioCursor" class="studio-cursor">Ln 1, Col 1</span>
                 </footer>
                 <pre id="studioError" class="studio-error" hidden></pre>
             </section>
@@ -323,28 +364,40 @@
                 <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Ctrl+Enter</kbd>로 즉시 실행</span></li>
                 <li><kbd>/</kbd><span><b>파라미터</b> — 슬라이더로 값을 조절하고 Uniform을 추가</span></li>
                 <li><kbd>성능</kbd><span><b>프로파일러</b> — 패스별 GPU 시간과 미등록 Uniform을 확인</span></li>
+                <li><kbd>?</kbd><span><b>가이드</b> — 모든 기능 설명·코드 예시, 처음이라면 아래 <b>UI 둘러보기</b></span></li>
             </ol>
             <h3>Shader Art</h3>
             <div id="galleryGrid" class="gallery-grid"></div>
             <h3>기법 배우기</h3>
             <div id="galleryLessons" class="gallery-grid"></div>
         </div>
-        <footer class="gallery-foot"><span>갤러리는 뷰포트 툴바 또는 <kbd>X</kbd>로 다시 열 수 있습니다.</span><button id="galleryBlank" type="button">현재 작업 계속하기</button></footer>
+        <footer class="gallery-foot"><span>갤러리는 뷰포트 툴바 또는 <kbd>X</kbd>로 다시 열 수 있습니다.</span><div class="gallery-foot-actions"><button id="galleryTour" type="button" title="화면 요소를 하나씩 강조하며 설명합니다">UI 둘러보기</button><button id="galleryBlank" type="button">현재 작업 계속하기</button></div></footer>
     </dialog>
 
-    <dialog id="quickHelp" aria-labelledby="helpTitle">
-        <header class="help-head"><div><h2 id="helpTitle">빠른 사용법 · 단축키</h2><p>버튼 위에 마우스를 올리면 기능 설명이 표시됩니다.</p></div><button id="helpClose" type="button" title="도움말 닫기 (Esc)" aria-label="도움말 닫기" class="glyph-icon icon-close"></button></header>
-        <div class="help-body">
+    <!-- 앱 내장 가이드: 주제·검색·코드 예시는 js/guide.js가 채운다. 아래 정적 내용은 스크립트 실패 시 대체 안내다. -->
+    <dialog id="quickHelp" class="guide" aria-labelledby="helpTitle">
+        <header class="guide-head">
+            <div class="guide-title"><span class="section-index">FIELD STUDIO GUIDE</span><h2 id="helpTitle">가이드</h2></div>
+            <div class="guide-head-tools">
+                <label class="guide-search"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="guideSearch" type="search" placeholder="검색 · 예: 마우스, MRT, 노출" autocomplete="off" spellcheck="false" aria-label="가이드 검색"></label>
+                <button id="guideTour" type="button" class="primary" title="화면 요소를 하나씩 강조하며 설명합니다">UI 둘러보기</button>
+                <button id="helpClose" type="button" title="가이드 닫기 (Esc)" aria-label="가이드 닫기" class="glyph-icon icon-close"></button>
+            </div>
+        </header>
+        <div class="guide-body">
+            <nav id="guideNav" class="guide-nav" aria-label="가이드 주제"></nav>
+            <article id="guideContent" class="guide-content help-body" tabindex="-1" aria-live="polite">
             <h3>처음 사용할 때</h3>
             <p><b>1.</b> &lt;/&gt; 버튼으로 편집기 열기 → <b>2.</b> Starter Projects 선택 또는 Image/Buffer 탭 선택 → <b>3.</b> GLSL 작성 후 Run. 다른 패스를 읽으려면 iChannel에서 입력을 선택하세요.</p>
-            <h3>파일 저장 범위</h3><p><b>전체 프로젝트 저장(Pack)</b>은 코드·파라미터·연결된 이미지와 설정을 함께 보관합니다. <b>소스 JSON</b>은 코드와 연결 구성만, <b>Save GLSL</b>은 현재 패스의 코드만 저장합니다. 브라우저 자동 저장과 별도로 Pack을 보관할 수 있습니다.</p>
+            <h3>파일 저장 범위</h3><p><b>전체 프로젝트 저장(Pack)</b>은 코드·파라미터·연결된 이미지와 설정을 함께 보관합니다. <b>소스 JSON</b>은 코드와 연결 구성만, 편집기 ⋯ 메뉴의 <b>.frag 파일로 저장</b>은 현재 패스의 코드만 저장합니다. 브라우저 자동 저장과 별도로 Pack을 보관할 수 있습니다.</p>
             <h3>화면·카메라 (3D 셰이더에서 사용)</h3>
             <div class="help-list"><span>셰이더 편집기 열기/닫기</span><kbd>E</kbd><span>예제 갤러리</span><kbd>X</kbd><span>재생/일시정지 (뷰포트 선택)</span><kbd>Space</kbd><span>전체화면</span><kbd>F</kbd><span>설정 패널 표시/숨김</span><kbd>H</kbd><span>FPS HUD 표시/숨김</span><kbd>G</kbd><span>Uniform 검색</span><kbd>/</kbd><span>이 도움말 열기/닫기</span><kbd>?</kbd><span>카메라 회전 / 확대</span><kbd>드래그 / 휠</kbd><span>회전·확대 / 속도 증가</span><kbd>WASD·방향키 / Shift</kbd><span>카메라 초기화 (뷰포트 선택)</span><kbd>R</kbd></div>
             <h3>GLSL 편집</h3>
             <p class="help-note">Ctrl 단축키는 Mac에서 Cmd로도 사용할 수 있습니다. 일부 키는 브라우저가 먼저 처리할 수 있습니다.</p>
             <div class="help-list"><span>현재 코드 적용</span><kbd>Ctrl+Enter / Ctrl+S</kbd><span>검색 / 치환 / 줄 이동</span><kbd>Ctrl+F / Ctrl+H / Ctrl+G</kbd><span>현재 GLSL 함수 탐색</span><kbd>Functions</kbd><span>GLSL 이름 자동 완성</span><kbd>Ctrl+Space</kbd><span>다음 / 이전 검색 결과</span><kbd>F3 / Shift+F3</kbd><span>선택 줄 주석 전환</span><kbd>Ctrl+/</kbd><span>들여쓰기 / 내어쓰기</span><kbd>Tab / Shift+Tab</kbd><span>선택 줄 들여쓰기</span><kbd>Ctrl+] / Ctrl+[</kbd><span>현재 줄 복제</span><kbd>Ctrl+Shift+D</kbd><span>선택 줄 위/아래 이동</span><kbd>Alt+↑ / Alt+↓</kbd><span>편집 취소 / 다시 실행</span><kbd>Ctrl+Z / Ctrl+Y</kbd><span>앞 / 뒤 패스 전환 (편집 중)</span><kbd>Alt+PageUp / Alt+PageDown</kbd><span>패스 탭 간 이동 (탭 선택 중)</span><kbd>← → / Home End</kbd><span>들여쓰기 폭 / 자동 줄바꿈</span><kbd>Tab 2·4 / Wrap</kbd></div>
             <h3>버퍼 · 데이터</h3>
-            <p><b>+ Buffer</b>로 패스를 추가하고 <b>iChannel0~3</b>에서 Texture 또는 Buffer를 연결합니다. <b>current</b>는 먼저 실행된 패스, <b>previous</b>는 직전 프레임의 결과입니다. <b>Auto</b>는 코드 변경 시 자동 적용, <b>Pause</b>는 재생 정지, <b>Reset</b>은 프레임/피드백 초기화, <b>Undo/Redo</b>는 컴파일 실패를 포함한 편집 이력을 되돌립니다. 연속 타이핑은 묶어서 저장하며, 편집기에서 <b>Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z</b>를 사용할 수 있습니다.</p>
+            <p>패스 탭 옆 <b>+</b>로 패스를 추가하고 <b>iChannel0~3</b>에서 Texture 또는 Buffer를 연결합니다. <b>current</b>는 먼저 실행된 패스, <b>previous</b>는 직전 프레임의 결과입니다. <b>자동</b>은 코드 변경 시 자동 적용, 재생 버튼은 정지/재생, 시간 초기화 버튼은 프레임/피드백 초기화, <b>Undo/Redo</b>는 컴파일 실패를 포함한 편집 이력을 되돌립니다. 연속 타이핑은 묶어서 저장하며, 편집기에서 <b>Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z</b>를 사용할 수 있습니다.</p>
+            </article>
         </div>
     </dialog>
 

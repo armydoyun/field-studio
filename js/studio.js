@@ -675,6 +675,18 @@ void main() {
     const menu=$("studioCodeTools");
     on(menu,"click",event=>{if(event.target?.closest?.(".studio-menu-panel>button"))menu.open=false;});
     on(document,"pointerdown",event=>{if(menu.open&&!menu.contains?.(event.target))menu.open=false;});
+    // 편집기를 아래에 작게 배치하면 메뉴가 #stage(overflow:hidden) 밖으로 나가 잘린다.
+    // 열 때 아래·위 여유 공간을 재서 더 넓은 쪽으로 펼치고, 그 공간에 맞게 높이를 제한한다(넘치면 메뉴 안에서 스크롤).
+    const placeMenu=()=>{
+      const panel=menu.querySelector?.(".studio-menu-panel"),summary=menu.querySelector?.("summary");if(!menu.open||!panel?.style||!summary?.getBoundingClientRect)return;
+      panel.classList.remove("is-up");panel.style.maxHeight="";
+      const clip=$("stage")?.getBoundingClientRect?.(),view=window.innerHeight||document.documentElement?.clientHeight||0,gap=6,margin=8;
+      const limitTop=Math.max(0,clip?.top??0)+margin,limitBottom=Math.min(view,clip?.bottom??view)-margin,anchor=summary.getBoundingClientRect();
+      const below=limitBottom-(anchor.bottom+gap),above=(anchor.top-gap)-limitTop,natural=panel.scrollHeight||0;
+      const up=below<natural&&above>below;panel.classList.toggle("is-up",up);
+      panel.style.maxHeight=`${Math.max(120,Math.floor(Math.min(540,up?above:below)))}px`;
+    };
+    on(menu,"toggle",placeMenu);on(window,"resize",placeMenu);
     on(menu,"keydown",event=>{if(event.key==="Escape"&&menu.open){event.preventDefault();event.stopPropagation();menu.open=false;menu.querySelector?.("summary")?.focus();}});
     // 분할 배치에서 도구 서랍은 코드 위에 겹치므로, 코드를 누르면 닫아 편집 영역을 돌려준다.
     const closeToolsDrawer=()=>{if(!$("studioTools").hidden){$("studioTools").hidden=true;$("studioToolsToggle").setAttribute("aria-expanded","false");}};

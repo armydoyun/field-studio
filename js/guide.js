@@ -437,7 +437,12 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     listen(search, "keydown", event => { if(event.key === "Enter") { event.preventDefault(); nav.querySelector("button")?.click(); content.focus(); } });
     listen($("guideTour"), "click", () => { dialog.close(); startTour(); });
     // ui.js가 dialog를 직접 여는 경우(? 키·툴바)에도 내용이 채워져 있도록 열릴 때마다 동기화한다.
+    // ? 키·툴바 버튼(ui.js)은 이 요청 이벤트로 가이드를 연다. 처리했음을 preventDefault로 알린다.
+    listen(document, "guide-open-request", event => { event.preventDefault(); open(); });
+    // dialog를 다른 경로로 직접 연 경우의 보조 동기화. toggle 이벤트는 최신 브라우저에서만 발생한다(Chrome 132+ 등).
     listen(dialog, "toggle", () => { if(dialog.open && !nav.children.length) { renderNav(); show(current); } });
+    // 목록은 처음부터 채워 둔다. toggle 이벤트가 없는 브라우저에서도 dialog를 열면 바로 목록이 보인다.
+    renderNav();
     // 문맥 도움말: data-guide="주제" 요소를 누르면 그 주제를 연다.
     listen(document, "click", event => {
       const trigger = event.target instanceof Element ? event.target.closest("[data-guide]") : null; if(!trigger) return;

@@ -625,6 +625,7 @@ kbd { border-color:var(--line-strong);border-bottom-width:2px;background:var(--e
 .studio-menu>summary::-webkit-details-marker { display:none; }
 .studio-menu>summary:hover,.studio-menu[open]>summary { background:var(--surface-hover);color:var(--text); }
 .studio-menu-panel { position:absolute;top:calc(100% + 6px);right:0;z-index:30;display:grid;gap:1px;width:264px;max-height:min(72vh,540px);overflow-y:auto;padding:6px;border:1px solid var(--line-strong);border-radius:10px;background:var(--elevated);box-shadow:var(--shadow);font-family:var(--sans); }
+.studio-menu-panel.is-up { top:auto;bottom:calc(100% + 6px); }
 .studio-menu-title { margin:8px 8px 2px;color:var(--faint);font:600 10px/1.4 var(--mono);letter-spacing:.4px; }
 .studio-menu-title:first-child { margin-top:2px; }
 .studio-menu-panel>button { justify-content:space-between;width:100%;min-height:32px;padding:5px 8px;border-color:transparent;background:transparent;color:var(--text-soft);font-size:12px;font-weight:500;text-align:left; }

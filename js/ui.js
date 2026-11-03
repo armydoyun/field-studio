@@ -228,7 +228,8 @@
         else await stage.requestFullscreen(); showError("");
             } catch(error) { showError(`전체화면 전환 실패: ${error.message}`); }
     }; listen($("cameraReset"), "click", () => input.resetCamera()); listen($("panelClose"), "click", togglePanel);
-    const helpDialog = $("quickHelp"), toggleHelp = () => helpDialog.open ? helpDialog.close() : helpDialog.showModal();
+    // 가이드(guide.js)가 있으면 그쪽에서 목록을 채운 뒤 연다. <dialog>의 toggle 이벤트는 구형 브라우저에서 발생하지 않으므로 그것에 기대지 않는다.
+    const helpDialog = $("quickHelp"), toggleHelp = () => { if(helpDialog.open) return helpDialog.close(); const request = new CustomEvent("guide-open-request", {cancelable:true}); if(document.dispatchEvent(request) && !helpDialog.open) helpDialog.showModal(); };
     for(const id of ["helpToggle","studioHelp"]) listen($(id),"click",toggleHelp);
     listen($("helpClose"),"click",()=>helpDialog.close());listen(helpDialog,"click",event=>{if(event.target===helpDialog)helpDialog.close();});
     listen(helpDialog,"keydown",event=>{if(!["Escape","?"].includes(event.key))event.stopPropagation();});
