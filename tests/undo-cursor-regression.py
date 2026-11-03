@@ -1,5 +1,5 @@
 # python tests/undo-cursor-regression.py (Playwright/Chromium, GPU-independent mock renderer)
-from esm_for_browser import load_modules
+from esm_for_browser import load_modules, EditorModel
 import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -35,7 +35,7 @@ with sync_playwright() as p:
         assert condition,label
         print('PASS',label,flush=True)
     original=js('testRenderer.getFragmentSource()')
-    area=page.locator('#studioCode')
+    area=EditorModel(page)   # 키 입력은 CodeMirror 화면으로, 선택·값은 #studioCode 창구로 확인
     def selection(): return js('''() => {const el=document.getElementById('studioCode');return [el.selectionStart,el.selectionEnd,el.selectionDirection]}''')
     def place(start,end=None,direction='none'):
         js("""(args) => {const el=document.getElementById('studioCode');el.focus();el.setSelectionRange(...args);}""",[start,start if end is None else end,direction])

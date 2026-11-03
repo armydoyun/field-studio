@@ -19,12 +19,12 @@ assert.equal(base('.studio-dialog-head h2').get('min-height'),'36px');assert.equ
 assert.equal(base('.uniform-type').has('margin-left'),false,'Wrapped labels must use their parent gap');
 assert.equal(base('.viewport-footer').get('align-items'),'center');assert(!base('.viewport-info').has('position'));assert(!base('.stage-stats').has('position'));
 assert.equal(base('.studio-top').get('grid-template-columns'),'minmax(0,1fr) auto');assert(html.includes('class="studio-window-tools"'));assert(html.includes('class="viewport-footer"'));
-assert.equal(base('#studioCode').get('scrollbar-gutter'),'stable');assert.equal(base('#studioHighlight').get('scrollbar-gutter'),'stable');
-assert.equal(base('#studioHighlight').get('padding'),'12px');assert.equal(base('.studio-gutter').get('padding').split(' ')[0],'12px');
+// 편집기는 CodeMirror가 그린다: 호스트가 프레임을 채우고(flex), 편집 화면이 그 높이를 그대로 쓴다.
+assert.equal(base('.studio-cm-host').get('display'),'flex');assert.equal(base('.studio-cm-host').get('flex'),'1');assert.equal(base('.studio-cm-host>.cm-editor').get('height'),'100%');
 assert.equal(base('.studio-group-body').get('padding'),'12px 14px 16px');assert.equal(base('.studio-group-body').get('gap'),'12px');
 assert([...rules.keys()].some(key=>key.includes('@container preview (max-height:220px)')),'HUD must adapt to actual preview height');
 console.log(`PASS CSS ${count} selector scopes parsed: no repeated selector/property pair in the same scope`);
-console.log('PASS Centered controls / unit placement / modal grid / toolbar groups / shared HUD / code layer gutters');
+console.log('PASS Centered controls / unit placement / modal grid / toolbar groups / shared HUD / editor host fills the frame');
 console.log('Static CSS contracts, not a rendered pixel measurement.');
 
 for(const m of html.matchAll(/<button\b([^>]*)class="[^"]*glyph-icon[^"]*"([^>]*)>([\s\S]*?)<\/button>/g)){
@@ -33,7 +33,7 @@ for(const m of html.matchAll(/<button\b([^>]*)class="[^"]*glyph-icon[^"]*"([^>]*
 for(const selector of ['.glyph-icon::before','.studio-group>summary::after','.studio-code-tools>summary::after']){
  assert.equal(base(selector).get('width'),'16px');assert.equal(base(selector).get('height'),'16px');assert.equal(base(selector).get('content'),'""');assert.equal(base(selector).get('mask'),'var(--icon) center/contain no-repeat');
 }
-assert.equal(base('.studio-find-row button.glyph-icon').get('padding'),'0');assert.equal(base('.studio-texture .icon-close').get('width'),'28px');
+assert.equal(base('.studio-texture .icon-close').get('width'),'28px');
 assert(base('#previewPause[aria-pressed="true"]').has('--icon'));assert(base('#studioMaximize[aria-pressed="true"]').has('--icon'));
 console.log('PASS Font-independent icon boxes / accessible icon buttons / state icons / square delete and navigation controls');
 

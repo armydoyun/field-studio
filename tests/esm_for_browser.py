@@ -38,3 +38,15 @@ def load_modules(page, root, names):
         page.add_script_tag(content=named_module(source, name)); loaded.append(name)
     for name in names: visit(name)
     return loaded
+
+class EditorModel:
+    """#studioCode 창구 + CodeMirror 화면을 예전 textarea 로케이터처럼 다룬다(fill · input_value · press · focus).
+    fill은 사용자가 내용을 통째로 바꾼 것처럼 값을 넣고 input 이벤트를 보낸다. 키 입력은 실제 CodeMirror 화면으로 간다."""
+    def __init__(self, page): self.page = page
+    def fill(self, text):
+        self.page.evaluate("""text => { const t = document.getElementById('studioCode'); t.value = text;
+          t.dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data:text})); }""", text)   # Playwright fill과 같은 이벤트(타이핑 묶음 아님)
+    def input_value(self): return self.page.evaluate("document.getElementById('studioCode').value")
+    def focus(self): self.page.evaluate("document.getElementById('studioCode').focus()")
+    def press(self, key): self.focus(); self.page.keyboard.press(key)
+    def type(self, text): self.focus(); self.page.keyboard.type(text)

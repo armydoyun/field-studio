@@ -1,11 +1,11 @@
-// 브라우저 콘솔에서 실행. 미적용 편집본이 없는 상태에서만 시작한다.
+// 브라우저 콘솔에서 실행. 미적용 편집본이 없는 상태에서만 시작한다. 키 입력은 CodeMirror 화면(.cm-content)으로 보낸다.
 (() => {
   const $=id=>document.getElementById(id), studio=window.shaderStudio, area=$("studioCode");
   if(!studio || !area) throw new Error("Shader Studio가 초기화되지 않았습니다.");
   if($("studioMessage").classList.contains("is-dirty")) throw new Error("미적용 편집본을 먼저 적용해 주세요.");
   const savedCode=area.value, savedIndent=$("studioIndent").value, live=$("studioLive"), wasLive=live.checked;
   const check=(ok,name)=>{if(!ok)throw new Error(`FAIL: ${name}`);console.log(`PASS: ${name}`);};
-  const key=(name,extra={})=>area.dispatchEvent(new KeyboardEvent("keydown",{key:name,bubbles:true,cancelable:true,...extra}));
+  const key=(name,extra={})=>document.querySelector(".cm-content").dispatchEvent(new KeyboardEvent("keydown",{key:name,bubbles:true,cancelable:true,...extra}));
   studio.open();live.checked=false;live.dispatchEvent(new Event("change"));
   try {
     $("studioIndent").value="2";$("studioIndent").dispatchEvent(new Event("change"));

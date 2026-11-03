@@ -14,7 +14,7 @@ void main(){fragColor=vec4(0.5, 0.2, 0.8, 1.0);}`;
     eq(typeof r.validateFragment === "function" && typeof r.resetSimulation === "function", "새 Renderer API");
     eq(r.validateFragment(src,true) === true, "GLSL 사전 컴파일");
     studio.open(); eq(!document.getElementById("studioDock").hidden, "Studio 열기");
-    eq(document.getElementById("studioHighlight") && document.getElementById("studioLines"), "구문 강조 및 줄 번호 요소");
+    eq(document.querySelector(".studio-cm-host .cm-editor .cm-lineNumbers") && document.querySelector(".cm-content [class*=glsl-]"), "구문 강조 및 줄 번호 요소 (CodeMirror)");
     eq(studio.setProject({image:src,passes:[{name:"A",fragment:src,format:"rgba8",scale:1,channels:{}}],imageChannels:{}}), "테스트 패스 컴파일");
     eq(r.getPasses().length===1, "Buffer 생성");
     const previous = r.getPassDefinitions()[0].fragment;

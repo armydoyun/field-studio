@@ -3,7 +3,11 @@ const assert=require('node:assert/strict'),{fixture,src}=require('./logic-regres
 let passed=0,failed=0;
 async function test(name,fn){const f=fixture(true);try{await fn(f,id=>f.document.getElementById(id));passed++;console.log('PASS',name);}catch(e){failed++;console.error('FAIL',name,e.stack);}finally{f.dispose();}}
 // Keep the modal's pending promise separately; awaiting a click before Enter would deadlock.
-const open=(f,n)=>{n('studioCode').value=src;n('studioCode').setSelectionRange(0,0);const pending=n('studioGoto').click();n('studioDialogInput').value='3';return pending;};
+// 입력 모달은 편집기가 mount(textarea, ask)로 받아 쓴다(이름 바꾸기 등). 여기서는 그 ask로 '줄 번호로 이동' 입력을 열고, 결과로 커서를 옮긴다.
+const lineStart=line=>src.split('\n').slice(0,line-1).join('\n').length+(line>1?1:0);
+const open=(f,n)=>{n('studioCode').value=src;n('studioCode').setSelectionRange(0,0);
+ const pending=f.ask({title:'줄 번호로 이동',message:'이동할 줄을 입력하세요.',value:'1',label:'줄 번호',type:'number',min:1,max:src.split('\n').length,ok:'이동'}).then(v=>{if(v!==null){const at=lineStart(Number(v));n('studioCode').setSelectionRange(at,at);}return v;});
+ n('studioDialogInput').value='3';return pending;};
 (async()=>{
 for(const focused of ['studioDialogInput','studioDialogCancel','studioDialogClose','studioDialogOK'])await test('Enter accepts input even when focus is on '+focused,async(f,n)=>{
  const pending=open(f,n);let clicks=0;n(focused).addEventListener('click',()=>clicks++);n(focused).focus();

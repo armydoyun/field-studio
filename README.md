@@ -45,7 +45,11 @@ js/
   pass-manager.js
   texture-input.js
   studio.js
-  code-editor.js
+  codemirror.js       # CodeMirror 6 (MIT, 미리 번들링 · tools/codemirror에서 재생성) — 손으로 고치지 않는다
+  cm-editor.js        # GLSL 코드 편집기: CodeMirror 화면 + studio용 #studioCode 창구 · 팔레트 · 툴바
+  cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류
+  glsl-language.js    # GLSL 언어 정보(키워드·타입·앱 Uniform·심볼 표·자동 완성 후보)
+  glsl-highlight.js   # 가이드 코드 예시의 GLSL 강조
   ui.js
   input.js
   settings.js
@@ -53,6 +57,7 @@ js/
   package.json        # Node.js 검증을 위한 ESM 지정
   (loader.js 제거됨)
 tools/build_deploy.py # 순수 Python 배포 번들 생성기
+tools/codemirror/     # js/codemirror.js 생성 도구 (npm은 이 파일을 다시 만들 때만 필요)
 tools/update_sha_manifest.py # 실행 소스 SHA-256 목록 갱신
 deploy/index.html      # file:// 오프라인 실행 가능
 deploy/style.css

@@ -7,9 +7,11 @@ const select=(f,name)=>f.nodes.get('studioPassTabs').children.find(x=>x.textCont
 const edit=async(f,text)=>{const a=f.nodes.get('studioCode');a.value=text;await a.dispatchEvent({type:'input'});return a;};
 function timers(f){const pending=new Map();let serial=0;f.contexts.studio.setTimeout=(fn,ms)=>{pending.set(++serial,{fn,ms});return serial;};f.contexts.studio.clearTimeout=id=>pending.delete(id);return ms=>{for(const [id,t] of [...pending])if(t.ms===ms){pending.delete(id);t.fn();}};}
 const connected=()=>({image:src,passes:[pass('A'),{...pass('B'),channels:{0:{buffer:'A',frame:'current'},1:{buffer:'B',frame:'previous'}}}],imageChannels:{0:{buffer:'A',frame:'current'},1:{buffer:'B',frame:'current'}}});
-async function complete(f,text){const a=await edit(f,text);a.setSelectionRange(text.length,text.length);await a.dispatchEvent({type:'keydown',key:' ',code:'Space',ctrlKey:true});const box=f.nodes.get('studioCompletion');if(box.hidden)return [];
-  // 자동 완성 상자 = [후보 목록, 설명 칸]. 후보 버튼은 [종류 아이콘, 이름(일치 글자 강조), 상세]이므로 이름 칸의 글자만 모은다.
-  const label=node=>node.children.length?node.children.map(label).join(''):String(node.textContent??'');return box.children[0].children.map(button=>label(button.children[1]));}
+// 자동 완성 후보: 편집기(CodeMirror)와 같은 규칙(glsl-language.js)으로, 지금 편집 중인 소스(#studioCode 창구)와 렌더러에 등록된 파라미터를 본다.
+async function complete(f,text){const a=await edit(f,text),src=a.value,prefix=src.match(/[A-Za-z_]\w*$/)?.[0]||'',at=src.length;
+  const params=()=>f.renderer.getUserUniforms().map(u=>({name:u.name,type:u.type}));
+  const language=f.load('glsl-language').create({options:{builtins:[],userUniforms:params},uniformNames:()=>params().map(u=>u.name),highlighter:f.load('glsl-highlight').create([]),source:()=>a.value});
+  return language.gatherItems(src,at,at-prefix.length).items.filter(item=>item.kind!=='snippet'&&language.fuzzy(item.label,prefix)).map(item=>item.label);}
 (async()=>{
 await test('Execution and source retention have independent success states',async(f,n)=>{assert(f.studio.setProject(scene()));assert.equal(n('studioState').textContent,'실행 반영됨');assert.equal(n('studioStorageState').dataset.state,'saved');assert.match(n('studioStorageState').title,/소스·채널/);});
 await test('Pending edits become recoverable drafts without claiming execution',async(f,n)=>{const tick=timers(f);await edit(f,src+'\n// draft');assert.equal(n('studioStorageState').dataset.state,'pending');tick(550);assert.equal(n('studioStorageState').dataset.state,'draft');assert.equal(n('studioState').dataset.state,'dirty');assert.match(f.storage.get('webgl.shader-studio.draft.v2'),/draft/);});
