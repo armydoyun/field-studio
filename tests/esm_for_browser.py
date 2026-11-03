@@ -17,3 +17,24 @@ def mock_module(source):
     deps=','.join('"'+x[1]+'"' for x in imports)
     args=','.join(x[0] for x in imports)
     return 'define(['+deps+'],('+args+')=>{\n'+body+'\n});'
+
+# 모듈을 이름으로 등록하는 공용 로더. 테스트마다 손으로 쓰던 define() 분기를 대신한다.
+# import 줄을 읽어 의존 모듈을 먼저 넣으므로, 앱에 모듈이 추가돼도 테스트 하네스를 고칠 필요가 없다.
+SHIM = '''() => { window.define = (name, deps, factory) => {
+  const m = window.__testModules ??= {}; m[name] = factory(...deps.map(dep => m[dep]));
+  const alias = {"code-editor":"TestEditor", "studio":"TestStudio", "shader":"TestShader"}[name]; if(alias) window[alias] = m[name];
+}; }'''
+
+def named_module(source, name):
+    return mock_module(source).replace('define([', f'define({name!r},[', 1)
+
+def load_modules(page, root, names):
+    """root/js의 모듈 names와 그 의존 모듈을 의존 순서대로 페이지에 넣는다. TestEditor·TestStudio·TestShader 별칭도 만든다."""
+    page.evaluate(SHIM); loaded = []
+    def visit(name):
+        if name in loaded: return
+        source = (root / 'js' / f'{name}.js').read_text()
+        for match in IMPORT.finditer(source): visit(match.group(3))
+        page.add_script_tag(content=named_module(source, name)); loaded.append(name)
+    for name in names: visit(name)
+    return loaded

@@ -1,7 +1,7 @@
-// 브라우저에서 index.html을 연 뒤 개발자 콘솔에 전체 붙여넣어 실행한다.
+// 브라우저에서 개발용 index.html(로컬 HTTP 서버)을 연 뒤 개발자 콘솔에 전체 붙여넣어 실행한다. ES Module을 직접 import하므로 deploy/(file://)에서는 쓰지 않는다.
 (async () => {
     const assert = (ok, name) => { if(!ok) throw new Error(`FAIL: ${name}`); console.log(`PASS: ${name}`); };
-    const [Renderer, Shader] = await require.async(["renderer", "shader"]);
+    const Shader = (await import(new URL("js/shader.js", document.baseURI).href)).default;   // AMD require.async → 표준 ES Module import
     const source = Shader.fragment;
     assert(source.includes("uTime") && !source.includes("SDFResult"),"범용 Shader Art 시작 템플릿");
     assert(source.startsWith("#version 300 es"), "GLSL 버전");
