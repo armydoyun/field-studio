@@ -3,11 +3,13 @@
 //  - scope "global"(기본): 함수·상수 정의 → 편집기가 main() 바깥(전역)에 넣는다.
 //  - scope "main": main() 안에 쓰는 문장 → 커서 위치에 넣는다.
 //  - requires: 먼저 필요한 다른 조각. 삽입 시 코드에 아직 없는 것만 함께 넣는다.
-// 공식 출처: 해시는 Dave Hoskins "Hash without Sine"(MIT), 심플렉스 노이즈는 Ashima Arts/Stefan Gustavson(MIT),
+// 공식 출처: 실수 해시는 Dave Hoskins "Hash without Sine"(MIT), 정수 해시는 PCG(M. O'Neill)와 Jarzynski·Olano
+// "Hash Functions for GPU Rendering"(JCGT 2020)의 pcg3d/pcg4d·xxhash32, lowbias32는 Chris Wellons hash-prospector(퍼블릭 도메인),
+// 심플렉스 노이즈는 Ashima Arts/Stefan Gustavson(MIT),
 // SDF·스무스 연산은 Inigo Quilez가 공개한 표준 공식을 따른다.
   const CATEGORIES = [
-    {id:"hash", title:"해시 · 난수", desc:"좌표를 넣으면 0~1 의사난수를 돌려주는 함수. 노이즈·패턴·랜덤 배치의 기초입니다.", items:[
-      {id:"hash11", title:"hash11", desc:"float → float 난수", code:`float hash11(float p) {
+    {id:"hash", title:"해시 · 난수", desc:"좌표를 넣으면 0~1 의사난수를 돌려주는 빠른 실수 해시. 노이즈·패턴·랜덤 배치의 기초입니다. 좌표가 수만을 넘으면 정밀도가 모자라 편향·줄무늬가 생기니, 그때는 '해시 · 정수' 범주의 uhash(이름만 바꿔 쓰는 대체 함수)를 쓰세요.", items:[
+      {id:"hash11", title:"hash11", desc:"float → float 난수. 연속된 정수(0, 1, 2…)를 넣으면 분포가 약간 치우치므로 정수 번호에는 uhash11을 권장", code:`float hash11(float p) {
     p = fract(p * 0.1031);
     p *= p + 33.33;
     p *= p + p;
@@ -42,21 +44,70 @@
     vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
     p3 += dot(p3, p3.yxz + 33.33);
     return fract((p3.xxy + p3.yzz) * p3.zyx);
+}`}]},
+    {id:"hashInt", title:"해시 · 정수 (큰 좌표)", desc:"uint 비트 연산 해시. 좌표가 수십만~수천만이거나 시간이 오래 누적돼도 편향·줄무늬가 생기지 않습니다. 실수 해시와 쓰는 법이 같은 uhash 계열(hash21 → uhash21처럼 이름만 바꾸면 됨)부터 보세요. 그 아래는 uint를 직접 다루는 정수 해시입니다.", items:[
+      {id:"uhash11", title:"uhash11", desc:"float → float 난수 (hash11 대체). 실수의 비트 패턴을 해시하므로 큰 값·음수·연속 정수에도 고르게 분포", requires:["lowbias32"], code:`float uhash11(float p) {
+    return float(lowbias32(floatBitsToUint(p)) >> 8u) * (1.0 / 16777216.0);
 }`},
-      {id:"pcg", title:"PCG 정수 해시", desc:"uint 기반 고품질 난수. 큰 좌표·누적 시뮬레이션에서도 패턴이 생기지 않음", code:`uint pcgHash(uint v) {
+      {id:"uhash21", title:"uhash21", desc:"vec2 → float 난수 (hash21 대체). 셀·픽셀마다 값 하나, 좌표 크기와 관계없이 균일", requires:["pcg3d"], code:`float uhash21(vec2 p) {
+    return float(pcg3d(uvec3(floatBitsToUint(p), 0u)).x >> 8u) * (1.0 / 16777216.0);
+}`},
+      {id:"uhash22", title:"uhash22", desc:"vec2 → vec2 난수 (hash22 대체). 두 값이 서로 독립", requires:["pcg3d"], code:`vec2 uhash22(vec2 p) {
+    return vec2(pcg3d(uvec3(floatBitsToUint(p), 0u)).xy >> 8u) * (1.0 / 16777216.0);
+}`},
+      {id:"uhash13", title:"uhash13", desc:"vec3 → float 난수 (hash13 대체). z에 시드·프레임 번호를 넣어 다른 난수 줄기를 만들 수 있음", requires:["pcg3d"], code:`float uhash13(vec3 p) {
+    return float(pcg3d(floatBitsToUint(p)).x >> 8u) * (1.0 / 16777216.0);
+}`},
+      {id:"uhash33", title:"uhash33", desc:"vec3 → vec3 난수 (hash33 대체). 3D 셀의 무작위 벡터·색", requires:["pcg3d"], code:`vec3 uhash33(vec3 p) {
+    return vec3(pcg3d(floatBitsToUint(p)) >> 8u) * (1.0 / 16777216.0);
+}`},
+      {id:"uintToUnit", title:"uint → 0~1 실수", desc:"정수 해시 결과를 [0, 1) 실수로. 상위 24비트를 써서 1.0이 나오지 않고 모든 값이 같은 간격", code:`float uintToUnit(uint x) {
+    return float(x >> 8u) * (1.0 / 16777216.0);
+}`},
+      {id:"lowbias32", title:"lowbias32", desc:"uint → uint, 가장 싸면서 고른 1D 정수 해시 (xorshift-곱셈 3단). 2D는 lowbias32(x ^ lowbias32(y))처럼 이어서", code:`uint lowbias32(uint x) {
+    x ^= x >> 16u; x *= 0x7feb352du;
+    x ^= x >> 15u; x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}`},
+      {id:"pcg3d", title:"pcg3d", desc:"uvec3 → uvec3, 세 값이 모두 고른 해시. 2D 정수 좌표는 pcg3d(uvec3(ivec2(floor(p)), seed))처럼 셋째 칸에 시드를 넣어 씀", code:`uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}`},
+      {id:"pcg4d", title:"pcg4d", desc:"uvec4 → uvec4, 픽셀 x·y + 프레임 + 샘플 번호처럼 입력이 4개일 때 (누적 렌더링·패스 트레이싱)", code:`uvec4 pcg4d(uvec4 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+    v ^= v >> 16u;
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+    return v;
+}`},
+      {id:"xxhash32", title:"xxhash32 (x, y, 시드)", desc:"uvec3 → uint, 품질이 가장 높은 축에 드는 해시. 값 하나만 필요할 때 pcg3d보다 연산이 적음", code:`uint xxhash32(uvec3 p) {
+    const uint P2 = 2246822519u, P3 = 3266489917u, P4 = 668265263u, P5 = 374761393u;
+    uint h = p.z + P5 + p.x * P3;
+    h = P4 * ((h << 17u) | (h >> 15u));
+    h += p.y * P3;
+    h = P4 * ((h << 17u) | (h >> 15u));
+    h = P2 * (h ^ (h >> 15u));
+    h = P3 * (h ^ (h >> 13u));
+    return h ^ (h >> 16u);
+}`},
+      {id:"pcg", title:"PCG 정수 해시", desc:"uint 1개 → uint 해시와 정수 픽셀 좌표 + 시드용 randPCG. 큰 좌표·누적 시뮬레이션에서도 패턴이 생기지 않음", code:`uint pcgHash(uint v) {
     uint state = v * 747796405u + 2891336453u;
     uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
 // 픽셀 좌표 + 시드 → 0~1 난수
 float randPCG(uvec2 p, uint seed) {
-    return float(pcgHash(p.x + pcgHash(p.y + pcgHash(seed)))) / 4294967295.0;
+    return float(pcgHash(p.x + pcgHash(p.y + pcgHash(seed))) >> 8u) * (1.0 / 16777216.0);   // 24비트 → [0, 1)
 }`},
       {id:"frameRandom", title:"프레임마다 바뀌는 난수", desc:"픽셀·프레임별로 다른 값 (노이즈 디더·누적 렌더링). uFrame 필요", scope:"main", requires:["pcg"], code:`float rnd = randPCG(uvec2(gl_FragCoord.xy), uint(uFrame));`}]},
     {id:"noise", title:"노이즈 2D", desc:"부드럽게 변하는 무작위 값. 구름·지형·흐름·질감에 씁니다. 3D 버전은 '노이즈 3D' 범주에 있습니다.", items:[
-      {id:"noise1D", title:"noise1D", desc:"1D 부드러운 노이즈, 0~1. 카메라 흔들림·깜빡임·값의 자연스러운 흔들림", requires:["hash11"], code:`float noise1D(float x) {
-    float i = floor(x), f = fract(x);
-    return mix(hash11(i), hash11(i + 1.0), f * f * (3.0 - 2.0 * f));
+      {id:"noise1D", title:"noise1D", desc:"1D 부드러운 노이즈, 0~1. 카메라 흔들림·깜빡임·값의 자연스러운 흔들림", requires:["uhash11"], code:`float noise1D(float x) {
+    float i = floor(x), f = fract(x);   // 정수 격자점 해시는 uhash11(hash11은 연속 정수에서 분포가 치우침)
+    return mix(uhash11(i), uhash11(i + 1.0), f * f * (3.0 - 2.0 * f));
 }`},
       {id:"valueNoise", title:"valueNoise (2D)", desc:"격자 값 보간 노이즈, 0~1", requires:["hash21"], code:`float valueNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);

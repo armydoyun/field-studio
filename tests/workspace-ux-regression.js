@@ -111,5 +111,47 @@ await test('Pack export exposes busy state and restores its label even after fai
  const label=n('studioExportPack').textContent;const promise=n('studioExportPack').click();assert.equal(n('studioExportPack').disabled,true);assert.equal(n('studioExportPack').attrs['aria-busy'],'true');await promise;assert.equal(n('studioExportPack').disabled,false);assert.equal(n('studioExportPack').textContent,label);assert.equal(n('studioExportPack').attrs['aria-busy'],undefined);
  const input=n('studioChannels').children[0].children[1];input.value='tex:missing';await input.dispatchEvent({type:'change'});await n('studioExportPack').click();assert.equal(n('studioExportPack').disabled,false);assert.equal(n('studioExportPack').textContent,label);assert.match(n('studioMessage').textContent,/원본 이미지/);
 });
+// ---- 화면 전환 상태 유지 ----
+await test('Adding then removing a pass returns to the Image cursor and scroll',async(f,n)=>{
+ const area=n('studioCode');area.setSelectionRange(9,14);area.scrollTop=64;
+ await n('studioAdd').click();assert.equal(f.studio.getProject().passes.length,1);assert.equal(area.selectionStart,0);
+ await n('studioRemove').click();assert.equal(f.studio.getProject().passes.length,0);
+ assert.equal(area.selectionStart,9);assert.equal(area.selectionEnd,14);assert.equal(area.scrollTop,64);
+});
+await test('Re-rendering the shown pass with unchanged source keeps the cursor',async(f,n)=>{
+ const area=n('studioCode');let writes=0,current=area.value;
+ area.setSelectionRange(5,8);area.scrollTop=30;
+ Object.defineProperty(area,'value',{configurable:true,get:()=>current,set:v=>{writes++;current=v;}});
+ f.studio.setProject({image:f.studio.getProject().image,passes:[],imageChannels:{}});
+ assert.equal(writes,0,'same source must not be written back into the editor');assert.equal(area.selectionStart,5);assert.equal(area.scrollTop,30);
+});
+await test('Compact parameters button opens the panel over the editor without closing it',async(f,n)=>{
+ f.studio.open();assert.equal(n('studioDock').hidden,false);
+ await n('studioParameters').click();assert.equal(n('studioDock').hidden,false,'editor stays open under the panel');
+ assert.equal(f.document.body.classList.contains('panel-hidden'),false);assert.equal(n('stage').inert,true);
+ await n('panelBackdrop').click();assert.equal(n('stage').inert,false);assert.equal(n('studioDock').hidden,false,'closing the panel returns to the editor');
+},true);
+await test('Editor open state is saved and reopened on the next start',async(f,n)=>{
+ f.studio.open();assert.equal(JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1')).editor,true);
+ f.studio.close();assert.equal(JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1')).editor,false);
+});
+await test('Saved open editor is restored at start',async()=>{
+ // 모의 DOM의 hidden 기본값은 false라 열림 여부는 open()이 하는 일(코드 창 포커스·hidden=false 지정)로 확인한다.
+ const g=fixture(false,false,{'webgl.shader-studio.workspace.v1':JSON.stringify({editor:true})});try{assert.equal(g.document.activeElement,g.nodes.get('studioCode'));assert.equal(g.nodes.get('studioDock').hidden,false);}finally{g.dispose();}
+ const h=fixture(false,false,{'webgl.shader-studio.workspace.v1':JSON.stringify({editor:false})});try{assert.notEqual(h.document.activeElement,h.nodes.get('studioCode'));}finally{h.dispose();}
+});
+await test('Fullscreen hides the editor and restores it (with focus mode) afterwards',async(f,n)=>{
+ f.studio.open();await n('studioMaximize').click();assert.equal(n('stage').classList.contains('studio-maximized'),true);
+ f.document.fullscreenElement=n('stage');await f.document.dispatchEvent({type:'fullscreenchange'});assert.equal(n('studioDock').hidden,true);
+ assert.equal(JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1')).editor,true,'a reload during fullscreen still reopens the editor');
+ f.document.fullscreenElement=null;await f.document.dispatchEvent({type:'fullscreenchange'});
+ assert.equal(n('studioDock').hidden,false);assert.equal(n('stage').classList.contains('studio-maximized'),true);
+ f.studio.close();f.document.fullscreenElement=n('stage');await f.document.dispatchEvent({type:'fullscreenchange'});
+ f.document.fullscreenElement=null;await f.document.dispatchEvent({type:'fullscreenchange'});assert.equal(n('studioDock').hidden,true,'a closed editor stays closed');
+});
+await test('Starting a project from the side-layout tools drawer closes the drawer over the code',async(f,n)=>{
+ f.studio.open();if(n('studioTools').hidden)await n('studioToolsToggle').click();assert.equal(n('studioTools').hidden,false);
+ assert(await n('studioExamplePipeline').click()!==false);assert.equal(f.studio.getProject().passes.length,2);assert.equal(n('studioTools').hidden,true);
+},false,{'webgl.shader-studio.layout.v1':JSON.stringify({layout:'right'})});
 console.log(`Workspace UX: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
 })();

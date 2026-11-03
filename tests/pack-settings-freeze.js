@@ -28,7 +28,7 @@ const settings=Settings.mount(r);
 const backup=settings.snapshot();ok(backup.user[0].name==='uGain' && !Object.hasOwn(backup,'required'),'단일 사용자 Uniform 스냅샷');
 const pack=JSON.parse(JSON.stringify(backup));pack.rendering.fpsLimit=30;pack.raymarch.maxSteps=256;pack.panelHidden=true;
 ok(settings.validatePack(pack)===pack,'Pack 유효성 검사');settings.applyPack(pack);
-ok(state.fpsLimit===30 && march.maxSteps===256 && hidden,'렌더링/레이마칭/패널 적용');
+ok(state.fpsLimit===30 && march.maxSteps===256 && !hidden,'렌더링/레이마칭 적용 · 패널 표시는 Pack을 열어도 그대로');
 ok(JSON.parse(stored).rendering.fpsLimit===30,'Pack 설정 저장 연동');
 for(const [key,mutate] of Object.entries({
   invalidFps:x=>x.rendering.fpsLimit=241,

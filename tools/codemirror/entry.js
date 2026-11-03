@@ -4,7 +4,7 @@ export {EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLin
   highlightSpecialChars, hoverTooltip, Decoration, ViewPlugin, WidgetType, showTooltip, scrollPastEnd, placeholder, highlightTrailingWhitespace, closeHoverTooltips} from "@codemirror/view";
 export {defaultKeymap, indentWithTab, toggleComment, toggleBlockComment, indentMore, indentLess, selectLine, deleteLine, cursorMatchingBracket,
   addCursorAbove, addCursorBelow, copyLineDown, copyLineUp, moveLineDown, moveLineUp, insertBlankLine, selectAll, toggleTabFocusMode} from "@codemirror/commands";
-export {StreamLanguage, HighlightStyle, syntaxHighlighting, bracketMatching, indentOnInput, indentUnit, foldGutter, foldKeymap, foldService, codeFolding, foldAll, unfoldAll, foldCode, unfoldCode} from "@codemirror/language";
+export {StreamLanguage, HighlightStyle, syntaxHighlighting, bracketMatching, indentOnInput, indentUnit, foldGutter, foldKeymap, foldService, codeFolding, foldAll, unfoldAll, foldCode, unfoldCode, foldedRanges, foldEffect} from "@codemirror/language";
 export {search, searchKeymap, openSearchPanel, closeSearchPanel, highlightSelectionMatches, gotoLine, selectNextOccurrence, selectSelectionMatches} from "@codemirror/search";
 export {autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap, startCompletion, closeCompletion, snippet} from "@codemirror/autocomplete";
 export {setDiagnostics, lintGutter, lintKeymap, nextDiagnostic, previousDiagnostic, openLintPanel, closeLintPanel} from "@codemirror/lint";

@@ -53,11 +53,13 @@ with sync_playwright() as p:
     check(page.evaluate('testRenderer.getUserUniforms().find(u=>u.name==="uRMMaxSteps").options.max===512'),'Ray parameter slider metadata')
     page.evaluate('testRenderer.setUniform("uRMHeatmap",true)')
     check(page.evaluate('testRenderer.getUserUniforms().find(u=>u.name==="uRMHeatmap").value===true'),'Ray debug parameter editable')
+    if page.evaluate('document.getElementById("studioTools").hidden'):page.locator('#studioToolsToggle').click()   # 옆 배치에서는 프로젝트를 바꾸면 서랍이 닫힌다
     page.locator('#studioExampleRaymarch').click();page.wait_for_timeout(160)
     check(page.evaluate('testRenderer.getUserUniforms().length===6'),'reapplying Starter does not duplicate Uniforms')
     page.evaluate('testStudio.setProject({image:TestShader.fragment,passes:[],imageChannels:{}})')
     check(page.evaluate('testStudio.getProject().image===TestShader.fragment'),'return to general Shader Art')
     page.evaluate('''() => {for(const u of testRenderer.getUserUniforms())testRenderer.removeUniform(u.name);window.failUniform="uRMNormalEpsilon";}''')
+    if page.evaluate('document.getElementById("studioTools").hidden'):page.locator('#studioToolsToggle').click()   # 옆 배치에서는 프로젝트를 바꾸면 서랍이 닫힌다
     page.locator('#studioExampleRaymarch').click();page.wait_for_timeout(160)
     check(page.evaluate('testStudio.getProject().image===TestShader.fragment'),'failed preset leaves previous project unchanged')
     check(page.evaluate('testRenderer.getUserUniforms().length===0'),'failed preset removes partially created Uniforms')
