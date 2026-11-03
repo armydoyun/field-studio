@@ -47,4 +47,4 @@
     return Array.isArray(value) ? value.map(clamp) : clamp(value);
   };
   const sameOptions = (a = {}, b = {}) => ["min","max","step","color"].every(key => a[key] === b[key]);
-  export {parseLine, collect, clampValue, sameOptions};
+  export {collect, clampValue, sameOptions};

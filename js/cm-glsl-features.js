@@ -5,10 +5,8 @@
 //  · 정의로 이동(F12 · Ctrl+클릭), 이름 바꾸기(F2).
 //  · 들여쓰기 안내선, 컴파일 오류 메시지를 줄 끝에 표시(Error Lens).
 // 소스 분석은 glsl-language.js가 맡고, 여기서는 화면·키 동작만 다룬다.
-import * as Highlight from "./glsl-highlight.js";
   const create = ({CM, language, options = {}, ask, notify = () => {}, onScrub = () => {}}) => {
-    const {cleanOf, symbolsOf, KEYWORDS, TYPES, isIdent} = language;
-    const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const {cleanOf, symbolsOf, KEYWORDS, TYPES, isIdent, escapeRe} = language;
     const docText = state => state.doc.toString();
     const inCode = (src, pos) => cleanOf(src)[pos] === src[pos] || /\s/.test(src[pos] || "");   // 주석·문자열·전처리문 밖
     const wordAround = (src, pos) => {

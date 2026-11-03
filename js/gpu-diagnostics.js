@@ -101,4 +101,4 @@
     init();
     return {begin, end, endFrame, getResults, setEnabled, onLost, restore, dispose};
   };
-  export {GLSL_TYPES, clearErrors, reflectUniforms, describeLocations, createGpuTimer};
+  export {clearErrors, reflectUniforms, describeLocations, createGpuTimer};

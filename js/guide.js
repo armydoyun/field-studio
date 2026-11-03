@@ -228,6 +228,18 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       return node;
     };
     const flash = (button, text) => { const before = button.textContent; button.textContent = text; button.disabled = true; setTimeout(() => { button.textContent = before; button.disabled = false; }, 1400); };
+    // "복사" 버튼: 누를 때 text()의 결과를 클립보드에 넣는다.
+    const copyButton = text => {
+      const copy = element("button", "", "복사"); copy.type = "button";
+      copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(text()); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); } });
+      return copy;
+    };
+    // 범주 탭 버튼: 누르면 select(id)로 범주를 바꾼다.
+    const categoryChip = (chips, id, label, count, select) => {
+      const button = element("button"); button.type = "button"; button.dataset.category = id; button.setAttribute("role", "tab");
+      button.append(document.createTextNode(label), element("span", "", String(count)));
+      button.addEventListener("click", () => select(id)); chips.append(button);
+    };
     const runAction = action => {
       if(action === "tour") { dialog.close(); startTour(); }
       else if(action === "gallery") { dialog.close(); gallery?.open(false); }
@@ -260,12 +272,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       const tags = element("span", "snippet-tags");
       tags.append(element("em", item.replace ? "is-replace" : item.scope === "main" ? "is-main" : "is-global", item.replace ? "패스 교체" : item.scope === "main" ? "main() 안" : "전역 함수"));
       if(item.requires?.length) tags.append(element("em", "is-dep", `+ ${item.requires.map(titleOf).join(", ")}`));
-      const copy = element("button", "", "복사"); copy.type = "button";
-      copy.addEventListener("click", async () => {
-        const plan = Snippets.plan(item.id, "");
-        const text = [...plan.globals.map(entry => entry.code), plan.mainCode].filter(Boolean).join("\n\n");
-        try { await navigator.clipboard.writeText(text); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); }
-      });
+      const copy = copyButton(() => { const plan = Snippets.plan(item.id, ""); return [...plan.globals.map(entry => entry.code), plan.mainCode].filter(Boolean).join("\n\n"); });
       const insert = element("button", "guide-insert", item.replace ? "패스 교체" : "삽입"); insert.type = "button";
       insert.title = item.replace ? "현재 편집 중인 패스 전체를 이 코드로 바꿉니다" : "필요한 함수와 함께 편집기에 넣습니다";
       insert.addEventListener("click", () => insertItem(item, insert));
@@ -284,11 +291,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
         if(!items.length) list.append(element("p", "guide-empty", "이 범주에는 검색어와 맞는 조각이 없습니다."));
         for(const chip of chips.children) { const active = chip.dataset.category === snippetCategory; chip.classList.toggle("is-active", active); chip.setAttribute("aria-selected", String(active)); }
       };
-      const chip = (id, label, count) => {
-        const button = element("button"); button.type = "button"; button.dataset.category = id; button.setAttribute("role", "tab");
-        button.append(document.createTextNode(label), element("span", "", String(count)));
-        button.addEventListener("click", () => { snippetCategory = id; fill(); }); chips.append(button);
-      };
+      const chip = (id, label, count) => categoryChip(chips, id, label, count, next => { snippetCategory = next; fill(); });
       if(words.length) chip("all", "전체 검색", Snippets.ALL.filter(matches).length);
       for(const category of Snippets.CATEGORIES) {
         const count = words.length ? category.items.filter(matches).length : category.items.length;
@@ -305,9 +308,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       head.append(element("strong", "ref-name", item.name), highlighter.paint(element("code", "ref-sig"), item.sig)); row.append(head, rich("p", item.desc, "ref-desc"));
       if(item.c) { const c = element("p", "ref-c"); c.append(element("span", "", "C 대응"), element("code", "", item.c)); row.append(c); }
       if(item.ex) {
-        const ex = element("div", "ref-ex"), copy = element("button", "", "복사"); copy.type = "button";
-        copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(item.ex); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); } });
-        ex.append(codeBlock(item.ex), copy); row.append(ex);
+        const ex = element("div", "ref-ex"); ex.append(codeBlock(item.ex), copyButton(() => item.ex)); row.append(ex);
       }
       return row;
     };
@@ -325,11 +326,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
         if(!items.length) list.append(element("p", "guide-empty", "검색어와 맞는 내장 함수가 없습니다."));
         for(const chip of chips.children) { const active = chip.dataset.category === referenceCategory; chip.classList.toggle("is-active", active); chip.setAttribute("aria-selected", String(active)); }
       };
-      const chip = (id, label, count) => {
-        const button = element("button"); button.type = "button"; button.dataset.category = id; button.setAttribute("role", "tab");
-        button.append(document.createTextNode(label), element("span", "", String(count)));
-        button.addEventListener("click", () => { referenceCategory = id; fill(); }); chips.append(button);
-      };
+      const chip = (id, label, count) => categoryChip(chips, id, label, count, next => { referenceCategory = next; fill(); });
       if(words.length) chip("all", "검색 결과", Reference.ALL.filter(matches).length);
       else for(const category of Reference.CATEGORIES) chip(category.id, category.title, category.items.length);
       fill(); wrap.append(chips, intro, list); return wrap;
@@ -374,9 +371,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     const codeFigure = block => {
       const figure = element("figure", "guide-code"), bar = element("figcaption"), pre = codeBlock(block.code);
       bar.append(element("span", "", block.title || "GLSL"));
-      const copy = element("button", "", "복사"); copy.type = "button";
-      copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(block.code); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); } });
-      bar.append(copy);
+      bar.append(copyButton(() => block.code));
       if(block.insert) {
         const insert = element("button", "guide-insert", block.insert === "replace" ? "현재 패스를 이 코드로 교체" : "편집기에 삽입"); insert.type = "button";
         insert.addEventListener("click", async () => {
@@ -539,4 +534,4 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     listen(window, "resize", place);
     listen($("galleryTour"), "click", () => { $("gallery")?.close(); startTour(); });
     return {open, show, startTour, dispose:() => { controller.abort(); overlay.remove(); }};
-  }; export {mount, TOPICS};
+  }; export {mount};

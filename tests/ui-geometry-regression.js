@@ -30,7 +30,7 @@ console.log('Static CSS contracts, not a rendered pixel measurement.');
 for(const m of html.matchAll(/<button\b([^>]*)class="[^"]*glyph-icon[^"]*"([^>]*)>([\s\S]*?)<\/button>/g)){
  assert(/aria-label="[^" ]/.test(m[1]+m[2]),'Icon-only buttons need an accessible name');assert.equal(m[3].trim(),'','Icon-only controls must not depend on font glyph metrics');
 }
-for(const selector of ['.glyph-icon::before','.studio-group>summary::after','.studio-code-tools>summary::after']){
+for(const selector of ['.glyph-icon::before','.studio-group>summary::after']){
  assert.equal(base(selector).get('width'),'16px');assert.equal(base(selector).get('height'),'16px');assert.equal(base(selector).get('content'),'""');assert.equal(base(selector).get('mask'),'var(--icon) center/contain no-repeat');
 }
 assert.equal(base('.studio-texture .icon-close').get('width'),'28px');

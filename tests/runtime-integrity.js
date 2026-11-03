@@ -30,5 +30,6 @@ for(const name of names){const source=fs.readFileSync(path.join(jsdir,name+'.js'
 const deploy=path.join(root,'deploy');
 assert(fs.existsSync(path.join(deploy,'js/min.js')),'Offline bundle missing');
 assert(fs.readFileSync(path.join(deploy,'index.html'),'utf8').includes('<script src="./js/min.js"></script>'),'offline entry missing');
-assert(!/\b(?:define|require)\s*\(/.test(fs.readFileSync(path.join(deploy,'js/min.js'),'utf8')),'bundle contains loader');
+// AMD define()/require() 호출만 찾는다. 번들에 든 CodeMirror의 `Facet.define(` 호출과 `static define(` 메서드 정의는 제외한다.
+assert(!/(?<![.\w$])(?<!static\s)(?:define|require)\s*\(/.test(fs.readFileSync(path.join(deploy,'js/min.js'),'utf8')),'bundle contains loader');
 console.log(`PASS ${files.length} runtime files SHA-256, ${names.size} ES Modules, import cycle, ${ids.size} DOM IDs and offline bundle`);

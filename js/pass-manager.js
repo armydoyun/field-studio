@@ -356,4 +356,4 @@ void main(){
     return {setPasses,updatePasses,validateConfiguration,refreshPrograms,setPassFragment,setPassChannels,getSpecs,setImageChannels,setPreview,setPreviewOptions,
       getPreviewOptions:() => ({...previewOptions}),getPreviewAttachment:() => previewAttachment,ensureTargets,drawPasses,bindImage,unbindImage,drawPreview,
       captureThumbnails,readPixel,resetTargets,getPasses,getImageChannels,getPreview,getMemoryBytes,getReflection,detachTexture,onLost,restore,dispose};
-  }; export {createPassManager, makeLocations, FORMATS};
+  }; export {createPassManager, makeLocations};

@@ -297,6 +297,10 @@
                                         <button id="studioPaletteOpen" type="button" class="studio-menu-palette" title="모든 명령을 이름으로 검색해 실행 · @ 함수·변수로 이동 · : 줄 번호">명령 팔레트… <kbd>Ctrl+Shift+P</kbd></button>
                                         <p class="studio-menu-title">편집</p>
                                         <button id="studioReplace" type="button" title="코드 검색·치환 (Ctrl+H)">찾아 바꾸기 <kbd>Ctrl+H</kbd></button>
+                                        <button id="studioDefinition" type="button" title="커서 아래 이름의 정의로 이동 (F12 · Ctrl+클릭)">정의로 이동 <kbd>F12</kbd></button>
+                                        <button id="studioRename" type="button" title="커서 아래 이름을 이 패스에서 모두 바꾸기 (F2)">이름 바꾸기 <kbd>F2</kbd></button>
+                                        <button id="studioLintPanel" type="button" title="컴파일 오류를 목록으로 보기 · F8로 다음 오류 (Ctrl+Shift+M)">오류 목록 <kbd>Ctrl+Shift+M</kbd></button>
+                                        <div class="studio-menu-row"><span>코드 접기</span><span class="studio-stepper"><button id="studioFoldAll" type="button" title="모든 블록 접기 (Ctrl+Alt+[)">모두 접기</button><button id="studioUnfoldAll" type="button" title="모든 블록 펴기 (Ctrl+Alt+])">펴기</button></span></div>
                                         <button id="studioSampleUV" type="button" title="texture(iChannel0, uv) 샘플 코드 삽입">텍스처 읽기 코드 삽입 <kbd>texture</kbd></button>
                                         <button id="studioSamplePixel" type="button" title="texelFetch(iChannel0, 정수 픽셀 좌표, 0) 삽입">픽셀 정확히 읽기 코드 삽입 <kbd>texelFetch</kbd></button>
                                         <p class="studio-menu-title">파일 · 현재 패스만</p>
@@ -316,15 +320,8 @@
                                 </details>
                             </div>
                         </div>
-                        <div id="studioFindPanel" class="studio-find-panel" hidden>
-                            <div class="studio-find-row"><input id="studioFindQuery" placeholder="현재 패스에서 검색" aria-label="검색어"><span id="studioFindCount">0 results</span>
-                                <button id="studioFindPrev" title="이전 검색 결과 (Shift+F3)" class="glyph-icon icon-up" type="button" aria-label="이전 검색 결과"></button><button id="studioFindNext" title="다음 검색 결과 (F3)" class="glyph-icon icon-down" type="button" aria-label="다음 검색 결과"></button><button id="studioFindClose" aria-label="검색 닫기" title="검색 닫기 (Esc)" class="glyph-icon icon-close"></button></div>
-                            <div id="studioReplaceRow" class="studio-find-row" hidden><input id="studioReplaceValue" placeholder="바꿀 텍스트" aria-label="치환할 텍스트"><button id="studioReplaceOne" title="현재 검색 결과 하나만 바꾸기">Replace</button><button id="studioReplaceAll" title="검색 결과 전체 바꾸기">Replace all</button></div>
-                        </div>
-                        <div class="studio-editor-frame"><pre id="studioLines" class="studio-gutter" aria-hidden="true"></pre><div class="studio-code-surface"><pre id="studioHighlight" aria-hidden="true"></pre><textarea id="studioCode" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" aria-label="GLSL Fragment Shader 코드" wrap="off" aria-describedby="studioSignature"></textarea><div id="studioCompletion" class="studio-completion" role="listbox" aria-label="GLSL 자동 완성 후보" hidden></div></div>
-                            <!-- 커서가 함수 이름·호출 안에 있으면 시그니처와 설명을 보여준다(내장 함수 + 이 패스의 함수). -->
-                            <div id="studioSignature" class="studio-signature" role="status" aria-live="polite" hidden></div>
-                        </div>
+                        <!-- CodeMirror 6 편집기(js/cm-editor.js)가 이 안에 화면을 만든다. 아래 textarea는 studio가 소스를 읽고 쓰는 숨은 창구다. -->
+                        <div class="studio-editor-frame"><textarea id="studioCode" class="studio-code-model" hidden tabindex="-1" aria-hidden="true" spellcheck="false" autocomplete="off"></textarea></div>
                     </div>
                 </div>
                 <div id="studioDraft" class="studio-draft" hidden><span>복구 가능한 미적용 편집본이 있습니다.</span><button id="studioDraftRestore" title="저장된 미적용 편집본 복구">편집본 복구</button><button id="studioDraftDiscard" title="미적용 편집본 버리기">버리기</button></div>
