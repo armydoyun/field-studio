@@ -9,11 +9,11 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':1440,'height':900}); errors=[]; count=[0]
     page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
-    page.evaluate('''() => window.define=(deps,factory)=>{
+    page.evaluate('''() => window.define=(deps,factory)=>{if(deps[0]==="glsl-highlight"){window.TestEditor=factory(window.TestEditor);return;}
       if(!deps.length){const m=factory();if(m.raymarch)window.TestShader=m;else window.TestEditor=m;}
       else if(deps[0]==="code-editor")window.TestStudio=factory(window.TestEditor);
     }''')
-    for file in ['shader','code-editor','studio']:page.add_script_tag(content=mock_module((root/'js'/f'{file}.js').read_text()))
+    for file in ['shader','glsl-highlight','code-editor','studio']:page.add_script_tag(content=mock_module((root/'js'/f'{file}.js').read_text()))
     page.evaluate('''() => {
       const Shader=window.TestShader;
       const state={image:Shader.fragment,passes:[],imageChannels:{}}, uniforms=new Map();

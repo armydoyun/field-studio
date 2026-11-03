@@ -1233,21 +1233,47 @@ void main() {
     .replace(/uSurfaceEpsilon/g,"uRMSurfaceEpsilon").replace(/uNormalEpsilon/g,"uRMNormalEpsilon")
     .replace(/uDebugRaySteps/g,"uRMHeatmap"), orbitHome, rayUniforms, passes:[], imageChannels:{}};
 })();
-const code_editor=(()=>{
+const glsl_highlight=(()=>{
+// GLSL 문법 강조 공용 모듈. 편집기(code-editor.js)와 가이드(guide.js)의 코드 예시가 같은 규칙·색(.glsl-* 클래스)을 쓴다.
+// DOM 노드(텍스트 + span)만 만들며 HTML 문자열은 해석하지 않는다.
+  const KEYWORDS = "uniform|out|in|inout|const|precision|highp|mediump|lowp|if|else|for|while|do|break|continue|return|discard|struct|layout|switch|case|default|true|false|flat|smooth";
+  const TYPES = "void|float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler2D|samplerCube|sampler3D";
+  const TOKENS = new RegExp(String.raw`\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|#[^\n]*|"(?:\\.|[^"\\])*"|\b(?:${KEYWORDS})\b|\b(?:${TYPES})\b|\bgl_\w+\b|\b[A-Za-z_]\w*(?=\s*\()|\b\d+(?:\.\d*)?(?:[eE][+-]?\d+)?[uU]?\b|\.\d+(?:[eE][+-]?\d+)?`, "g");
+  const KEYWORD = new RegExp(`^(?:${KEYWORDS})$`), TYPE = new RegExp(`^(?:${TYPES})$`);
+  // 레퍼런스에 없어도 자주 쓰는 내장 함수는 항상 내장 색으로 칠한다.
+  const DEFAULT_BUILTINS = "texture textureSize texelFetch textureLod normalize length distance dot cross mix clamp smoothstep step pow exp log sin cos tan atan abs min max floor ceil fract mod sqrt reflect refract radians degrees".split(" ");
+  // builtinNames: 내장 함수 이름 목록(호출 이름 + '('이 여기에 있으면 builtin, 없으면 사용자 함수 색).
+  const create = (builtinNames = []) => {
+    const builtins = new Set([...builtinNames].filter(name => /^[A-Za-z_]\w*$/.test(name))); for(const name of DEFAULT_BUILTINS) builtins.add(name);
+    const tokenClass = token => token.startsWith("//")||token.startsWith("/*")?"glsl-comment":token.startsWith("#")?"glsl-directive":token.startsWith('"')?"glsl-string":
+      KEYWORD.test(token)?"glsl-keyword":TYPE.test(token)?"glsl-type":/^[.\d]/.test(token)?"glsl-number":token.startsWith("gl_")||builtins.has(token)?"glsl-builtin":"glsl-function";
+    // source를 강조한 DocumentFragment를 돌려준다.
+    const fragment = source => {
+      const src = String(source), frag = document.createDocumentFragment(); let offset = 0;
+      for(const match of src.matchAll(TOKENS)) {
+        if(match.index > offset) frag.append(document.createTextNode(src.slice(offset, match.index)));
+        const token = match[0], span = document.createElement("span"); span.textContent = token; span.className = tokenClass(token);
+        frag.append(span); offset = match.index + token.length;
+      }
+      if(offset < src.length) frag.append(document.createTextNode(src.slice(offset)));
+      return frag;
+    };
+    // node의 내용을 강조된 source로 바꾼다. 텍스트 내용(textContent)은 source와 같게 유지된다.
+    const paint = (node, source = node.textContent) => { node.replaceChildren(fragment(source)); node.classList?.add("glsl-code"); return node; };
+    return {tokenClass, fragment, paint, builtins};
+  };
+  return {create,TOKENS};
+})();
+const code_editor=((Highlight)=>{
 // 로컬 textarea 기반 GLSL 편집 보조 도구. 별도 라이브러리나 CDN이 필요하지 않다.
+
   // options.lookup(name) → {sig, desc} | null : 내장 함수 설명(시그니처 힌트). options.onScrub() : 숫자를 끌어 바꾸는 중 즉시 적용 요청.
   const mount = (textarea,ask,beforeEdit=()=>{},uniformNames=()=>[],options={}) => {
     const $ = id => document.getElementById(id), ac = new AbortController(), signal = ac.signal;
     const listen = (target, type, fn) => target?.addEventListener(type, fn, {signal});   // 선택 요소(버튼 등)가 없어도 편집기는 동작한다
     const gutter = $("studioLines"), highlight = $("studioHighlight"), position = $("studioCursor"), findPanel = $("studioFindPanel");
     // 강조: 내장 함수 이름은 레퍼런스(options.builtins)에서 받는다. 호출(이름 + '(')은 내장이면 builtin, 아니면 사용자 함수 색.
-    const BUILTIN_NAMES = new Set((options.builtins || []).map(item => item.name).filter(name => /^[A-Za-z_]\w*$/.test(name)));
-    for(const name of "texture textureSize texelFetch textureLod normalize length distance dot cross mix clamp smoothstep step pow exp log sin cos tan atan abs min max floor ceil fract mod sqrt reflect refract radians degrees".split(" ")) BUILTIN_NAMES.add(name);
-    const TOKENS = /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|#[^\n]*|"(?:\\.|[^"\\])*"|\b(?:uniform|out|in|inout|const|precision|highp|mediump|lowp|if|else|for|while|do|break|continue|return|discard|struct|layout|switch|case|default|true|false|flat|smooth)\b|\b(?:void|float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler2D|samplerCube|sampler3D)\b|\bgl_\w+\b|\b[A-Za-z_]\w*(?=\s*\()|\b\d+(?:\.\d*)?(?:[eE][+-]?\d+)?[uU]?\b|\.\d+(?:[eE][+-]?\d+)?/g;
-    const tokenClass = token => token.startsWith("//")||token.startsWith("/*")?"glsl-comment":token.startsWith("#")?"glsl-directive":token.startsWith('"')?"glsl-string":
-      /^(?:uniform|out|in|inout|const|precision|highp|mediump|lowp|if|else|for|while|do|break|continue|return|discard|struct|layout|switch|case|default|true|false|flat|smooth)$/.test(token)?"glsl-keyword":
-      /^(?:void|float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler2D|samplerCube|sampler3D)$/.test(token)?"glsl-type":
-      /^[.\d]/.test(token)?"glsl-number":token.startsWith("gl_")||BUILTIN_NAMES.has(token)?"glsl-builtin":"glsl-function";
+    const highlighter = Highlight.create((options.builtins || []).map(item => item.name));
     // 주석·문자열·전처리문을 제외한다. 함수 탐색은 최상위 정의만 열거한다.
     const cleanSource = source => source.replace(/^[ \t]*#(?:[^\n]*\\\r?\n)*[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*|"(?:\\.|[^"\\])*"/gm,s=>s.replace(/[^\n]/g," "));
     let functionSource=null,functionEntries=[];
@@ -1268,13 +1294,7 @@ const code_editor=(()=>{
       symbols.value="";symbols.disabled=!entries.length;
     };
     let paintRequest = 0,paintedSource=null; const paint = () => {
-      paintRequest=0;const src=textarea.value;if(src===paintedSource)return;paintedSource=src;const frag=document.createDocumentFragment();let offset=0;
-      TOKENS.lastIndex=0;for(const match of src.matchAll(TOKENS)) {
-        if(match.index>offset)frag.append(document.createTextNode(src.slice(offset,match.index)));
-        const token=match[0],span=document.createElement("span");span.textContent=token;span.className=tokenClass(token);
-        frag.append(span);offset=match.index+token.length;
-      }
-      if(offset<src.length)frag.append(document.createTextNode(src.slice(offset)));
+      paintRequest=0;const src=textarea.value;if(src===paintedSource)return;paintedSource=src;const frag=highlighter.fragment(src);
       frag.append(document.createTextNode("\n ")); highlight.replaceChildren(frag);
       highlight.scrollTop=textarea.scrollTop;highlight.scrollLeft=textarea.scrollLeft;updateFunctions();
       renderDiagnostics();
@@ -1754,7 +1774,7 @@ const code_editor=(()=>{
       for(const d of sym.defines) add({label:d.name, kind:"constant", detail:`#define ${d.value}`.trim(), desc:`${d.line}번째 줄`});
       for(const u of userUniforms()) add({label:u.name, kind:"uniform", detail:`uniform ${u.type}`, desc:"파라미터 패널에 등록된 값 · 선언은 자동으로 추가됩니다"});
       for(const [name, type, desc, declare] of APP_UNIFORMS) add({label:name, kind:"uniform", detail:`uniform ${type}`, desc:`${desc} · 고르면 선언도 함께 추가합니다`, declare:declare || `uniform ${type} ${name};`});
-      const builtins = options.builtins?.length ? options.builtins : [...BUILTIN_NAMES].map(name => ({name, sig:"", desc:""}));   // 레퍼런스 없이 쓰일 때의 최소 목록
+      const builtins = options.builtins?.length ? options.builtins : [...highlighter.builtins].map(name => ({name, sig:"", desc:""}));   // 레퍼런스 없이 쓰일 때의 최소 목록
       for(const item of builtins) if(isIdent(item.name)) add({label:item.name, kind:item.name.startsWith("gl_") ? "builtin-var" : "builtin", detail:item.sig.split(" · ")[0], desc:item.desc, sig:item.sig});
       for(const name of TYPES) add({label:name, kind:"type", detail:"타입", desc:/^[biu]?vec|^mat/.test(name) ? "생성자로도 씁니다: " + name + "(…)" : ""});
       for(const name of KEYWORDS) add({label:name, kind:"keyword", detail:"키워드", desc:""});
@@ -2049,7 +2069,7 @@ const code_editor=(()=>{
       dispose:()=>{hideCompletion();hideHover();ac.abort();if(paintRequest)cancelAnimationFrame(paintRequest);clearTimeout(decoRequest);
         for(const node of [palette,hover,mirror,decorations])node.remove?.();}};
   }; return {mount};
-})();
+})(glsl_highlight);
 const annotations=(()=>{
 // GLSL 주석 어노테이션 → 파라미터 정의. DOM·GPU에 의존하지 않는 순수 파서다.
 // 형식: uniform <type> <name>; // @range <min> <max> [step] @min <v> @max <v> @step <v> @default <v...> @color
@@ -5716,61 +5736,61 @@ const glsl_reference=(()=>{
 // 항목: {name, sig, desc, c?, ex?}
 //  - sig: 대표 시그니처. T는 float·vec2·vec3·vec4 중 하나(성분별로 적용), I는 int·ivec, U는 uint·uvec, B는 bool·bvec.
 //  - c: C 표준 라이브러리로 쓰면 무엇인지(이미 C를 아는 사람을 위한 대응표).
-//  - ex: 셰이더에서 자주 쓰는 한 줄 예시.
+//  - ex: 셰이더에서 자주 쓰는 짧은 예시(한두 줄, 여러 줄이면 \n). 모든 항목에 하나씩 둔다.
 // WebGL2(GLSL ES 3.00)에 없는 함수(fma, bitfieldExtract, frexp 등)는 넣지 않는다.
   const CATEGORIES = [
     {id:"basic", title:"기본 수학", desc:"성분별(component-wise)로 동작합니다. vec3에 쓰면 x·y·z 각각에 적용돼요.", items:[
       {name:"abs", sig:"T abs(T x) · I abs(I x)", desc:"절댓값.", c:"fabsf / abs", ex:"float d = abs(p.x);   // 좌우 대칭"},
       {name:"sign", sig:"T sign(T x)", desc:"음수 −1, 0이면 0, 양수 1.", c:"(x > 0) − (x < 0)", ex:"float side = sign(p.x);"},
       {name:"floor", sig:"T floor(T x)", desc:"x 이하 최대 정수(실수형으로 반환). 칸 번호를 구할 때.", c:"floorf", ex:"vec2 cell = floor(uv * 8.0);"},
-      {name:"ceil", sig:"T ceil(T x)", desc:"x 이상 최소 정수.", c:"ceilf"},
-      {name:"trunc", sig:"T trunc(T x)", desc:"0 방향으로 소수부 버림. 음수에서 floor와 다름(trunc(−1.5) = −1).", c:"truncf"},
+      {name:"ceil", sig:"T ceil(T x)", desc:"x 이상 최소 정수.", c:"ceilf", ex:"float rows = ceil(count / 8.0);   // 8개씩 담을 때 필요한 줄 수"},
+      {name:"trunc", sig:"T trunc(T x)", desc:"0 방향으로 소수부 버림. 음수에서 floor와 다름(trunc(−1.5) = −1).", c:"truncf", ex:"float a = trunc(-1.5);   // -1.0 (floor(-1.5)는 -2.0)"},
       {name:"round", sig:"T round(T x)", desc:"가장 가까운 정수. 0.5의 처리 방향은 구현마다 다를 수 있음.", c:"roundf", ex:"p - s * round(p / s)   // 무한 반복"},
-      {name:"roundEven", sig:"T roundEven(T x)", desc:"가장 가까운 정수, 0.5는 짝수 쪽으로(은행원 반올림).", c:"nearbyintf (기본 모드)"},
+      {name:"roundEven", sig:"T roundEven(T x)", desc:"가장 가까운 정수, 0.5는 짝수 쪽으로(은행원 반올림).", c:"nearbyintf (기본 모드)", ex:"float r = roundEven(2.5);   // 2.0 · roundEven(3.5) = 4.0"},
       {name:"fract", sig:"T fract(T x)", desc:"x − floor(x). 항상 0 이상 1 미만 — 반복 무늬·톱니파의 핵심.", c:"x - floorf(x)", ex:"vec2 local = fract(uv * 8.0) - 0.5;"},
       {name:"mod", sig:"T mod(T x, T y) · T mod(T x, float y)", desc:"x − y·floor(x/y). 결과 부호가 y를 따름: mod(−1, 3) = 2. 정수는 % 연산자를 쓰세요.", c:"fmodf와 음수에서 다름", ex:"float a = mod(angle, 6.2831853);"},
-      {name:"modf", sig:"T modf(T x, out T i)", desc:"정수부를 i에, 소수부를 반환. 둘 다 x와 같은 부호.", c:"modff"},
+      {name:"modf", sig:"T modf(T x, out T i)", desc:"정수부를 i에, 소수부를 반환. 둘 다 x와 같은 부호.", c:"modff", ex:"float whole;\nfloat part = modf(uTime, whole);   // whole = 정수 초, part = 0~1"},
       {name:"min", sig:"T min(T x, T y) · T min(T x, float y)", desc:"작은 값. SDF에서는 합집합.", c:"fminf", ex:"float d = min(dCircle, dBox);"},
-      {name:"max", sig:"T max(T x, T y) · T max(T x, float y)", desc:"큰 값. SDF에서는 교집합, max(a, −b)는 차집합.", c:"fmaxf"},
+      {name:"max", sig:"T max(T x, T y) · T max(T x, float y)", desc:"큰 값. SDF에서는 교집합, max(a, −b)는 차집합.", c:"fmaxf", ex:"float d = max(dBox, -dSphere);   // 상자에서 구를 파냄(차집합)"},
       {name:"clamp", sig:"T clamp(T x, T lo, T hi)", desc:"lo~hi 범위로 자르기.", c:"fminf(fmaxf(x, lo), hi)", ex:"float t = clamp(x, 0.0, 1.0);"},
       {name:"mix", sig:"T mix(T a, T b, T t) · T mix(T a, T b, B sel)", desc:"선형 보간 a + (b − a)·t. bool 버전은 성분별 선택(sel이 true면 b).", c:"a + (b - a) * t", ex:"vec3 col = mix(bg, fg, mask);"},
       {name:"step", sig:"T step(T edge, T x)", desc:"x < edge면 0, 아니면 1. 분기 없는 if.", c:"x < edge ? 0 : 1", ex:"float inside = step(d, 0.0);"},
       {name:"smoothstep", sig:"T smoothstep(T e0, T e1, T x)", desc:"e0~e1 사이에서 0→1로 부드럽게(3t² − 2t³). e0 > e1이면 반대 방향. 경계 안티앨리어싱에 사용.", c:"t = clamp((x-e0)/(e1-e0),0,1); t*t*(3-2*t)", ex:"float a = smoothstep(px, -px, d);"},
-      {name:"isnan · isinf", sig:"B isnan(T x) · B isinf(T x)", desc:"NaN·무한대 검사. 0 나누기·음수 sqrt를 찾는 디버깅에.", c:"isnan / isinf"}]},
+      {name:"isnan · isinf", sig:"B isnan(T x) · B isinf(T x)", desc:"NaN·무한대 검사. 0 나누기·음수 sqrt를 찾는 디버깅에.", c:"isnan / isinf", ex:"if (isnan(v.x) || isinf(v.x)) fragColor = vec4(1, 0, 1, 1);   // 문제 픽셀을 자홍색으로"}]},
     {id:"trig", title:"삼각 · 각도", desc:"각도는 모두 라디안입니다. 2π ≈ 6.2831853.", items:[
-      {name:"radians · degrees", sig:"T radians(T deg) · T degrees(T rad)", desc:"도 ↔ 라디안 변환.", c:"deg * M_PI / 180"},
+      {name:"radians · degrees", sig:"T radians(T deg) · T degrees(T rad)", desc:"도 ↔ 라디안 변환.", c:"deg * M_PI / 180", ex:"float a = radians(45.0);   // 0.785…\nfloat deg = degrees(atan(p.y, p.x));"},
       {name:"sin · cos · tan", sig:"T sin(T a) · T cos(T a) · T tan(T a)", desc:"삼각함수. sin(uTime)은 −1~1 왕복 — 애니메이션의 기본.", c:"sinf / cosf / tanf", ex:"vec2 orbit = vec2(cos(t), sin(t));"},
       {name:"asin · acos", sig:"T asin(T x) · T acos(T x)", desc:"역사인·역코사인. x가 −1~1 밖이면 결과 정의 안 됨 — clamp하세요.", c:"asinf / acosf", ex:"float ang = acos(clamp(dot(a, b), -1.0, 1.0));"},
       {name:"atan (2인수)", sig:"T atan(T y, T x)", desc:"점 (x, y)의 각도 −π~π. 이름은 atan이지만 C의 atan2와 같음. 극좌표·방사형 무늬에.", c:"atan2f(y, x)", ex:"float a = atan(p.y, p.x);"},
-      {name:"atan (1인수)", sig:"T atan(T y_over_x)", desc:"−π/2~π/2 범위 역탄젠트.", c:"atanf"},
-      {name:"sinh · cosh · tanh", sig:"T sinh(T x) · T cosh(T x) · T tanh(T x)", desc:"쌍곡선 함수. tanh는 값을 −1~1로 부드럽게 눌러주는 데 유용.", c:"sinhf / coshf / tanhf"},
-      {name:"asinh · acosh · atanh", sig:"T asinh(T x) · T acosh(T x) · T atanh(T x)", desc:"역쌍곡선 함수.", c:"asinhf / acoshf / atanhf"}]},
+      {name:"atan (1인수)", sig:"T atan(T y_over_x)", desc:"−π/2~π/2 범위 역탄젠트.", c:"atanf", ex:"float slope = atan(dy / dx);   // 방향(사분면) 구분 없는 기울기 각"},
+      {name:"sinh · cosh · tanh", sig:"T sinh(T x) · T cosh(T x) · T tanh(T x)", desc:"쌍곡선 함수. tanh는 값을 −1~1로 부드럽게 눌러주는 데 유용.", c:"sinhf / coshf / tanhf", ex:"float soft = tanh(x * 2.0);   // 큰 값을 -1~1로 부드럽게 제한"},
+      {name:"asinh · acosh · atanh", sig:"T asinh(T x) · T acosh(T x) · T atanh(T x)", desc:"역쌍곡선 함수.", c:"asinhf / acoshf / atanhf", ex:"float x = atanh(clamp(v, -0.999, 0.999));   // tanh의 역함수"}]},
     {id:"exp", title:"지수 · 로그 · 거듭제곱", desc:"음수·0 입력에 주의하세요. 정의되지 않은 값은 GPU마다 결과가 다릅니다.", items:[
       {name:"pow", sig:"T pow(T x, T y)", desc:"x의 y제곱. x < 0이거나 x = 0, y ≤ 0이면 정의되지 않음.", c:"powf", ex:"col = pow(col, vec3(1.0 / 2.2));   // 감마"},
       {name:"exp · log", sig:"T exp(T x) · T log(T x)", desc:"자연 지수·자연 로그. exp(−k·d)는 거리에 따라 부드럽게 사라지는 빛·안개.", c:"expf / logf", ex:"float glow = exp(-8.0 * abs(d));"},
-      {name:"exp2 · log2", sig:"T exp2(T x) · T log2(T x)", desc:"2의 거듭제곱·밑이 2인 로그. 옥타브·밉 레벨 계산.", c:"exp2f / log2f"},
-      {name:"sqrt", sig:"T sqrt(T x)", desc:"제곱근(x ≥ 0). 거리 비교만 할 때는 dot(v, v)로 sqrt를 생략할 수 있음.", c:"sqrtf"},
-      {name:"inversesqrt", sig:"T inversesqrt(T x)", desc:"1 / sqrt(x). 정규화에 쓰이며 보통 빠름.", c:"1.0f / sqrtf(x)"}]},
+      {name:"exp2 · log2", sig:"T exp2(T x) · T log2(T x)", desc:"2의 거듭제곱·밑이 2인 로그. 옥타브·밉 레벨 계산.", c:"exp2f / log2f", ex:"float freq = exp2(float(i));   // 옥타브: 1, 2, 4, 8…\nfloat lastMip = log2(float(max(size.x, size.y)));"},
+      {name:"sqrt", sig:"T sqrt(T x)", desc:"제곱근(x ≥ 0). 거리 비교만 할 때는 dot(v, v)로 sqrt를 생략할 수 있음.", c:"sqrtf", ex:"float r = sqrt(dot(p, p));   // length(p)와 같음"},
+      {name:"inversesqrt", sig:"T inversesqrt(T x)", desc:"1 / sqrt(x). 정규화에 쓰이며 보통 빠름.", c:"1.0f / sqrtf(x)", ex:"vec3 n = v * inversesqrt(dot(v, v));   // normalize(v)와 같음"}]},
     {id:"geometry", title:"벡터 · 기하", desc:"벡터를 하나의 값으로 다루는 함수들입니다. 거리·방향·조명 계산의 기초예요.", items:[
       {name:"length", sig:"float length(T v)", desc:"벡터 길이 √(x² + y² + …). 원점까지 거리 = 원의 SDF.", c:"sqrtf(x*x + y*y)", ex:"float d = length(p) - r;"},
-      {name:"distance", sig:"float distance(T a, T b)", desc:"두 점 사이 거리 = length(a − b).", c:"hypotf(ax-bx, ay-by)"},
+      {name:"distance", sig:"float distance(T a, T b)", desc:"두 점 사이 거리 = length(a − b).", c:"hypotf(ax-bx, ay-by)", ex:"float d = distance(uv, vec2(0.5));   // 화면 중심까지 거리"},
       {name:"dot", sig:"float dot(T a, T b)", desc:"내적. 두 단위 벡터의 dot은 cos(사이각) — 조명 밝기·방향 비교. dot(v, v)는 길이².", c:"a.x*b.x + a.y*b.y + …", ex:"float diffuse = max(dot(n, lightDir), 0.0);"},
       {name:"cross", sig:"vec3 cross(vec3 a, vec3 b)", desc:"외적. a·b 모두에 수직인 벡터(오른손 법칙). 카메라 축 만들기.", c:"직접 구현", ex:"vec3 right = normalize(cross(forward, vec3(0, 1, 0)));"},
       {name:"normalize", sig:"T normalize(T v)", desc:"같은 방향, 길이 1인 벡터. 길이 0 벡터는 정의되지 않음.", c:"v / length(v)", ex:"vec3 rd = normalize(vec3(uv, 1.5));"},
       {name:"reflect", sig:"T reflect(T I, T N)", desc:"입사 방향 I를 법선 N(단위 벡터)에 대해 반사. 거울·하이라이트.", c:"I - 2*dot(N,I)*N", ex:"vec3 r = reflect(rd, n);"},
-      {name:"refract", sig:"T refract(T I, T N, float eta)", desc:"굴절 방향. eta = 굴절률 비(공기→유리 ≈ 1/1.5). 전반사면 0 벡터.", c:"직접 구현"},
-      {name:"faceforward", sig:"T faceforward(T N, T I, T Nref)", desc:"dot(Nref, I) < 0이면 N, 아니면 −N. 법선이 시점 쪽을 향하게.", c:"직접 구현"}]},
+      {name:"refract", sig:"T refract(T I, T N, float eta)", desc:"굴절 방향. eta = 굴절률 비(공기→유리 ≈ 1/1.5). 전반사면 0 벡터.", c:"직접 구현", ex:"vec3 t = refract(rd, n, 1.0 / 1.5);   // 공기 → 유리로 꺾이는 방향"},
+      {name:"faceforward", sig:"T faceforward(T N, T I, T Nref)", desc:"dot(Nref, I) < 0이면 N, 아니면 −N. 법선이 시점 쪽을 향하게.", c:"직접 구현", ex:"vec3 nf = faceforward(n, rd, n);   // 법선을 시점 쪽으로 뒤집기"}]},
     {id:"matrix", title:"행렬", desc:"GLSL 행렬은 열 우선(column-major)입니다. m[i]는 i번째 열, m * v는 행렬×벡터, v * m은 전치 곱.", items:[
       {name:"생성자", sig:"mat2(a, b, c, d) · mat3(col0, col1, col2) · mat3(1.0)", desc:"인수는 열 순서로 채워짐. mat3(1.0)은 단위 행렬. mat3(m4)는 왼쪽 위 3×3.", c:"배열 [col][row]와 같은 배치", ex:"mat2 rot = mat2(c, s, -s, c);   // 회전"},
-      {name:"matrixCompMult", sig:"mat matrixCompMult(mat a, mat b)", desc:"성분별 곱(행렬 곱이 아님). 행렬 곱은 * 연산자.", c:"a[i][j] * b[i][j]"},
-      {name:"outerProduct", sig:"matNxM outerProduct(vecM c, vecN r)", desc:"외적 행렬 c·rᵀ.", c:"직접 구현"},
-      {name:"transpose", sig:"mat transpose(mat m)", desc:"전치. 회전 행렬의 역행렬은 전치와 같음(싸게 되돌리기).", c:"직접 구현"},
-      {name:"determinant", sig:"float determinant(mat m)", desc:"행렬식.", c:"직접 구현"},
-      {name:"inverse", sig:"mat inverse(mat m)", desc:"역행렬. 비싸므로 회전이면 transpose를 쓰세요.", c:"직접 구현"}]},
+      {name:"matrixCompMult", sig:"mat matrixCompMult(mat a, mat b)", desc:"성분별 곱(행렬 곱이 아님). 행렬 곱은 * 연산자.", c:"a[i][j] * b[i][j]", ex:"mat2 m = matrixCompMult(a, b);   // m[i][j] = a[i][j] * b[i][j]"},
+      {name:"outerProduct", sig:"matNxM outerProduct(vecM c, vecN r)", desc:"외적 행렬 c·rᵀ.", c:"직접 구현", ex:"mat3 proj = outerProduct(n, n);   // n 방향 성분만 남기는 투영 행렬"},
+      {name:"transpose", sig:"mat transpose(mat m)", desc:"전치. 회전 행렬의 역행렬은 전치와 같음(싸게 되돌리기).", c:"직접 구현", ex:"mat3 invRot = transpose(rot);   // 회전 행렬의 역행렬"},
+      {name:"determinant", sig:"float determinant(mat m)", desc:"행렬식.", c:"직접 구현", ex:"float area = determinant(mat2(e1, e2));   // 두 변이 만드는 평행사변형 넓이(부호 포함)"},
+      {name:"inverse", sig:"mat inverse(mat m)", desc:"역행렬. 비싸므로 회전이면 transpose를 쓰세요.", c:"직접 구현", ex:"mat3 inv = inverse(m);   // 회전만 있다면 transpose(m)이 더 쌈"}]},
     {id:"compare", title:"벡터 비교 · 논리", desc:"벡터끼리 <, == 등을 쓰면 성분별이 아니라 오류이거나 전체 비교입니다. 성분별 비교는 아래 함수로 bvec를 받으세요.", items:[
       {name:"lessThan · greaterThan", sig:"B lessThan(T a, T b) · B greaterThan(T a, T b)", desc:"성분별 <, > 결과를 bvec로.", ex:"bvec2 inside = lessThan(abs(p), vec2(0.5));"},
-      {name:"lessThanEqual · greaterThanEqual", sig:"B lessThanEqual(T a, T b) · B greaterThanEqual(T a, T b)", desc:"성분별 ≤, ≥."},
-      {name:"equal · notEqual", sig:"B equal(T a, T b) · B notEqual(T a, T b)", desc:"성분별 ==, !=. (a == b는 모든 성분이 같을 때만 true인 bool 하나)"},
+      {name:"lessThanEqual · greaterThanEqual", sig:"B lessThanEqual(T a, T b) · B greaterThanEqual(T a, T b)", desc:"성분별 ≤, ≥.", ex:"bvec2 inside = lessThanEqual(abs(p), vec2(0.5));\nif (all(inside)) col = vec3(1.0);   // 상자 안"},
+      {name:"equal · notEqual", sig:"B equal(T a, T b) · B notEqual(T a, T b)", desc:"성분별 ==, !=. (a == b는 모든 성분이 같을 때만 true인 bool 하나)", ex:"if (all(equal(cell, ivec2(3, 4)))) col = vec3(1, 0, 0);   // 특정 칸만 강조"},
       {name:"any · all · not", sig:"bool any(B v) · bool all(B v) · B not(B v)", desc:"하나라도 true / 모두 true / 성분별 부정.", ex:"if (all(inside)) col = vec3(1.0);"},
       {name:"mix (bool 선택)", sig:"T mix(T a, T b, B sel)", desc:"sel이 true인 성분만 b에서 가져옴 — 분기 없는 성분별 선택.", ex:"vec3 c = mix(a, b, greaterThan(n, vec3(0.0)));"}]},
     {id:"texture", title:"텍스처 읽기", desc:"sampler2D(이미지·버퍼)를 읽는 함수입니다. 좌표 uv는 0~1, texelFetch만 정수 픽셀 좌표를 씁니다.", items:[
@@ -5779,43 +5799,44 @@ const glsl_reference=(()=>{
       {name:"textureLod", sig:"vec4 textureLod(sampler2D s, vec2 uv, float lod)", desc:"밉맵 레벨을 직접 지정해 읽기. lod가 클수록 흐림(Buffer의 Mip 켜기 필요).", ex:"vec4 blur = textureLod(iChannel0, uv, 4.0);"},
       {name:"textureSize", sig:"ivec2 textureSize(sampler2D s, int lod)", desc:"텍스처 크기(픽셀). iChannelResolution 대신 쓸 수 있음.", ex:"vec2 px = 1.0 / vec2(textureSize(iChannel0, 0));"},
       {name:"textureOffset", sig:"vec4 textureOffset(sampler2D s, vec2 uv, ivec2 offset)", desc:"uv에서 정수 텍셀만큼 떨어진 곳 읽기. offset은 상수여야 함(−8~7 정도).", ex:"vec4 r = textureOffset(iChannel0, uv, ivec2(1, 0));"},
-      {name:"texelFetchOffset", sig:"vec4 texelFetchOffset(sampler2D s, ivec2 p, int lod, ivec2 offset)", desc:"texelFetch + 상수 오프셋."},
+      {name:"texelFetchOffset", sig:"vec4 texelFetchOffset(sampler2D s, ivec2 p, int lod, ivec2 offset)", desc:"texelFetch + 상수 오프셋.", ex:"vec4 right = texelFetchOffset(iChannel0, ivec2(gl_FragCoord.xy), 0, ivec2(1, 0));   // 오른쪽 이웃 픽셀"},
       {name:"textureGrad", sig:"vec4 textureGrad(sampler2D s, vec2 uv, vec2 dPdx, vec2 dPdy)", desc:"화면 미분을 직접 넘겨 밉 레벨을 결정. 좌표가 불연속인 곳(fract 타일)의 경계 줄무늬 제거.", ex:"textureGrad(tex, fract(uv), dFdx(uv), dFdy(uv))"},
-      {name:"textureProj", sig:"vec4 textureProj(sampler2D s, vec3 p)", desc:"p.xy / p.z로 나눈 좌표로 읽기(투영 텍스처)."},
-      {name:"textureLodOffset · textureProjLod …", sig:"textureLodOffset · textureProjOffset · textureProjLod · textureProjLodOffset · textureGradOffset · textureProjGrad · textureProjGradOffset", desc:"위 기능들의 조합 버전. 이름 그대로 Lod(레벨 지정)·Offset(정수 오프셋)·Proj(투영)·Grad(미분 지정)를 합친 것."}]},
+      {name:"textureProj", sig:"vec4 textureProj(sampler2D s, vec3 p)", desc:"p.xy / p.z로 나눈 좌표로 읽기(투영 텍스처).", ex:"vec4 c = textureProj(iChannel0, vec3(q.xy, q.z));   // texture(iChannel0, q.xy / q.z)와 같음"},
+      {name:"textureLodOffset · textureProjLod …", sig:"textureLodOffset · textureProjOffset · textureProjLod · textureProjLodOffset · textureGradOffset · textureProjGrad · textureProjGradOffset", desc:"위 기능들의 조합 버전. 이름 그대로 Lod(레벨 지정)·Offset(정수 오프셋)·Proj(투영)·Grad(미분 지정)를 합친 것.", ex:"vec4 left = textureLodOffset(iChannel0, uv, 0.0, ivec2(-1, 0));   // 0번 밉 레벨의 왼쪽 이웃"}]},
     {id:"derivative", title:"화면 미분", desc:"이웃 픽셀과의 차이. GPU는 픽셀을 2×2 묶음으로 실행하므로 옆 픽셀의 값을 알 수 있습니다. 안티앨리어싱의 핵심 도구예요.", items:[
       {name:"dFdx · dFdy", sig:"T dFdx(T v) · T dFdy(T v)", desc:"v가 화면 가로·세로 한 픽셀마다 얼마나 변하는지. 분기 안(일부 픽셀만 실행)에서 쓰면 정의되지 않음.", ex:"vec3 n = normalize(cross(dFdx(pos), dFdy(pos)));   // 면 법선"},
       {name:"fwidth", sig:"T fwidth(T v)", desc:"abs(dFdx(v)) + abs(dFdy(v)). '이 값에서 픽셀 1개의 크기' — 어떤 스케일에서도 1픽셀 폭으로 부드러운 경계.", ex:"float w = fwidth(d); float a = 1.0 - smoothstep(-w, w, d);"}]},
     {id:"bits", title:"비트 · 정수 · 패킹", desc:"정수 연산과 실수↔비트 변환입니다. 정수에는 +, −, *, /, %, <<, >>, &, |, ^, ~ 연산자를 그대로 쓸 수 있어요(C와 동일).", items:[
       {name:"정수 연산자", sig:"I % I · I << I · I & I · I ^ I · ~I", desc:"C와 같은 정수 연산. 정수 나눗셈은 0 방향 버림. uint 상수는 1u처럼 u 접미사.", c:"C와 동일", ex:"ivec2 p = ivec2(gl_FragCoord.xy) & 3;"},
       {name:"floatBitsToInt · floatBitsToUint", sig:"I floatBitsToInt(T x) · U floatBitsToUint(T x)", desc:"실수의 IEEE 비트 패턴을 정수로 그대로 읽기(형변환 아님). 실수로 고품질 해시를 만들 때.", c:"memcpy(&i, &f, 4)", ex:"uint h = floatBitsToUint(p.x) * 747796405u;"},
-      {name:"intBitsToFloat · uintBitsToFloat", sig:"T intBitsToFloat(I x) · T uintBitsToFloat(U x)", desc:"정수 비트 패턴을 실수로 해석.", c:"memcpy(&f, &i, 4)"},
-      {name:"packHalf2x16 · unpackHalf2x16", sig:"uint packHalf2x16(vec2 v) · vec2 unpackHalf2x16(uint p)", desc:"vec2를 16비트 실수 두 개로 uint 하나에 압축 / 복원. 버퍼 채널 절약.", c:"half 변환 + 비트 시프트"},
-      {name:"packUnorm2x16 · unpackUnorm2x16", sig:"uint packUnorm2x16(vec2 v) · vec2 unpackUnorm2x16(uint p)", desc:"0~1 값 두 개를 16비트 정수로 압축 / 복원."},
-      {name:"packSnorm2x16 · unpackSnorm2x16", sig:"uint packSnorm2x16(vec2 v) · vec2 unpackSnorm2x16(uint p)", desc:"−1~1 값 두 개를 16비트 부호 정수로 압축 / 복원."},
-      {name:"형변환 생성자", sig:"float(i) · int(f) · uint(i) · bool(x) · vec3(ivec3)", desc:"암묵 변환이 없으므로 생성자로 명시. int(f)는 0 방향 버림.", c:"(float)i, (int)f"}]},
+      {name:"intBitsToFloat · uintBitsToFloat", sig:"T intBitsToFloat(I x) · T uintBitsToFloat(U x)", desc:"정수 비트 패턴을 실수로 해석.", c:"memcpy(&f, &i, 4)", ex:"float one = uintBitsToFloat(0x3f800000u);   // 1.0\nuint bits = floatBitsToUint(one);"},
+      {name:"packHalf2x16 · unpackHalf2x16", sig:"uint packHalf2x16(vec2 v) · vec2 unpackHalf2x16(uint p)", desc:"vec2를 16비트 실수 두 개로 uint 하나에 압축 / 복원. 버퍼 채널 절약.", c:"half 변환 + 비트 시프트", ex:"uint packed = packHalf2x16(velocity);\nvec2 back = unpackHalf2x16(packed);"},
+      {name:"packUnorm2x16 · unpackUnorm2x16", sig:"uint packUnorm2x16(vec2 v) · vec2 unpackUnorm2x16(uint p)", desc:"0~1 값 두 개를 16비트 정수로 압축 / 복원.", ex:"uint packed = packUnorm2x16(uv);   // 0~1 좌표 두 개를 uint 하나에\nvec2 uv2 = unpackUnorm2x16(packed);"},
+      {name:"packSnorm2x16 · unpackSnorm2x16", sig:"uint packSnorm2x16(vec2 v) · vec2 unpackSnorm2x16(uint p)", desc:"−1~1 값 두 개를 16비트 부호 정수로 압축 / 복원.", ex:"uint packed = packSnorm2x16(n.xy);   // -1~1 법선 xy 압축\nvec2 nxy = unpackSnorm2x16(packed);"},
+      {name:"형변환 생성자", sig:"float(i) · int(f) · uint(i) · bool(x) · vec3(ivec3)", desc:"암묵 변환이 없으므로 생성자로 명시. int(f)는 0 방향 버림.", c:"(float)i, (int)f", ex:"int column = int(uv.x * 8.0);   // 0 방향 버림\nfloat t = float(uFrame) * 0.5;"}]},
     {id:"builtins", title:"내장 변수 · 문법", desc:"프래그먼트 셰이더에서 쓸 수 있는 내장 변수와 자주 헷갈리는 문법입니다.", items:[
       {name:"gl_FragCoord", sig:"in highp vec4 gl_FragCoord", desc:"이 픽셀의 창 좌표. xy = 픽셀 중심(0.5, 0.5부터), 원점은 왼쪽 아래. z = 깊이(0~1), w = 1/w.", ex:"vec2 uv = gl_FragCoord.xy / uResolution;"},
-      {name:"gl_FrontFacing", sig:"in bool gl_FrontFacing", desc:"앞면 여부. 전체 화면 사각형만 그리는 이 앱에서는 항상 true."},
-      {name:"gl_FragDepth", sig:"out highp float gl_FragDepth", desc:"깊이 값을 직접 쓰기. 이 앱은 깊이 버퍼를 쓰지 않으므로 효과 없음."},
-      {name:"gl_PointCoord", sig:"in mediump vec2 gl_PointCoord", desc:"점 그리기용 좌표. 이 앱에서는 쓰이지 않음."},
-      {name:"out 변수", sig:"out vec4 fragColor; · layout(location = N) out vec4 …;", desc:"출력 색. 이름은 자유. 출력이 여럿(MRT)이면 모두 location을 지정해야 함."},
-      {name:"precision", sig:"precision highp float;", desc:"float 기본 정밀도. 프래그먼트 셰이더에는 기본값이 없어 반드시 선언. highp ≈ 32비트 IEEE.", c:"float"},
+      {name:"gl_FrontFacing", sig:"in bool gl_FrontFacing", desc:"앞면 여부. 전체 화면 사각형만 그리는 이 앱에서는 항상 true.", ex:"vec3 nf = gl_FrontFacing ? n : -n;   // 이 앱에서는 항상 앞면"},
+      {name:"gl_FragDepth", sig:"out highp float gl_FragDepth", desc:"깊이 값을 직접 쓰기. 이 앱은 깊이 버퍼를 쓰지 않으므로 효과 없음.", ex:"gl_FragDepth = 0.5;   // 이 앱에서는 결과에 영향 없음"},
+      {name:"gl_PointCoord", sig:"in mediump vec2 gl_PointCoord", desc:"점 그리기용 좌표. 이 앱에서는 쓰이지 않음.", ex:"float d = length(gl_PointCoord - 0.5);   // 점 스프라이트용(이 앱에서는 사용 안 함)"},
+      {name:"out 변수", sig:"out vec4 fragColor; · layout(location = N) out vec4 …;", desc:"출력 색. 이름은 자유. 출력이 여럿(MRT)이면 모두 location을 지정해야 함.", ex:"layout(location = 0) out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }"},
+      {name:"precision", sig:"precision highp float;", desc:"float 기본 정밀도. 프래그먼트 셰이더에는 기본값이 없어 반드시 선언. highp ≈ 32비트 IEEE.", c:"float", ex:"#version 300 es\nprecision highp float;"},
       {name:"매개변수 한정자", sig:"in · out · inout · const", desc:"in = 값 복사(기본), out = 함수가 써서 돌려줌, inout = 둘 다. 포인터 대신 이것으로 여러 값을 반환.", c:"in ≈ 값 전달, out/inout ≈ 포인터", ex:"void polar(vec2 p, out float r, out float a)"},
       {name:"스위즐", sig:"v.xy · v.zyx · v.rgb · v.stpq · v.xxx", desc:"성분을 원하는 순서·개수로 뽑기. xyzw·rgba·stpq는 같은 성분의 다른 이름(섞어 쓰기는 불가). 대입도 가능(v.xz = …).", ex:"p.xz = rot * p.xz;"},
-      {name:"배열", sig:"float a[4] = float[4](1.0, 2.0, 3.0, 4.0);", desc:"크기는 상수. 배열 생성자로 초기화. .length()로 길이. 동적 할당·포인터 없음.", c:"float a[4] = {…}"},
-      {name:"구조체", sig:"struct Hit { float t; vec3 n; };", desc:"C 구조체와 같음. 생성자 Hit(1.0, vec3(0))로 만들고 함수 반환값으로 쓸 수 있음.", c:"typedef struct"},
-      {name:"반복문 제약", sig:"for (int i = 0; i < N; i++)", desc:"재귀 금지. 루프는 가능하면 상수 상한 + break. 너무 긴 루프는 GPU 타임아웃(화면 멈춤)을 일으킬 수 있음."},
-      {name:"#define · #if", sig:"#define NAME value · #if … #endif", desc:"C 전처리기와 거의 같음(#include는 없음). 상수·매크로·디버그 스위치에."}]}
+      {name:"배열", sig:"float a[4] = float[4](1.0, 2.0, 3.0, 4.0);", desc:"크기는 상수. 배열 생성자로 초기화. .length()로 길이. 동적 할당·포인터 없음.", c:"float a[4] = {…}", ex:"float w[3] = float[3](0.25, 0.5, 0.25);\nfor (int i = 0; i < w.length(); i++) sum += w[i] * v[i];"},
+      {name:"구조체", sig:"struct Hit { float t; vec3 n; };", desc:"C 구조체와 같음. 생성자 Hit(1.0, vec3(0))로 만들고 함수 반환값으로 쓸 수 있음.", c:"typedef struct", ex:"struct Hit { float t; vec3 n; };\nHit h = Hit(1e9, vec3(0.0));"},
+      {name:"반복문 제약", sig:"for (int i = 0; i < N; i++)", desc:"재귀 금지. 루프는 가능하면 상수 상한 + break. 너무 긴 루프는 GPU 타임아웃(화면 멈춤)을 일으킬 수 있음.", ex:"for (int i = 0; i < 64; i++) {   // 상수 상한\n    float d = map(p);\n    if (d < 0.001) break;\n    p += rd * d;\n}"},
+      {name:"#define · #if", sig:"#define NAME value · #if … #endif", desc:"C 전처리기와 거의 같음(#include는 없음). 상수·매크로·디버그 스위치에.", ex:"#define STEPS 64\n#define DEBUG 0\n#if DEBUG\n    fragColor = vec4(n * 0.5 + 0.5, 1.0);\n#endif"}]}
   ];
   const ALL = CATEGORIES.flatMap(category => category.items.map(item => ({...item, category:category.id})));
   return {CATEGORIES,ALL};
 })();
-const guide=((Snippets, Course, Reference)=>{
+const guide=((Snippets, Course, Reference, Highlight)=>{
 // 앱 내장 가이드: 주제별 설명·검색·코드 예시(편집기 삽입)·UI 둘러보기 투어·문맥 도움말(?) 버튼.
 // 내용은 아래 TOPICS 데이터로만 정의한다. 문단 안의 `코드`와 **강조**만 서식으로 해석하고 HTML은 해석하지 않는다.
 // 코드 조각 라이브러리의 내용은 snippets.js가 소유하고, 여기서는 범주 탭·검색·삽입 UI만 담당한다.
 // 입문 과정(단계별 수업·예제 프로젝트)의 내용은 course.js가 소유하고, 여기서는 진행률·이전/다음·완료 표시를 담당한다.
+
 
 
 
@@ -5829,6 +5850,18 @@ const guide=((Snippets, Course, Reference)=>{
         "**코드 고치기** — `E`로 편집기를 열고 숫자 하나를 바꿔 보세요. 0.9초 뒤 자동으로 적용됩니다(`Ctrl+Enter`는 즉시 실행).",
         "**값 조절하기** — 설정 패널의 **파라미터** 탭에서 슬라이더·색상으로 Uniform 값을 실시간으로 바꿉니다.",
         "**확인하기** — **성능** 탭에서 GPU 시간과 버퍼 내용을 들여다봅니다."]},
+      {p:"**가장 작은 셰이더** — 아래 코드는 화면 좌표를 색으로 바꿉니다. **이 코드로 시작**을 누른 뒤 `0.5`나 `sin` 안의 값을 바꿔 보세요."},
+      {code:`#version 300 es
+precision highp float;
+uniform vec2 uResolution;   // 화면 픽셀 크기
+uniform float uTime;        // 재생 시간(초)
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;        // 0~1 화면 좌표
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(uTime));    // x → 빨강, y → 초록, 시간 → 파랑
+    fragColor = vec4(col, 1.0);
+}`, title:"첫 셰이더 · 좌표를 색으로", start:true},
       {actions:[{label:"UI 둘러보기 시작", run:"tour"}, {label:"예제 갤러리 열기", run:"gallery"}, {label:"첫 셰이더 구조 보기", run:"topic:editor"}]},
       {note:"**셰이더가 처음인가요?** C와 GLSL 문법을 안다면 **입문 과정**(12단계)을 따라가 보세요. 픽셀 하나의 관점부터 버퍼로 만드는 시뮬레이션까지, 단계마다 바로 실행되는 예제와 과제가 있습니다."},
       {actions:[{label:"입문 과정 시작 →", run:"topic:course"}]},
@@ -5998,6 +6031,9 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     const element = (tag, className = "", text = "") => { const node = document.createElement(tag); if(className) node.className = className; if(text) node.textContent = text; return node; };
     const listen = (target, type, fn, options = {}) => target?.addEventListener(type, fn, {...options, signal});
     let current = "start";
+    // 가이드의 GLSL 예시도 편집기와 같은 규칙으로 강조한다. 내장 함수 이름은 레퍼런스에서 가져온다("sin · cos" → sin, cos).
+    const highlighter = Highlight.create(Reference.ALL.flatMap(item => item.name.split("·").map(name => name.replace(/\(.*\)/, "").trim())));
+    const codeBlock = source => highlighter.paint(element("pre"), source);
     // 탐색 목록: 시작하기 → 입문 과정 → 기능 레퍼런스. group이 바뀌는 곳에 목록 제목을 넣는다.
     const ALL = [{...TOPICS[0], group:""}, ...Course.LESSONS.map(lesson => ({...lesson, group:"입문 과정 · C 개발자용"})), ...TOPICS.slice(1).map(topic => ({...topic, group:"기능 레퍼런스"}))];
     const LESSON_IDS = Course.LESSONS.filter(lesson => lesson.step).map(lesson => lesson.id), COURSE_ORDER = Course.LESSONS.map(lesson => lesson.id);
@@ -6060,7 +6096,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       const insert = element("button", "guide-insert", item.replace ? "패스 교체" : "삽입"); insert.type = "button";
       insert.title = item.replace ? "현재 편집 중인 패스 전체를 이 코드로 바꿉니다" : "필요한 함수와 함께 편집기에 넣습니다";
       insert.addEventListener("click", () => insertItem(item, insert));
-      bar.append(head, tags, copy, insert); figure.append(bar, element("pre", "", item.code)); return figure;
+      bar.append(head, tags, copy, insert); figure.append(bar, codeBlock(item.code)); return figure;
     };
     const renderLibrary = () => {
       const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -6093,12 +6129,12 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     let referenceCategory = Reference.CATEGORIES[0].id;
     const referenceItem = item => {
       const row = element("article", "ref-item"), head = element("header", "ref-head");
-      head.append(element("strong", "ref-name", item.name), element("code", "ref-sig", item.sig)); row.append(head, rich("p", item.desc, "ref-desc"));
+      head.append(element("strong", "ref-name", item.name), highlighter.paint(element("code", "ref-sig"), item.sig)); row.append(head, rich("p", item.desc, "ref-desc"));
       if(item.c) { const c = element("p", "ref-c"); c.append(element("span", "", "C 대응"), element("code", "", item.c)); row.append(c); }
       if(item.ex) {
         const ex = element("div", "ref-ex"), copy = element("button", "", "복사"); copy.type = "button";
         copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(item.ex); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); } });
-        ex.append(element("pre", "", item.ex), copy); row.append(ex);
+        ex.append(codeBlock(item.ex), copy); row.append(ex);
       }
       return row;
     };
@@ -6163,7 +6199,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     };
     // 코드 블록: 복사 + (선택) 커서 위치 삽입 · 현재 패스 교체 · 이 코드로 새 프로젝트 시작.
     const codeFigure = block => {
-      const figure = element("figure", "guide-code"), bar = element("figcaption"), pre = element("pre", "", block.code);
+      const figure = element("figure", "guide-code"), bar = element("figcaption"), pre = codeBlock(block.code);
       bar.append(element("span", "", block.title || "GLSL"));
       const copy = element("button", "", "복사"); copy.type = "button";
       copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(block.code); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); } });
@@ -6331,7 +6367,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     listen($("galleryTour"), "click", () => { $("gallery")?.close(); startTour(); });
     return {open, show, startTour, dispose:() => { controller.abort(); overlay.remove(); }};
   }; return {mount,TOPICS};
-})(snippets, course, glsl_reference);
+})(snippets, course, glsl_reference, glsl_highlight);
 ((Renderer, Shader, UI, Input, Settings, Studio, Profiler, Gallery, Guide, Reference, Snippets)=>{
 // 앱 조립 진입점. 범용 기본 GLSL과 Ray Marching 프리셋은 shader.js, GPU 렌더링은 renderer.js가 담당한다.
 
