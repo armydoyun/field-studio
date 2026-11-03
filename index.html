@@ -307,6 +307,8 @@
                                         <p class="studio-menu-title">표시</p>
                                         <div class="studio-menu-row"><span>글자 크기</span><span class="studio-stepper"><button id="studioZoomOut" type="button" aria-label="글자 작게" title="편집기 글씨 크기 -1">A−</button><span id="studioFontSize">12px</span><button id="studioZoomIn" type="button" aria-label="글자 크게" title="편집기 글씨 크기 +1">A+</button></span></div>
                                         <label class="studio-menu-row" title="Tab 키로 넣을 공백 수"><span>들여쓰기</span><select id="studioIndent" aria-label="들여쓰기 공백 수"><option value="4">공백 4</option><option value="2">공백 2</option></select></label>
+                                        <label class="studio-menu-row" title="편집기 엔진을 고릅니다. CodeMirror 6은 실험 단계입니다(여러 커서 이동·코드 접기 지원). 새로고침하면 적용됩니다."><span>편집기</span><select id="studioEngine" aria-label="편집기 엔진"><option value="classic">기본</option><option value="codemirror">CodeMirror (실험)</option></select></label>
+                                        <span id="studioEngineNote" class="studio-menu-note" hidden>새로고침하면 적용됩니다. 미적용 편집본은 브라우저에 보관됩니다.</span>
                                         <button id="studioLineWrap" type="button" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
                                         <p class="studio-menu-title">창</p>
                                         <button id="studioLayout" type="button" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>

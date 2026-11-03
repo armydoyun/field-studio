@@ -1,5 +1,6 @@
 // 로컬 textarea 기반 GLSL 편집 보조 도구. 별도 라이브러리나 CDN이 필요하지 않다.
 import * as Highlight from "./glsl-highlight.js";
+import * as Language from "./glsl-language.js";
   // options.lookup(name) → {sig, desc} | null : 내장 함수 설명(시그니처 힌트). options.onScrub() : 숫자를 끌어 바꾸는 중 즉시 적용 요청.
   const mount = (textarea,ask,beforeEdit=()=>{},uniformNames=()=>[],options={}) => {
     const $ = id => document.getElementById(id), ac = new AbortController(), signal = ac.signal;
@@ -7,8 +8,9 @@ import * as Highlight from "./glsl-highlight.js";
     const gutter = $("studioLines"), highlight = $("studioHighlight"), position = $("studioCursor"), findPanel = $("studioFindPanel");
     // 강조: 내장 함수 이름은 레퍼런스(options.builtins)에서 받는다. 호출(이름 + '(')은 내장이면 builtin, 아니면 사용자 함수 색.
     const highlighter = Highlight.create((options.builtins || []).map(item => item.name));
-    // 주석·문자열·전처리문을 제외한다. 함수 탐색은 최상위 정의만 열거한다.
-    const cleanSource = source => source.replace(/^[ \t]*#(?:[^\n]*\\\r?\n)*[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*|"(?:\\.|[^"\\])*"/gm,s=>s.replace(/[^\n]/g," "));
+    // 언어 정보·심볼 분석·자동 완성 후보는 glsl-language.js가 담당한다(CodeMirror 편집기와 공유).
+    const language = Language.create({options, uniformNames, highlighter, source:() => textarea.value});
+    const {KEYWORDS, TYPES, APP_UNIFORMS, BUILTIN_VARS, isIdent, userUniforms, cleanSource, cleanOf, symbolsOf, typeOf, describeFunction, describeSymbol, SNIPPETS, boundaryAt, fuzzy, KIND_ORDER, KIND_ICON, KIND_NAME, swizzleItems, gatherItems, declaringName} = language;
     let functionSource=null,functionEntries=[];
     const scanFunctions = source => {
       if(source===functionSource)return functionEntries;
@@ -89,64 +91,12 @@ import * as Highlight from "./glsl-highlight.js";
       position.textContent = `Ln ${line}, Col ${p-start+1}${multi ? ` · 다중 선택 ${multi.ranges.length}개` : selected ? ` · ${selected}자 선택` : ""}`;
       updateSignature(); scheduleDecorations(); checkSnippetSession();
     };
-    // ==== 언어 정보: 키워드·타입·앱 Uniform·내장 변수 ====
-    const KEYWORDS = "if else for while do break continue return discard switch case default struct const uniform in out inout layout precision highp mediump lowp true false flat smooth".split(" ");
-    const TYPES = "void bool int uint float vec2 vec3 vec4 bvec2 bvec3 bvec4 ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 mat2 mat3 mat4 mat2x3 mat2x4 mat3x2 mat3x4 mat4x2 mat4x3 sampler2D isampler2D usampler2D samplerCube sampler3D".split(" ");
-    // 렌더러가 값을 넣어 주는 Uniform: 선언하지 않은 채 자동 완성으로 고르면 선언을 맨 위에 함께 추가한다.
-    const APP_UNIFORMS = [["uResolution","vec2","현재 패스의 픽셀 크기 (vec3으로 선언하면 z = 1)"],["uTime","float","재생 시간(초). 일시정지 중에는 멈춥니다"],
-      ["uDeltaTime","float","직전 프레임과의 시간 간격(초)"],["uFrame","int","누적 프레임 수. 시간 초기화·구조 변경 시 0"],
-      ["uMouse","vec4","포인터 픽셀 좌표(밖이면 -1) · zw = 클릭 위치, z > 0 누르는 중, w > 0 누른 첫 프레임"],
-      ...[0,1,2,3].map(i => [`iChannel${i}`,"sampler2D",`입력 채널 ${i} — 편집기 입력 채널에서 연결한 이미지·버퍼`]),
-      ["iChannelResolution","vec3","각 입력 채널의 크기 (배열 4개)","uniform vec3 iChannelResolution[4];"]];
-    const BUILTIN_VARS = {gl_FragCoord:"vec4", gl_FrontFacing:"bool", gl_PointCoord:"vec2", gl_FragDepth:"float"};
-    const isIdent = text => /^[A-Za-z_]\w*$/.test(text);
-    const userUniforms = () => options.userUniforms?.() || uniformNames().map(name => ({name, type:""}));
     const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-    // 주석·문자열을 같은 길이 공백으로 지운 사본(위치 보존). 같은 소스면 다시 계산하지 않는다.
-    let cleanCache = {src:null, clean:""};
-    const cleanOf = src => { if(cleanCache.src !== src) cleanCache = {src, clean:cleanSource(src)}; return cleanCache.clean; };
     const lineStartsOf = src => { const starts = [0]; for(let i = src.indexOf("\n"); i >= 0; i = src.indexOf("\n", i+1)) starts.push(i+1); return starts; };
     const lineIndexAt = (starts, offset) => { let lo = 0, hi = starts.length-1; while(lo < hi) { const mid = (lo+hi+1) >> 1; if(starts[mid] <= offset) lo = mid; else hi = mid-1; } return lo; };
-    // ==== 심볼 표: 함수·변수(매개변수 포함)·구조체·#define. 소스가 바뀔 때만 다시 만든다 ====
-    const DECL = /\b((?:(?:const|uniform|in|out|inout|highp|mediump|lowp|flat|smooth)\s+)*)((?:[biu]?vec[234]|mat[234](?:x[234])?|float|int|uint|bool|[iu]?sampler2D|samplerCube|sampler3D|[A-Z]\w*))\s+([A-Za-z_]\w*)\s*(?=[=;,)\[])/g;
-    let symbolCache = {src:null};
-    const symbolsOf = src => {
-      if(symbolCache.src === src) return symbolCache;
-      const clean = cleanOf(src), starts = lineStartsOf(src), line = at => lineIndexAt(starts, at) + 1, functions = [], variables = [], structs = new Map(), defines = [];
-      for(const m of clean.matchAll(/\b([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*\(([^;{}]*)\)\s*\{/g)) if(!KEYWORDS.includes(m[1]) && !KEYWORDS.includes(m[2]))
-        functions.push({name:m[2], ret:m[1], params:m[3].trim().replace(/\s+/g," "), offset:m.index + m[0].indexOf(m[2], m[1].length), line:line(m.index)});
-      for(const m of clean.matchAll(DECL)) if(!KEYWORDS.includes(m[3]) && !TYPES.includes(m[3]))
-        variables.push({name:m[3], type:m[2], uniform:/\buniform\b/.test(m[1]), output:/\bout\b/.test(m[1]), offset:m.index + m[0].lastIndexOf(m[3]), line:line(m.index)});
-      for(const m of clean.matchAll(/\bstruct\s+([A-Za-z_]\w*)\s*\{([^}]*)\}/g))
-        structs.set(m[1], {line:line(m.index), offset:m.index + m[0].indexOf(m[1]), fields:[...m[2].matchAll(/([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*;/g)].map(f => ({name:f[2], type:f[1]}))});
-      for(const m of src.matchAll(/^[ \t]*#define[ \t]+([A-Za-z_]\w*)[ \t]*(.*)$/gm)) defines.push({name:m[1], value:m[2].trim(), offset:m.index + m[0].indexOf(m[1]), line:line(m.index)});
-      return symbolCache = {src, functions, variables, structs, defines};
-    };
-    // 이름의 타입: 가장 가까운 앞쪽 선언 → 내장 변수 → 앱 Uniform
-    const typeOf = (name, pos) => {
-      const vars = symbolsOf(textarea.value).variables.filter(v => v.name === name); if(!vars.length) return BUILTIN_VARS[name] || APP_UNIFORMS.find(u => u[0] === name)?.[1] || "";
-      const before = vars.filter(v => v.offset <= pos); return (before.length ? before[before.length-1] : vars[0]).type;
-    };
     const wordAround = (src, pos) => {
       let a = pos, b = pos; while(a > 0 && /\w/.test(src[a-1])) a--; while(b < src.length && /\w/.test(src[b])) b++;
       const word = src.slice(a, b); return isIdent(word) ? {word, start:a, end:b} : null;
-    };
-    // 설명: 함수(내장·이 패스) / 변수·Uniform·구조체·#define — 시그니처 힌트와 마우스 설명이 함께 쓴다.
-    const describeFunction = name => {
-      const builtin = options.lookup?.(name); if(builtin) return {sig:builtin.sig, desc:builtin.desc};
-      const own = symbolsOf(textarea.value).functions.find(entry => entry.name === name);
-      return own ? {sig:`${own.ret} ${name}(${own.params})`, desc:`이 패스에 정의된 함수 · ${own.line}번째 줄`} : null;
-    };
-    const describeSymbol = (name, pos) => {
-      const fn = describeFunction(name); if(fn) return fn;
-      const sym = symbolsOf(textarea.value), app = APP_UNIFORMS.find(u => u[0] === name);
-      const vars = sym.variables.filter(v => v.name === name), decl = vars.filter(v => v.offset <= pos).pop() || vars[0];
-      if(decl) return {sig:`${decl.uniform ? "uniform " : decl.output ? "out " : ""}${decl.type} ${name}`, desc:app ? app[2] : `${decl.uniform ? "Uniform" : decl.output ? "출력" : "변수"} · ${decl.line}번째 줄에서 선언`};
-      if(app) return {sig:`uniform ${app[1]} ${name}`, desc:`${app[2]} · 아직 선언되지 않음`};
-      const param = userUniforms().find(u => u.name === name); if(param) return {sig:`uniform ${param.type} ${name}`, desc:"파라미터 패널에 등록된 값 · 선언은 자동으로 추가됩니다"};
-      const struct = sym.structs.get(name); if(struct) return {sig:`struct ${name} { ${struct.fields.map(f => `${f.type} ${f.name};`).join(" ")} }`, desc:`구조체 · ${struct.line}번째 줄`};
-      const define = sym.defines.find(d => d.name === name); if(define) return {sig:`#define ${name} ${define.value}`, desc:`매크로 · ${define.line}번째 줄`};
-      return null;
     };
     // ==== 커서 화면 좌표: textarea와 같은 글꼴·여백·줄바꿈을 가진 숨은 복제본으로 잰다(줄바꿈 켜도 정확) ====
     const frame = textarea.closest(".studio-editor-frame");
@@ -637,20 +587,6 @@ import * as Highlight from "./glsl-highlight.js";
       }return mode;
     };
     // ==== 코드 템플릿(스니펫): ${1:기본값}은 Tab으로 차례로 이동하는 자리, $0은 마지막 커서 위치 ====
-    const SNIPPETS = [
-      {label:"main", detail:"void main() { … }", body:"void main() {\n\t$0\n}"},
-      {label:"for", detail:"for (int i = 0; i < N; i++) { … }", body:"for (int i = 0; i < ${1:8}; i++) {\n\t$0\n}"},
-      {label:"if", detail:"if (조건) { … }", body:"if (${1:condition}) {\n\t$0\n}"},
-      {label:"ifelse", detail:"if (조건) { … } else { … }", body:"if (${1:condition}) {\n\t$2\n} else {\n\t$0\n}"},
-      {label:"func", detail:"반환형 이름(매개변수) { … }", body:"${1:float} ${2:name}(${3:vec2 p}) {\n\treturn ${4:0.0};\n}"},
-      {label:"struct", detail:"struct 이름 { … };", body:"struct ${1:Name} {\n\t${2:float value};\n};"},
-      {label:"uniform-range", detail:"슬라이더 파라미터 · @range", body:"uniform float ${1:uAmount}; // @range ${2:0} ${3:1} @default ${4:0.5}"},
-      {label:"uniform-color", detail:"색상 파라미터 · @color", body:"uniform vec3 ${1:uColor}; // @color @default ${2:1.0 0.5 0.2}"},
-      {label:"uv-center", detail:"중심 원점 · 종횡비 보정 좌표", body:"vec2 ${1:uv} = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;"},
-      {label:"uv01", detail:"0~1 화면 좌표", body:"vec2 ${1:uv} = gl_FragCoord.xy / uResolution;"},
-      {label:"tex", detail:"texture(채널, uv)", body:"texture(${1:iChannel0}, ${2:uv})"},
-      {label:"texfetch", detail:"texelFetch — 픽셀 정확히 읽기", body:"texelFetch(${1:iChannel0}, ivec2(gl_FragCoord.xy), 0)"},
-      {label:"frag", detail:"새 셰이더 전체 골격", body:"#version 300 es\nprecision highp float;\nuniform vec2 uResolution;\nuniform float uTime;\nout vec4 fragColor;\n\nvoid main() {\n\tvec2 uv = gl_FragCoord.xy / uResolution;\n\tfragColor = vec4(${1:uv, 0.5 + 0.5 * sin(uTime)}, 1.0);$0\n}"}];
     const expandSnippet = (body, indent) => {
       const source = body.replace(/\t/g, " ".repeat(tabSize)).replace(/\n/g, "\n" + indent), stops = []; let text = "", final = -1;
       for(let i = 0; i < source.length;) {
@@ -687,62 +623,10 @@ import * as Highlight from "./glsl-highlight.js";
       if(!session) return; const a = textarea.selectionStart, first = session.stops[0].start, lastStop = Math.max(session.final, ...session.stops.map(s => s.end));
       if(a < first || a > lastStop) session = null;
     };
-    // ==== 자동 완성 ====
-    // 순위: 접두어 일치 > 단어 경계(camelCase·_) 일치 > 연속 일치. 첫 글자는 이름의 시작이나 단어 경계와 맞아야 한다.
-    const boundaryAt = (s, i) => i === 0 || s[i-1] === "_" || s[i-1] === "-" || (/[A-Z]/.test(s[i]) && /[a-z0-9]/.test(s[i-1])) || (/\d/.test(s[i]) && !/\d/.test(s[i-1]));
-    const fuzzy = (label, query) => {
-      if(!query) return {score:0, hits:[]};
-      const lower = label.toLowerCase(), q = query.toLowerCase(), hits = []; let from = 0, score = 0, prev = -2;
-      for(let k = 0; k < q.length; k++) {
-        let i = lower.indexOf(q[k], from); if(i < 0) return null;
-        if(i !== prev + 1) for(let j = i; j >= 0; j = lower.indexOf(q[k], j+1)) if(boundaryAt(label, j)) { i = j; break; }   // 경계 위치 우선
-        score += i === prev + 1 ? 5 : boundaryAt(label, i) ? 3 : 0; if(label[i] === query[k]) score += 1;
-        hits.push(i); prev = i; from = i + 1;
-      }
-      if(!boundaryAt(label, hits[0])) return null;
-      if(lower.startsWith(q)) score += 30; if(label.startsWith(query)) score += 5;
-      return {score:score - label.length * 0.05, hits};
-    };
-    const KIND_ORDER = {variable:0, field:0, function:1, uniform:2, constant:2, builtin:3, "builtin-var":3, type:4, keyword:5, snippet:6, library:7};
-    const KIND_ICON = {variable:"x", field:"·", function:"ƒ", uniform:"u", constant:"#", builtin:"ƒ", "builtin-var":"g", type:"T", keyword:"k", snippet:"{}", library:"+"};
-    const KIND_NAME = {variable:"변수", field:"필드", function:"이 패스의 함수", uniform:"Uniform", constant:"#define", builtin:"내장 함수", "builtin-var":"내장 변수", type:"타입", keyword:"키워드", snippet:"코드 템플릿", library:"코드 조각 모음"};
-    // 스위즐: vecN 뒤의 '.'에서 x·y·z·w(rgba) 조합을 제안
-    const swizzleItems = type => {
-      const m = /^([biu]?)vec([234])$/.exec(type); if(!m) return [];
-      const n = Number(m[2]), base = {b:"bool", i:"int", u:"uint", "":"float"}[m[1]], vec = k => k === 1 ? base : `${m[1]}vec${k}`;
-      const set = ["x","y","z","w","xy","xz","yz","xyz","xyzw","r","g","b","a","rg","rgb","rgba","yx","zyx"];
-      return set.filter(s => [...s].every(c => ("xyzw".indexOf(c) >= 0 ? "xyzw".indexOf(c) : "rgba".indexOf(c)) < n)).map(s => ({label:s, kind:"field", detail:vec(s.length), desc:`${type}의 성분 ${s}`}));
-    };
     let shown = [], chosen = 0, wordStart = 0, wordEnd = 0;
     const completion = $("studioCompletion"), list = document.createElement("div"), docPane = document.createElement("div");
     list.className = "completion-list"; docPane.className = "completion-doc"; completion.replaceChildren(list, docPane);
     const hideCompletion = () => { completion.hidden = true; shown = []; };
-    const gatherItems = (src, at, start) => {
-      // 멤버 완성: 이름 뒤 '.' → 벡터 스위즐 또는 구조체 필드
-      if(src[start-1] === ".") {
-        const owner = src.slice(0, start-1).match(/([A-Za-z_]\w*)(?:\[[^\]]*\])?\s*$/)?.[1]; if(!owner) return {items:[], member:true};
-        const type = typeOf(owner, start), struct = symbolsOf(src).structs.get(type);
-        return {member:true, items:struct ? struct.fields.map(f => ({label:f.name, kind:"field", detail:f.type, desc:`${type}의 필드`})) : swizzleItems(type)};
-      }
-      const sym = symbolsOf(src), items = [], seen = new Set(), add = item => { const key = `${item.kind === "snippet" ? "s" : "n"}:${item.label}`; if(!seen.has(key)) { seen.add(key); items.push(item); } };
-      const nearest = new Map(); for(const v of sym.variables) if(v.offset < start || !nearest.has(v.name)) nearest.set(v.name, v);
-      for(const v of nearest.values()) if(v.offset !== start) add({label:v.name, kind:v.uniform ? "uniform" : "variable", detail:`${v.uniform ? "uniform " : ""}${v.type}`, desc:APP_UNIFORMS.find(u => u[0] === v.name)?.[2] || `${v.line}번째 줄에서 선언`});
-      for(const f of sym.functions) add({label:f.name, kind:"function", detail:`${f.ret} ${f.name}(${f.params})`, desc:`이 패스의 함수 · ${f.line}번째 줄`});
-      for(const [name, s] of sym.structs) add({label:name, kind:"type", detail:"struct", desc:s.fields.map(f => `${f.type} ${f.name}`).join(" · ")});
-      for(const d of sym.defines) add({label:d.name, kind:"constant", detail:`#define ${d.value}`.trim(), desc:`${d.line}번째 줄`});
-      for(const u of userUniforms()) add({label:u.name, kind:"uniform", detail:`uniform ${u.type}`, desc:"파라미터 패널에 등록된 값 · 선언은 자동으로 추가됩니다"});
-      for(const [name, type, desc, declare] of APP_UNIFORMS) add({label:name, kind:"uniform", detail:`uniform ${type}`, desc:`${desc} · 고르면 선언도 함께 추가합니다`, declare:declare || `uniform ${type} ${name};`});
-      const builtins = options.builtins?.length ? options.builtins : [...highlighter.builtins].map(name => ({name, sig:"", desc:""}));   // 레퍼런스 없이 쓰일 때의 최소 목록
-      for(const item of builtins) if(isIdent(item.name)) add({label:item.name, kind:item.name.startsWith("gl_") ? "builtin-var" : "builtin", detail:item.sig.split(" · ")[0], desc:item.desc, sig:item.sig});
-      for(const name of TYPES) add({label:name, kind:"type", detail:"타입", desc:/^[biu]?vec|^mat/.test(name) ? "생성자로도 씁니다: " + name + "(…)" : ""});
-      for(const name of KEYWORDS) add({label:name, kind:"keyword", detail:"키워드", desc:""});
-      for(const s of SNIPPETS) add({label:s.label, kind:"snippet", detail:s.detail, desc:"Tab으로 다음 자리로 이동", body:s.body});
-      const defined = new Set(sym.functions.map(f => f.name));
-      for(const lib of options.library?.items || []) if(!defined.has(lib.name)) add({label:lib.name, kind:"library", detail:lib.title, desc:`${lib.desc} · 고르면 함수 정의(필요한 함수 포함)를 위쪽에 추가합니다`, id:lib.id});
-      return {items, member:false};
-    };
-    // 선언 자리(타입 다음에 새 이름을 쓰는 중)에서는 저절로 띄우지 않는다.
-    const declaringName = (src, start) => /(?:^|[\s(,;{])(?:(?:const|uniform|in|out|inout|highp|mediump|lowp)\s+)*(?:void|float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler2D|struct|[A-Z]\w*)\s+$/.test(src.slice(Math.max(0, start-80), start));
     const showCompletion = (mode = "explicit") => {
       const at = textarea.selectionStart, src = textarea.value;
       if(at !== textarea.selectionEnd || codeMode(at) || /^[ \t]*#/.test(src.slice(src.lastIndexOf("\n", at-1)+1, at))) return hideCompletion();

@@ -9,7 +9,9 @@ for(const id of ["studioPromptDialog","studioDialogForm","studioDialogTitle","st
 check(html.includes('<dialog id="studioPromptDialog"')&&html.includes('method="dialog"'),"접근 가능한 네이티브 모달");
 check(css.includes(".studio-prompt-dialog::backdrop")&&css.includes('data-danger="true"'),"매트 테마/위험 확인 스타일");
 check(!/(?:window\.)?(?:prompt|confirm|alert)\s*\(/.test(studio+editor),"기본 입력/확인 대화상자 미사용");
-check(studio.includes('CodeEditor.mount($("studioCode"),ask')&&editor.includes("const mount = (textarea,ask"),"단일 모달 함수의 편집기 공유");
+// 편집기 엔진(기본 · CodeMirror)이 둘이어도 같은 모달 함수 ask를 받는다.
+const cmEditor=read("js/cm-editor.js");
+check(studio.includes('.mount($("studioCode"),ask')&&editor.includes("const mount = (textarea,ask")&&cmEditor.includes("const mount = (textarea, ask"),"단일 모달 함수의 편집기 공유");
 check(studio.includes("valueInput.disabled=!hasValue")&&studio.includes("valueInput.reportValidity()"),"숫자 입력 제한·숨김 입력 제외");
 check(studio.includes('on(dialog,"cancel"')&&studio.includes('on(dialog,"keydown"'),"Esc 취소 및 하위 키 전달 방지");
 check(studio.includes('if(!await confirmReplace())')&&studio.includes('proceed(confirmReplace()'),"비동기 확인과 기존 동기 API 호환");
