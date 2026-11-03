@@ -163,7 +163,7 @@ vec4 texel = texelFetch(iChannel0, ivec2(gl_FragCoord.xy), 0);              // �
 vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v - 1.0, 0) : vec3(v); }`, title:"값 시각화 함수", insert:"cursor"},
       {actions:[{label:"성능 탭 열기", run:"panel:profile"}]}]},
     {id:"snippets", title:"코드 조각 모음", summary:"해시·노이즈·SDF 등 범주별 함수 라이브러리", blocks:[
-      {p:"범주를 고르고 **삽입**을 누르면 현재 편집 중인 패스에 들어갑니다. 함수는 자동으로 `main()` 바깥(전역)에, 문장 조각은 함수 안 커서 위치에 들어가며, 필요한 함수(예: `fbm` → `valueNoise` → `hash21`)도 **코드에 없을 때만** 함께 넣습니다."},
+      {p:"범주를 고르고 **삽입**을 누르면 현재 편집 중인 패스에 들어갑니다. 함수는 자동으로 `main()` 바깥(전역)에, 문장 조각은 함수 안 커서 위치에 들어가며, 필요한 함수(예: `fbm` → `valueNoise` → `uhash21` → `pcg3d`)도 **코드에 없을 때만** 함께 넣습니다."},
       {library:true}]},
     {id:"shortcuts", title:"단축키", summary:"키보드로 빠르게", blocks:[
       {keys:[["가이드 열기/닫기","?"],["셰이더 편집기","E"],["예제 갤러리","X"],["재생/일시정지 (뷰포트 선택 시)","Space"],["전체화면","F"],["설정 패널","H"],["HUD 표시","G"],["파라미터 검색","/"],

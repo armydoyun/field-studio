@@ -9,10 +9,24 @@ uniform float uTime;
 uniform vec2 uMouse;
 ${params}out vec4 fragColor;
 `;
+  // 예제 공용 해시: 정수 해시(pcg3d)라 시간이 흘러 좌표가 커져도(스크롤·드리프트) 격자 무늬나 편향이 생기지 않는다.
+  const PCG = `uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}`;
+  const HASH = `// 정수 해시(pcg3d): 좌표 비트를 섞으므로 좌표가 아무리 커져도 고르다. 코드 조각 '해시 · 정수'의 uhash21과 같다.
+${PCG}
+float hash(vec2 p) { return float(pcg3d(uvec3(floatBitsToUint(p), 0u)).x >> 8u) * (1.0 / 16777216.0); }`;
+  // 한 번의 해시로 0~1 값 3개(칸 안 위치 x·y + 색 등)를 얻는다.
+  const HASH3 = `// 정수 해시(pcg3d) 한 번으로 서로 독립인 0~1 값 3개를 얻는다.
+${PCG}
+vec3 hash3(vec2 p) { return vec3(pcg3d(uvec3(floatBitsToUint(p), 0u)) >> 8u) * (1.0 / 16777216.0); }`;
   const aurora = head("uniform float uSpeed;\nuniform float uWarp;\nuniform vec3 uTint;\n") + `
 // Domain warping: fbm으로 좌표를 두 번 비틀어 오로라 같은 흐름을 만든다.
-// sin 기반 해시는 좌표가 커지면 정밀도가 무너져 격자 모양 이음매가 생기므로 sin 없는 해시를 쓴다.
-float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+${HASH}
 float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -95,7 +109,7 @@ void main() {
 }`;
   const truchet = head("uniform float uScale;\nuniform vec3 uInk;\n") + `
 // Truchet 타일: 셀마다 무작위로 회전한 사분원 두 개가 끊김 없는 미로를 만든다.
-float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+${HASH}
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y * uScale + vec2(uTime * 0.25, 0.0);
     vec2 id = floor(uv), f = fract(uv) - 0.5;
@@ -109,6 +123,57 @@ void main() {
     vec3 col = mix(vec3(0.95, 0.93, 0.88), uInk * (0.6 + 0.4 * shade), line);
     fragColor = vec4(col * (1.0 - 0.25 * length((gl_FragCoord.xy / uResolution) - 0.5)), 1.0);
 }`;
+  const voronoi = head("uniform float uScale;\nuniform float uEdge;\nuniform vec3 uLead;\n") + `
+// 보로노이(셀) 무늬: 칸마다 해시로 점 하나를 두고, 픽셀에서 가장 가까운 점과 두 번째로 가까운 점을 찾는다.
+// 점은 이웃 칸에도 있으므로 3×3 칸만 보면 된다. 두 거리의 차(d2 - d1)가 작을수록 경계에 가깝다.
+${HASH3}
+vec3 palette(float t) { return 0.55 + 0.45 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67))); }
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+    vec2 p = uv * uScale + uTime * vec2(0.15, 0.05);   // 계속 흐르므로 칸 번호가 커진다 → 정수 해시
+    vec2 g = floor(p), f = fract(p);
+    float d1 = 8.0, d2 = 8.0;
+    vec3 cell = vec3(0.0);
+    for (int y = -1; y <= 1; y++)
+    for (int x = -1; x <= 1; x++) {
+        vec2 o = vec2(x, y);
+        vec3 h = hash3(g + o);                                   // xy = 점의 움직임 위상, z = 칸 색
+        vec2 point = o + 0.5 + 0.38 * sin(uTime * 0.7 + 6.2831 * h.xy);
+        float d = length(point - f);
+        if (d < d1) { d2 = d1; d1 = d; cell = h; } else if (d < d2) d2 = d;
+    }
+    float edge = d2 - d1;
+    vec3 glass = palette(cell.z + 0.05 * uTime) * (0.65 + 0.35 * smoothstep(0.7, 0.0, d1)); // 가운데가 밝은 유리
+    vec3 col = mix(uLead, glass, smoothstep(uEdge * 0.5, uEdge, edge));                      // 납 테두리
+    col += glass * 0.35 * exp(-30.0 * edge);                                                  // 테두리에 번지는 빛
+    fragColor = vec4(pow(col, vec3(0.95)), 1.0);
+}`;
+  const starfield = head("uniform float uSpeed;\nuniform vec3 uTint;\n") + `
+// 시차(parallax) 별밭: 별이 든 격자를 4겹 겹쳐 서로 다른 속도로 흘린다. 앞 겹일수록 별이 크고 빠르다.
+// 시간이 갈수록 좌표가 끝없이 커지지만 정수 해시라 몇 시간을 흘려도 별 배치에 무늬가 생기지 않는다.
+${HASH3}
+float stars(vec2 p, float t) {
+    vec2 id = floor(p), f = fract(p) - 0.5;
+    vec3 h = hash3(id);
+    if (h.z < 0.6) return 0.0;                          // 40% 칸에만 별
+    vec2 pos = (h.xy - 0.5) * 0.6;                      // 칸 안 무작위 위치 (가장자리 여유를 남김)
+    float d = length(f - pos);
+    float twinkle = 0.6 + 0.4 * sin(t * (1.0 + 4.0 * h.x) + 6.2831 * h.y);
+    float core = smoothstep(0.035 + 0.06 * (h.z - 0.6), 0.0, d);
+    float glow = 0.004 / (d * d + 0.004) * smoothstep(0.45, 0.1, d);   // 칸 경계 전에 0으로 줄인다
+    return twinkle * (core + 0.35 * glow);
+}
+void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+    vec3 col = mix(vec3(0.005, 0.006, 0.02), vec3(0.04, 0.02, 0.08), smoothstep(-0.6, 0.6, uv.y));
+    for (int i = 0; i < 4; i++) {
+        float depth = 1.0 + float(i);                   // 1 = 가장 앞
+        vec2 p = uv * (5.0 * depth) + vec2(uTime * uSpeed * 3.0 / depth, 41.0 * float(i));
+        vec3 tint = mix(vec3(1.0, 0.9, 0.8), uTint, float(i) / 3.0);
+        col += tint * stars(p, uTime + 7.0 * float(i)) / depth;
+    }
+    fragColor = vec4(1.0 - exp(-1.6 * col), 1.0);      // 밝은 별이 하얗게 날아가지 않게 톤 매핑
+}`;
   const p = (name, type, value, options = {}) => ({name, type, value, options});
   const ART = [
     {id:"aurora", title:"Aurora Flow", tag:"Noise · Domain warp", description:"fbm으로 좌표를 두 번 비트는 도메인 워핑. 흐르는 오로라.", image:aurora,
@@ -120,7 +185,11 @@ void main() {
     {id:"horizon", title:"Neon Horizon", tag:"Projection · Grid", description:"화면 하단을 바닥 평면으로 투영한 원근 격자와 줄무늬 태양.", image:horizon,
       users:[p("uGridSpeed","float",1.5,{min:0,max:6,step:0.01}), p("uGlow","vec3",[0.2,0.9,1])]},
     {id:"truchet", title:"Truchet Weave", tag:"Tiling · Hash", description:"셀마다 무작위로 뒤집힌 사분원이 끝없는 미로를 엮습니다.", image:truchet,
-      users:[p("uScale","float",6,{min:2,max:20,step:0.1}), p("uInk","vec3",[0.15,0.2,0.55])]}
+      users:[p("uScale","float",6,{min:2,max:20,step:0.1}), p("uInk","vec3",[0.15,0.2,0.55])]},
+    {id:"voronoi", title:"Voronoi Glass", tag:"Cellular · Hash", description:"칸마다 해시로 둔 점이 흔들리는 셀 무늬 스테인드글라스.", image:voronoi,
+      users:[p("uScale","float",5,{min:1,max:16,step:0.1}), p("uEdge","float",0.08,{min:0.01,max:0.3,step:0.005}), p("uLead","vec3",[0.04,0.03,0.05])]},
+    {id:"starfield", title:"Starfield Drift", tag:"Layers · Hash", description:"속도가 다른 별 격자 4겹이 끝없이 흐르는 시차 별밭.", image:starfield,
+      users:[p("uSpeed","float",0.4,{min:0,max:3,step:0.01}), p("uTint","vec3",[0.55,0.75,1])]}
   ];
   // ---- 기법 배우기: 기능 하나씩을 보여주는 작은 프로젝트. 주석이 곧 설명서다. ----
   const annotated = `#version 300 es
@@ -147,6 +216,36 @@ void main() {
     float shape = 1.0 - smoothstep(-uSoftness, uSoftness, d);
     fragColor = vec4(mix(uBack, uColor, shape), 1.0);
 }`;
+  const hashPrecision = `#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+// 해시와 큰 좌표: 같은 칸 번호를 두 해시에 넣어 비교한다. 왼쪽 = 실수 해시(예전 방식), 오른쪽 = 정수 해시.
+// 해시 값이 상위 4%인 칸만 점으로 찍으면 규칙성이 눈에 잘 띈다. 무작위라면 점이 어디에도 줄지어 서지 않는다.
+// uOffset을 0부터 올려 보세요. 실수 해시는 수십만부터 점이 행·열로 줄을 서고, 천만 근처에서는 격자가 됩니다.
+uniform float uOffset;  // @range 0 10000000 @step 1000 @default 10000000
+uniform float uCell;    // @range 1 8 @step 1 @default 2
+uniform int   uShowRaw; // @min 0 @max 1 @default 0
+out vec4 fragColor;
+// 예전 방식: fract로 소수부만 남겨 섞는다(Hoskins "Hash without Sine"). float의 유효숫자 24비트에 묶인다.
+float hashFloat(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+// 정수 해시: float의 비트를 uint로 읽어 곱셈·xor·시프트로 섞는다. 크기와 관계없이 고르다.
+${PCG}
+float hashInt(vec2 p) { return float(pcg3d(uvec3(floatBitsToUint(p), 0u)).x >> 8u) * (1.0 / 16777216.0); }
+void main() {
+    vec2 cell = floor(gl_FragCoord.xy / uCell) + uOffset;       // 칸 번호 (정수값, 1천만까지 float로 정확)
+    bool right = gl_FragCoord.x > 0.5 * uResolution.x;
+    float h = right ? hashInt(cell) : hashFloat(cell);
+    vec3 col = uShowRaw == 1 ? vec3(h) : vec3(step(0.96, h));   // 0: 상위 4%만 점으로 · 1: 해시 값 그대로
+    float divider = 1.0 - smoothstep(1.0, 2.0, abs(gl_FragCoord.x - 0.5 * uResolution.x));
+    fragColor = vec4(mix(col, vec3(1.0, 0.55, 0.2), divider), 1.0);
+}
+// 참고: 노이즈처럼 소수부가 필요한 계산은 좌표 자체가 수백만이면 float에 소수부가 남지 않는다.
+// 그럴 때는 격자 번호(정수)와 칸 안 위치(소수)를 따로 계산해 해시에는 정수부만 넘기세요.
+`;
   const mrtSource = `#version 300 es
 precision highp float;
 // Buffer A · Out = 2 (MRT). 한 번의 실행으로 두 출력에 서로 다른 데이터를 쓴다.
@@ -217,7 +316,7 @@ uniform sampler2D iChannel0;
 uniform float uFeed;          // @range 0.01 0.09 @step 0.0005 @default 0.037
 uniform float uKill;          // @range 0.04 0.07 @step 0.0005 @default 0.06
 out vec4 fragColor;
-float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+${HASH}
 void main() {
     vec2 px = 1.0 / uResolution, uv = gl_FragCoord.xy * px;
     if (uFrame == 0) {   // 초기 상태: U=1, 무작위 점과 중앙 사각형에만 V
@@ -258,6 +357,8 @@ void main() {
   const LESSONS = [
     {id:"annotations", title:"Annotated Parameters", tag:"@range · @color", description:"GLSL 주석만으로 슬라이더·색상 파라미터를 만드는 법.", image:annotated, thumb:"annotations",
       project:{image:annotated, passes:[], imageChannels:{}}},
+    {id:"hashprecision", title:"Hash Precision", tag:"Hash · 큰 좌표", description:"실수 해시와 정수 해시를 나란히 비교. 좌표가 커지면 실수 해시에만 격자가 생깁니다.", image:hashPrecision, thumb:"hashprecision",
+      project:{image:hashPrecision, passes:[], imageChannels:{}}},
     {id:"reaction", title:"Reaction–Diffusion", tag:"Fixed size · RGBA16F · Repeat", description:"고정 해상도 피드백 시뮬레이션. 화면을 눌러 끌면 패턴을 심습니다.", thumb:"reaction",
       project:{image:reactionImage, passes:[{name:"A", fragment:reactionSource, format:"rgba16f", scale:1, size:[512,512], wrap:"repeat", channels:{0:{buffer:"A", frame:"previous"}}}], imageChannels:{0:{buffer:"A", frame:"current"}}}},
     {id:"mrt", title:"MRT Outputs", tag:"Out = 2 · A[1]", description:"한 패스에서 색과 거리장을 동시에 쓰고 Image에서 따로 읽기.", thumb:"mrt",

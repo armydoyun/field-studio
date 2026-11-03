@@ -109,26 +109,26 @@ float randPCG(uvec2 p, uint seed) {
     float i = floor(x), f = fract(x);   // 정수 격자점 해시는 uhash11(hash11은 연속 정수에서 분포가 치우침)
     return mix(uhash11(i), uhash11(i + 1.0), f * f * (3.0 - 2.0 * f));
 }`},
-      {id:"valueNoise", title:"valueNoise (2D)", desc:"격자 값 보간 노이즈, 0~1", requires:["hash21"], code:`float valueNoise(vec2 p) {
+      {id:"valueNoise", title:"valueNoise (2D)", desc:"격자 값 보간 노이즈, 0~1", requires:["uhash21"], code:`float valueNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash21(i), hash21(i + vec2(1, 0)), u.x),
-               mix(hash21(i + vec2(0, 1)), hash21(i + vec2(1, 1)), u.x), u.y);
+    return mix(mix(uhash21(i), uhash21(i + vec2(1, 0)), u.x),
+               mix(uhash21(i + vec2(0, 1)), uhash21(i + vec2(1, 1)), u.x), u.y);
 }`},
-      {id:"tileableNoise", title:"tileableNoise (반복 이음매 없음)", desc:"period 칸마다 정확히 반복되는 값 노이즈. 타일 텍스처·루프 애니메이션", requires:["hash21"], code:`float tileableNoise(vec2 p, vec2 period) {
+      {id:"tileableNoise", title:"tileableNoise (반복 이음매 없음)", desc:"period 칸마다 정확히 반복되는 값 노이즈. 타일 텍스처·루프 애니메이션", requires:["uhash21"], code:`float tileableNoise(vec2 p, vec2 period) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
     vec2 i0 = mod(i, period), i1 = mod(i + 1.0, period);   // 격자 번호를 감싸면 가장자리가 이어진다
-    return mix(mix(hash21(i0), hash21(vec2(i1.x, i0.y)), u.x),
-               mix(hash21(vec2(i0.x, i1.y)), hash21(i1), u.x), u.y);
+    return mix(mix(uhash21(i0), uhash21(vec2(i1.x, i0.y)), u.x),
+               mix(uhash21(vec2(i0.x, i1.y)), uhash21(i1), u.x), u.y);
 }`},
-      {id:"gradientNoise", title:"gradientNoise (2D)", desc:"퍼린 계열 그래디언트 노이즈, 대략 -1~1. 값 노이즈보다 덜 각짐", requires:["hash22"], code:`float gradientNoise(vec2 p) {
+      {id:"gradientNoise", title:"gradientNoise (2D)", desc:"퍼린 계열 그래디언트 노이즈, 대략 -1~1. 값 노이즈보다 덜 각짐", requires:["uhash22"], code:`float gradientNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);   // quintic
-    float n00 = dot(hash22(i) * 2.0 - 1.0, f);
-    float n10 = dot(hash22(i + vec2(1, 0)) * 2.0 - 1.0, f - vec2(1, 0));
-    float n01 = dot(hash22(i + vec2(0, 1)) * 2.0 - 1.0, f - vec2(0, 1));
-    float n11 = dot(hash22(i + vec2(1, 1)) * 2.0 - 1.0, f - vec2(1, 1));
+    float n00 = dot(uhash22(i) * 2.0 - 1.0, f);
+    float n10 = dot(uhash22(i + vec2(1, 0)) * 2.0 - 1.0, f - vec2(1, 0));
+    float n01 = dot(uhash22(i + vec2(0, 1)) * 2.0 - 1.0, f - vec2(0, 1));
+    float n11 = dot(uhash22(i + vec2(1, 1)) * 2.0 - 1.0, f - vec2(1, 1));
     return 1.4142 * mix(mix(n00, n10, u.x), mix(n01, n11, u.x), u.y);
 }`},
       {id:"simplex", title:"simplexNoise (2D)", desc:"심플렉스 노이즈, 약 -1~1. 방향성 결이 적고 빠름", code:`vec3 permute289(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
@@ -200,34 +200,34 @@ float simplexNoise(vec2 v) {
     vec2 r = vec2(fbm(p + 4.0 * q + vec2(1.7, 9.2) + t * 0.15), fbm(p + 4.0 * q + vec2(8.3, 2.8)));
     return fbm(p + 4.0 * r);
 }`},
-      {id:"voronoi", title:"voronoi", desc:"셀 노이즈. x=가까운 점 거리, y=경계까지 여유(F2-F1), z=셀 고유값", requires:["hash22","hash21"], code:`vec3 voronoi(vec2 p) {
+      {id:"voronoi", title:"voronoi", desc:"셀 노이즈. x=가까운 점 거리, y=경계까지 여유(F2-F1), z=셀 고유값", requires:["uhash22","uhash21"], code:`vec3 voronoi(vec2 p) {
     vec2 n = floor(p), f = fract(p), id = vec2(0);
     float d1 = 8.0, d2 = 8.0;
     for (int j = -1; j <= 1; j++)
     for (int i = -1; i <= 1; i++) {
         vec2 g = vec2(i, j);
-        vec2 r = g + hash22(n + g) - f;
+        vec2 r = g + uhash22(n + g) - f;
         float d = dot(r, r);
         if (d < d1) { d2 = d1; d1 = d; id = n + g; }
         else if (d < d2) { d2 = d; }
     }
-    return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), hash21(id));
+    return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), uhash21(id));
 }`}]},
     {id:"noise3d", title:"노이즈 3D", desc:"3차원 노이즈와 프랙털. 레이마칭 표면·구름 같은 부피 표현에 쓰고, 2D 화면에서는 z에 시간을 넣어 '형태가 변하며 흐르는' 노이즈로 씁니다.", items:[
-      {id:"valueNoise3", title:"valueNoise3 (3D)", desc:"3D 값 노이즈, 0~1. 가장 싸고 단순", requires:["hash13"], code:`float valueNoise3(vec3 p) {
+      {id:"valueNoise3", title:"valueNoise3 (3D)", desc:"3D 값 노이즈, 0~1. 가장 싸고 단순", requires:["uhash13"], code:`float valueNoise3(vec3 p) {
     vec3 i = floor(p), f = fract(p);
     vec3 u = f * f * (3.0 - 2.0 * f);
-    float a = mix(hash13(i), hash13(i + vec3(1, 0, 0)), u.x);
-    float b = mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), u.x);
-    float c = mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), u.x);
-    float d = mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), u.x);
+    float a = mix(uhash13(i), uhash13(i + vec3(1, 0, 0)), u.x);
+    float b = mix(uhash13(i + vec3(0, 1, 0)), uhash13(i + vec3(1, 1, 0)), u.x);
+    float c = mix(uhash13(i + vec3(0, 0, 1)), uhash13(i + vec3(1, 0, 1)), u.x);
+    float d = mix(uhash13(i + vec3(0, 1, 1)), uhash13(i + vec3(1, 1, 1)), u.x);
     return mix(mix(a, b, u.y), mix(c, d, u.y), u.z);
 }`},
-      {id:"gradientNoise3", title:"gradientNoise3 (3D 퍼린)", desc:"3D 그래디언트(퍼린) 노이즈, 대략 -1~1. 값 노이즈보다 결이 고름", requires:["hash33"], code:`float gradientNoise3(vec3 p) {
+      {id:"gradientNoise3", title:"gradientNoise3 (3D 퍼린)", desc:"3D 그래디언트(퍼린) 노이즈, 대략 -1~1. 값 노이즈보다 결이 고름", requires:["uhash33"], code:`float gradientNoise3(vec3 p) {
     vec3 i = floor(p), f = fract(p);
     vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);   // quintic
     // 격자 꼭짓점 8개의 무작위 기울기와 꼭짓점→점 벡터의 내적을 삼선형 보간
-    #define GRAD(o) dot(hash33(i + o) * 2.0 - 1.0, f - o)
+    #define GRAD(o) dot(uhash33(i + o) * 2.0 - 1.0, f - o)
     float n000 = GRAD(vec3(0, 0, 0)), n100 = GRAD(vec3(1, 0, 0));
     float n010 = GRAD(vec3(0, 1, 0)), n110 = GRAD(vec3(1, 1, 0));
     float n001 = GRAD(vec3(0, 0, 1)), n101 = GRAD(vec3(1, 0, 1));
@@ -306,19 +306,19 @@ float simplexNoise3(vec3 v) {
     }
     return value;
 }`},
-      {id:"voronoi3", title:"voronoi3 (3D 셀)", desc:"3D 셀 노이즈. x = 가까운 점 거리(F1), y = F2 − F1(경계), z = 셀 고유값", requires:["hash33","hash13"], code:`vec3 voronoi3(vec3 p) {
+      {id:"voronoi3", title:"voronoi3 (3D 셀)", desc:"3D 셀 노이즈. x = 가까운 점 거리(F1), y = F2 − F1(경계), z = 셀 고유값", requires:["uhash33","uhash13"], code:`vec3 voronoi3(vec3 p) {
     vec3 n = floor(p), f = fract(p), id = vec3(0);
     float d1 = 8.0, d2 = 8.0;
     for (int k = -1; k <= 1; k++)
     for (int j = -1; j <= 1; j++)
     for (int i = -1; i <= 1; i++) {
         vec3 g = vec3(i, j, k);
-        vec3 r = g + hash33(n + g) - f;
+        vec3 r = g + uhash33(n + g) - f;
         float d = dot(r, r);
         if (d < d1) { d2 = d1; d1 = d; id = n + g; }
         else if (d < d2) { d2 = d; }
     }
-    return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), hash13(id));
+    return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), uhash13(id));
 }`},
       {id:"domainWarp3", title:"domainWarp3", desc:"3D fbm으로 좌표를 비튼 흐름 (t = 시간). 2D 화면에선 p = vec3(uv, 0)", requires:["fbm3"], code:`float domainWarp3(vec3 p, float t) {
     vec3 q = vec3(fbm3(p + vec3(0.0, 0.0, t)), fbm3(p + vec3(5.2, 1.3, 2.8)), fbm3(p + vec3(1.7, 9.2, t * 0.5)));
@@ -331,18 +331,24 @@ uniform vec2 uResolution;
 uniform float uTime;
 out vec4 fragColor;
 
-float hash13(vec3 p3) {
-    p3 = fract(p3 * 0.1031);
-    p3 += dot(p3, p3.zyx + 31.32);
-    return fract((p3.x + p3.y) * p3.z);
+// 정수 해시: 카메라가 uTime으로 계속 앞으로 가므로 좌표가 커져도 무늬가 생기지 않는 pcg3d를 쓴다.
+uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}
+float uhash13(vec3 p) {
+    return float(pcg3d(floatBitsToUint(p)).x >> 8u) * (1.0 / 16777216.0);
 }
 float valueNoise3(vec3 p) {
     vec3 i = floor(p), f = fract(p);
     vec3 u = f * f * (3.0 - 2.0 * f);
-    float a = mix(hash13(i), hash13(i + vec3(1, 0, 0)), u.x);
-    float b = mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), u.x);
-    float c = mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), u.x);
-    float d = mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), u.x);
+    float a = mix(uhash13(i), uhash13(i + vec3(1, 0, 0)), u.x);
+    float b = mix(uhash13(i + vec3(0, 1, 0)), uhash13(i + vec3(1, 1, 0)), u.x);
+    float c = mix(uhash13(i + vec3(0, 0, 1)), uhash13(i + vec3(1, 0, 1)), u.x);
+    float d = mix(uhash13(i + vec3(0, 1, 1)), uhash13(i + vec3(1, 1, 1)), u.x);
     return mix(mix(a, b, u.y), mix(c, d, u.y), u.z);
 }
 float fbm3(vec3 p) {
@@ -378,7 +384,7 @@ void main() {
         float t0 = (CLOUD_BOTTOM - ro.y) / rd.y;
         float t1 = min((CLOUD_TOP - ro.y) / rd.y, t0 + 18.0);
         float dt = (t1 - t0) / 24.0;
-        float t = t0 + dt * hash13(vec3(gl_FragCoord.xy, uTime));   // 시작점을 흔들어 띠 무늬 제거
+        float t = t0 + dt * uhash13(vec3(gl_FragCoord.xy, uTime));  // 시작점을 흔들어 띠 무늬 제거
         vec3 acc = vec3(0.0);
         float transmittance = 1.0;
         for (int i = 0; i < 24; i++) {
@@ -422,9 +428,9 @@ void main() {
     float w = fwidth(d);
     return 1.0 - smoothstep(-w, w, d);
 }`},
-      {id:"truchet", title:"truchet", desc:"칸마다 무작위로 뒤집힌 사분원 → 끊김 없는 곡선 미로. 반환 = 곡선까지 거리", requires:["hash21"], code:`float truchet(vec2 p) {
+      {id:"truchet", title:"truchet", desc:"칸마다 무작위로 뒤집힌 사분원 → 끊김 없는 곡선 미로. 반환 = 곡선까지 거리", requires:["uhash21"], code:`float truchet(vec2 p) {
     vec2 id = floor(p), f = fract(p) - 0.5;
-    if (hash21(id) > 0.5) f.x = -f.x;
+    if (uhash21(id) > 0.5) f.x = -f.x;
     vec2 c = f - sign(f.x + f.y + 1e-6) * 0.5;   // 가까운 두 모서리 중 하나를 원의 중심으로
     return abs(length(c) - 0.5);
 }`},
@@ -433,10 +439,10 @@ void main() {
     p.x += 0.5 * mod(floor(p.y), 2.0);   // 홀수 줄을 반 칸 밀기
     return vec4(fract(p) - 0.5, floor(p));
 }`},
-      {id:"starLayer", title:"반짝이는 별 한 겹", desc:"밀도를 바꿔 여러 겹 더하면 깊이감 있는 별밭 (p = 화면 좌표 × 밀도)", requires:["hash22","hash21"], code:`float starLayer(vec2 p, float time) {
+      {id:"starLayer", title:"반짝이는 별 한 겹", desc:"밀도를 바꿔 여러 겹 더하면 깊이감 있는 별밭 (p = 화면 좌표 × 밀도)", requires:["uhash22","uhash21"], code:`float starLayer(vec2 p, float time) {
     vec2 id = floor(p), f = fract(p) - 0.5;
-    vec2 pos = (hash22(id) - 0.5) * 0.8;           // 칸 안 무작위 위치
-    float r = hash21(id + 7.0);                    // 밝기·깜빡임 속도
+    vec2 pos = (uhash22(id) - 0.5) * 0.8;           // 칸 안 무작위 위치
+    float r = uhash21(id + 7.0);                    // 밝기·깜빡임 속도
     float d = length(f - pos);
     float twinkle = 0.6 + 0.4 * sin(time * (2.0 + 4.0 * r) + r * 6.2831);
     float core = smoothstep(0.05 * (0.5 + r), 0.0, d);
@@ -722,7 +728,7 @@ vec3 opBend(vec3 p, float k)  { p.xy = rot2(k * p.x) * p.xy; return p; }`},
 }`},
       {id:"polar", title:"극좌표 변환", desc:"(반지름, 각도 0~1)로 바꾸기 — 방사형 패턴", scope:"main", code:`vec2 polar = vec2(length(uv), atan(uv.y, uv.x) / 6.2831853 + 0.5);`},
       {id:"tile", title:"타일 나누기 + 셀 번호", desc:"n칸 격자로 나누고 각 칸의 정수 id·내부 좌표 얻기", scope:"main", code:`vec2 grid = uv * 8.0;
-vec2 cellId = floor(grid);          // 칸 번호 (hash21(cellId)로 칸마다 다른 값)
+vec2 cellId = floor(grid);          // 칸 번호 (uhash21(cellId)로 칸마다 다른 값)
 vec2 cellUv = fract(grid) - 0.5;    // 칸 안의 -0.5~0.5 좌표`},
       {id:"pixelate", title:"픽셀화", desc:"좌표를 큰 픽셀 단위로 끊기 (레트로·모자이크)", scope:"main", code:`float pixelSize = 8.0;
 vec2 pixelUv = (floor(gl_FragCoord.xy / pixelSize) + 0.5) * pixelSize / uResolution;`},
@@ -998,11 +1004,11 @@ color = pow(color, vec3(1.0 / 2.2));`},
     uv *= 1.0 - uv.yx;
     return pow(uv.x * uv.y * 16.0, strength);
 }`},
-      {id:"grain", title:"필름 그레인", desc:"프레임마다 바뀌는 미세 노이즈 (밴딩 완화)", requires:["hash21"], code:`vec3 filmGrain(vec3 color, vec2 fragCoord, float time, float amount) {
-    float n = hash21(fragCoord + fract(time) * 1000.0) - 0.5;
+      {id:"grain", title:"필름 그레인", desc:"프레임마다 바뀌는 미세 노이즈 (밴딩 완화). 시간을 셋째 좌표로 넣어 오래 재생해도 반복·무늬가 없음", requires:["uhash13"], code:`vec3 filmGrain(vec3 color, vec2 fragCoord, float time, float amount) {
+    float n = uhash13(vec3(fragCoord, time)) - 0.5;   // 픽셀 × 시간마다 다른 값
     return color + n * amount;
 }`},
-      {id:"dither", title:"디더링", desc:"8bit 출력의 계단(밴딩) 제거", requires:["hash21"], scope:"main", code:`fragColor.rgb += (hash21(gl_FragCoord.xy) - 0.5) / 255.0;`},
+      {id:"dither", title:"디더링", desc:"8bit 출력의 계단(밴딩) 제거", requires:["uhash21"], scope:"main", code:`fragColor.rgb += (uhash21(gl_FragCoord.xy) - 0.5) / 255.0;`},
       {id:"chromatic", title:"색수차", desc:"iChannel0을 R/G/B로 조금씩 어긋나게 읽기", code:`vec3 chromaticAberration(sampler2D tex, vec2 uv, float amount) {
     vec2 dir = uv - 0.5;
     return vec3(texture(tex, uv + dir * amount).r,

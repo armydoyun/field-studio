@@ -10,7 +10,7 @@ assert(shader.raymarch.includes('SDFResult map(')&&shader.raymarch.includes('uRM
 assert.equal(shader.rayUniforms.length,6);assert.equal(new Set(shader.rayUniforms.map(x=>x[0])).size,6);
 for(const [name,type,value,opts] of shader.rayUniforms){assert(shader.raymarch.includes(name));assert(['int','float','bool','vec3'].includes(type));
   if(type==='vec3')assert.equal(value.length,3);else{assert.equal(typeof value,type==='bool'?'boolean':'number');if(type!=='bool')assert(opts.min<opts.max&&opts.step>0);}}
-assert(html.includes('id="studioExampleRaymarch"')&&html.includes('id="studioStarters"'));
+assert(!html.includes('id="studioExampleRaymarch"')&&!html.includes('id="studioStarters"'),'old editor-drawer starters are gone (the gallery opens Ray Marching)');
 for(const id of ['rayMaxSteps','rayStepsRange','rayMaxDistance','raySurfaceEpsilon','rayNormalEpsilon','debugHeatmap']){
   assert(!html.includes(`id="${id}"`)&&!ui.includes(`$("${id}")`),`${id} still exposed in Render`);
 }

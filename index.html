@@ -79,7 +79,7 @@
                     <div class="uniform-search-wrap"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="uniformSearch" type="search" placeholder="이름 또는 타입으로 검색" autocomplete="off" spellcheck="false" aria-label="Uniform 검색"><kbd>/</kbd></div>
                     <section class="control-section uniform-section">
                         <div class="section-heading"><h2>프로젝트 파라미터 <button type="button" class="guide-hint" data-guide="params" aria-label="파라미터·어노테이션 가이드" title="파라미터·어노테이션 사용법">?</button></h2><span id="uniformCount" class="count-badge">0</span></div>
-                        <p class="help section-description">값은 즉시 반영됩니다. Starter를 선택하면 해당 예제의 파라미터로 교체됩니다.</p>
+                        <p class="help section-description">값은 즉시 반영됩니다. 갤러리에서 예제를 열면 그 예제의 파라미터로 교체됩니다.</p>
                         <p id="uiError" role="alert" aria-live="polite"></p>
                         <details id="uniformEditor">
                             <summary><span class="summary-plus glyph-icon icon-plus" aria-hidden="true"></span> 파라미터 추가</summary>
@@ -141,7 +141,7 @@
                     <section class="control-section">
                         <div class="section-heading"><h2>선택적 Orbit 카메라</h2><span class="section-note">INPUT</span></div>
                         <p id="cameraStatus" class="help" role="status"></p>
-                        <p class="help">파라미터에 vec3 uCameraOrbit이 등록된 프로젝트에서만 동작합니다. Ray Marching Starter가 자동으로 준비합니다.</p>
+                        <p class="help">파라미터에 vec3 uCameraOrbit이 등록된 프로젝트에서만 동작합니다. 갤러리의 Ray Marching SDF 예제가 자동으로 준비합니다.</p>
                         <div class="shortcut-grid">
                             <div><span>카메라 회전</span><kbd>Drag</kbd></div>
                             <div><span>줌 인 · 아웃</span><kbd>Wheel</kbd></div>
@@ -257,15 +257,8 @@
                             <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 Pack으로 저장">전체 프로젝트 저장</button><button id="studioImportPack" type="button" title="다른 컴퓨터에서 이미지까지 복원할 수 있는 프로젝트 열기">Pack 열기</button></div>
                         <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
                             <div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트를 JSON 파일로 저장 (이미지 파일 제외)">소스 JSON 저장</button><button id="studioImport" type="button" title="JSON 프로젝트 파일 불러오기">소스 JSON 열기</button></div>
+                            <button id="studioReset" type="button" title="모든 패스와 파라미터를 지우고 기본 Shader Art 장면으로 새로 시작 · Undo 가능">새 프로젝트 (기본 장면)</button>
                         <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
-                        </div></details>
-                        <details id="studioStarters" class="studio-group"><summary>시작 예제</summary><div class="studio-group-body">
-                            <p class="studio-hint">코드·버퍼·파라미터를 함께 교체합니다. Undo로 이전 작업으로 돌아갈 수 있습니다.</p>
-                        <button id="studioExamplePipeline" type="button" title="A current → B 색상 후처리 → Image · 기존 프로젝트 교체 · Undo 가능">01 · 버퍼 연결과 후처리</button>
-                        <button id="studioExampleFeedback" type="button" title="A current + B previous → 잔상 누적 · 기존 프로젝트 교체 · Undo 가능">02 · 이전 프레임 잔상</button>
-                        <button id="studioExampleRaymarch" type="button" title="현재 프로젝트를 SDF 장면과 카메라 포함 파라미터 6개로 교체 · Undo 가능">Ray Marching · SDF</button>
-                        <p class="studio-hint">01은 A → B → Image 연결, 02는 B의 previous 입력을 추가합니다. Image 왼쪽은 원본, 오른쪽은 처리 결과입니다. 각 패스의 첫 주석에서 채널 설정을 확인하세요.</p>
-                        <button id="studioReset" type="button" title="모든 패스를 지우고 기본 셰이더 아트 예제로 복원">기본 Shader Art로 시작</button>
                         </div></details>
                         <details id="studioImages" class="studio-group"><summary>이미지</summary><div class="studio-group-body">
                             <button id="studioTextureAdd" type="button" title="로컬 이미지 파일을 불러와 Texture로 등록">+ 이미지 파일 불러오기</button>
@@ -385,7 +378,7 @@
             <nav id="guideNav" class="guide-nav" aria-label="가이드 주제"></nav>
             <article id="guideContent" class="guide-content help-body" tabindex="-1" aria-live="polite">
             <h3>처음 사용할 때</h3>
-            <p><b>1.</b> &lt;/&gt; 버튼으로 편집기 열기 → <b>2.</b> Starter Projects 선택 또는 Image/Buffer 탭 선택 → <b>3.</b> GLSL 작성 후 Run. 다른 패스를 읽으려면 iChannel에서 입력을 선택하세요.</p>
+            <p><b>1.</b> &lt;/&gt; 버튼으로 편집기 열기 → <b>2.</b> 예제 갤러리(X)에서 예제를 고르거나 Image/Buffer 탭 선택 → <b>3.</b> GLSL 작성 후 Run. 다른 패스를 읽으려면 iChannel에서 입력을 선택하세요.</p>
             <h3>파일 저장 범위</h3><p><b>전체 프로젝트 저장(Pack)</b>은 코드·파라미터·연결된 이미지와 설정을 함께 보관합니다. <b>소스 JSON</b>은 코드와 연결 구성만, 편집기 ⋯ 메뉴의 <b>.frag 파일로 저장</b>은 현재 패스의 코드만 저장합니다. 브라우저 자동 저장과 별도로 Pack을 보관할 수 있습니다.</p>
             <h3>화면·카메라 (3D 셰이더에서 사용)</h3>
             <div class="help-list"><span>셰이더 편집기 열기/닫기</span><kbd>E</kbd><span>예제 갤러리</span><kbd>X</kbd><span>재생/일시정지 (뷰포트 선택)</span><kbd>Space</kbd><span>전체화면</span><kbd>F</kbd><span>설정 패널 표시/숨김</span><kbd>H</kbd><span>FPS HUD 표시/숨김</span><kbd>G</kbd><span>Uniform 검색</span><kbd>/</kbd><span>이 도움말 열기/닫기</span><kbd>?</kbd><span>카메라 회전 / 확대</span><kbd>드래그 / 휠</kbd><span>회전·확대 / 속도 증가</span><kbd>WASD·방향키 / Shift</kbd><span>카메라 초기화 (뷰포트 선택)</span><kbd>R</kbd></div>

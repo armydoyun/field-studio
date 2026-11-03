@@ -22,10 +22,18 @@ float sdBox(vec2 p, vec2 b) {
 }`;
 
   const HASH = `// 같은 입력 → 항상 같은 출력. 상태가 없는 '난수'.
+// 좌표의 비트를 uint로 읽어 C처럼 곱셈·xor·시프트로 섞습니다(pcg3d).
+// uint 곱셈은 C의 unsigned처럼 2^32에서 감기므로 좌표가 아무리 커져도 무늬가 생기지 않아요.
+uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}
 float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
+    uint h = pcg3d(uvec3(floatBitsToUint(p), 0u)).x;
+    return float(h >> 8u) / 16777216.0;   // 상위 24비트 → 0~1 (1.0은 나오지 않음)
 }`;
 
   // ---------------------------------------------------------------- 1. 픽셀 하나의 관점
@@ -370,11 +378,7 @@ uniform vec4 uMouse;           // xy = 포인터(이 버퍼 좌표), z > 0 = 누
 uniform sampler2D iChannel0;
 out vec4 fragColor;            // r = 살아 있음(0/1), g = 나이
 
-float hash12(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
+${HASH}
 
 // 배열 읽기: texelFetch는 정수 인덱스로 정확히 한 칸을 읽습니다(보간 없음).
 // 가장자리는 % 로 감싸 토러스(위아래·좌우가 이어진 판)로 만듭니다.
@@ -388,7 +392,7 @@ void main() {
     ivec2 c = ivec2(gl_FragCoord.xy);
 
     if (uFrame == 0) {                               // 첫 프레임: 무작위로 30% 채우기
-        fragColor = vec4(step(0.7, hash12(gl_FragCoord.xy)), 0.0, 0.0, 1.0);
+        fragColor = vec4(step(0.7, hash21(gl_FragCoord.xy)), 0.0, 0.0, 1.0);
         return;
     }
 
@@ -616,7 +620,8 @@ vec2 f  = fract(p * N) - 0.5; // -0.5~0.5`}},
         "칸마다 다른 속도로 **회전하는 상자**로 바꿔 보세요.",
         "해시 값이 0.5보다 작은 칸은 **비워** 보세요."]},
       {solution:L6_SOL},
-      {note:"이웃 칸의 도형이 경계를 넘어오면 잘려 보입니다. 도형을 칸 안(반지름 0.5 미만)에 두거나, 주변 3×3 칸을 루프로 함께 검사하면 해결됩니다."}]},
+      {note:"이웃 칸의 도형이 경계를 넘어오면 잘려 보입니다. 도형을 칸 안(반지름 0.5 미만)에 두거나, 주변 3×3 칸을 루프로 함께 검사하면 해결됩니다."},
+      {note:"예제의 `hash21`은 정수 해시입니다. `floatBitsToUint`로 실수의 비트를 그대로 uint로 읽고(C의 `memcpy`나 공용체로 float 비트를 읽는 것과 같음), 곱셈·xor·시프트로 섞습니다. `fract(sin(...))`처럼 실수 연산만 쓰는 짧은 해시는 좌표가 수만을 넘으면 정밀도가 모자라 줄무늬가 생깁니다. 코드 조각의 **해시 · 정수** 범주에 같은 방식의 함수가 더 있습니다."}]},
 
     {id:"c7", course:true, step:7, title:"색과 합성", summary:"팔레트 · 레이어 · 빛 번짐", blocks:[
       {p:"색은 0~1 실수 벡터라서 일반 산술이 그대로 됩니다. 장면은 **뒤에서 앞으로 레이어를 쌓는**(화가 알고리즘) 방식으로 칠합니다."},
