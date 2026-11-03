@@ -1,4 +1,4 @@
-from esm_for_browser import load_modules
+from esm_for_browser import load_modules, EditorModel
 # python tests/compiler-lines-browser-regression.py — Chromium DOM test with a mock renderer, no GPU required.
 import os
 from pathlib import Path
@@ -32,7 +32,7 @@ with sync_playwright() as p:
       };
       window.testStudio=TestStudio.mount(renderer,{fragment:good});testStudio.open();document.getElementById('studioLive').checked=false;
     }''')
-    area=page.locator('#studioCode');diag=page.locator('#studioDiagnostics button')
+    area=EditorModel(page);diag=page.locator('#studioDiagnostics button')
     def check(condition,label):
         assert condition,label
         print('PASS',label,flush=True)

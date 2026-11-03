@@ -49,9 +49,11 @@ function fixture(realEditor=false,compact=false,initialStorage={}){
   const canvas=new Node();Object.assign(canvas,{width:100,height:60,clientWidth:100,clientHeight:60,getContext:()=>gl});
   const shader=load('shader'),renderer=load('renderer').createRenderer(canvas,shader);
   const settings=load('settings').mount(renderer);
-  if(!realEditor)modules['code-editor']={mount:()=>({update(){},goToLine(){},dispose(){}})};
+  // 편집기(CodeMirror)는 실제 DOM이 필요하므로 Node 검사에서는 가짜로 대신한다. #studioCode 노드가 소스를 담는 창구 역할을 그대로 한다.
+  // 편집기 자체의 동작은 브라우저 테스트(tests/cm-editor-browser-regression.py)가 검사한다. realEditor 인자는 예전 호출과의 호환을 위해 남겨 둔다.
+  let editorAsk=null;modules['cm-editor']={mount:(textarea,ask)=>{editorAsk=ask;return {update(){},goToLine(){},setDiagnostics(){},registerCommands(){},openPalette(){},showFind(){},dispose(){}};}};
   const studio=load('studio').mount(renderer,shader,settings);
-  return {gl,renderer,studio,shader,settings,nodes,storage,reads,outputs,errors,frames,load,canvas,document,window,contexts,metrics,
+  return {ask:(...args)=>editorAsk(...args),gl,renderer,studio,shader,settings,nodes,storage,reads,outputs,errors,frames,load,canvas,document,window,contexts,metrics,
     deferBitmap:()=>{let resolve;pendingBitmap=new Promise(r=>resolve=r);return ()=>resolve({width:2,height:2,close(){closed++;}});},
     resources:()=>({closed,textureCreates}),dispose:()=>{studio.dispose();settings.dispose();renderer.dispose();}};
 }

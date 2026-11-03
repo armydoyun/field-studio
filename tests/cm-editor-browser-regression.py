@@ -1,5 +1,5 @@
 from esm_for_browser import load_modules
-# python tests/cm-editor-browser-regression.py — CodeMirror 6 편집기 엔진(실험): textarea 창구 · studio 연동 · 주요 편집 기능 (GPU 불필요)
+# python tests/cm-editor-browser-regression.py — GLSL 편집기(CodeMirror 6): textarea 창구 · studio 연동 · 편집 기능 · GLSL 도우미 (GPU 불필요)
 import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -23,7 +23,7 @@ with sync_playwright() as p:
         for(const [name,source] of [["Image",scene.image],...scene.passes.map(p=>[p.name,p.fragment])]){try{renderer.validateFragment(source);}catch(error){error.passName=name;throw error;}}
         renderer.setPasses(scene.passes,scene.imageChannels);renderer.setFragment(scene.image);return true;};
       window.testRenderer=renderer;
-      window.testStudio=TestStudio.mount(renderer,{fragment:src},null,{editorEngine:"codemirror",builtins:[{name:"smoothstep",sig:"T smoothstep(T e0, T e1, T x)",desc:"부드러운 계단"}],lookup:n=>n==="smoothstep"?{sig:"T smoothstep(T e0, T e1, T x)",desc:"부드러운 계단"}:null});
+      window.testStudio=TestStudio.mount(renderer,{fragment:src},null,{builtins:[{name:"smoothstep",sig:"T smoothstep(T e0, T e1, T x)",desc:"부드러운 계단"},{name:"mix",sig:"T mix(T a, T b, T t)",desc:"선형 보간"}],lookup:n=>({smoothstep:{sig:"T smoothstep(T e0, T e1, T x)",desc:"부드러운 계단"},mix:{sig:"T mix(T a, T b, T t)",desc:"선형 보간"}})[n]||null,notify:t=>window.lastNotice=t});
       testStudio.open();document.getElementById('studioLive').checked=false;
     }''')
     n=[0]
@@ -37,7 +37,7 @@ with sync_playwright() as p:
 
     # ---- 장착 · 창구 ----
     check(js("!!document.querySelector('.studio-cm-host .cm-editor') && document.querySelector('.studio-editor-frame').classList.contains('is-codemirror')"),'CodeMirror view is mounted in the editor frame')
-    check(js("getComputedStyle(document.querySelector('.studio-code-surface')).display")=='none','classic gutter/highlight/textarea surface is hidden')
+    check(js("document.getElementById('studioCode').hidden && !document.querySelector('#studioHighlight, #studioLines, #studioCompletion, #studioFindPanel')"),'the model textarea is hidden and no classic editor layers exist')
     check(val()==js("testStudio.getProject().image") and js("document.querySelector('.cm-content').textContent.includes('fragColor = vec4(1.0);')"),'facade value and CodeMirror document hold the project source')
     classes=js("[...new Set([...document.querySelectorAll('.cm-content [class*=glsl-]')].map(n=>n.className))].sort()")
     check({'glsl-directive','glsl-keyword','glsl-type','glsl-number'}<=set(classes),f'GLSL tokens use the shared .glsl-* colors: {classes}')
@@ -106,6 +106,70 @@ with sync_playwright() as p:
       while((node=walker.nextNode())){const i=node.textContent.indexOf('smoothstep');if(i>=0){const range=document.createRange();range.setStart(node,i+2);range.setEnd(node,i+3);const r=range.getBoundingClientRect();return [r.left+2,r.top+r.height/2];}}})()""")
     page.mouse.move(*box);wait(800)
     check('부드러운 계단' in (js("document.querySelector('.cm-tooltip-hover')?.textContent || ''")),'hovering a builtin shows its description')
+
+    # ---- 예전 편집기 테스트에서 옮겨 온 기본 편집 동작 ----
+    SRC2='#version 300 es\nprecision highp float;\nout vec4 fragColor;\nfloat wave(float x, float k) {\n    return sin(x * k);\n}\nvoid main() {\n    vec3 tint = vec3(1.0, 0.5, 0.0);\n    float a = 1;\n    float b = 2;\n    fragColor = vec4(tint * wave(a, 3.0), 1.0);\n}\n'
+    def load(src):js("s=>testStudio.setProject({image:s,passes:[],imageChannels:{}})",src);wait(80)
+    def place(a,b=None):js("a=>{const t=document.getElementById('studioCode');t.focus();t.setSelectionRange(a[0],a[1]);}",[a,a if b is None else b]);wait(40)
+    def sel():return js("(t=>[t.selectionStart,t.selectionEnd])(document.getElementById('studioCode'))")
+    load(SRC2)
+    at=SRC2.index('float a = 1;')+len('float a = 1');place(at);page.keyboard.type('(')
+    check(val()[at:at+2]=='()' and sel()==[at+1,at+1],'( auto-closes and keeps the caret inside')
+    page.keyboard.type(')');check(val()[at:at+3]=='();' and sel()==[at+2,at+2],'typing ) steps over the auto-closed bracket')
+    page.keyboard.press('Control+z');page.keyboard.press('Control+z');wait()
+    load(SRC2);a=SRC2.index('float a');b=SRC2.index('float b = 2;')+5;place(a,b);page.keyboard.press('Tab')
+    check('        float a = 1;\n        float b = 2;' in val(),'Tab indents every selected line')
+    page.keyboard.press('Shift+Tab');check('    float a = 1;\n    float b = 2;' in val(),'Shift+Tab outdents them again')
+    place(SRC2.index('float a'));page.keyboard.press('Control+/');check('    // float a = 1;' in val(),'Ctrl+/ comments the line')
+    page.keyboard.press('Control+/');check('    float a = 1;' in val() and '// float a' not in val(),'Ctrl+/ again uncomments it')
+    page.keyboard.press('Alt+ArrowDown');check(val().index('float b = 2;')<val().index('float a = 1;'),'Alt+↓ moves the line down')
+    page.keyboard.press('Alt+ArrowUp');page.keyboard.press('Control+Shift+KeyD');check(val().count('float a = 1;')==2,'Ctrl+Shift+D duplicates the line')
+    load(SRC2);place(SRC2.index('float a'));page.keyboard.press('Control+l');check(js("(t=>t.value.slice(t.selectionStart,t.selectionEnd))(document.getElementById('studioCode'))").startswith('    float a = 1;'),'Ctrl+L selects the line')
+    options_=js("[...document.getElementById('studioFunctions').options].map(o=>o.textContent)")
+    check(len(options_)==3 and options_[1].startswith('wave(float x, float k)') and options_[2].startswith('main()'),f'function list shows top-level functions: {options_}')
+    js("(s=>{s.value=s.options[2].value;s.dispatchEvent(new Event('change'));})(document.getElementById('studioFunctions'))");wait()
+    check(sel()[0]==SRC2.index('void main'),'choosing a function moves the caret to its definition')
+
+    # ---- GLSL 도우미 ----
+    place(SRC2.index('3.0)')+1);wait(80)
+    sig=js("(t=>t&&[t.textContent,t.querySelector('em')?.textContent])(document.querySelector('.cm-glsl-signature'))")
+    check(sig and sig[1]=='float k','signature help highlights the argument being typed (wave → float k)')
+    page.keyboard.press('Control+ArrowUp');check('wave(a, 3.1)' in val(),'Ctrl+↑ nudges the number by its last digit')
+    page.keyboard.press('Shift+Control+ArrowDown');check('wave(a, 2.1)' in val(),'Shift+Ctrl+↓ nudges ten steps')
+    sw=js("[...document.querySelectorAll('.cm-glsl-swatch')].map(n=>n.style.getPropertyValue('--swatch'))")
+    check(sw==['rgb(255 128 0)'],f'a color swatch precedes 0..1 vec3 literals: {sw}')
+    js("""()=>{const i=document.querySelector('.cm-glsl-color-input')||document.createElement('input');HTMLInputElement.prototype.showPicker=function(){};document.querySelector('.cm-glsl-swatch').click();const p=document.querySelector('.cm-glsl-color-input');p.value='#336699';p.dispatchEvent(new Event('input'));}""");wait()
+    check('vec3(0.2, 0.4, 0.6)' in val(),'the swatch color picker writes 0..1 values')
+    page.keyboard.press('Control+z');wait(80);check('vec3(1.0, 0.5, 0.0)' in val(),'Undo restores the color')
+    check(js("document.querySelectorAll('.cm-indent-guides').length")>=3,'indent guide decorations are drawn')
+    place(val().index('wave(a')+1);page.keyboard.press('F12');wait()
+    check(sel()==[SRC2.index('wave('),SRC2.index('wave(')+4],'F12 jumps to the function definition')
+    box=js("""(()=>{const w=document.createTreeWalker(document.querySelector('.cm-content'),NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())){const i=n.textContent.indexOf('tint *');if(i>=0){const r=document.createRange();r.setStart(n,i+1);r.setEnd(n,i+2);const c=r.getBoundingClientRect();return [c.left+1,c.top+c.height/2];}}})()""")
+    page.keyboard.down('Control');page.mouse.click(*box);page.keyboard.up('Control');wait()
+    check(sel()==[SRC2.index('tint ='),SRC2.index('tint =')+4],'Ctrl+click jumps to the variable declaration')
+    page.keyboard.press('F2');wait(120);check(js("document.getElementById('studioPromptDialog').open"),'F2 opens the rename dialog')
+    js("(i=>{i.value='color';})(document.getElementById('studioDialogInput'))");page.keyboard.press('Enter');wait(120)
+    check(val().count('color')==2 and 'tint' not in val(),'rename replaces every use of the name')
+    page.keyboard.press('Control+z');wait(80)
+    nb=js("""(()=>{const line=[...document.querySelectorAll('.cm-line')].find(l=>l.textContent.includes('float b = 2;'));const num=[...line.querySelectorAll('span')].find(x=>x.textContent==='2');const c=num.getBoundingClientRect();return [c.left+c.width/2,c.top+c.height/2];})()""")
+    page.keyboard.down('Alt');page.mouse.move(*nb);page.mouse.down();page.mouse.move(nb[0]+20,nb[1],steps=4);page.mouse.up();page.keyboard.up('Alt');wait()
+    check('float b = 7;' in val(),'Alt+drag on a number scrubs its value')
+    load(SRC2);caret_to_end();page.keyboard.type('SYNTAX');js("testStudio.apply()");wait(150)
+    lens=js("[...document.querySelectorAll('.cm-error-lens')].map(n=>n.className+'|'+n.textContent)")
+    check(lens and 'test diagnostic' in lens[0] and 'is-stale' not in lens[0],f'the compile error message is shown at the end of its line: {lens}')
+    page.keyboard.type(' ');wait()
+    check(js("document.querySelectorAll('.cm-error-lens.is-stale').length")==1,'editing marks the error message as stale until the next compile')
+    js("document.getElementById('studioLintPanel').click()");wait();check(page.is_visible('.cm-panel-lint'),'the error list panel opens from the menu')
+    page.keyboard.press('Escape');load(SRC2)
+    js("document.getElementById('studioFoldAll').click()");wait();check(js("document.querySelectorAll('.cm-foldPlaceholder').length")==2,'fold all collapses both functions')
+    js("document.getElementById('studioUnfoldAll').click()");wait();check(js("document.querySelectorAll('.cm-foldPlaceholder').length")==0,'unfold all expands them')
+    place(SRC2.index('float a'));page.keyboard.press('Control+Alt+ArrowDown');check('다중 선택 2개' in page.locator('#studioCursor').inner_text(),'Ctrl+Alt+↓ adds a cursor on the next line')
+    page.keyboard.press('Escape')
+    page.keyboard.press('Control+h');wait()
+    check(page.is_visible('.cm-search') and js("document.activeElement?.name")=='replace','Ctrl+H opens search with the replace field focused')
+    check('찾기' in js("document.querySelector('.cm-search input[name=search]').placeholder") and '모두 바꾸기' in js("document.querySelector('.cm-search').textContent"),'search panel labels are Korean (EditorState.phrases)')
+    page.keyboard.press('Escape');js("document.getElementById('studioCode').value=''");wait()
+    check('GLSL 코드를 입력하세요' in js("document.querySelector('.cm-placeholder')?.textContent || ''"),'an empty document shows a placeholder hint')
     check(errors==[],f'no Chromium page exceptions: {errors}')
-    print(f'PASS all {n[0]} CodeMirror engine checks')
+    print(f'PASS all {n[0]} editor checks')
     browser.close()

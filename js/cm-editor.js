@@ -1,12 +1,13 @@
-// CodeMirror 6 기반 편집기 (실험). code-editor.js와 같은 mount API를 제공한다.
+// GLSL 코드 편집기 (CodeMirror 6). studio.js가 mount()로 붙이고 update · goToLine · setDiagnostics 등을 부른다.
 // studio.js는 #studioCode textarea를 직접 읽고 쓰므로, 그 textarea를 CodeMirror 문서의 "창구(facade)"로 만든다:
 // value·selectionStart/End·setSelectionRange·setRangeText·scrollTop·focus는 CodeMirror 상태를 읽고 쓰며,
 // 사용자의 편집·선택·키 입력은 textarea의 input·select·keydown 이벤트로 다시 알린다. 되돌리기는 지금처럼 studio가 맡는다(CodeMirror history 미사용).
 import * as CodeMirror from "./codemirror.js";
 import * as Highlight from "./glsl-highlight.js";
 import * as Language from "./glsl-language.js";
+import * as Features from "./cm-glsl-features.js";
   const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], options = {}) => {
-    const CM = CodeMirror.load();   // CodeMirror는 이 엔진을 실제로 쓸 때 처음 초기화한다(기본 편집기 사용 시 비용 없음)
+    const CM = CodeMirror.load();   // CodeMirror는 편집기를 처음 붙일 때 초기화한다
     const $ = id => document.getElementById(id), ac = new AbortController(), signal = ac.signal;
     const listen = (target, type, fn, opts = {}) => target?.addEventListener(type, fn, {...opts, signal});
     const highlighter = Highlight.create((options.builtins || []).map(item => item.name));
@@ -14,15 +15,18 @@ import * as Language from "./glsl-language.js";
     const language = Language.create({options, uniformNames, highlighter, source:() => view ? view.state.doc.toString() : textarea.value});
     const {APP_UNIFORMS, symbolsOf, describeSymbol, gatherItems, declaringName, KIND_ORDER, KIND_NAME, cleanOf, fuzzy} = language;
     const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const notify = text => options.notify?.(text);
+    // 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류 표시
+    const features = Features.create({CM, language, options, ask, notify, onScrub:() => options.onScrub?.()});
 
-    // ---- 표시 설정: 기본 편집기와 같은 저장값(글자 크기·줄바꿈·들여쓰기)을 쓴다 ----
+    // ---- 표시 설정(글자 크기·줄바꿈·들여쓰기). 예전 편집기와 같은 저장값을 이어서 쓴다 ----
     const STATE_KEY = "webgl.shader-studio.editor.v2"; let saved = {};
     try { saved = JSON.parse(localStorage.getItem(STATE_KEY) || "{}") || {}; } catch (_) {}
     let fontSize = Number.isInteger(saved.fontSize) ? Math.max(10, Math.min(20, saved.fontSize)) : 12, wrap = !!saved.wrap, tabSize = saved.tabSize === 2 ? 2 : 4;
     const save = () => { try { localStorage.setItem(STATE_KEY, JSON.stringify({...saved, fontSize, wrap, tabSize})); } catch (_) {} };
     const fontComp = new CM.Compartment(), wrapComp = new CM.Compartment(), tabComp = new CM.Compartment();
     const fontTheme = () => CM.EditorView.theme({"&":{fontSize:`${fontSize}px`}});
-    const tabConfig = () => [CM.EditorState.tabSize.of(tabSize), CM.indentUnit.of(" ".repeat(tabSize))];
+    const tabConfig = () => [CM.EditorState.tabSize.of(tabSize), CM.indentUnit.of(" ".repeat(tabSize)), CM.EditorView.editorAttributes.of({style:`--tab-size:${tabSize}`})];
 
     // ---- GLSL 문법 강조: glsl-highlight.js와 같은 규칙·색(.glsl-* 클래스) ----
     const CLASSES = ["glsl-keyword","glsl-type","glsl-number","glsl-comment","glsl-string","glsl-directive","glsl-builtin","glsl-function"];
@@ -125,7 +129,6 @@ import * as Language from "./glsl-language.js";
     const frame = textarea.closest(".studio-editor-frame"), pane = textarea.closest(".studio-code-pane");
     frame?.classList.add("is-codemirror");
     const host = document.createElement("div"); host.className = "studio-cm-host"; frame?.append(host);
-    const findPanel = $("studioFindPanel"); if(findPanel) findPanel.hidden = true;
     const position = $("studioCursor"), symbols = $("studioFunctions");
     const updateStatus = state => {
       const main = state.selection.main, line = state.doc.lineAt(main.head), count = state.selection.ranges.length;
@@ -179,7 +182,8 @@ import * as Language from "./glsl-language.js";
       }
     }));
     // studio의 되돌리기 기록용: 사용자 편집 직전 커서를 알려 준다.
-    const beforeUserEdit = CM.EditorState.transactionFilter.of(tr => { if(tr.docChanged && !tr.annotation(External)) beforeEdit(); return tr; });
+    // 글자 입력(input.type)은 제외한다: 브라우저가 이미 커서 쪽으로 스크롤한 뒤라, 직전에 받은 beforeinput·select 시점의 위치가 맞다.
+    const beforeUserEdit = CM.EditorState.transactionFilter.of(tr => { if(tr.docChanged && !tr.annotation(External) && !tr.isUserEvent("input.type")) beforeEdit(); return tr; });
     let commands = [];
     const editorKeys = [
       {key:"Mod-Space", run:CM.startCompletion},
@@ -187,8 +191,18 @@ import * as Language from "./glsl-language.js";
       {key:"Mod-Shift-o", run:() => { openPalette("@"); return true; }},
       {key:"Mod-Shift-\\", run:CM.cursorMatchingBracket},
       {key:"Alt-z", run:() => { wrap = !wrap; applyPresentation(); return true; }},
+      {key:"Mod-Alt-ArrowUp", run:CM.addCursorAbove}, {key:"Mod-Alt-ArrowDown", run:CM.addCursorBelow},
+      // 예전 편집기와 같은 키: 줄 선택 · 줄 복제 · 찾아 바꾸기
+      {key:"Mod-l", run:CM.selectLine}, {key:"Mod-Shift-d", run:CM.copyLineDown}, {key:"Mod-h", run:() => { showFind(true); return true; }},
+      // keyCode가 없는 키 이벤트(합성 이벤트·일부 키보드 배열)는 Shift+글자를 대문자 이름으로만 보낸다. 같은 동작을 대문자 이름에도 묶는다.
+      {key:"Mod-Shift-D", run:CM.copyLineDown}, {key:"Mod-Shift-O", run:() => { openPalette("@"); return true; }}, {key:"Mod-Shift-P", run:() => { openPalette(); return true; }},
       {key:"F1", run:() => { openPalette(); return true; }}, {key:"Mod-Shift-p", run:() => { openPalette(); return true; }}
     ];
+    // CodeMirror 내장 UI(검색 창·접기·오류 목록·자동 완성) 문구를 한국어로 (EditorState.phrases)
+    const PHRASES = {"Find":"찾기", "Replace":"바꿀 내용", "next":"다음", "previous":"이전", "all":"모두 선택", "match case":"대소문자", "by word":"단어 단위", "regexp":"정규식",
+      "replace":"바꾸기", "replace all":"모두 바꾸기", "close":"닫기", "current match":"현재 일치", "on line":"줄", "replaced match on line $":"$번째 줄에서 바꿈", "replaced $ matches":"$곳을 바꿈",
+      "Go to line":"줄 이동", "go":"이동", "to":"→", "Folded lines":"접은 줄", "Unfolded lines":"편 줄", "Fold line":"접기", "Unfold line":"펴기", "folded code":"접힌 코드", "unfold":"펴기",
+      "Diagnostics":"오류 목록", "No diagnostics":"오류 없음", "Completions":"자동 완성 후보", "Control character":"제어 문자"};
     view = new CM.EditorView({
       parent:host,
       state:CM.EditorState.create({doc:textarea.value, extensions:[
@@ -197,10 +211,12 @@ import * as Language from "./glsl-language.js";
         CM.rectangularSelection(), CM.crosshairCursor(), CM.highlightActiveLine(), CM.highlightSelectionMatches(),
         CM.indentOnInput(), CM.bracketMatching(), CM.closeBrackets(), glsl, CM.syntaxHighlighting(glslStyle),
         CM.autocompletion({override:[completionSource], icons:true, activateOnTyping:true}), hover, CM.lintGutter(),
-        CM.search({top:true}), forwardKeys, beforeUserEdit,
+        CM.search({top:true}), forwardKeys, beforeUserEdit, ...features.extensions, CM.scrollPastEnd(),
+        CM.EditorView.clickAddsSelectionRange.of(event => event.altKey && !event.ctrlKey && !event.metaKey),   // Alt+클릭: 커서 추가 (Ctrl+클릭은 정의로 이동)
         CM.keymap.of([...editorKeys, ...CM.closeBracketsKeymap, ...CM.completionKeymap, ...CM.searchKeymap, ...CM.foldKeymap, ...CM.lintKeymap, ...CM.defaultKeymap, CM.indentWithTab]),
         fontComp.of(fontTheme()), wrapComp.of(wrap ? CM.EditorView.lineWrapping : []), tabComp.of(tabConfig()), editorTheme,
         CM.EditorView.contentAttributes.of({"aria-label":"GLSL 코드 편집기", spellcheck:"false", autocorrect:"off", autocapitalize:"off"}),
+        CM.EditorState.phrases.of(PHRASES), CM.placeholder("// GLSL 코드를 입력하세요 · Ctrl+Space 자동 완성 · Ctrl+Shift+P 명령 팔레트"),
         CM.EditorView.updateListener.of(notifyTextarea)
       ]})
     });
@@ -208,11 +224,14 @@ import * as Language from "./glsl-language.js";
     facade("selectionStart", {get:() => view.state.selection.main.from, set:value => setSelection(value, Math.max(Number(value) || 0, view.state.selection.main.to))});
     facade("selectionEnd", {get:() => view.state.selection.main.to, set:value => setSelection(Math.min(view.state.selection.main.from, Number(value) || 0), value)});
     facade("selectionDirection", {get:() => { const m = view.state.selection.main; return m.empty ? "none" : m.head < m.anchor ? "backward" : "forward"; }, set:() => {}});
-    facade("scrollTop", {get:() => view.scrollDOM.scrollTop, set:value => { view.scrollDOM.scrollTop = value; }});
-    facade("scrollLeft", {get:() => view.scrollDOM.scrollLeft, set:value => { view.scrollDOM.scrollLeft = value; }});
+    // 스크롤 위치: CodeMirror는 문서가 바뀐 뒤 다음 측정 단계에서 스크롤을 자체 기준으로 다시 맞추므로, 그 단계에서도 한 번 더 적용한다(되돌리기 후 스크롤 복원).
+    const setScroll = (axis, value) => { view.scrollDOM[axis] = value; view.requestMeasure({key:`facade-${axis}`, read:() => null, write:() => { view.scrollDOM[axis] = value; }}); };
+    facade("scrollTop", {get:() => view.scrollDOM.scrollTop, set:value => setScroll("scrollTop", value)});
+    facade("scrollLeft", {get:() => view.scrollDOM.scrollLeft, set:value => setScroll("scrollLeft", value)});
     facade("setSelectionRange", {value:(a, b, direction = "none") => setSelection(a, b, direction)});
     facade("select", {value:() => setSelection(0, view.state.doc.length)});
-    facade("focus", {value:() => view.focus()});
+    // textarea의 focus()처럼 내용 스크롤 위치는 그대로 둔다(CodeMirror의 focus는 화면 밖 커서 쪽으로 스크롤할 수 있다).
+    facade("focus", {value:() => { const top = view.scrollDOM.scrollTop, left = view.scrollDOM.scrollLeft; view.focus(); if(view.scrollDOM.scrollTop !== top) setScroll("scrollTop", top); if(view.scrollDOM.scrollLeft !== left) setScroll("scrollLeft", left); }});
     facade("blur", {value:() => view.contentDOM.blur()});
     // HTMLTextAreaElement.setRangeText와 같은 규칙(select · start · end · preserve)으로 선택을 옮긴다.
     facade("setRangeText", {value:(text, start, end, mode = "preserve") => {
@@ -243,6 +262,7 @@ import * as Language from "./glsl-language.js";
     const setDiagnostics = list => {
       const doc = view.state.doc, items = (Array.isArray(list) ? list : []).filter(item => Number.isInteger(item?.line) && item.line >= 1 && item.line <= doc.lines && typeof item.message === "string");
       view.dispatch(CM.setDiagnostics(view.state, items.map(item => { const row = doc.line(item.line); return {from:row.from, to:row.to, severity:item.severity === "warning" ? "warning" : "error", message:item.message}; })));
+      features.setDiagnostics(view, items);
     };
 
     // ---- 명령 팔레트: 기본 편집기와 같은 모양(.studio-palette) · @ 함수·변수로 이동 · : 줄 번호 ----
@@ -259,6 +279,16 @@ import * as Language from "./glsl-language.js";
       {label:"다음 일치 항목 선택 추가", key:"Ctrl+D", run:() => CM.selectNextOccurrence(view)}, {label:"모든 일치 항목 선택", key:"Ctrl+Shift+L", run:() => CM.selectSelectionMatches(view)},
       {label:"줄 삭제", key:"Ctrl+Shift+K", run:() => CM.deleteLine(view)}, {label:"짝 괄호로 이동", key:"Ctrl+Shift+\\", run:() => CM.cursorMatchingBracket(view)},
       {label:"들여쓰기", key:"Ctrl+]", run:() => CM.indentMore(view)}, {label:"내어쓰기", key:"Ctrl+[", run:() => CM.indentLess(view)},
+      {label:"정의로 이동", key:"F12 · Ctrl+클릭", run:() => features.goToDefinition(view)}, {label:"이름 바꾸기 (같은 이름 모두)", key:"F2", run:() => features.renameSymbol(view)},
+      {label:"색상 선택기 열기 (커서 위치의 vec3/vec4)", run:() => features.openColorPicker(view)},
+      {label:"커서 위 숫자 올리기 / 내리기", key:"Ctrl+↑ / Ctrl+↓", run:() => features.nudge(1, 1)(view) || notify("커서를 숫자 위에 두세요")},
+      {label:"커서를 위에 추가", key:"Ctrl+Alt+↑", run:() => CM.addCursorAbove(view)}, {label:"커서를 아래에 추가", key:"Ctrl+Alt+↓", run:() => CM.addCursorBelow(view)},
+      {label:"줄을 위로 이동", key:"Alt+↑", run:() => CM.moveLineUp(view)}, {label:"줄을 아래로 이동", key:"Alt+↓", run:() => CM.moveLineDown(view)},
+      {label:"줄을 위로 복사", key:"Shift+Alt+↑", run:() => CM.copyLineUp(view)}, {label:"줄을 아래로 복사", key:"Shift+Alt+↓", run:() => CM.copyLineDown(view)},
+      {label:"현재 블록 접기", key:"Ctrl+Shift+[", run:() => CM.foldCode(view)}, {label:"현재 블록 펴기", key:"Ctrl+Shift+]", run:() => CM.unfoldCode(view)},
+      {label:"모두 접기", key:"Ctrl+Alt+[", run:() => CM.foldAll(view)}, {label:"모두 펴기", key:"Ctrl+Alt+]", run:() => CM.unfoldAll(view)},
+      {label:"오류 목록 열기", key:"Ctrl+Shift+M", run:() => CM.openLintPanel(view)}, {label:"다음 오류로", key:"F8", run:() => CM.nextDiagnostic(view)}, {label:"이전 오류로", key:"Shift+F8", run:() => CM.previousDiagnostic(view)},
+      {label:"Tab 키로 포커스 이동 켜기/끄기 (접근성)", key:"Ctrl+M", run:() => CM.toggleTabFocusMode(view)},
       {label:"긴 줄 자동 줄바꿈 켜기/끄기", key:"Alt+Z", run:() => { wrap = !wrap; applyPresentation(); }},
       {label:"글자 크게", run:() => { fontSize = Math.min(20, fontSize + 1); applyPresentation(); }}, {label:"글자 작게", run:() => { fontSize = Math.max(10, fontSize - 1); applyPresentation(); }},
       {label:"들여쓰기 크기 2 ↔ 4 바꾸기", run:() => { tabSize = tabSize === 4 ? 2 : 4; applyPresentation(); }}];
@@ -303,6 +333,9 @@ import * as Language from "./glsl-language.js";
     listen($("studioFind"), "click", () => showFind()); listen($("studioReplace"), "click", () => showFind(true));
     listen($("studioGoto"), "click", () => openPalette(":")); listen($("studioComplete"), "click", () => { view.focus(); CM.startCompletion(view); });
     listen($("studioPaletteOpen"), "click", () => openPalette());
+    listen($("studioFoldAll"), "click", () => { CM.foldAll(view); view.focus(); }); listen($("studioUnfoldAll"), "click", () => { CM.unfoldAll(view); view.focus(); });
+    listen($("studioLintPanel"), "click", () => CM.openLintPanel(view)); listen($("studioRename"), "click", () => features.renameSymbol(view));
+    listen($("studioDefinition"), "click", () => features.goToDefinition(view));
     listen(symbols, "change", () => { if(symbols.value) goToLine(Number(symbols.value)); symbols.value = ""; });
     listen($("studioZoomIn"), "click", () => { fontSize = Math.min(20, fontSize + 1); applyPresentation(); });
     listen($("studioZoomOut"), "click", () => { fontSize = Math.max(10, fontSize - 1); applyPresentation(); });
@@ -318,7 +351,7 @@ import * as Language from "./glsl-language.js";
       update:() => { CM.closeCompletion(view); updateStatus(view.state); updateFunctions(); },
       goToLine, showFind, setDiagnostics, registerCommands, openPalette, view:() => view,
       dispose:() => {
-        ac.abort(); view.destroy(); host.remove(); palette.remove(); frame?.classList.remove("is-codemirror");
+        ac.abort(); features.dispose(); view.destroy(); host.remove(); palette.remove(); frame?.classList.remove("is-codemirror");
         for(const name of ["value","selectionStart","selectionEnd","selectionDirection","scrollTop","scrollLeft","setSelectionRange","select","focus","blur","setRangeText"]) delete textarea[name];
       }
     };

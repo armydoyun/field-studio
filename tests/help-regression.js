@@ -11,7 +11,7 @@
   const search = $('guideSearch'); search.value = 'Ctrl+Shift+D'; search.dispatchEvent(new Event('input'));
   check(!!document.querySelector('#guideNav button[data-topic="shortcuts"]'), '가이드 검색: Ctrl+Shift+D → 단축키'); search.value = ''; search.dispatchEvent(new Event('input'));
   check($('guideNav').querySelectorAll('button').length > 10, '가이드 목록 채워짐'); help.close();
-  for(const id of ['studioRun','studioAdd','studioSamplePixel','studioExport','studioFindNext'])
+  for(const id of ['studioRun','studioAdd','studioSamplePixel','studioExport','studioFoldAll'])
     check(!!$(id).title, `버튼 설명: ${id}`);
   if(help.open) help.close(); $('helpToggle').click(); check(help.open,'상단 버튼으로 열기'); $('helpClose').click();check(!help.open,'닫기');
   $('studioHelp').click();check(help.open,'편집기에서 열기'); help.close();

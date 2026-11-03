@@ -121,29 +121,10 @@ function fakeDB(){
     const f=fixture();try{assert.equal(f.renderer.defineRequiredUniform,undefined);assert.equal(f.renderer.getRequiredUniforms,undefined);
       assert.throws(()=>f.renderer.defineUniform('uTime','float',0));assert(!Object.hasOwn(f.settings.snapshot(),'required'));}finally{f.dispose();}
   });
-  await test('Search uses source indices even when case folding changes string length',async()=>{
-    const f=fixture(true);try{const area=f.nodes.get('studioCode');area.value='// İ foo';await area.dispatchEvent({type:'input'});await f.nodes.get('studioFind').click();f.nodes.get('studioFindQuery').value='foo';await f.nodes.get('studioFindQuery').dispatchEvent({type:'input'});area.setSelectionRange(0,0);await f.nodes.get('studioFindNext').click();
-      assert.equal(area.value.slice(area.selectionStart,area.selectionEnd),'foo');}finally{f.dispose();}
-  });
-  await test('Replace All uses literal matches and preserves original Unicode offsets',async()=>{
-    const f=fixture(true);try{const area=f.nodes.get('studioCode');area.value='İ foo foo.*';await area.dispatchEvent({type:'input'});f.nodes.get('studioFindQuery').value='foo';f.nodes.get('studioReplaceValue').value='$&';await f.nodes.get('studioReplaceAll').click();assert.equal(area.value,'İ $& $&.*');}finally{f.dispose();}
-  });
-  await test('Search and replacement treat regular-expression syntax as literal text',async()=>{
-    const f=fixture(true);try{const area=f.nodes.get('studioCode');area.value='[x]+.* [x]+.*';await area.dispatchEvent({type:'input'});f.nodes.get('studioFindQuery').value='[x]+.*';f.nodes.get('studioReplaceValue').value='$1';await f.nodes.get('studioReplaceAll').click();assert.equal(area.value,'$1 $1');}finally{f.dispose();}
-  });
-  await test('Source change invalidates highlight/function caches',async()=>{
-    const f=fixture(true);try{while(f.frames.length)f.frames.shift()(0);const funcs=f.nodes.get('studioFunctions');const area=f.nodes.get('studioCode');area.value=src+'\nfloat added(){return 1.0;}';await area.dispatchEvent({type:'input'});while(f.frames.length)f.frames.shift()(0);assert(funcs.children.some(option=>option.textContent.includes('added(')));}finally{f.dispose();}
-  });
-  await test('Unchanged source does not rebuild syntax highlight or function list',async()=>{
-    const f=fixture(true);try{while(f.frames.length)f.frames.shift()(0);const highlight=f.nodes.get('studioHighlight'),functions=f.nodes.get('studioFunctions');let updates=0;
-      for(const node of [highlight,functions]){const fn=node.replaceChildren.bind(node);node.replaceChildren=(...args)=>{updates++;fn(...args);};}
-      await f.nodes.get('studioZoomIn').click();while(f.frames.length)f.frames.shift()(0);assert.equal(updates,0);}finally{f.dispose();}
-  });
+  // 검색·바꾸기, 문법 강조·함수 목록 캐시, Tab 들여쓰기는 예전 textarea 편집기 내부를 검사하던 항목이다.
+  // 지금은 CodeMirror가 맡으므로 실제 브라우저에서 tests/cm-editor-browser-regression.py가 검사한다.
   await test('IME composition does not trigger Studio Undo',async()=>{
     const f=fixture();try{await input(f,src+'\n// keep');await f.nodes.get('studioCode').dispatchEvent({type:'keydown',key:'z',ctrlKey:true,isComposing:true});assert(f.studio.getProject().image.endsWith('keep'));}finally{f.dispose();}
-  });
-  await test('IME composition does not trigger editor Tab indentation',async()=>{
-    const f=fixture(true);try{const area=f.nodes.get('studioCode'),before=area.value;await area.dispatchEvent({type:'keydown',key:'Tab',isComposing:true});assert.equal(area.value,before);}finally{f.dispose();}
   });
   console.log(`Deep regression: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
 })();
