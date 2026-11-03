@@ -19,6 +19,7 @@
       ["iChannelResolution","vec3","각 입력 채널의 크기 (배열 4개)","uniform vec3 iChannelResolution[4];"]];
     const BUILTIN_VARS = {gl_FragCoord:"vec4", gl_FrontFacing:"bool", gl_PointCoord:"vec2", gl_FragDepth:"float"};
     const isIdent = text => /^[A-Za-z_]\w*$/.test(text);
+    const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const userUniforms = () => options.userUniforms?.() || uniformNames().map(name => ({name, type:""}));
 
     // 주석·문자열을 같은 길이 공백으로 지운 사본(위치 보존). 같은 소스면 다시 계산하지 않는다.
@@ -133,6 +134,6 @@
     // 선언 자리(타입 다음에 새 이름을 쓰는 중)에서는 저절로 띄우지 않는다.
     const declaringName = (src, start) => /(?:^|[\s(,;{])(?:(?:const|uniform|in|out|inout|highp|mediump|lowp)\s+)*(?:void|float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler2D|struct|[A-Z]\w*)\s+$/.test(src.slice(Math.max(0, start-80), start));
 
-    return {KEYWORDS, TYPES, APP_UNIFORMS, BUILTIN_VARS, isIdent, userUniforms, cleanSource, cleanOf, symbolsOf, typeOf, describeFunction, describeSymbol, SNIPPETS, boundaryAt, fuzzy, KIND_ORDER, KIND_ICON, KIND_NAME, swizzleItems, gatherItems, declaringName};
+    return {KEYWORDS, TYPES, APP_UNIFORMS, BUILTIN_VARS, isIdent, escapeRe, userUniforms, cleanSource, cleanOf, symbolsOf, typeOf, describeFunction, describeSymbol, SNIPPETS, boundaryAt, fuzzy, KIND_ORDER, KIND_ICON, KIND_NAME, swizzleItems, gatherItems, declaringName};
   };
   export {create};

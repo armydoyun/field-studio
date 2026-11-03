@@ -26,4 +26,4 @@
     const paint = (node, source = node.textContent) => { node.replaceChildren(fragment(source)); node.classList?.add("glsl-code"); return node; };
     return {tokenClass, fragment, paint, builtins};
   };
-  export {create, TOKENS};
+  export {create};

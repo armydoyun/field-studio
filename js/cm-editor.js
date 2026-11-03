@@ -13,8 +13,7 @@ import * as Features from "./cm-glsl-features.js";
     const highlighter = Highlight.create((options.builtins || []).map(item => item.name));
     let view = null;
     const language = Language.create({options, uniformNames, highlighter, source:() => view ? view.state.doc.toString() : textarea.value});
-    const {APP_UNIFORMS, symbolsOf, describeSymbol, gatherItems, declaringName, KIND_ORDER, KIND_NAME, cleanOf, fuzzy} = language;
-    const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const {symbolsOf, describeSymbol, gatherItems, declaringName, KIND_ORDER, KIND_NAME, cleanOf, fuzzy, escapeRe} = language;
     const notify = text => options.notify?.(text);
     // 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류 표시
     const features = Features.create({CM, language, options, ask, notify, onScrub:() => options.onScrub?.()});

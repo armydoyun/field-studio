@@ -93,7 +93,7 @@ import * as Diagnostics from "./gpu-diagnostics.js";
       throw new TypeError(`Uniform 타입(${type})에 맞지 않는 값입니다.`);
     };
     // 벡터/행렬은 등록·변경 시점에 Typed Array로 한 번 변환해 두어 매 프레임 할당 없이 업로드한다.
-    const makeData = (type, value) => {
+    const makeData = type => {
       const spec = UNIFORM_TYPES[type]; if(spec.n === 1) return null;
       return spec.kind === "u" ? new Uint32Array(spec.n) : spec.kind === "i" || spec.kind === "b" ? new Int32Array(spec.n) : new Float32Array(spec.n);
     }; const writeData = item => {
@@ -364,7 +364,7 @@ import * as Diagnostics from "./gpu-diagnostics.js";
         throw new Error("Uniform 슬라이더 범위가 올바르지 않습니다.");
       if(color!==undefined && (color!==true || !["vec3","vec4"].includes(type))) throw new Error("color 표시는 vec3/vec4에만 사용할 수 있습니다.");
       const nextOptions=min===undefined?{}:{min,max,step}; if(color)nextOptions.color=true;
-      return writeData({type,value:normalized,data:makeData(type,normalized),options:nextOptions});
+      return writeData({type,value:normalized,data:makeData(type),options:nextOptions});
     };
     const defineUniform = (name, type, value, options = {}) => {
       if(disposed || lost) throw new Error("현재 Uniform을 등록할 수 없습니다.");
