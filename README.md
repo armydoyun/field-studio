@@ -40,7 +40,7 @@ js/
   profiler.js         # 성능·디버그 탭 (README_UX_v2_재설계.md)
   gallery.js          # 예제 갤러리·첫 실행 안내
   annotations.js      # GLSL 주석 @range/@color 파서 (README_파라미터_버퍼_업데이트.md)
-  snippets.js         # GLSL 코드 조각 라이브러리(12범주 · 의존성 정보) — 조각 추가는 여기 CATEGORIES에
+  snippets.js         # GLSL 코드 조각 라이브러리(16범주 · 의존성 정보 · 실수/정수 해시) — 조각 추가는 여기 CATEGORIES에
   guide.js            # 앱 내장 가이드(주제·검색·코드 삽입)·UI 둘러보기·문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리
   pass-manager.js
   texture-input.js
