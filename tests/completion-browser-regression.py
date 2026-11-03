@@ -1,16 +1,16 @@
-from esm_for_browser import mock_module
+from esm_for_browser import load_modules
 # python tests/completion-browser-regression.py — Ctrl+Space suggestions, keyboard/mouse and editor history.
+import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parent.parent
 html=(root/'index.html').read_text();html=html[:html.index('    <!-- ES Modules:')]+'</body></html>'
 with sync_playwright() as p:
-    browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+    browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1440,'height':900});errors=[];n=[0]
     page.on('pageerror',lambda err:errors.append(str(err)))
     page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
-    page.evaluate('''() => window.define=(deps,factory)=>{if(deps[0]==="glsl-highlight"){window.TestEditor=factory(window.TestEditor);return;}if(!deps.length)window.TestEditor=factory();else if(deps[0]==="code-editor")window.TestStudio=factory(window.TestEditor);}''')
-    page.add_script_tag(content=mock_module((root/'js/glsl-highlight.js').read_text()));page.add_script_tag(content=mock_module((root/'js/code-editor.js').read_text()));page.add_script_tag(content=mock_module((root/'js/studio.js').read_text()))
+    load_modules(page,root,['studio'])   # studio와 의존 모듈(code-editor, glsl-highlight, annotations)
     page.evaluate('''() => {
       const src="#version 300 es\\nprecision highp float;\\nvoid main(){}",state={image:src,passes:[],imageChannels:{}};
       const renderer={getUserUniforms:()=>[],getFragmentSource:()=>state.image,getPassDefinitions:()=>structuredClone(state.passes),getImageChannels:()=>structuredClone(state.imageChannels),
@@ -85,4 +85,9 @@ with sync_playwright() as p:
     page.locator('#studioFindClose').click()
     check(errors==[],f'no JS page errors: {errors}')
     print(f'PASS all {n[0]} browser completion checks',flush=True)
+    # 후보 목록이 열려 있어도, 범위를 선택했거나 Shift 조합이면 목록이 키를 가로채지 않는다.
+    setup('float b;\nb');open_completion();check(panel.is_visible(),'popup open before selection change')
+    code.press('Shift+ArrowUp');check(page.evaluate('document.getElementById("studioCode").selectionStart')<len('float b;\n'),'Shift+ArrowUp extends the selection instead of moving the completion choice')
+    check(panel.is_hidden(),'popup closes once a range is selected')
+    setup('float b;\nb');open_completion();select(0,len('float b;\nb'));code.press('Tab');check(code.input_value()=='    float b;\n    b','Tab with a multi-line selection indents instead of accepting a completion')
     browser.close()

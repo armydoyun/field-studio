@@ -717,11 +717,16 @@ import * as Highlight from "./glsl-highlight.js";
       highlight.scrollTop=textarea.scrollTop;highlight.scrollLeft=textarea.scrollLeft;if(diagnostics.length)renderDiagnostics();
       hideHover();scheduleDecorations();if(!completion.hidden)placeCompletion();if(!signature?.hidden)updateSignature();});
     for(const type of ["click","keyup","select"])listen(textarea,type,updateCursor);
+    // 후보 목록은 커서가 접힌 채로 완성 중인 단어 안에 있을 때만 유효하다. 범위를 선택했거나(Shift+화살표, 여러 줄 선택) 단어 밖으로 나가면 닫는다.
+    const dropStaleCompletion = () => { const a = textarea.selectionStart, b = textarea.selectionEnd; if(!completion.hidden && (a !== b || a < wordStart || a > wordEnd)) hideCompletion(); };
+    for(const type of ["keyup","select"])listen(textarea,type,dropStaleCompletion);
     listen(gutter,"click",e=>{const height=parseFloat(getComputedStyle(textarea).lineHeight)||fontSize*1.6;
       goToLine(Math.floor((e.clientY-gutter.getBoundingClientRect().top+gutter.scrollTop)/height)+1);
     }); listen(textarea,"keydown",event=>{
       if(event.isComposing)return;const cmd=event.ctrlKey||event.metaKey, start=textarea.selectionStart,end=textarea.selectionEnd,src=textarea.value;
-      if(!completion.hidden && ['ArrowDown','ArrowUp','PageDown','PageUp','Enter','Tab','Escape'].includes(event.key) && !cmd && !event.altKey) {
+      // 낡은 후보 목록은 닫고 원래 동작(들여쓰기·줄 이동 등)을 따른다. Shift 조합(선택 확장·내어쓰기)도 목록이 가로채지 않는다.
+      dropStaleCompletion();
+      if(!completion.hidden && ['ArrowDown','ArrowUp','PageDown','PageUp','Enter','Tab','Escape'].includes(event.key) && !cmd && !event.altKey && !event.shiftKey) {
         event.preventDefault();if(event.key==='Escape')hideCompletion();else if(event.key==='Enter'||event.key==='Tab')acceptCompletion();
         else if(event.key.startsWith('Page')){chosen=event.key==='PageDown'?Math.min(shown.length-1,chosen+8):Math.max(0,chosen-8);renderCompletion();}
         else moveChoice(event.key==='ArrowDown'?1:-1);
@@ -772,7 +777,7 @@ import * as Highlight from "./glsl-highlight.js";
         textarea.dispatchEvent(new Event("input",{bubbles:true}));
       } else if(event.key==="Backspace" && !cmd && !event.altKey && start===end) {
         const left=src.slice(src.lastIndexOf("\n",end-1)+1,end);
-        if(end>0 && pairs[src[end-1]]===src[end] && !codeMode(end-1)){event.preventDefault();replaceSelection("",end-1,end+1);}
+        if(end>0 && end<src.length && Object.hasOwn(pairs,src[end-1]) && pairs[src[end-1]]===src[end] && !codeMode(end-1)){event.preventDefault();replaceSelection("",end-1,end+1);}
         else if(left && /^ +$/.test(left)) {event.preventDefault();replaceSelection("",end-Math.min(left.length,tabSize),end);}
       } else if(event.key==="Home" && !event.shiftKey && !cmd && !event.altKey) {
         const p=textarea.selectionStart, start=textarea.value.lastIndexOf("\n",p-1)+1;
