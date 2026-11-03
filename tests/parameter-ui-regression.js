@@ -19,10 +19,11 @@ await test('Parameter deletion uses the shared SVG mask and retains its accessib
 });
 await test('Empty parameter list explains how to start',async(f,n,row)=>{assert.match(row().textContent,/추가|Starter/);assert.equal(n('uniformCount').textContent,'0 / 64');});
 await test('Adding a parameter clears stale search and ignores hidden scalar bounds',async(f,n)=>{
-  n('uniformMin').value='0';n('uniformType').value='vec3';await n('uniformType').dispatchEvent({type:'change'});
+  // 벡터는 이제 성분별 슬라이더 범위를 지원하므로 범위 칸이 보인다. 범위 칸이 숨겨지는 행렬 타입에 남은 Min 값은 무시되어야 한다.
+  n('uniformMin').value='0';n('uniformType').value='mat2';await n('uniformType').dispatchEvent({type:'change'});
   n('uniformName').value='uTint';n('uniformSearch').value='missing';
   await n('uniformForm').dispatchEvent({type:'submit'});
-  assert.equal(f.renderer.getUserUniforms()[0].name,'uTint');assert.equal(n('uniformSearch').value,'');assert.equal(n('uniformEditor').open,false);
+  assert.equal(n('rangeFields').hidden,true);assert.equal(f.renderer.getUserUniforms()[0].name,'uTint');assert.deepEqual({...f.renderer.getUserUniforms()[0].options},{});assert.equal(n('uniformSearch').value,'');assert.equal(n('uniformEditor').open,false);
 });
 await test('Reserved built-in rejection retains form data and explains failure',async(f,n)=>{
   n('uniformType').value='float';n('uniformValue').value='1';n('uniformName').value='uTime';await n('uniformForm').dispatchEvent({type:'submit'});

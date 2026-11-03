@@ -3,7 +3,9 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),jsdir=path.join(root,'js');
 const files=['index.html','style.css',...fs.readdirSync(jsdir).filter(x=>x.endsWith('.js')).map(x=>'js/'+x)].sort();
-assert.equal(files.length,15,'2 UI + 13 ESM entry/module files');
+// 모듈 수는 늘어날 수 있으므로 고정하지 않는다. 대신 배포 번들러(tools/build_deploy.py)의 MODULES 목록과 js/ 모듈이 정확히 일치해야 한다(누락된 모듈이 번들에서 빠지지 않도록).
+const bundled=/^MODULES = \[([^\]]*)\]/m.exec(fs.readFileSync(path.join(root,'tools/build_deploy.py'),'utf8'));assert(bundled,'build_deploy.py MODULES missing');
+assert.deepEqual([...bundled[1].matchAll(/'([\w-]+)'/g)].map(x=>x[1]).sort(),files.filter(x=>x.startsWith('js/')).map(x=>path.basename(x,'.js')).sort(),'build_deploy.py MODULES must list every js/*.js module');
 assert(!fs.existsSync(path.join(jsdir,'loader.js')),'AMD loader must be absent');
 const manifest=fs.readFileSync(path.join(root,'SOURCE_SHA256_Runtime.txt'),'utf8').trim().split(/\r?\n/);
 const hashes=new Map();for(const line of manifest){const m=/^([a-f0-9]{64})  (.+)$/.exec(line);assert(m,'SHA256 format');assert(!hashes.has(m[2]),'duplicate manifest entry');hashes.set(m[2],m[1]);}

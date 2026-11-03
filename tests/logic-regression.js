@@ -15,7 +15,7 @@ function fixture(realEditor=false,compact=false,initialStorage={}){
   gl.getParameter=key=>{if(key===gl.MAX_TEXTURE_SIZE)metrics.maxQueries++;return getParameter(key);};
   const createTexture=gl.createTexture;gl.createTexture=()=>{textureCreates++;return createTexture();};
   class Node {
-    constructor(){this.children=[];this.listeners=new Map();this.value='';this.hidden=false;this.checked=false;this.disabled=false;this.dataset={};this.selectionStart=this.selectionEnd=this.scrollTop=this.scrollLeft=0;this.selectionDirection='none';this.firstChild={textContent:''};this.style={setProperty(){}};this.classList={contains:()=>false,toggle(){},add(){},remove(){}};}
+    constructor(){this.children=[];this.listeners=new Map();this.textContent='';this.value='';this.hidden=false;this.checked=false;this.disabled=false;this.dataset={};this.selectionStart=this.selectionEnd=this.scrollTop=this.scrollLeft=0;this.selectionDirection='none';this.firstChild={textContent:''};this.style={setProperty(){}};this.classList={contains:()=>false,toggle(){},add(){},remove(){}};}
     addEventListener(name,fn){if(!this.listeners.has(name))this.listeners.set(name,[]);this.listeners.get(name).push(fn);}
     removeEventListener(){} setAttribute(){} removeAttribute(){} append(...nodes){this.children.push(...nodes);} replaceChildren(...nodes){this.children=nodes;}
     setRangeText(text,start,end,mode){this.value=this.value.slice(0,start)+text+this.value.slice(end);this.selectionStart=mode==='select'?start:start+text.length;this.selectionEnd=start+text.length;}
@@ -23,11 +23,15 @@ function fixture(realEditor=false,compact=false,initialStorage={}){
     setPointerCapture(id){this.pointerCapture=id;} hasPointerCapture(id){return this.pointerCapture===id;} releasePointerCapture(){this.pointerCapture=null;}
     showModal(){this.open=true;} close(){this.open=false;} reportValidity(){return true;} closest(selector){return selector==='.studio-editor-frame'?new Node():null;}
     get options(){return this.children;} click(){return this.dispatchEvent({type:'click'});}
+    // 실제 DOM처럼 자손을 찾는다. 테스트가 쓰는 단순 선택자(tag · [data-x] · tag[data-x])만 해석하고 나머지는 찾지 못한 것으로 둔다.
+    querySelectorAll(selector){const m=/^([a-z]+)?(?:\[data-([\w-]+)\])?$/i.exec(selector);if(!m||(!m[1]&&!m[2]))return [];const key=m[2]?.replace(/-(\w)/g,(_,c)=>c.toUpperCase()),out=[];
+      const walk=node=>{for(const child of node.children||[]){if((!m[1]||child.tagName===m[1].toUpperCase())&&(!key||child.dataset?.[key]!==undefined))out.push(child);walk(child);}};walk(this);return out;}
+    querySelector(selector){return this.querySelectorAll(selector)[0]||null;}
     dispatchEvent(e){e.currentTarget=this;e.target=this;e.defaultPrevented=false;e.preventDefault=()=>{e.defaultPrevented=true;};e.stopPropagation=()=>{e.propagationStopped=true;};
       const pending=(this.listeners.get(e.type)||[]).map(fn=>fn(e));e.currentTarget=null;return Promise.all(pending);}
   }
   const document=new Node();document.body=new Node();document.hidden=false;
-  document.getElementById=id=>{if(!nodes.has(id)){const node=new Node();node.hidden=['studioFindPanel','studioCompletion'].includes(id);nodes.set(id,node);}return nodes.get(id);};document.createElement=tag=>{const node=new Node();if(tag==='canvas')Object.assign(node,{getContext:()=>({putImageData(){}}),toBlob:cb=>cb(new Blob(['png'],{type:'image/png'}))});return node;};
+  document.getElementById=id=>{if(!nodes.has(id)){const node=new Node();node.hidden=['studioFindPanel','studioCompletion'].includes(id);nodes.set(id,node);}return nodes.get(id);};document.createElement=tag=>{const node=new Node();node.tagName=String(tag).toUpperCase();if(tag==='canvas')Object.assign(node,{getContext:()=>({putImageData(){}}),toBlob:cb=>cb(new Blob(['png'],{type:'image/png'}))});return node;};
   document.createDocumentFragment=()=>new Node();document.createTextNode=text=>Object.assign(new Node(),{textContent:text});
   const localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
   const window={devicePixelRatio:1,localStorage,indexedDB:null,matchMedia:()=>({matches:compact}),addEventListener(){},removeEventListener(){}};

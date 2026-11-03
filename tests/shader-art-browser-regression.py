@@ -1,19 +1,16 @@
-from esm_for_browser import mock_module
+from esm_for_browser import load_modules
 # python tests/shader-art-browser-regression.py — Chromium DOM validation without GPU or server.
+import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parent.parent
 html=(root/'index.html').read_text().split('    <!-- 외부 라이브러리')[0]+'</body></html>'
 with sync_playwright() as p:
-    browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+    browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1440,'height':900}); errors=[]; count=[0]
     page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
-    page.evaluate('''() => window.define=(deps,factory)=>{if(deps[0]==="glsl-highlight"){window.TestEditor=factory(window.TestEditor);return;}
-      if(!deps.length){const m=factory();if(m.raymarch)window.TestShader=m;else window.TestEditor=m;}
-      else if(deps[0]==="code-editor")window.TestStudio=factory(window.TestEditor);
-    }''')
-    for file in ['shader','glsl-highlight','code-editor','studio']:page.add_script_tag(content=mock_module((root/'js'/f'{file}.js').read_text()))
+    load_modules(page,root,['shader','studio'])
     page.evaluate('''() => {
       const Shader=window.TestShader;
       const state={image:Shader.fragment,passes:[],imageChannels:{}}, uniforms=new Map();
@@ -47,6 +44,7 @@ with sync_playwright() as p:
     check(not page.locator('#rayMaxSteps').count() and not page.locator('#debugHeatmap').count(),'ray-only Render controls removed')
     check(page.locator('#studioExampleRaymarch').count()==1 and page.locator('#studioExampleFeedback').count()==1,'starter buttons retained')
     check(page.evaluate('testStudio.getProject().image===TestShader.fragment'),'Studio begins with generic Image')
+    page.locator('#studioToolsToggle').click()   # 시작 예제는 편집기 도구 서랍 안에 있다
     page.locator('#studioStarters > summary').click()
     page.locator('#studioExampleRaymarch').click();page.wait_for_timeout(160)
     check(page.evaluate('testStudio.getProject().image===TestShader.raymarch'),'Ray Starter installs SDF source')

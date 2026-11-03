@@ -1,16 +1,16 @@
-from esm_for_browser import mock_module
+from esm_for_browser import load_modules
 # python tests/compiler-lines-browser-regression.py — Chromium DOM test with a mock renderer, no GPU required.
+import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parent.parent
 html=(root/'index.html').read_text();html=html[:html.index('    <!-- ES Modules:')]+'</body></html>'
 with sync_playwright() as p:
-    browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+    browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1440,'height':900});errors=[]
     page.on('pageerror',lambda error: errors.append(str(error)))
     page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
-    page.evaluate('''() => window.define=(deps,factory)=>{if(deps[0]==="glsl-highlight"){window.TestEditor=factory(window.TestEditor);return;}if(!deps.length)window.TestEditor=factory();else if(deps[0]==="code-editor")window.TestStudio=factory(window.TestEditor);}''')
-    page.add_script_tag(content=mock_module((root/'js/glsl-highlight.js').read_text()));page.add_script_tag(content=mock_module((root/'js/code-editor.js').read_text()));page.add_script_tag(content=mock_module((root/'js/studio.js').read_text()))
+    load_modules(page,root,['studio'])   # studio와 의존 모듈(code-editor, glsl-highlight, annotations)
     page.evaluate('''() => {
       const good="#version 300 es\\nprecision highp float;\\nout vec4 fragColor;\\nvoid main(){fragColor=vec4(1.);}";
       const state={image:good,passes:[],imageChannels:{}};
@@ -39,14 +39,15 @@ with sync_playwright() as p:
     def run_case(token):
         source=f'#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){{{token};}}'
         area.fill(source);page.locator('#studioRun').click();return source
+    # 진단 행은 '패스 · 줄 · 메시지' 형식이다(여러 패스 중 어디서 난 오류인지 보이도록 패스 이름이 앞에 붙는다).
     src=run_case('SYNTAX_SHIFT')
-    check(diag.count()==1 and diag.first.inner_text().startswith('Line 4 ·'),'injected Uniform line maps to original line 4')
+    check(diag.count()==1 and diag.first.inner_text().startswith('Image · Line 4 ·'),'injected Uniform line maps to original line 4')
     diag.first.click();pos=page.evaluate('document.getElementById("studioCode").selectionStart')
     check(pos==src.index('void main()'),'click jumps to the actual source line')
     run_case('SYNTAX_AUTO')
-    check(diag.count()==1 and diag.first.inner_text().startswith('Auto Uniform ·') and diag.first.is_disabled(),'generated Uniform has no invalid jump target')
+    check(diag.count()==1 and diag.first.inner_text().startswith('Image · Auto Uniform ·') and diag.first.is_disabled(),'generated Uniform has no invalid jump target')
     src=run_case('SYNTAX_PLAIN')
-    check(diag.first.inner_text().startswith('Line 4 ·') and not diag.first.is_disabled(),'without injection original line is unchanged')
+    check(diag.first.inner_text().startswith('Image · Line 4 ·') and not diag.first.is_disabled(),'without injection original line is unchanged')
     diag.first.click();pos=page.evaluate('document.getElementById("studioCode").selectionStart')
     check(pos==src.index('void main()'),'unshifted diagnostic navigates normally')
     check(errors==[],f'no Chromium page exceptions: {errors}')
