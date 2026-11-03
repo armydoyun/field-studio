@@ -71,10 +71,13 @@ import * as Highlight from "./glsl-highlight.js";
     };
     const query = $("studioFindQuery"), replacement = $("studioReplaceValue"), result = $("studioFindCount");
     const STATE_KEY = "webgl.shader-studio.editor.v2"; let fontSize = 12, wrap = false, tabSize = 4, matches = [], matchIndex = -1;
+    const findOptions = {caseSensitive:false, wholeWord:false, regex:false};
+    let multi = null;   // Ctrl+D 다중 선택: {ranges:[{start,end}] (위치 순), active: 지금 textarea가 보여 주는 선택의 번호, text, whole}
     try { const state = JSON.parse(localStorage.getItem(STATE_KEY) || "{}");
       if(Number.isInteger(state.fontSize)) fontSize = Math.max(10, Math.min(20, state.fontSize)); wrap = !!state.wrap; tabSize = state.tabSize === 2 ? 2 : 4;
+      for(const key of Object.keys(findOptions)) findOptions[key] = state.find?.[key] === true;
     } catch (_) {}
-    const save = () => { try { localStorage.setItem(STATE_KEY, JSON.stringify({fontSize,wrap,tabSize})); } catch (_) {} };
+    const save = () => { try { localStorage.setItem(STATE_KEY, JSON.stringify({fontSize,wrap,tabSize,find:findOptions})); } catch (_) {} };
     const setPresentation = () => {
       textarea.style.tabSize=highlight.style.tabSize=String(tabSize);textarea.style.fontSize = `${fontSize}px`; gutter.style.fontSize = `${fontSize}px`;highlight.style.fontSize=`${fontSize}px`;
       textarea.classList.toggle("editor-wrap", wrap);highlight.classList.toggle("editor-wrap",wrap);
@@ -83,7 +86,7 @@ import * as Highlight from "./glsl-highlight.js";
     }; const lineAt = offset => textarea.value.slice(0,offset).split("\n").length; const updateCursor = () => {
       const p = textarea.selectionStart, line = lineAt(p), start = textarea.value.lastIndexOf("\n",p-1)+1;
       const selected = textarea.selectionEnd - p;
-      position.textContent = `Ln ${line}, Col ${p-start+1}${selected ? ` · ${selected}자 선택` : ""}`;
+      position.textContent = `Ln ${line}, Col ${p-start+1}${multi ? ` · 다중 선택 ${multi.ranges.length}개` : selected ? ` · ${selected}자 선택` : ""}`;
       updateSignature(); scheduleDecorations(); checkSnippetSession();
     };
     // ==== 언어 정보: 키워드·타입·앱 Uniform·내장 변수 ====
@@ -237,10 +240,45 @@ import * as Highlight from "./glsl-highlight.js";
       }
       return null;
     };
+    // ==== 색상 미리보기: vec3(r, g, b) · vec4(r, g, b, a) 숫자 리터럴(모두 0~1)에 색 밑줄, 커서가 안에 있으면 색상 선택기 버튼 ====
+    const COLOR_RE = /\bvec([34])\s*\(([^()\n]*)\)/g, NUMBER_RE = /^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+    const findColors = (src, from, to) => {
+      const clean = cleanOf(src), found = []; COLOR_RE.lastIndex = 0;
+      for(const m of clean.slice(from, to).matchAll(COLOR_RE)) {
+        const size = Number(m[1]), open = from + m.index + m[0].indexOf("(") + 1, args = []; let at = open;
+        for(const part of m[2].split(",")) { const lead = part.length - part.trimStart().length, text = part.trim(); args.push({start:at + lead, end:at + lead + text.length, text}); at += part.length + 1; }
+        if(args.length !== size || !args.every(arg => NUMBER_RE.test(arg.text))) continue;
+        const values = args.map(arg => parseFloat(arg.text)); if(!values.every(v => v >= 0 && v <= 1)) continue;
+        found.push({start:from + m.index, end:from + m.index + m[0].length, args, values});
+      }
+      return found;
+    };
+    const toHex = values => "#" + values.slice(0, 3).map(v => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+    const cssColor = values => `rgb(${values.slice(0, 3).map(v => Math.round(v * 255)).join(" ")}${values.length > 3 ? ` / ${values[3]}` : ""})`;
+    const formatChannel = v => { const r = Math.round(v * 1000) / 1000; return Number.isInteger(r) ? r.toFixed(1) : String(r); };
+    let colorTarget = null;   // 커서가 들어 있는 색 리터럴의 시작 위치
+    const colorChip = document.createElement("button"), colorInput = document.createElement("input");
+    colorChip.type = "button"; colorChip.className = "studio-color-chip"; colorChip.hidden = true; colorChip.title = "색상 선택기로 바꾸기 · 결과는 0~1 값으로 들어갑니다 (Ctrl+Z로 되돌리기)"; colorChip.setAttribute("aria-label", "색상 선택기 열기");
+    colorInput.type = "color"; colorInput.className = "studio-color-input"; colorInput.tabIndex = -1; colorInput.setAttribute("aria-hidden", "true");
+    frame?.append(colorChip, colorInput);
+    const colorAt = pos => { const src = textarea.value, from = src.lastIndexOf("\n", pos-1) + 1, stop = src.indexOf("\n", pos); return findColors(src, from, stop < 0 ? src.length : stop).find(c => pos >= c.start && pos <= c.end) || null; };
+    const openColorPicker = () => {
+      const color = colorAt(textarea.selectionStart); if(!color) return false;
+      colorTarget = color.start; colorInput.value = toHex(color.values); colorInput.showPicker ? colorInput.showPicker() : colorInput.click(); return true;
+    };
+    listen(colorChip, "mousedown", event => event.preventDefault());   // 편집기 포커스·커서를 유지한다
+    listen(colorChip, "click", openColorPicker);
+    listen(colorInput, "input", () => {
+      if(colorTarget === null) return; const color = colorAt(colorTarget + 1); if(!color || color.start !== colorTarget) return;
+      const hex = colorInput.value, rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255), caret = textarea.selectionStart;
+      beforeEdit();
+      for(let i = 2; i >= 0; i--) textarea.setRangeText(formatChannel(rgb[i]), color.args[i].start, color.args[i].end, "preserve");   // 뒤에서부터 바꿔 앞 위치를 지킨다
+      textarea.setSelectionRange(Math.min(caret, textarea.value.length), Math.min(caret, textarea.value.length)); notifyAdjust(); scheduleDecorations();
+    });
     // 커서 이동·입력이 몰려도 한 번만 그린다. 화면 갱신 주기(rAF)가 멈춘 상태(숨은 창)에서도 밀리지 않도록 타이머를 쓴다.
     let decoRequest = 0; const scheduleDecorations = () => { if(!decoRequest) decoRequest = setTimeout(renderDecorations, 0); };
     const renderDecorations = () => {
-      decoRequest = 0; if(!surface || wrap) { decorations.replaceChildren(); return; }
+      decoRequest = 0; if(!surface || wrap) { decorations.replaceChildren(); colorChip.hidden = true; return; }
       const style = getComputedStyle(textarea), lh = parseFloat(style.lineHeight) || fontSize*1.65, cw = charWidth(style);
       const top = parseFloat(style.paddingTop) || 12, left = parseFloat(style.paddingLeft) || 12, src = textarea.value, starts = lineStartsOf(src);
       const a = textarea.selectionStart, b = textarea.selectionEnd, focused = document.activeElement === textarea, nodes = [];
@@ -249,8 +287,14 @@ import * as Highlight from "./glsl-highlight.js";
       const box = (offset, length, className) => {
         const index = lineIndexAt(starts, offset); if(index < first || index > last) return;
         const node = document.createElement("div"); node.className = className;
-        node.style.cssText = `left:${left + column(index, offset)*cw - textarea.scrollLeft}px;top:${top + index*lh - textarea.scrollTop}px;width:${Math.max(1,length)*cw}px;height:${lh}px`; nodes.push(node);
+        node.style.cssText = `left:${left + column(index, offset)*cw - textarea.scrollLeft}px;top:${top + index*lh - textarea.scrollTop}px;width:${Math.max(1,length)*cw}px;height:${lh}px`; nodes.push(node); return node;
       };
+      // 다중 선택: textarea가 직접 보여 주는 선택(active) 말고 나머지 선택과 커서를 그린다.
+      if(multi) multi.ranges.forEach((range, i) => {
+        if(i === multi.active) return;
+        if(range.start === range.end) { const caret = box(range.start, 1, "deco-caret"); if(caret) caret.style.width = "2px"; return; }
+        const lineEnd = src.indexOf("\n", range.start); box(range.start, (lineEnd < 0 || lineEnd > range.end ? range.end : lineEnd) - range.start, "deco-multi");
+      });
       if(focused) { const index = lineIndexAt(starts, a); if(index >= first && index <= last) { const band = document.createElement("div"); band.className = "deco-line"; band.style.cssText = `top:${top + index*lh - textarea.scrollTop}px;height:${lh}px`; nodes.push(band); } }
       if(focused && a === b) { const pair = matchBracket(src, a); if(pair) { box(pair[0], 1, "deco-bracket"); box(pair[1], 1, "deco-bracket"); } }
       // 이름 강조: 커서 아래 단어, 또는 한 줄 안의 선택 텍스트와 같은 다른 위치
@@ -260,9 +304,144 @@ import * as Highlight from "./glsl-highlight.js";
         for(const m of clean.slice(from, to).matchAll(new RegExp(`\\b${escapeRe(found.word)}\\b`, "g"))) { hits.push(from + m.index); if(hits.length > 300) break; }
         if(hits.length > 1) for(const at of hits) box(at, found.word.length, "deco-occurrence");
       }
+      // 색 리터럴: 글자 아래 색 막대. 커서가 그 안에 있으면 바로 위에 색상 선택기 버튼을 띄운다.
+      const visibleFrom = starts[first], visibleTo = last+1 < starts.length ? starts[last+1] : src.length; let chipFor = null;
+      for(const color of findColors(src, visibleFrom, visibleTo)) {
+        const bar = box(color.start, color.end - color.start, "deco-color"); bar?.style.setProperty("--swatch", cssColor(color.values));
+        if(focused && a === b && a >= color.start && a <= color.end) chipFor = color;
+      }
+      if(chipFor && !multi) {
+        const index = lineIndexAt(starts, chipFor.start), y = top + index*lh - textarea.scrollTop;
+        colorChip.style.setProperty("--swatch", cssColor(chipFor.values)); colorChip.hidden = false;
+        const sr = surface.getBoundingClientRect(), fr = frame.getBoundingClientRect();   // 장식 좌표(surface 기준) → 버튼 좌표(frame 기준)
+        // 버튼은 그 줄 글자 끝 오른쪽에 둔다(코드 글자를 가리지 않는다).
+        const lineEnd = (src.indexOf("\n", chipFor.start) + 1 || src.length + 1) - 1, endX = left + column(index, lineEnd)*cw - textarea.scrollLeft + 8;
+        colorChip.style.left = `${Math.max(2, endX + sr.left - fr.left)}px`; colorChip.style.top = `${y + (lh - 16) / 2 + sr.top - fr.top}px`;
+      } else colorChip.hidden = true;
+      // 찾기 창이 열려 있으면 보이는 줄의 일치 항목을 모두 표시한다.
+      if(!findPanel.hidden && matches.length) { const from = starts[first], to = last+1 < starts.length ? starts[last+1] : src.length;
+        for(const m of matches) { if(m.end < from) continue; if(m.start > to) break; const lineEnd = src.indexOf("\n", m.start); box(m.start, (lineEnd < 0 || lineEnd > m.end ? m.end : lineEnd) - m.start, "deco-find"); } }
+      // 들여쓰기 안내선: 들여쓰기 한 단위(tabSize)마다 세로선. 빈 줄은 위·아래에서 가까운 내용 줄 중 얕은 쪽을 따른다. 세로로 이어지는 선은 한 덩어리로 그린다.
+      const indentOf = index => {
+        const from = starts[index], to = index+1 < starts.length ? starts[index+1]-1 : src.length; let visual = 0;
+        for(let i = from; i < to; i++) { const ch = src[i]; if(ch === " ") visual++; else if(ch === "\t") visual += tabSize - visual % tabSize; else return visual; }
+        return -1;   // 빈 줄(공백뿐)
+      };
+      const levels = [];
+      for(let index = first; index <= last; index++) {
+        let depth = indentOf(index);
+        if(depth < 0) { let up = -1, down = -1;
+          for(let i = index-1, n = 0; i >= 0 && n < 400 && up < 0; i--, n++) up = indentOf(i);
+          for(let i = index+1, n = 0; i < starts.length && n < 400 && down < 0; i++, n++) down = indentOf(i);
+          depth = Math.max(0, Math.min(up < 0 ? 0 : up, down < 0 ? 0 : down)); }
+        levels.push(Math.floor(depth / tabSize));
+      }
+      // 커서가 있는 블록의 안내선(커서 줄 들여쓰기보다 한 단계 바깥)을 밝게 표시한다.
+      const caretIndex = lineIndexAt(starts, a) - first, activeLevel = focused && caretIndex >= 0 && caretIndex < levels.length ? levels[caretIndex] - 1 : -1;
+      for(let level = 0, deepest = Math.max(0, ...levels); level < deepest; level++) {
+        for(let i = 0; i < levels.length; i++) {
+          if(levels[i] <= level) continue; let j = i; while(j+1 < levels.length && levels[j+1] > level) j++;
+          const guide = document.createElement("div"); guide.className = level === activeLevel && caretIndex >= i && caretIndex <= j ? "deco-indent is-active" : "deco-indent";
+          guide.style.cssText = `left:${left + level*tabSize*cw - textarea.scrollLeft}px;top:${top + (first+i)*lh - textarea.scrollTop}px;height:${(j-i+1)*lh}px`;
+          nodes.unshift(guide); i = j;
+        }
+      }
       decorations.replaceChildren(...nodes);
     };
     listen(textarea, "focus", scheduleDecorations); listen(textarea, "blur", scheduleDecorations);
+    // ==== 다중 선택 (Ctrl+D 다음 일치 추가 · Ctrl+Shift+L 모든 일치) ====
+    // textarea는 선택을 하나만 가질 수 있다. 나머지 선택은 multi.ranges에 보관해 장식 레이어에 그리고,
+    // 입력·삭제·붙여넣기·IME 조합 결과를 모든 선택에 한 번에(되돌리기 한 번) 적용한다. 화살표·클릭 등으로 커서를 옮기면 다중 선택을 끝낸다.
+    let multiApplying = false, composing = null;
+    const endMulti = () => { if(!multi) return; multi = null; scheduleDecorations(); updateCursor(); };
+    const showActive = () => { const r = multi.ranges[multi.active]; textarea.setSelectionRange(r.start, r.end); if(!wrap) revealLine(lineAt(r.start)); updateCursor(); scheduleDecorations(); };
+    const occurrences = (src, text, whole) => {
+      const found = []; if(!text) return found;
+      for(let i = src.indexOf(text); i >= 0; i = src.indexOf(text, i + Math.max(1, text.length))) {
+        if(whole && (/\w/.test(src[i-1] || "") || /\w/.test(src[i + text.length] || ""))) continue;
+        found.push({start:i, end:i + text.length});
+      }
+      return found;
+    };
+    // 첫 Ctrl+D: 선택이 없으면 커서 아래 단어를 고른다(이후 같은 이름만 단어 단위로 찾는다). 선택이 있으면 그 글자 그대로 다음 일치를 더한다.
+    const beginMulti = () => {
+      const src = textarea.value, a = textarea.selectionStart, b = textarea.selectionEnd;
+      if(a === b) { const word = wordAround(src, a); if(!word) return false; multi = {ranges:[{start:word.start, end:word.end}], active:0, text:word.word, whole:true}; showActive(); return "word"; }
+      multi = {ranges:[{start:a, end:b}], active:0, text:src.slice(a, b), whole:false}; return "selection";
+    };
+    const addNextOccurrence = () => {
+      if(!multi && beginMulti() === "word") return true;
+      if(!multi) return false;
+      const all = occurrences(textarea.value, multi.text, multi.whole), from = multi.ranges[multi.active].end;
+      const free = all.filter(o => !multi.ranges.some(r => o.start < r.end && o.end > r.start));
+      const next = free.find(o => o.start >= from) || free[0];
+      if(!next) { position.textContent += " · 더 이상 일치 없음"; return false; }
+      multi.ranges.push(next); multi.ranges.sort((x, y) => x.start - y.start); multi.active = multi.ranges.indexOf(next); showActive(); return true;
+    };
+    const selectAllOccurrences = () => {
+      if(!multi && beginMulti() === false) return false;
+      const active = multi.ranges[multi.active], all = occurrences(textarea.value, multi.text, multi.whole);
+      multi.ranges = all; multi.active = Math.max(0, all.findIndex(r => r.start === active.start)); showActive(); return true;
+    };
+    // make(range, i) → {from, to, text}. 겹치는 편집은 앞쪽을 우선한다. 결과 커서는 각 삽입 텍스트 끝.
+    const applyMulti = make => {
+      const src = textarea.value, edits = multi.ranges.map((range, i) => ({...make(range, i)}));
+      let cursor = 0; for(const e of edits) { e.from = Math.max(e.from, cursor); e.to = Math.max(e.to, e.from); cursor = e.to; }
+      const lo = edits[0].from, hi = edits[edits.length-1].to; let out = "", at = lo, delta = 0; const carets = [];
+      for(const e of edits) { out += src.slice(at, e.from) + e.text; at = e.to; const caret = e.from + delta + e.text.length; carets.push({start:caret, end:caret}); delta += e.text.length - (e.to - e.from); }
+      out += src.slice(at, hi);
+      multiApplying = true;
+      try { beforeEdit(); textarea.setRangeText(out, lo, hi, "end"); multi.ranges = carets; showActive();
+        textarea.dispatchEvent(typeof InputEvent === "function" ? new InputEvent("input", {bubbles:true, inputType:"insertReplacementText"}) : new Event("input", {bubbles:true})); }
+      finally { multiApplying = false; }
+    };
+    const lineIndent = (src, pos) => src.slice(src.lastIndexOf("\n", pos-1) + 1).match(/^[ \t]*/)[0];
+    // 다중 선택 중의 키 처리. true를 돌려주면 일반 키 처리를 건너뛴다.
+    const multiKeydown = event => {
+      if(!multi) return false; const cmd = event.ctrlKey || event.metaKey, key = event.key;
+      if(["Shift","Control","Alt","Meta","CapsLock"].includes(key)) return true;
+      if(cmd && !event.altKey && event.code === "KeyD" && !event.shiftKey) { event.preventDefault(); addNextOccurrence(); return true; }
+      if(cmd && event.shiftKey && event.code === "KeyL") { event.preventDefault(); selectAllOccurrences(); return true; }
+      if(key === "Escape") { event.preventDefault(); const r = multi.ranges[multi.active]; endMulti(); textarea.setSelectionRange(r.start, r.end); return true; }
+      if(cmd && ["KeyC","KeyX","KeyV","KeyA"].includes(event.code) && !event.shiftKey && !event.altKey) { if(event.code === "KeyA") endMulti(); return event.code !== "KeyA"; }
+      const len = textarea.value.length;
+      if((key === "Backspace" || key === "Delete") && !cmd && !event.altKey) {
+        event.preventDefault();
+        applyMulti(r => r.start !== r.end ? {from:r.start, to:r.end, text:""} : key === "Backspace" ? {from:Math.max(0, r.start-1), to:r.start, text:""} : {from:r.end, to:Math.min(len, r.end+1), text:""});
+        return true;
+      }
+      if(key === "Enter" && !cmd && !event.altKey && !event.shiftKey) { event.preventDefault(); const src = textarea.value; applyMulti(r => ({from:r.start, to:r.end, text:"\n" + lineIndent(src, r.start)})); return true; }
+      if(key === "Tab" && !cmd && !event.altKey && !event.shiftKey) { event.preventDefault(); applyMulti(r => ({from:r.start, to:r.end, text:" ".repeat(tabSize)})); return true; }
+      if(key.length === 1 && !cmd && !event.altKey) return true;   // 글자 입력은 beforeinput에서 모든 선택에 넣는다(자동 괄호는 쓰지 않는다)
+      endMulti(); return false;   // 그 밖의 키(화살표·Home·다른 명령)는 다중 선택을 끝내고 원래대로 처리한다
+    };
+    listen(textarea, "beforeinput", event => {
+      if(!multi || multiApplying || event.isComposing || event.inputType === "insertCompositionText") return;
+      // 다른 경로로 선택이 바뀐 뒤의 입력(전체 선택 후 입력 등)이면 다중 선택을 끝내고 원래대로 둔다.
+      const active = multi.ranges[multi.active]; if(textarea.selectionStart !== active.start || textarea.selectionEnd !== active.end) { endMulti(); return; }
+      if(event.inputType === "insertText" || event.inputType === "insertReplacementText") { event.preventDefault(); const data = event.data ?? ""; applyMulti(r => ({from:r.start, to:r.end, text:data})); }
+      else if(event.inputType === "insertLineBreak") { event.preventDefault(); const src = textarea.value; applyMulti(r => ({from:r.start, to:r.end, text:"\n" + lineIndent(src, r.start)})); }
+      else if(!event.inputType.startsWith("insertFromPaste") && !event.inputType.startsWith("delete")) endMulti();
+    });
+    // 복사·잘라내기: 모든 선택을 줄바꿈으로 이어 담는다. 붙여넣기: 줄 수가 선택 수와 같으면 한 줄씩 나눠 넣는다.
+    const multiText = () => multi.ranges.map(r => textarea.value.slice(r.start, r.end)).join("\n");
+    listen(textarea, "copy", event => { if(!multi || !event.clipboardData) return; event.preventDefault(); event.clipboardData.setData("text/plain", multiText()); });
+    listen(textarea, "cut", event => { if(!multi || !event.clipboardData) return; event.preventDefault(); event.clipboardData.setData("text/plain", multiText()); applyMulti(r => ({from:r.start, to:r.end, text:""})); });
+    listen(textarea, "paste", event => {
+      if(!multi) return; const data = event.clipboardData?.getData("text/plain"); if(data == null) return endMulti();
+      event.preventDefault(); const parts = data.replace(/\r\n?/g, "\n").split("\n"), split = parts.length > 1 && parts.length === multi.ranges.length;
+      applyMulti((r, i) => ({from:r.start, to:r.end, text:split ? parts[i] : data}));
+    });
+    // IME(한글 등) 조합: 조합은 보이는 선택에서 그대로 하게 두고, 끝나면 같은 글자를 나머지 선택에도 넣는다.
+    listen(textarea, "compositionstart", () => { if(multi) composing = {ranges:multi.ranges.map(r => ({...r})), active:multi.active}; });
+    listen(textarea, "compositionend", event => {
+      if(!composing || !multi) { composing = null; return; } const {ranges, active} = composing, data = event.data || ""; composing = null;
+      const at = ranges[active], delta = data.length - (at.end - at.start);
+      multi.ranges = ranges.map((r, i) => i < active ? r : i === active ? {start:r.start, end:r.start + data.length} : {start:r.start + delta, end:r.end + delta});
+      multi.active = active; applyMulti((r, i) => ({from:r.start, to:r.end, text:i === active ? textarea.value.slice(r.start, r.end) : data}));
+    });
+    listen(textarea, "mousedown", endMulti);
+    listen(textarea, "input", event => { if(multi && !multiApplying && !composing && !/Composition/.test(event.inputType || "")) endMulti(); });
     // ---- 숫자 조절: Ctrl+↑/↓(Shift = 10배) 또는 숫자 위에서 Alt+좌우 드래그 ----
     // 단위는 리터럴의 마지막 자릿수(0.25 → 0.01, 3. → 1, 8 → 1)이고 정수·실수 형식을 그대로 유지한다.
     const numberAt = (src, pos) => {
@@ -338,33 +517,51 @@ import * as Highlight from "./glsl-highlight.js";
       const begin = rows.slice(0,line-1).reduce((sum,row)=>sum+row.length+1,0);
       const offset = begin + Math.min(rows[line-1].length,Math.max(0,column-1)); const keep = textarea.scrollTop; textarea.focus(); textarea.setSelectionRange(offset,offset); textarea.scrollTop = keep;
       if(!wrap) revealLine(line); updateLines(); return line;
-    }; const findMatches = (src,text,limit=Infinity) => {
-      const found=[];if(!text)return found;const pattern=new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"gi");
-      for(const match of src.matchAll(pattern)){if(found.length===limit)break;found.push(match.index);}return found;
-    }; const updateMatches = () => {
-      matches=findMatches(textarea.value,query.value,10000);matchIndex=-1;
-      result.textContent=`${matches.length} results`;return matches.length;
+    }; // ---- 찾기: 대소문자 구분 · 단어 단위 · 정규식 옵션. 일치는 {start, end, match}로 보관한다(정규식이면 길이가 저마다 다르다). ----
+    const buildPattern = () => {
+      const text = query.value; if(!text) return null;
+      let source = findOptions.regex ? text : text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if(findOptions.wholeWord) source = `(?<!\\w)(?:${source})(?!\\w)`;
+      return new RegExp(source, findOptions.caseSensitive ? "gm" : "gim");   // 잘못된 정규식이면 여기서 예외
+    };
+    const findMatches = (src, limit = Infinity) => {
+      let pattern; try { pattern = buildPattern(); query.removeAttribute("aria-invalid"); }
+      catch (error) { query.setAttribute("aria-invalid","true"); query.title = `정규식 오류: ${error.message}`; return null; }
+      query.title = ""; const found = []; if(!pattern) return found;
+      for(const match of src.matchAll(pattern)) { if(!match[0].length) continue; if(found.length === limit) break; found.push({start:match.index, end:match.index + match[0].length, match}); }
+      return found;
+    };
+    // 정규식 바꾸기의 $1 · $<이름> · $& · $$를 해석한다. 일반 모드에서는 바꿀 텍스트를 글자 그대로 쓴다.
+    const expandReplacement = match => !findOptions.regex ? replacement.value : replacement.value.replace(/\$(\$|&|\d{1,2}|<([^>]+)>)/g, (all, token, name) =>
+      token === "$" ? "$" : token === "&" ? match[0] : name !== undefined ? (match.groups?.[name] ?? "") : Number(token) < match.length ? (match[Number(token)] ?? "") : all);
+    const updateMatches = () => {
+      const found = findMatches(textarea.value, 10000); matches = found || []; matchIndex = -1;
+      result.textContent = found ? `${matches.length} results` : "정규식 오류"; scheduleDecorations(); return matches.length;
     }; const findNext = backwards => {
       if(!matches.length) { updateMatches(); if(!matches.length) return false; }
-      const p = textarea.selectionStart, len = query.value.length;
-      if(backwards){let index=matches.length-1;while(index>=0&&matches[index]>=p)index--;matchIndex=index<0?matches.length-1:index;}
-      else {const index=matches.findIndex(x=>x>=textarea.selectionEnd);matchIndex=index<0?0:index;}
-      const start = matches[matchIndex], keep = textarea.scrollTop; textarea.focus();textarea.setSelectionRange(start,start+len); textarea.scrollTop = keep;
+      const p = textarea.selectionStart;
+      if(backwards){let index=matches.length-1;while(index>=0&&matches[index].start>=p)index--;matchIndex=index<0?matches.length-1:index;}
+      else {const index=matches.findIndex(x=>x.start>=textarea.selectionEnd);matchIndex=index<0?0:index;}
+      const {start, end} = matches[matchIndex], keep = textarea.scrollTop; textarea.focus();textarea.setSelectionRange(start,end); textarea.scrollTop = keep;
       const line = lineAt(start); if(!wrap) revealLine(line); updateCursor();result.textContent=`${matchIndex+1} / ${matches.length}`; return true;
+    }; const setReplaceOpen = open => {
+      $("studioReplaceRow").hidden = !open; $("studioReplaceToggle")?.setAttribute("aria-expanded", String(open));
     }; const showFind = (replace = false) => {
-      findPanel.hidden = false; $("studioReplaceRow").hidden = !replace;
+      findPanel.hidden = false; setReplaceOpen(replace);
       const selected = textarea.value.slice(textarea.selectionStart,textarea.selectionEnd);
-      if(selected && !selected.includes("\n") && selected.length < 100) query.value = selected; query.focus();query.select();updateMatches();
-    }; const closeFind = () => {findPanel.hidden=true;textarea.focus();}; const doReplace = all => {
-      if(!query.value)return;if(all) {
-        const src=textarea.value,positions=findMatches(src,query.value),chunks=[];if(!positions.length)return;let last=0;
-        for(const at of positions){chunks.push(src.slice(last,at),replacement.value);last=at+query.value.length;}
+      if(selected && !selected.includes("\n") && selected.length < 100) query.value = findOptions.regex ? selected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : selected;
+      query.focus();query.select();updateMatches();
+    }; const closeFind = () => {findPanel.hidden=true;scheduleDecorations();textarea.focus();}; const doReplace = all => {
+      if(!query.value)return;const src=textarea.value,found=findMatches(src);if(!found?.length)return;
+      if(all) {
+        const chunks=[];let last=0;
+        for(const m of found){chunks.push(src.slice(last,m.start),expandReplacement(m.match));last=m.end;}
         chunks.push(src.slice(last));replaceSelection(chunks.join(""),0,src.length);
       } else {
-        if(textarea.selectionEnd-textarea.selectionStart!==query.value.length || !findMatches(textarea.value.slice(textarea.selectionStart,textarea.selectionEnd),query.value).length) {
-          if(!findNext(false)) return;
-        }
-        replaceSelection(replacement.value);
+        // 지금 선택이 일치 항목이면 바꾸고 다음 일치로 넘어간다. 아니면 먼저 다음 일치를 고른다.
+        const a=textarea.selectionStart,b=textarea.selectionEnd,current=found.find(m=>m.start===a&&m.end===b);
+        if(!current) { updateMatches(); findNext(false); return; }
+        replaceSelection(expandReplacement(current.match),a,b);updateMatches();findNext(false);return;
       }
       updateMatches();
     }; const indent = (reverse, wholeLine = false) => {
@@ -400,6 +597,17 @@ import * as Highlight from "./glsl-highlight.js";
       const remove=lines.every(line=>!line.trim()||/^\s*\/\//.test(line));
       const replaced=lines.map(line=>!line.trim()?line:remove?line.replace(/^(\s*)\/\/ ?/,"$1"):line.replace(/^(\s*)/,"$1// ")).join("\n");
       beforeEdit();textarea.setRangeText(replaced,a,end,"select");textarea.dispatchEvent(new Event("input",{bubbles:true}));
+    }; const toggleBlockComment = () => {
+      // 선택 영역을 /* */로 감싸거나(앞뒤 공백은 밖에 둔다), 이미 감싸져 있으면 벗긴다. 선택이 없으면 /*  */를 넣고 커서를 가운데 둔다.
+      const src=textarea.value,a=textarea.selectionStart,b=textarea.selectionEnd;
+      if(a===b){beforeEdit();textarea.setRangeText("/*  */",a,b,"end");textarea.setSelectionRange(a+3,a+3);textarea.dispatchEvent(new Event("input",{bubbles:true}));return;}
+      const body=src.slice(a,b),lead=body.match(/^\s*/)[0].length,trail=body.length-body.trimEnd().length,start=a+lead,end=b-trail,inner=src.slice(start,end);
+      const wrapped=/^\/\*[\s\S]*\*\/$/.test(inner), outside=src.slice(Math.max(0,start-3),start).trimEnd().endsWith("/*")&&src.slice(end,end+3).trimStart().startsWith("*/");
+      let from=start,to=end,text;
+      if(wrapped)text=inner.replace(/^\/\* ?/,"").replace(/ ?\*\/$/,"");
+      else if(outside){from=src.lastIndexOf("/*",start);to=src.indexOf("*/",end)+2;text=inner;}
+      else text=`/* ${inner} */`;
+      beforeEdit();textarea.setRangeText(text,from,to,"select");textarea.dispatchEvent(new Event("input",{bubbles:true}));
     }; const pairs={"(":")","[":"]","{":"}",'"':'"'};
     const codeMode = pos => {
       const src=textarea.value;let mode="";
@@ -695,9 +903,11 @@ import * as Highlight from "./glsl-highlight.js";
       {label:"찾기", key:"Ctrl+F", run:() => showFind()}, {label:"찾아 바꾸기", key:"Ctrl+H", run:() => showFind(true)},
       {label:"줄 번호로 이동", key:"Ctrl+G", run:() => openPalette(":")}, {label:"함수·변수로 이동", key:"Ctrl+Shift+O", run:() => openPalette("@")},
       {label:"정의로 이동", key:"F12", run:() => goToDefinition()}, {label:"이름 바꾸기 (같은 이름 모두)", key:"F2", run:renameSymbol},
-      {label:"줄 주석 전환", key:"Ctrl+/", run:toggleComment}, {label:"줄 삭제", key:"Ctrl+Shift+K", run:deleteLines},
+      {label:"줄 주석 전환", key:"Ctrl+/", run:toggleComment}, {label:"블록 주석 전환 (/* */)", key:"Shift+Alt+A", run:toggleBlockComment}, {label:"줄 삭제", key:"Ctrl+Shift+K", run:deleteLines},
       {label:"줄을 아래로 복사", key:"Shift+Alt+↓", run:() => copyLines(true)}, {label:"줄을 위로 복사", key:"Shift+Alt+↑", run:() => copyLines(false)},
       {label:"줄을 아래로 이동", key:"Alt+↓", run:() => moveLines(true)}, {label:"줄을 위로 이동", key:"Alt+↑", run:() => moveLines(false)},
+      {label:"색상 선택기 열기 (커서 위치의 vec3/vec4)", run:() => { if(!openColorPicker()) position.textContent += " · 커서가 색 리터럴 안에 있지 않습니다"; }},
+      {label:"다음 일치 항목 선택 추가", key:"Ctrl+D", run:addNextOccurrence}, {label:"모든 일치 항목 선택", key:"Ctrl+Shift+L", run:selectAllOccurrences},
       {label:"줄 선택", key:"Ctrl+L", run:selectLine}, {label:"짝 괄호로 이동", key:"Ctrl+Shift+\\", run:jumpToBracket},
       {label:"들여쓰기", key:"Ctrl+]", run:() => indent(false, true)}, {label:"내어쓰기", key:"Ctrl+[", run:() => indent(true, true)},
       {label:"긴 줄 자동 줄바꿈 켜기/끄기", key:"Alt+Z", run:() => { wrap = !wrap; setPresentation(); }},
@@ -723,7 +933,7 @@ import * as Highlight from "./glsl-highlight.js";
     listen(gutter,"click",e=>{const height=parseFloat(getComputedStyle(textarea).lineHeight)||fontSize*1.6;
       goToLine(Math.floor((e.clientY-gutter.getBoundingClientRect().top+gutter.scrollTop)/height)+1);
     }); listen(textarea,"keydown",event=>{
-      if(event.isComposing)return;const cmd=event.ctrlKey||event.metaKey, start=textarea.selectionStart,end=textarea.selectionEnd,src=textarea.value;
+      if(event.isComposing)return;if(multiKeydown(event))return;const cmd=event.ctrlKey||event.metaKey, start=textarea.selectionStart,end=textarea.selectionEnd,src=textarea.value;
       // 낡은 후보 목록은 닫고 원래 동작(들여쓰기·줄 이동 등)을 따른다. Shift 조합(선택 확장·내어쓰기)도 목록이 가로채지 않는다.
       dropStaleCompletion();
       if(!completion.hidden && ['ArrowDown','ArrowUp','PageDown','PageUp','Enter','Tab','Escape'].includes(event.key) && !cmd && !event.altKey && !event.shiftKey) {
@@ -785,7 +995,10 @@ import * as Highlight from "./glsl-highlight.js";
         event.preventDefault();textarea.setSelectionRange(p===indentEnd?start:indentEnd,p===indentEnd?start:indentEnd);updateCursor();
       } else if(event.key==="Tab" || (cmd && ["BracketLeft","BracketRight"].includes(event.code))) {
         event.preventDefault();indent(event.key==="Tab"?event.shiftKey:event.code==="BracketLeft",event.key!=="Tab");
-      } else if(cmd&&event.key==="/") {event.preventDefault();toggleComment();}
+      } else if(cmd&&!event.altKey&&!event.shiftKey&&event.code==="KeyD") {event.preventDefault();hideCompletion();addNextOccurrence();}
+      else if(cmd&&event.shiftKey&&!event.altKey&&event.code==="KeyL") {event.preventDefault();hideCompletion();selectAllOccurrences();}
+      else if(cmd&&event.key==="/") {event.preventDefault();toggleComment();}
+      else if(event.altKey&&event.shiftKey&&!cmd&&event.code==="KeyA") {event.preventDefault();toggleBlockComment();}
       else if(cmd&&event.key.toLowerCase()==="f") {event.preventDefault();showFind();}
       else if(cmd&&event.key.toLowerCase()==="h") {event.preventDefault();showFind(true);}
       else if(cmd&&event.key.toLowerCase()==="g") {event.preventDefault();$("studioGoto").click();}
@@ -796,6 +1009,14 @@ import * as Highlight from "./glsl-highlight.js";
     listen($("studioFindClose"),"click",closeFind);listen($("studioFindNext"),"click",()=>findNext(false));
     listen($("studioFindPrev"),"click",()=>findNext(true));listen($("studioReplaceOne"),"click",()=>doReplace(false));
     listen($("studioReplaceAll"),"click",()=>doReplace(true));
+    // 검색 옵션 버튼(Alt+C 대소문자 · Alt+W 단어 · Alt+R 정규식)과 바꾸기 줄 펼치기
+    const OPTION_BUTTONS = {caseSensitive:"studioFindCase", wholeWord:"studioFindWord", regex:"studioFindRegex"};
+    const syncFindOptions = () => { for(const [key, id] of Object.entries(OPTION_BUTTONS)) $(id)?.setAttribute("aria-pressed", String(findOptions[key])); };
+    const toggleFindOption = key => { findOptions[key] = !findOptions[key]; syncFindOptions(); save(); updateMatches(); };
+    for(const [key, id] of Object.entries(OPTION_BUTTONS)) listen($(id), "click", () => { toggleFindOption(key); query.focus(); });
+    listen(findPanel, "keydown", event => { const key = event.altKey && !event.ctrlKey && !event.metaKey && {KeyC:"caseSensitive", KeyW:"wholeWord", KeyR:"regex"}[event.code]; if(key) { event.preventDefault(); toggleFindOption(key); } });
+    listen($("studioReplaceToggle"), "click", () => { const open = $("studioReplaceRow").hidden; setReplaceOpen(open); (open ? replacement : query).focus(); });
+    syncFindOptions();
     listen($("studioFind"),"click",()=>showFind());listen($("studioReplace"),"click",()=>showFind(true));
     listen(symbols,"change",()=>{if(symbols.value)goToLine(Number(symbols.value));symbols.value="";});
     listen($("studioGoto"),"click",async()=>{const input=await ask({title:"줄 번호로 이동",message:"이동할 줄을 입력하세요.",value:String(lineAt(textarea.selectionStart)),label:"줄 번호",type:"number",min:1,max:lineAt(textarea.value.length),ok:"이동"});if(input!==null)goToLine(Number(input));});
