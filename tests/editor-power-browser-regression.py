@@ -102,6 +102,15 @@ with sync_playwright() as p:
     check(code.input_value().split('\n')[0]=='vec3 a = vec3(1.0, 0.0, 0.0);','picking again updates the same literal')
     code.press('Control+z');check(code.input_value().split('\n')[0]=='vec3 a = vec3(1.0, 0.5, 0.0);','Undo restores the original color')
 
+    # ---- 더블클릭 선택: 단어 뒤 공백 제외 (Windows Chrome·Edge의 기본 동작을 흉내 낸다) ----
+    def dblclick_with(a,b):
+        js("a=>{const e=document.getElementById('studioCode');e.focus();e.setSelectionRange(a[0],a[1]);e.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));}",[a,b]);return pos()
+    setup('float value = 1.0;',0)
+    check(dblclick_with(6,12)==[6,11],'double-click drops the trailing space Windows adds to the word')
+    check(dblclick_with(6,11)==[6,11],'double-click without extra space is unchanged')
+    check(dblclick_with(5,6)==[5,6],'double-click on whitespace only keeps the selection')
+    page.mouse.dblclick(*[v for v in js("() => {const r=document.getElementById('studioCode').getBoundingClientRect();return [r.left+12+7.2*8+3, r.top+12+8]}")])
+    check(code.input_value()[slice(*pos())].strip()==code.input_value()[slice(*pos())],'a real double-click never ends with whitespace')
     check(errors==[],f'no Chromium page exceptions: {errors}')
     print(f'PASS all {n[0]} editor power-feature checks')
     browser.close()

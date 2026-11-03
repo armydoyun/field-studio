@@ -441,6 +441,13 @@ import * as Highlight from "./glsl-highlight.js";
       multi.active = active; applyMulti((r, i) => ({from:r.start, to:r.end, text:i === active ? textarea.value.slice(r.start, r.end) : data}));
     });
     listen(textarea, "mousedown", endMulti);
+    // 더블클릭: Windows의 Chrome·Edge는 단어 뒤 공백까지 함께 선택한다. 코드에서는 단어만 고르는 편이 자연스러우므로 앞뒤 공백을 덜어 낸다.
+    listen(textarea, "dblclick", () => {
+      const src = textarea.value, from = textarea.selectionStart, to = textarea.selectionEnd; let a = from, b = to;
+      if(!src.slice(a, b).trim()) return;   // 공백만 골랐으면 그대로 둔다
+      while(b > a && /\s/.test(src[b-1])) b--; while(a < b && /\s/.test(src[a])) a++;
+      if(a !== from || b !== to) { textarea.setSelectionRange(a, b, "forward"); updateCursor(); }
+    });
     listen(textarea, "input", event => { if(multi && !multiApplying && !composing && !/Composition/.test(event.inputType || "")) endMulti(); });
     // ---- 숫자 조절: Ctrl+↑/↓(Shift = 10배) 또는 숫자 위에서 Alt+좌우 드래그 ----
     // 단위는 리터럴의 마지막 자릿수(0.25 → 0.01, 3. → 1, 8 → 1)이고 정수·실수 형식을 그대로 유지한다.
