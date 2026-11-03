@@ -9,7 +9,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'js'
 OUT = ROOT / 'deploy'
-MODULES = ['gpu-diagnostics', 'pass-manager', 'texture-input', 'renderer', 'shader', 'code-editor', 'annotations', 'studio', 'ui', 'input', 'settings', 'profiler', 'gallery', 'snippets', 'course', 'glsl-reference', 'guide', 'main']
+MODULES = ['gpu-diagnostics', 'pass-manager', 'texture-input', 'renderer', 'shader', 'glsl-highlight', 'code-editor', 'annotations', 'studio', 'ui', 'input', 'settings', 'profiler', 'gallery', 'snippets', 'course', 'glsl-reference', 'guide', 'main']
 IMPORT = re.compile(r'^import (\* as ([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)) from "\./([a-z-]+)\.js";\s*$', re.M)
 EXPORTS = re.compile(r'export \{([\w\s,]+)\};\s*\Z')
 

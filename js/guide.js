@@ -5,6 +5,7 @@
 import * as Snippets from "./snippets.js";
 import * as Course from "./course.js";
 import * as Reference from "./glsl-reference.js";
+import * as Highlight from "./glsl-highlight.js";
   // 블록 형식: {p}, {list:[…]}, {steps:[…]}, {table:{head, rows}}, {code, title, insert?:true}, {keys:[[설명, 키]…]},
   //            {note}, {actions:[{label, run:"tour"|"gallery"|"topic:<id>"|"example:<id>"}]}
   const TOPICS = [
@@ -15,6 +16,18 @@ import * as Reference from "./glsl-reference.js";
         "**코드 고치기** — `E`로 편집기를 열고 숫자 하나를 바꿔 보세요. 0.9초 뒤 자동으로 적용됩니다(`Ctrl+Enter`는 즉시 실행).",
         "**값 조절하기** — 설정 패널의 **파라미터** 탭에서 슬라이더·색상으로 Uniform 값을 실시간으로 바꿉니다.",
         "**확인하기** — **성능** 탭에서 GPU 시간과 버퍼 내용을 들여다봅니다."]},
+      {p:"**가장 작은 셰이더** — 아래 코드는 화면 좌표를 색으로 바꿉니다. **이 코드로 시작**을 누른 뒤 `0.5`나 `sin` 안의 값을 바꿔 보세요."},
+      {code:`#version 300 es
+precision highp float;
+uniform vec2 uResolution;   // 화면 픽셀 크기
+uniform float uTime;        // 재생 시간(초)
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;        // 0~1 화면 좌표
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(uTime));    // x → 빨강, y → 초록, 시간 → 파랑
+    fragColor = vec4(col, 1.0);
+}`, title:"첫 셰이더 · 좌표를 색으로", start:true},
       {actions:[{label:"UI 둘러보기 시작", run:"tour"}, {label:"예제 갤러리 열기", run:"gallery"}, {label:"첫 셰이더 구조 보기", run:"topic:editor"}]},
       {note:"**셰이더가 처음인가요?** C와 GLSL 문법을 안다면 **입문 과정**(12단계)을 따라가 보세요. 픽셀 하나의 관점부터 버퍼로 만드는 시뮬레이션까지, 단계마다 바로 실행되는 예제와 과제가 있습니다."},
       {actions:[{label:"입문 과정 시작 →", run:"topic:course"}]},
@@ -184,6 +197,9 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     const element = (tag, className = "", text = "") => { const node = document.createElement(tag); if(className) node.className = className; if(text) node.textContent = text; return node; };
     const listen = (target, type, fn, options = {}) => target?.addEventListener(type, fn, {...options, signal});
     let current = "start";
+    // 가이드의 GLSL 예시도 편집기와 같은 규칙으로 강조한다. 내장 함수 이름은 레퍼런스에서 가져온다("sin · cos" → sin, cos).
+    const highlighter = Highlight.create(Reference.ALL.flatMap(item => item.name.split("·").map(name => name.replace(/\(.*\)/, "").trim())));
+    const codeBlock = source => highlighter.paint(element("pre"), source);
     // 탐색 목록: 시작하기 → 입문 과정 → 기능 레퍼런스. group이 바뀌는 곳에 목록 제목을 넣는다.
     const ALL = [{...TOPICS[0], group:""}, ...Course.LESSONS.map(lesson => ({...lesson, group:"입문 과정 · C 개발자용"})), ...TOPICS.slice(1).map(topic => ({...topic, group:"기능 레퍼런스"}))];
     const LESSON_IDS = Course.LESSONS.filter(lesson => lesson.step).map(lesson => lesson.id), COURSE_ORDER = Course.LESSONS.map(lesson => lesson.id);
@@ -246,7 +262,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       const insert = element("button", "guide-insert", item.replace ? "패스 교체" : "삽입"); insert.type = "button";
       insert.title = item.replace ? "현재 편집 중인 패스 전체를 이 코드로 바꿉니다" : "필요한 함수와 함께 편집기에 넣습니다";
       insert.addEventListener("click", () => insertItem(item, insert));
-      bar.append(head, tags, copy, insert); figure.append(bar, element("pre", "", item.code)); return figure;
+      bar.append(head, tags, copy, insert); figure.append(bar, codeBlock(item.code)); return figure;
     };
     const renderLibrary = () => {
       const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -279,12 +295,12 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     let referenceCategory = Reference.CATEGORIES[0].id;
     const referenceItem = item => {
       const row = element("article", "ref-item"), head = element("header", "ref-head");
-      head.append(element("strong", "ref-name", item.name), element("code", "ref-sig", item.sig)); row.append(head, rich("p", item.desc, "ref-desc"));
+      head.append(element("strong", "ref-name", item.name), highlighter.paint(element("code", "ref-sig"), item.sig)); row.append(head, rich("p", item.desc, "ref-desc"));
       if(item.c) { const c = element("p", "ref-c"); c.append(element("span", "", "C 대응"), element("code", "", item.c)); row.append(c); }
       if(item.ex) {
         const ex = element("div", "ref-ex"), copy = element("button", "", "복사"); copy.type = "button";
         copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(item.ex); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); } });
-        ex.append(element("pre", "", item.ex), copy); row.append(ex);
+        ex.append(codeBlock(item.ex), copy); row.append(ex);
       }
       return row;
     };
@@ -349,7 +365,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     };
     // 코드 블록: 복사 + (선택) 커서 위치 삽입 · 현재 패스 교체 · 이 코드로 새 프로젝트 시작.
     const codeFigure = block => {
-      const figure = element("figure", "guide-code"), bar = element("figcaption"), pre = element("pre", "", block.code);
+      const figure = element("figure", "guide-code"), bar = element("figcaption"), pre = codeBlock(block.code);
       bar.append(element("span", "", block.title || "GLSL"));
       const copy = element("button", "", "복사"); copy.type = "button";
       copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(block.code); flash(copy, "복사됨"); } catch (_) { flash(copy, "복사 실패"); } });

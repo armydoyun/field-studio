@@ -9,8 +9,8 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':1440,'height':900});errors=[]
     page.on('pageerror',lambda error: errors.append(str(error)))
     page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
-    page.evaluate('''() => window.define=(deps,factory)=>{if(!deps.length)window.TestEditor=factory();else if(deps[0]==="code-editor")window.TestStudio=factory(window.TestEditor);}''')
-    page.add_script_tag(content=mock_module((root/'js/code-editor.js').read_text()));page.add_script_tag(content=mock_module((root/'js/studio.js').read_text()))
+    page.evaluate('''() => window.define=(deps,factory)=>{if(deps[0]==="glsl-highlight"){window.TestEditor=factory(window.TestEditor);return;}if(!deps.length)window.TestEditor=factory();else if(deps[0]==="code-editor")window.TestStudio=factory(window.TestEditor);}''')
+    page.add_script_tag(content=mock_module((root/'js/glsl-highlight.js').read_text()));page.add_script_tag(content=mock_module((root/'js/code-editor.js').read_text()));page.add_script_tag(content=mock_module((root/'js/studio.js').read_text()))
     page.evaluate('''() => {
       const good="#version 300 es\\nprecision highp float;\\nout vec4 fragColor;\\nvoid main(){fragColor=vec4(1.);}";
       const state={image:good,passes:[],imageChannels:{}};

@@ -1,17 +1,12 @@
 // 로컬 textarea 기반 GLSL 편집 보조 도구. 별도 라이브러리나 CDN이 필요하지 않다.
+import * as Highlight from "./glsl-highlight.js";
   // options.lookup(name) → {sig, desc} | null : 내장 함수 설명(시그니처 힌트). options.onScrub() : 숫자를 끌어 바꾸는 중 즉시 적용 요청.
   const mount = (textarea,ask,beforeEdit=()=>{},uniformNames=()=>[],options={}) => {
     const $ = id => document.getElementById(id), ac = new AbortController(), signal = ac.signal;
     const listen = (target, type, fn) => target?.addEventListener(type, fn, {signal});   // 선택 요소(버튼 등)가 없어도 편집기는 동작한다
     const gutter = $("studioLines"), highlight = $("studioHighlight"), position = $("studioCursor"), findPanel = $("studioFindPanel");
     // 강조: 내장 함수 이름은 레퍼런스(options.builtins)에서 받는다. 호출(이름 + '(')은 내장이면 builtin, 아니면 사용자 함수 색.
-    const BUILTIN_NAMES = new Set((options.builtins || []).map(item => item.name).filter(name => /^[A-Za-z_]\w*$/.test(name)));
-    for(const name of "texture textureSize texelFetch textureLod normalize length distance dot cross mix clamp smoothstep step pow exp log sin cos tan atan abs min max floor ceil fract mod sqrt reflect refract radians degrees".split(" ")) BUILTIN_NAMES.add(name);
-    const TOKENS = /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|#[^\n]*|"(?:\\.|[^"\\])*"|\b(?:uniform|out|in|inout|const|precision|highp|mediump|lowp|if|else|for|while|do|break|continue|return|discard|struct|layout|switch|case|default|true|false|flat|smooth)\b|\b(?:void|float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler2D|samplerCube|sampler3D)\b|\bgl_\w+\b|\b[A-Za-z_]\w*(?=\s*\()|\b\d+(?:\.\d*)?(?:[eE][+-]?\d+)?[uU]?\b|\.\d+(?:[eE][+-]?\d+)?/g;
-    const tokenClass = token => token.startsWith("//")||token.startsWith("/*")?"glsl-comment":token.startsWith("#")?"glsl-directive":token.startsWith('"')?"glsl-string":
-      /^(?:uniform|out|in|inout|const|precision|highp|mediump|lowp|if|else|for|while|do|break|continue|return|discard|struct|layout|switch|case|default|true|false|flat|smooth)$/.test(token)?"glsl-keyword":
-      /^(?:void|float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler2D|samplerCube|sampler3D)$/.test(token)?"glsl-type":
-      /^[.\d]/.test(token)?"glsl-number":token.startsWith("gl_")||BUILTIN_NAMES.has(token)?"glsl-builtin":"glsl-function";
+    const highlighter = Highlight.create((options.builtins || []).map(item => item.name));
     // 주석·문자열·전처리문을 제외한다. 함수 탐색은 최상위 정의만 열거한다.
     const cleanSource = source => source.replace(/^[ \t]*#(?:[^\n]*\\\r?\n)*[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*|"(?:\\.|[^"\\])*"/gm,s=>s.replace(/[^\n]/g," "));
     let functionSource=null,functionEntries=[];
@@ -32,13 +27,7 @@
       symbols.value="";symbols.disabled=!entries.length;
     };
     let paintRequest = 0,paintedSource=null; const paint = () => {
-      paintRequest=0;const src=textarea.value;if(src===paintedSource)return;paintedSource=src;const frag=document.createDocumentFragment();let offset=0;
-      TOKENS.lastIndex=0;for(const match of src.matchAll(TOKENS)) {
-        if(match.index>offset)frag.append(document.createTextNode(src.slice(offset,match.index)));
-        const token=match[0],span=document.createElement("span");span.textContent=token;span.className=tokenClass(token);
-        frag.append(span);offset=match.index+token.length;
-      }
-      if(offset<src.length)frag.append(document.createTextNode(src.slice(offset)));
+      paintRequest=0;const src=textarea.value;if(src===paintedSource)return;paintedSource=src;const frag=highlighter.fragment(src);
       frag.append(document.createTextNode("\n ")); highlight.replaceChildren(frag);
       highlight.scrollTop=textarea.scrollTop;highlight.scrollLeft=textarea.scrollLeft;updateFunctions();
       renderDiagnostics();
@@ -518,7 +507,7 @@
       for(const d of sym.defines) add({label:d.name, kind:"constant", detail:`#define ${d.value}`.trim(), desc:`${d.line}번째 줄`});
       for(const u of userUniforms()) add({label:u.name, kind:"uniform", detail:`uniform ${u.type}`, desc:"파라미터 패널에 등록된 값 · 선언은 자동으로 추가됩니다"});
       for(const [name, type, desc, declare] of APP_UNIFORMS) add({label:name, kind:"uniform", detail:`uniform ${type}`, desc:`${desc} · 고르면 선언도 함께 추가합니다`, declare:declare || `uniform ${type} ${name};`});
-      const builtins = options.builtins?.length ? options.builtins : [...BUILTIN_NAMES].map(name => ({name, sig:"", desc:""}));   // 레퍼런스 없이 쓰일 때의 최소 목록
+      const builtins = options.builtins?.length ? options.builtins : [...highlighter.builtins].map(name => ({name, sig:"", desc:""}));   // 레퍼런스 없이 쓰일 때의 최소 목록
       for(const item of builtins) if(isIdent(item.name)) add({label:item.name, kind:item.name.startsWith("gl_") ? "builtin-var" : "builtin", detail:item.sig.split(" · ")[0], desc:item.desc, sig:item.sig});
       for(const name of TYPES) add({label:name, kind:"type", detail:"타입", desc:/^[biu]?vec|^mat/.test(name) ? "생성자로도 씁니다: " + name + "(…)" : ""});
       for(const name of KEYWORDS) add({label:name, kind:"keyword", detail:"키워드", desc:""});
