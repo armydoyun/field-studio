@@ -1,6 +1,7 @@
 // 사용자 편집 상태만 소유한다. GPU 자원과 연결 규칙은 Renderer/PassManager가 검증한다.
 // 외부 코드 에디터나 네트워크 요청은 사용하지 않는다. file:// 배포는 deploy/ 번들을 사용한다.
 import * as CodeEditor from "./code-editor.js";
+import * as CmEditor from "./cm-editor.js";
 import * as Annotations from "./annotations.js";
 
   const STORAGE_KEY = "webgl.shader-studio.project.v1", DRAFT_KEY = "webgl.shader-studio.draft.v2", JSON_LIMIT=16*1024*1024, PACK_LIMIT=64*1024*1024; const copy = x => x && typeof x==="object" ? Array.isArray(x) ? x.map(copy) : Object.fromEntries(Object.entries(x).map(([k,v])=>[k,copy(v)])) : x;
@@ -126,7 +127,12 @@ void main() {
       const global = plan.globals.map(entry => entry.code).join("\n\n"); if(!global) return false;
       return insertCode({global, note:`코드 조각 '${item?.title || id}' 정의를 위쪽에 추가했습니다${plan.added.length ? ` (+ ${plan.added.join(", ")})` : ""} · Ctrl+Z로 되돌리기`});
     }} : null;
-    const editor = CodeEditor.mount($("studioCode"),ask,captureCursor,()=>renderer.getUserUniforms().map(item=>item.name),{lookup:options.lookup,builtins:options.builtins,library,
+    // 편집기 엔진: 기본(textarea) 또는 CodeMirror 6(실험). 바꾸면 새로고침 후 적용된다.
+    const ENGINE_KEY = "webgl.shader-studio.editor-engine.v1", engine = options.editorEngine === "codemirror" || options.editorEngine === "classic" ? options.editorEngine : (() => { try { return localStorage.getItem(ENGINE_KEY) === "codemirror" ? "codemirror" : "classic"; } catch (_) { return "classic"; } })();
+    if($("studioEngine")) { $("studioEngine").value = engine; on($("studioEngine"), "change", event => {
+      try { localStorage.setItem(ENGINE_KEY, event.target.value); } catch (_) {} if(dirty) { rememberEditor(); try { localStorage.setItem(DRAFT_KEY, JSON.stringify({version:1, project, selected})); } catch (_) {} }
+      $("studioEngineNote").hidden = event.target.value === engine; }); }
+    const editor = (engine === "codemirror" ? CmEditor : CodeEditor).mount($("studioCode"),ask,captureCursor,()=>renderer.getUserUniforms().map(item=>item.name),{lookup:options.lookup,builtins:options.builtins,library,
       userUniforms:()=>renderer.getUserUniforms().map(item=>({name:item.name,type:item.type})),onScrub:scrubApply,notify:text=>setStatus(text,"is-dirty")});
     for(const type of ["beforeinput","select","click","keyup","scroll"])on($("studioCode"),type,captureCursor);
     // 사용자가 직접 정한 높이·배치만 저장한다. 정하기 전에는 창 크기(반·4분할 창 포함)에 맞는 기본값을 따른다.

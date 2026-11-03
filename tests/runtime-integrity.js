@@ -13,7 +13,8 @@ assert.deepEqual([...hashes.keys()].sort(),files,'Runtime SHA manifest mismatch'
 for(const name of files){const sha=crypto.createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex');assert.equal(sha,hashes.get(name),name);}
 const names=new Set(files.filter(x=>x.startsWith('js/')).map(x=>path.basename(x,'.js'))),graph=new Map();
 for(const name of names){const source=fs.readFileSync(path.join(jsdir,name+'.js'),'utf8');
-  assert(!/\bdefine\s*\(/.test(source)&&!/\brequire\.config\s*\(/.test(source),`${name}: AMD runtime remaining`);
+  // AMD define() 호출만 찾는다(Facet.define( 같은 메서드 호출은 제외). codemirror.js는 tools/codemirror/build.mjs가 만든 서드파티 번들이다(`static define(` 메서드가 있다).
+  assert((name==='codemirror'||!/(?<![.\w$])define\s*\(/.test(source))&&!/\brequire\.config\s*\(/.test(source),`${name}: AMD runtime remaining`);
   const deps=[...source.matchAll(/^import (?:\* as \w+|\w+) from "\.\/([\w-]+)\.js";/gm)].map(x=>x[1]);
   assert(!/^import\s(?!\*\s+as\s+\w+\s+from|\w+\s+from)/m.test(source),`${name}: unresolved import syntax`);
   assert(deps.every(x=>names.has(x)),`${name}: missing ESM dependency`);

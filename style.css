@@ -669,6 +669,21 @@ kbd { border-color:var(--line-strong);border-bottom-width:2px;background:var(--e
 .deco-line { left:0;right:0;background:#ffffff07;box-shadow:inset 0 1px 0 #ffffff08,inset 0 -1px 0 #ffffff08; }
 .deco-bracket { border:1px solid color-mix(in srgb,var(--accent) 70%,transparent);border-radius:2px;background:color-mix(in srgb,var(--accent) 18%,transparent); }
 .deco-occurrence { border-radius:2px;background:#6fe0e620;box-shadow:inset 0 0 0 1px #6fe0e630; }
+/* CodeMirror 6 편집기(실험): 기본 편집기의 줄 번호·강조 레이어·textarea 대신 CodeMirror 화면을 쓴다. */
+.studio-editor-frame.is-codemirror>.studio-gutter,.studio-editor-frame.is-codemirror>.studio-code-surface { display:none; }
+.studio-cm-host { display:flex;flex:1;min-width:0;min-height:0; }
+.studio-cm-host>.cm-editor { flex:1;min-width:0;height:100%; }
+.studio-cm-host .cm-editor.cm-focused { outline:none; }
+.studio-cm-host .cm-panel.cm-search { display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;font:12px var(--sans); }
+.studio-cm-host .cm-panel.cm-search input[type="checkbox"] { width:auto; }
+.studio-cm-host .cm-panel.cm-search .cm-button { min-height:26px;padding:3px 8px;background-image:none;font-size:11px; }
+.studio-cm-host .cm-panel.cm-search label { display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:11px; }
+.studio-cm-host .cm-tooltip-autocomplete ul li { font-family:var(--mono); }
+.studio-cm-host .cm-completionDetail { color:var(--muted);font-style:normal;margin-left:10px; }
+.cm-glsl-info { max-width:420px;padding:6px 10px;font:12px/1.5 var(--sans); }
+.cm-glsl-info small { display:block;color:var(--faint); }
+.cm-glsl-info code { display:block;margin:2px 0;color:var(--text);font:12px/1.5 var(--mono);white-space:pre-wrap; }
+.cm-glsl-info p { margin:2px 0 0;color:var(--muted); }
 .deco-indent { width:0;border-left:1px solid #ffffff26; }
 .deco-indent.is-active { border-left-color:#ffffff40; }
 .deco-color { background:linear-gradient(transparent calc(100% - 3px),var(--swatch) 0);border-radius:0 0 2px 2px; }

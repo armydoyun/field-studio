@@ -9,7 +9,9 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'js'
 OUT = ROOT / 'deploy'
-MODULES = ['gpu-diagnostics', 'pass-manager', 'texture-input', 'renderer', 'shader', 'glsl-highlight', 'code-editor', 'annotations', 'studio', 'ui', 'input', 'settings', 'profiler', 'gallery', 'snippets', 'course', 'glsl-reference', 'guide', 'main']
+MODULES = ['gpu-diagnostics', 'pass-manager', 'texture-input', 'renderer', 'shader', 'glsl-highlight', 'glsl-language', 'code-editor', 'codemirror', 'cm-editor', 'annotations', 'studio', 'ui', 'input', 'settings', 'profiler', 'gallery', 'snippets', 'course', 'glsl-reference', 'guide', 'main']
+# 미리 번들링해 저장소에 넣은 서드파티 모듈(tools/codemirror/build.mjs가 생성). 클래스의 `static define(` 메서드가 있어 AMD 흔적 검사에서만 제외한다.
+VENDOR = {'codemirror'}
 IMPORT = re.compile(r'^import (\* as ([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)) from "\./([a-z-]+)\.js";\s*$', re.M)
 EXPORTS = re.compile(r'export \{([\w\s,]+)\};\s*\Z')
 
@@ -27,7 +29,7 @@ def compile_module(name):
     body = IMPORT.sub(replace, source).strip()
     if re.search(r'(?m)^\s*(?:import|export)\b', body) and name == 'main':
         raise ValueError(f'{name}: main must not import/export outside supported static headers')
-    if re.search(r'\b(?:import|define|require)\s*\(', body):
+    if re.search(r'\b(?:import|require)\s*\(', body) or (name not in VENDOR and re.search(r'(?<![.\w$])define\s*\(', body)):
         raise ValueError(f'{name}: unsupported dynamic/module syntax')
     if name == 'main':
         if 'export ' in body: raise ValueError('Main must be an entry-only module')
