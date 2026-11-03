@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shader Studio · WebGL2 GPU Validation</title>
+<style>
+  :root{color-scheme:light}*{box-sizing:border-box}body{max-width:900px;margin:2rem auto;padding:0 1rem;color:#222;background:#fff;font:14px/1.55 system-ui,sans-serif}
+  h1{margin-bottom:.25rem;font-size:1.6rem}p{color:#555}button{padding:.5rem .9rem;color:#111;background:#f2f2f2;border:1px solid #888;border-radius:5px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:wait}#results{padding:0;list-style:none}#results li{padding:.4rem .5rem;border-bottom:1px solid #ddd;overflow-wrap:anywhere}
+  .pass::before{content:'PASS · ';font-weight:bold}.fail::before{content:'FAIL · ';font-weight:bold}.skip::before{content:'SKIP · ';font-weight:bold}
+  .fail{color:#a11c1c}.skip{color:#765b00}pre,textarea{width:100%;border:1px solid #ccc;padding:.8rem;background:#fafafa;font:12px/1.5 ui-monospace,Consolas,monospace}
+  pre{white-space:pre-wrap;overflow-wrap:anywhere}textarea{resize:vertical;min-height:160px}#probe{position:fixed;left:-1000px;top:0;width:64px;height:48px;pointer-events:none}
+</style>
+</head>
+<body>
+<h1>Shader Studio · 실제 WebGL2 GPU 검증</h1>
+<p>앱과 분리된 Canvas에서 실제 GLSL 컴파일, GPU 렌더링, 색상·채널·Uniform·텍스처·복구를 검사합니다. 앱 소스/설정은 변경하지 않으며, 검사 중 IndexedDB를 메모리 저장소로 격리하여 기존 이미지 데이터를 보호합니다.</p>
+<p><button id="run">전체 GPU 테스트 실행</button> <strong id="summary">준비됨</strong></p>
+<ul id="results" aria-live="polite"></ul>
+<h2>브라우저 / GPU 환경</h2>
+<pre id="environment">WebGL2 연결 전</pre>
+<h2>전달할 결과</h2>
+<p>검사가 끝나면 <b>결과 복사</b> 버튼을 누르고 채팅에 붙여넣어 주세요. 복사가 막히면 아래 칸을 직접 선택해 복사하면 됩니다. FAIL이 있다면 F12 콘솔의 오류도 함께 알려 주세요.</p>
+<button id="copy" disabled>결과 복사</button>
+<textarea id="report" aria-label="GPU 검사 결과" readonly></textarea>
+<canvas id="probe" width="64" height="48"></canvas>
+<p>ES 모듈을 읽으므로 로컬 HTTP 서버(<code>http://localhost</code>)에서 열어야 합니다. 검사 중 이 탭은 화면에 표시된 상태로 유지하세요. GPU가 지원하지 않는 선택적 확장 검사만 SKIP으로 표기합니다. 검사는 앱 편집기의 실제 UI 조작까지 보장하지 않습니다.</p>
+<script src="gpu-validation.js"></script>
+</body>
+</html>

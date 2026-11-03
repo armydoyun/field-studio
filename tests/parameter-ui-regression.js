@@ -1,0 +1,81 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {fixture}=require('./logic-regression');
+let passed=0,failed=0;
+async function test(name,fn){const f=fixture();let ui;try{
+  const Node=f.canvas.constructor;Node.prototype.querySelector=()=>new Node();Node.prototype.querySelectorAll=()=>[];
+  Node.prototype.setAttribute=function(k,v){(this.attrs??={})[k]=v;};Node.prototype.removeAttribute=function(k){delete this.attrs?.[k];};
+  f.document.querySelectorAll=()=>[];
+  for(const id of ['uniformType','uniformValue','uniformMin','uniformMax','uniformStep','uniformName','uniformSearch'])f.document.getElementById(id);
+  ui=f.load('ui').mount(f.renderer,{getCamera:()=>null,resetCamera(){}},f.settings);
+  const n=id=>f.nodes.get(id),row=()=>n('uniformList').children[0];
+  await fn(f,n,row);passed++;console.log('PASS',name);
+}catch(e){failed++;console.error('FAIL',name,e.stack);}finally{ui?.dispose();f.dispose();}}
+(async()=>{
+await test('Parameter deletion uses the shared SVG mask and retains its accessible name',async(f,n,row)=>{
+  f.renderer.defineUniform('uAmount','float',1);await n('uniformSearch').dispatchEvent({type:'input'});
+  const remove=row().children[0].children[1];assert.equal(remove.className,'remove-uniform glyph-icon icon-close');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
+  await remove.click();assert.equal(f.renderer.getUserUniforms().length,0);
+});
+await test('Empty parameter list explains how to start',async(f,n,row)=>{assert.match(row().textContent,/추가|Starter/);assert.equal(n('uniformCount').textContent,'0 / 64');});
+await test('Adding a parameter clears stale search and ignores hidden scalar bounds',async(f,n)=>{
+  n('uniformMin').value='0';n('uniformType').value='vec3';await n('uniformType').dispatchEvent({type:'change'});
+  n('uniformName').value='uTint';n('uniformSearch').value='missing';
+  await n('uniformForm').dispatchEvent({type:'submit'});
+  assert.equal(f.renderer.getUserUniforms()[0].name,'uTint');assert.equal(n('uniformSearch').value,'');assert.equal(n('uniformEditor').open,false);
+});
+await test('Reserved built-in rejection retains form data and explains failure',async(f,n)=>{
+  n('uniformType').value='float';n('uniformValue').value='1';n('uniformName').value='uTime';await n('uniformForm').dispatchEvent({type:'submit'});
+  assert.equal(f.renderer.getUserUniforms().length,0);assert.equal(n('uniformName').value,'uTime');assert.match(n('uiError').textContent,/전용/);
+});
+await test('Vector changes preserve components changed externally after row render',async(f,n,row)=>{
+  f.renderer.defineUniform('uVector','vec3',[1,2,3]);await n('uniformSearch').dispatchEvent({type:'input'});
+  f.renderer.setUniform('uVector',[4,5,6]);const x=row().children[1].children[0].children[1];x.value='7';await x.dispatchEvent({type:'change'});
+  assert.deepEqual(Array.from(f.renderer.getUserUniforms()[0].value),[7,5,6]);
+});
+await test('Empty vector component cannot silently become zero',async(f,n,row)=>{
+  f.renderer.defineUniform('uVector','vec2',[1,2]);await n('uniformSearch').dispatchEvent({type:'input'});
+  const x=row().children[1].children[0].children[1];x.value='';await x.dispatchEvent({type:'change'});
+  assert.equal(f.renderer.getUserUniforms()[0].value[0],1);assert.equal(x.value,'1');assert.equal(x.attrs['aria-invalid'],'true');
+});
+await test('Slider and numeric field stay synchronized and reject invalid integers',async(f,n,row)=>{
+  f.renderer.defineUniform('uCount','int',2,{min:0,max:10,step:1});await n('uniformSearch').dispatchEvent({type:'input'});
+  const [range,number]=row().children[1].children;range.value='5';await range.dispatchEvent({type:'input'});assert.equal(number.value,'5');
+  number.value='1.5';await number.dispatchEvent({type:'change'});assert.equal(number.value,'5');assert.equal(f.renderer.getUserUniforms()[0].value,5);
+});
+await test('Delete can restore the last parameter including value and slider options',async(f,n,row)=>{
+  f.renderer.defineUniform('uGain','float',.7,{min:0,max:1,step:.1});await n('uniformSearch').dispatchEvent({type:'input'});
+  await row().children[0].children[1].click();assert.equal(f.renderer.getUserUniforms().length,0);assert.equal(n('undoUniform').hidden,false);
+  await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms()[0].value,.7);assert.equal(f.renderer.getUserUniforms()[0].options.step,.1);assert.equal(n('undoUniform').hidden,true);
+});
+await test('Failed deletion retains parameter and offers no false undo',async(f,n,row)=>{
+  f.renderer.defineUniform('uGain','float',.7);await n('uniformSearch').dispatchEvent({type:'input'});f.gl.getProgramParameter=()=>false;
+  await row().children[0].children[1].click();assert.equal(f.renderer.getUserUniforms().length,1);assert.notEqual(n('undoUniform').hidden,false);assert(n('uiError').textContent);
+});
+await test('Project switch clears search and previous-project deletion undo',async(f,n,row)=>{
+  f.renderer.defineUniform('uGain','float',.7);await n('uniformSearch').dispatchEvent({type:'input'});await row().children[0].children[1].click();
+  n('uniformSearch').value='missing';f.studio.exampleFeedback();await f.document.dispatchEvent({type:'shader-settings-applied'});
+  assert.equal(n('uniformSearch').value,'');assert.equal(n('undoUniform').hidden,true);await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms().length,0);
+});
+await test('Editor Parameters button opens the parameter view and focuses search',async(f,n)=>{
+  await n('studioParameters').click();assert.equal(f.document.activeElement,n('uniformSearch'));
+});
+await test('Deletion undo captures the latest external value rather than stale displayed value',async(f,n,row)=>{
+  f.renderer.defineUniform('uGain','float',.1);await n('uniformSearch').dispatchEvent({type:'input'});f.renderer.setUniform('uGain',.9);
+  await row().children[0].children[1].click();await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms()[0].value,.9);
+});
+await test('Malformed comma vectors are rejected without adding a zero component',async(f,n)=>{
+  n('uniformType').value='vec3';n('uniformName').value='uVector';n('uniformValue').value='1,2,';
+  await n('uniformForm').dispatchEvent({type:'submit'});assert.equal(f.renderer.getUserUniforms().length,0);assert(n('uiError').textContent);
+});
+await test('Boolean parameter uses an accessible switch with explicit true/false text',async(f,n,row)=>{
+  f.renderer.defineUniform('uEnabled','bool',false);await n('uniformSearch').dispatchEvent({type:'input'});
+  const label=row().children[1],[input,text]=label.children;assert.equal(label.className,'uniform-switch');assert.equal(input.type,'checkbox');assert.equal(input.attrs.role,'switch');assert.equal(input.checked,false);assert.match(text.textContent,/false/);
+  input.checked=true;await input.dispatchEvent({type:'change'});assert.equal(f.renderer.getUserUniforms()[0].value,true);assert.match(text.textContent,/true/);
+  f.renderer.setUniform=()=>{throw Error('forced failure');};input.checked=false;await input.dispatchEvent({type:'change'});assert.equal(input.checked,true);assert.match(text.textContent,/true/);
+});
+await test('Render panel example shortcut opens the current-frame pipeline',async(f,n)=>{
+  f.window.shaderStudio=f.studio;await n('bufferDemo').click();const p=f.studio.getProject();assert.equal(p.passes.length,2);assert.equal(Object.keys(p.passes[0].channels).length,0);assert.equal(p.passes[1].channels[0].frame,'current');
+});
+console.log(`Parameter UI: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
+})();
