@@ -111,6 +111,13 @@ with sync_playwright() as p:
     check(dblclick_with(5,6)==[5,6],'double-click on whitespace only keeps the selection')
     page.mouse.dblclick(*[v for v in js("() => {const r=document.getElementById('studioCode').getBoundingClientRect();return [r.left+12+7.2*8+3, r.top+12+8]}")])
     check(code.input_value()[slice(*pos())].strip()==code.input_value()[slice(*pos())],'a real double-click never ends with whitespace')
+    # 두 번째 클릭의 mousedown에서 바로 단어만 고른다(공백이 잠깐 선택됐다가 바뀌는 깜빡임 없음).
+    def second_mousedown(p):
+        return js("p=>{const e=document.getElementById('studioCode');e.focus();e.setSelectionRange(p,p);const ev=new MouseEvent('mousedown',{bubbles:true,cancelable:true,detail:2,button:0});e.dispatchEvent(ev);return [ev.defaultPrevented,e.selectionStart,e.selectionEnd];}",p)
+    setup('float value = 1.0;',0)
+    check(second_mousedown(8)==[True,6,11],'second mousedown selects the word before the browser paints its own selection')
+    check(second_mousedown(11)==[True,6,11],'caret just after the word still selects that word')
+    check(second_mousedown(12)[0]==False,'double-click on spaces/punctuation is left to the browser')
     check(errors==[],f'no Chromium page exceptions: {errors}')
     print(f'PASS all {n[0]} editor power-feature checks')
     browser.close()

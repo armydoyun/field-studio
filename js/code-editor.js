@@ -441,7 +441,17 @@ import * as Highlight from "./glsl-highlight.js";
       multi.active = active; applyMulti((r, i) => ({from:r.start, to:r.end, text:i === active ? textarea.value.slice(r.start, r.end) : data}));
     });
     listen(textarea, "mousedown", endMulti);
-    // 더블클릭: Windows의 Chrome·Edge는 단어 뒤 공백까지 함께 선택한다. 코드에서는 단어만 고르는 편이 자연스러우므로 앞뒤 공백을 덜어 낸다.
+    // 더블클릭: Windows의 Chrome·Edge는 단어 뒤 공백까지 함께 선택한다. 선택을 그린 뒤에 고치면 공백이 잠깐 보였다 사라지므로,
+    // 두 번째 클릭의 mousedown에서 브라우저의 단어 선택을 막고 처음부터 이름(영문·숫자·_)만 고른다. 첫 클릭이 이미 커서를 그 자리에 두었다.
+    // 공백·기호 위의 더블클릭은 브라우저 기본 동작에 맡긴다.
+    listen(textarea, "mousedown", event => {
+      if(event.detail !== 2 || event.button !== 0 || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+      const src = textarea.value, p = textarea.selectionStart; if(textarea.selectionEnd !== p) return;
+      if(!/\w/.test(src[p] || "") && !/\w/.test(src[p-1] || "")) return;
+      let a = p, b = p; while(a > 0 && /\w/.test(src[a-1])) a--; while(b < src.length && /\w/.test(src[b])) b++;
+      event.preventDefault(); textarea.focus({preventScroll:true}); textarea.setSelectionRange(a, b, "forward"); updateCursor();
+    });
+    // 다른 경로(터치 등)로 들어온 더블클릭 선택의 안전장치: 앞뒤 공백을 덜어 낸다.
     listen(textarea, "dblclick", () => {
       const src = textarea.value, from = textarea.selectionStart, to = textarea.selectionEnd; let a = from, b = to;
       if(!src.slice(a, b).trim()) return;   // 공백만 골랐으면 그대로 둔다
