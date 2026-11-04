@@ -257,7 +257,7 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-code-label .studio-state { flex-shrink:0;padding:2px 7px;border:1px solid var(--line-strong);font:10px/1.5 var(--mono); }
 .studio-editor-tools { display:flex;align-items:center;flex-wrap:wrap;flex-shrink:0;border-bottom:1px solid var(--line); }
 .studio-editor-tools button {padding:5px 8px; }
-#studioFunctions { width:174px;max-width:100%;min-width:0; }
+#studioFunctions { width:auto;max-width:180px;min-width:0; }
 #studioFontSize { color:var(--muted);font:10px/1.5 var(--mono);white-space:nowrap; }
 .studio-editor-frame { display:flex;flex:1;min-width:0;min-height:0;overflow:hidden; }
 .studio-bottom { display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-top:1px solid var(--line);font:10px/1.5 var(--mono); }
@@ -316,7 +316,7 @@ dialog { margin:auto;padding:0;border:1px solid #556986;color:var(--text); }
  .studio-run-tools { gap:6px;width:100%; }
  .studio-primary span { display:none; }
  #studioChannels { grid-template-columns:repeat(2,minmax(0,1fr)); }.studio-channel { grid-template-columns:minmax(0,1fr);gap:6px; }
- .studio-editor-tools { gap:6px;padding:6px 8px; }#studioFunctions { width:140px; }
+ .studio-editor-tools { gap:6px;padding:6px 8px; }#studioFunctions { max-width:150px; }
 .studio-code-label,.studio-bottom { padding-inline:8px; }
  .studio-dialog-head { gap:10px;padding:16px; }.studio-dialog-field { margin:0 16px 16px; }.studio-dialog-actions { padding:12px 16px; }
  .help-body { padding:16px; }.help-list { grid-template-columns:minmax(0,1fr);gap:0; }.help-list>span { min-height:0;padding-bottom:2px;border-bottom:0; }.help-list>kbd { justify-self:start;min-height:28px;padding-top:2px; }
@@ -545,7 +545,16 @@ kbd { border-color:var(--line-strong);border-bottom-width:2px;background:var(--e
 .studio-code-label .studio-preview-target { flex:0 1 auto;min-width:0;overflow:hidden;color:var(--faint);font-weight:500;text-overflow:ellipsis;white-space:nowrap; }
 .studio-code-label .studio-editor-tools { flex:0 0 auto;flex-wrap:nowrap;gap:2px;margin-left:auto;padding:0;border:0;background:none; }
 .studio-code-label .studio-editor-tools>.glyph-icon,.studio-menu>summary { flex:0 0 30px;width:30px;min-height:30px;height:30px;padding:0;border-radius:var(--radius-sm); }
-.studio-code-label #studioFunctions { width:124px;min-height:30px;margin-right:4px;padding:3px 6px;font:11px/1.4 var(--mono); }
+/* 현재 위치 표시(breadcrumb): 커서가 들어 있는 함수 이름 · 누르면 @ 함수·변수 팔레트 */
+.studio-code-label #studioFunctions.studio-crumb { display:inline-flex;align-items:center;gap:5px;width:auto;max-width:170px;min-width:0;height:30px;min-height:30px;margin-right:4px;padding:0 6px 0 8px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:500 11px/1 var(--mono);cursor:pointer; }
+.studio-crumb:hover,.studio-crumb[aria-expanded="true"] { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
+.studio-crumb.is-inside { color:var(--text-soft); }
+.studio-crumb-kind { flex:0 0 auto;color:var(--faint);font-weight:700; }
+.studio-crumb.is-inside .studio-crumb-kind { color:var(--accent-strong); }
+.studio-crumb-name { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.studio-crumb-chevron { flex:0 0 auto;width:8px;height:8px;background:currentColor;opacity:.7;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
 .studio-menu { position:relative; }
 .studio-menu>summary { display:inline-flex;align-items:center;justify-content:center;list-style:none;color:var(--muted);cursor:pointer; }
 .studio-menu>summary::-webkit-details-marker { display:none; }
@@ -646,6 +655,14 @@ kbd { border-color:var(--line-strong);border-bottom-width:2px;background:var(--e
 .studio-palette-list button { display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;min-height:30px;padding:4px 10px;border:0;border-radius:6px;background:transparent;color:var(--text-soft);font:13px/1.4 var(--sans);text-align:left; }
 .studio-palette-list button:hover { background:var(--surface-hover); }
 .studio-palette-list button.is-selected { background:var(--accent-soft);color:var(--text); }
+/* @ 함수·변수 목록: 종류 아이콘 칸을 앞에 둔다 */
+.studio-palette-list button.has-kind { grid-template-columns:18px minmax(0,auto) minmax(0,1fr); }
+.palette-kind { display:grid;place-items:center;width:18px;height:18px;border-radius:4px;background:var(--surface);color:var(--muted);font:700 10px/1 var(--mono); }
+.palette-kind.is-function { background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent-strong); }
+.palette-kind.is-uniform { background:#6fe0e61f;color:#6fe0e6; }
+.palette-kind.is-output { background:#9fe0791f;color:#9fe079; }
+.palette-kind.is-define { background:#f3c46e1f;color:#f3c46e; }
+.palette-kind.is-struct { background:#ff9fd21f;color:#ff9fd2; }
 .palette-hint { min-width:0;overflow:hidden;color:var(--faint);font:11px/1.4 var(--mono);text-overflow:ellipsis;white-space:nowrap; }
 .studio-palette-list kbd { font-size:10px; }
 .palette-empty { margin:6px 10px;color:var(--muted);font-size:12px; }
@@ -688,7 +705,7 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:#05060acc;-webkit-
  .studio-window-tools>* { flex-shrink:0;white-space:nowrap; }
  #studioHide { position:sticky;right:0;background:var(--panel); }
  /* 코드 머리줄은 파일 이름·상태와 탐색 도구가 들어가지 않으면 두 줄로 */
- .studio-code-label { flex-wrap:wrap;min-height:28px;padding-left:8px; }.studio-code-label #studioFunctions { width:100px; }
+ .studio-code-label { flex-wrap:wrap;min-height:28px;padding-left:8px; }.studio-code-label #studioFunctions.studio-crumb { max-width:110px; }
  .studio-menu-panel { width:min(264px,calc(100vw - 24px)); }
  .studio-pass-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .studio-editor-frame { min-height:200px; }

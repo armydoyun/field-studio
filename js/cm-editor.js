@@ -134,16 +134,30 @@ import * as Features from "./cm-glsl-features.js";
       const main = state.selection.main, line = state.doc.lineAt(main.head), count = state.selection.ranges.length;
       if(position) position.textContent = `Ln ${line.number}, Col ${main.head - line.from + 1}${count > 1 ? ` · 다중 선택 ${count}개` : main.empty ? "" : ` · ${main.to - main.from}자 선택`}`;
     };
-    let functionsFor = null;
+    // ---- 현재 위치 표시(breadcrumb): 커서가 들어 있는 최상위 함수 이름. 누르면 @ 함수·변수 팔레트 ----
+    // 함수 범위(정의 줄 시작 ~ 짝 '}')는 문서가 바뀔 때만 다시 계산하고, 커서가 움직이면 범위만 찾아 이름을 바꾼다.
+    let functionsFor = null, functionRanges = [];
     const updateFunctions = () => {
-      if(!symbols) return; const src = view.state.doc.toString(); if(src === functionsFor) return; functionsFor = src;
-      const clean = cleanOf(src), entries = []; let depth = 0, pos = 0, line = 1;
+      const src = view.state.doc.toString(); if(src === functionsFor) return; functionsFor = src;
+      const clean = cleanOf(src), ranges = []; let depth = 0, pos = 0;
       for(const m of clean.matchAll(/\b([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*\(([^;{}]*)\)\s*\{/g)) {
-        for(; pos < m.index; pos++) { const ch = clean[pos]; if(ch === "{") depth++; else if(ch === "}") depth = Math.max(0, depth-1); else if(ch === "\n") line++; }
-        if(!depth) entries.push({name:m[2], params:m[3].trim().replace(/\s+/g, " "), line});
+        if(m.index < pos) continue;   // 앞 함수 본문 안(중첩 블록)
+        for(; pos < m.index; pos++) { const ch = clean[pos]; if(ch === "{") depth++; else if(ch === "}") depth = Math.max(0, depth-1); }
+        if(depth) continue;
+        let end = m.index + m[0].length, level = 0;
+        for(; end < clean.length; end++) { const ch = clean[end]; if(ch === "{") level++; else if(ch === "}") { if(!level) break; level--; } }
+        ranges.push({name:m[2], from:m.index, to:end}); pos = Math.min(clean.length, end + 1);
       }
-      symbols.replaceChildren(new Option(`ƒ 함수 (${entries.length})`, ""), ...entries.map(({name, params, line}) => new Option(`${name}(${params.slice(0,38)}${params.length > 38 ? "…" : ""}) · Ln ${line}`, String(line))));
-      symbols.value = ""; symbols.disabled = !entries.length;
+      functionRanges = ranges; updateCrumb(view.state);
+    };
+    const functionAt = pos => functionRanges.find(range => pos >= range.from && pos <= range.to + 1) || null;
+    const crumbName = symbols?.querySelector(".studio-crumb-name"), crumbKind = symbols?.querySelector(".studio-crumb-kind");
+    const updateCrumb = state => {
+      if(!symbols || !crumbName) return; const current = functionAt(state.selection.main.head);
+      const text = current ? `${current.name}()` : functionRanges.length ? `함수 ${functionRanges.length}개` : "함수 없음";
+      if(crumbName.textContent !== text) crumbName.textContent = text;
+      symbols.classList.toggle("is-inside", !!current); if(crumbKind) crumbKind.textContent = current ? "ƒ" : "≡";
+      symbols.title = current ? `지금 ${current.name}() 안 · 눌러서 함수·변수로 이동 (Ctrl+Shift+O)` : "함수·변수로 이동 (Ctrl+Shift+O)";
     };
     const editorTheme = CM.EditorView.theme({
       "&":{height:"100%", backgroundColor:"var(--sunken)", color:"#d6dbe8"},
@@ -171,7 +185,7 @@ import * as Features from "./cm-glsl-features.js";
       }
       if(update.selectionSet && !update.transactions.some(tr => tr.annotation(External))) textarea.dispatchEvent(new Event("select"));
       if(update.docChanged || update.selectionSet) updateStatus(update.state);
-      if(update.docChanged) updateFunctions();
+      if(update.docChanged) updateFunctions(); else if(update.selectionSet) updateCrumb(update.state);
     };
     // 키 입력은 먼저 textarea로 알린다(studio의 Ctrl+Z/Y·Alt+PageUp 등). studio가 처리하면 CodeMirror는 건너뛴다.
     const forwardKeys = CM.Prec.highest(CM.EditorView.domEventHandlers({
@@ -300,10 +314,13 @@ import * as Features from "./cm-glsl-features.js";
       const value = paletteInput.value;
       if(value.startsWith(":")) { const line = Number(value.slice(1)); return [{label:line ? `${line}번째 줄로 이동` : `줄 번호 입력 (1–${view.state.doc.lines})`, run:() => line && goToLine(line)}]; }
       if(value.startsWith("@")) {
+        // 문서 순서대로, 종류 아이콘(ƒ 함수 · U uniform · O out · # define · S struct)과 함께. 고르는 동안 그 위치를 미리 보여 준다.
         const sym = symbolsOf(view.state.doc.toString()), query = value.slice(1).trim();
-        const items = [...sym.functions.map(f => ({label:f.name, hint:`ƒ ${f.ret} (${f.params}) · Ln ${f.line}`, run:() => goToLine(f.line)})),
-          ...sym.variables.filter(v => v.uniform || v.output).map(v => ({label:v.name, hint:`${v.uniform ? "uniform" : "out"} ${v.type} · Ln ${v.line}`, run:() => goToLine(v.line)})),
-          ...sym.defines.map(d => ({label:d.name, hint:`#define · Ln ${d.line}`, run:() => goToLine(d.line)}))];
+        const symbol = (kind, name, offset, line, hint) => ({label:name, kind, offset, line, hint:`${hint} · Ln ${line}`, symbol:true, run:() => jumpTo(offset, name.length)});
+        const items = [...sym.functions.map(f => symbol("function", f.name, f.offset, f.line, `${f.ret} (${f.params})`)),
+          ...[...sym.structs].map(([name, s]) => symbol("struct", name, s.offset, s.line, `struct · 필드 ${s.fields.length}개`)),
+          ...sym.variables.filter(v => v.uniform || v.output).map(v => symbol(v.uniform ? "uniform" : "output", v.name, v.offset, v.line, `${v.uniform ? "uniform" : "out"} ${v.type}`)),
+          ...sym.defines.map(d => symbol("define", d.name, d.offset, d.line, `#define${d.value ? ` ${d.value.slice(0, 24)}` : ""}`))].sort((a, b) => a.offset - b.offset);
         return {items, query};
       }
       return {items:[...commands, ...builtInCommands()].map(c => ({label:c.label, hint:c.key || "", run:c.run})), query:value.trim()};
@@ -312,21 +329,51 @@ import * as Features from "./cm-glsl-features.js";
       const entries = paletteEntries(), items = Array.isArray(entries) ? entries : entries.items, query = Array.isArray(entries) ? "" : entries.query;
       paletteItems = query ? items.map(item => ({item, m:fuzzy(item.label, query)})).filter(x => x.m).sort((a, b) => b.m.score - a.m.score).map(x => x.item) : items;
       paletteChoice = Math.min(paletteChoice, Math.max(0, paletteItems.length - 1));
+      const KIND_ICON = {function:"ƒ", struct:"S", uniform:"U", output:"O", define:"#"}, KIND_LABEL = {function:"함수", struct:"구조체", uniform:"uniform", output:"출력", define:"#define"};
       paletteList.replaceChildren(...paletteItems.map((item, i) => {
-        const button = document.createElement("button"); button.type = "button"; button.dataset.index = i; button.className = i === paletteChoice ? "is-selected" : ""; button.setAttribute("role", "option");
+        const button = document.createElement("button"); button.type = "button"; button.dataset.index = i; button.className = `${i === paletteChoice ? "is-selected" : ""}${item.kind ? " has-kind" : ""}`.trim(); button.setAttribute("role", "option");
+        button.setAttribute("aria-selected", String(i === paletteChoice));
+        if(item.kind) { const kind = document.createElement("span"); kind.className = `palette-kind is-${item.kind}`; kind.textContent = KIND_ICON[item.kind]; kind.title = KIND_LABEL[item.kind]; button.append(kind); }
         const label = document.createElement("span"); label.textContent = item.label; const hint = document.createElement("span"); hint.className = "palette-hint"; hint.textContent = item.hint || "";
         button.append(label, hint); return button;
       }));
       if(!paletteItems.length) { const empty = document.createElement("p"); empty.className = "palette-empty"; empty.textContent = "일치하는 항목이 없습니다"; paletteList.append(empty); }
+      paletteList.querySelector(".is-selected")?.scrollIntoView({block:"nearest"});
+      previewChoice();
     };
-    const openPalette = (prefix = "") => { palette.hidden = false; paletteInput.value = prefix; paletteChoice = 0; renderPalette(); paletteInput.focus(); };
-    const closePalette = (refocus = true) => { if(palette.hidden) return; palette.hidden = true; if(refocus) view.focus(); };
-    const runPaletteItem = index => { const item = paletteItems[index]; if(!item) return; closePalette(); item.run?.(); };
+    // 이름 위치로 이동: 이름을 선택하고 화면 가운데로.
+    const jumpTo = (offset, length = 0) => {
+      const at = Math.min(offset, view.state.doc.length); view.focus();
+      view.dispatch({selection:{anchor:at, head:Math.min(at + length, view.state.doc.length)}, effects:CM.EditorView.scrollIntoView(at, {y:"center"}), annotations:External.of(true)});
+    };
+    // @ 목록에서 고르는 동안 편집기 포커스는 그대로 팔레트에 두고 위치만 미리 보여 준다. Esc는 열기 전 커서·스크롤로 되돌린다.
+    let paletteOrigin = null;
+    const previewChoice = () => {
+      const item = paletteItems[paletteChoice]; if(!paletteOrigin || !item?.symbol) return;
+      view.dispatch({selection:{anchor:item.offset, head:item.offset + item.label.length}, effects:CM.EditorView.scrollIntoView(item.offset, {y:"center"}), annotations:External.of(true)});
+    };
+    const restoreOrigin = () => {
+      if(!paletteOrigin) return; const {selection, top, left} = paletteOrigin; paletteOrigin = null;
+      view.dispatch({selection, annotations:External.of(true)}); setScroll("scrollTop", top); setScroll("scrollLeft", left);
+    };
+    const openPalette = (prefix = "") => {
+      palette.hidden = false; paletteInput.value = prefix; paletteChoice = 0;
+      paletteOrigin = {selection:view.state.selection, top:view.scrollDOM.scrollTop, left:view.scrollDOM.scrollLeft};
+      if(prefix === "@") {   // 지금 커서가 들어 있는 함수(없으면 커서 바로 앞의 항목)를 먼저 고른다
+        const head = view.state.selection.main.head, current = functionAt(head), list = paletteEntries().items;
+        const index = current ? list.findIndex(item => item.kind === "function" && item.offset >= current.from && item.offset <= current.to) : list.reduce((best, item, i) => item.offset <= head ? i : best, 0);
+        paletteChoice = Math.max(0, index);
+      }
+      symbols?.setAttribute("aria-expanded", String(prefix === "@"));
+      renderPalette(); paletteInput.focus(); paletteInput.setSelectionRange(paletteInput.value.length, paletteInput.value.length);
+    };
+    const closePalette = (refocus = true) => { if(palette.hidden) return; palette.hidden = true; paletteOrigin = null; symbols?.setAttribute("aria-expanded", "false"); if(refocus) view.focus(); };
+    const runPaletteItem = index => { const item = paletteItems[index]; if(!item) return; paletteOrigin = null; closePalette(); item.run?.(); };
     listen(paletteInput, "input", () => { paletteChoice = 0; renderPalette(); });
     listen(paletteInput, "keydown", event => {
       if(event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); if(paletteItems.length) { paletteChoice = (paletteChoice + (event.key === "ArrowDown" ? 1 : -1) + paletteItems.length) % paletteItems.length; renderPalette(); } }
       else if(event.key === "Enter") { event.preventDefault(); runPaletteItem(paletteChoice); }
-      else if(event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closePalette(); }
+      else if(event.key === "Escape") { event.preventDefault(); event.stopPropagation(); restoreOrigin(); closePalette(); }
     });
     listen(paletteInput, "blur", () => setTimeout(() => { if(!palette.contains(document.activeElement)) closePalette(false); }, 0));
     listen(paletteList, "pointerdown", event => event.preventDefault());
@@ -340,7 +387,8 @@ import * as Features from "./cm-glsl-features.js";
     listen($("studioFoldAll"), "click", () => { CM.foldAll(view); view.focus(); }); listen($("studioUnfoldAll"), "click", () => { CM.unfoldAll(view); view.focus(); });
     listen($("studioLintPanel"), "click", () => CM.openLintPanel(view)); listen($("studioRename"), "click", () => features.renameSymbol(view));
     listen($("studioDefinition"), "click", () => features.goToDefinition(view));
-    listen(symbols, "change", () => { if(symbols.value) goToLine(Number(symbols.value)); symbols.value = ""; });
+    listen(symbols, "click", () => palette.hidden ? openPalette("@") : closePalette());
+    listen(symbols, "mousedown", event => { if(!palette.hidden) event.preventDefault(); });   // 열린 팔레트의 blur 닫기와 겹쳐 다시 열리지 않도록
     listen($("studioZoomIn"), "click", () => { fontSize = Math.min(20, fontSize + 1); applyPresentation(); });
     listen($("studioZoomOut"), "click", () => { fontSize = Math.max(10, fontSize - 1); applyPresentation(); });
     listen($("studioLineWrap"), "click", () => { wrap = !wrap; applyPresentation(); });
