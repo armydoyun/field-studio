@@ -938,7 +938,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const startProject = (next, users = []) => proceed(confirmReplace(), () => replaceProject(next, users));
   const exampleRaymarch = () =>
     startProject(
-      { image: Shader.raymarch, passes: [], imageChannels: {} },
+      { image: Shader.raymarch, passes: Shader.raymarchPasses, imageChannels: Shader.raymarchChannels },
       Shader.rayUniforms.map(([name, type, value, options]) => ({ name, type, value, options: options || {} }))
     );
   const examplePipeline = () => startProject(Examples.pipelineProject());

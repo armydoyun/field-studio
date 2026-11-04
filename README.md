@@ -67,7 +67,7 @@ js/
   ui.js               # 설정 패널(렌더링 · 파라미터 · 작업공간 탭)
   profiler.js         # 성능 탭: 프레임·패스별 GPU 시간 · 버퍼 뷰어 · 픽셀 값 · Uniform 진단
   annotations.js      # GLSL 주석 @range/@color 파서
-  input.js            # 포인터·키 입력 → 카메라 Uniform
+  input.js            # 뷰포트 포인터·키 입력 → 키보드 채널 전달
   settings.js         # 렌더링 설정 저장
   storage.js          # localStorage 창구 (실패를 삼키지 않음)
   theme.js            # 라이트·다크·시스템 테마
