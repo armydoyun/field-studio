@@ -631,7 +631,7 @@ void main() {
       } else if(event.altKey && ["PageUp","PageDown"].includes(event.key)) {
         event.preventDefault();const tabs=["Image",...project.passes.map(p=>p.name)],index=tabs.indexOf(selected);
         select(tabs[(index+(event.key==="PageDown"?1:-1)+tabs.length)%tabs.length]);$("studioCode").focus();
-      } else if((event.key==="Enter" || event.key.toLowerCase()==="s")&&(event.ctrlKey||event.metaKey)) {
+      } else if(((event.key==="Enter" && !event.shiftKey) || event.key.toLowerCase()==="s")&&(event.ctrlKey||event.metaKey)) {   // Ctrl+Shift+Enter는 편집기의 '위에 줄 삽입'
         event.preventDefault();rememberEditor();apply();
       }
     }); on($("studioRun"),"click",()=>{rememberEditor();apply();});
@@ -796,17 +796,20 @@ void main() {
       area.value=src;area.setSelectionRange(caret,caret);area.dispatchEvent(new Event("input",{bubbles:true}));return done();
     };
     // 명령 팔레트(Ctrl+Shift+P)에 편집기 바깥 기능도 등록한다. 대부분 기존 버튼을 누르는 것과 같다.
-    const press = (label, id, key) => ({label, key, run:() => { const button=$(id); if(button && !button.disabled) button.click(); }});
+    // bind: 편집기 안에서 이 명령을 실행할 VS Code식 키(CodeMirror 키 이름). key는 팔레트에 보이는 표기.
+    const press = (label, id, key, bind) => ({label, key, bind, run:() => { const button=$(id); if(button && !button.disabled) button.click(); }});
     const stepPass = step => { const tabs=[...$("studioPassTabs").children], at=tabs.findIndex(tab=>tab.classList.contains("is-active")); tabs[(at+step+tabs.length)%tabs.length]?.click(); };
     editor.registerCommands?.([
       press("셰이더 실행 (적용)","studioRun","Ctrl+Enter"), press("되돌리기","studioUndo","Ctrl+Z"), press("다시 실행","studioRedo","Ctrl+Y"),
       {label:"자동 적용 켜기/끄기", run:() => $("studioLive").click()},
       press("버퍼 패스 추가","studioAdd"), {label:"다음 패스로", key:"Alt+PageDown", run:() => stepPass(1)}, {label:"이전 패스로", key:"Alt+PageUp", run:() => stepPass(-1)},
-      press("재생 / 일시정지","studioPause"), press("시간·프레임 초기화","studioResetFrames"), press("도구 서랍 열기/닫기","studioToolsToggle"),
-      press("집중 모드 전환","studioMaximize"), press("편집기 배치 바꾸기 (오른쪽 ↔ 아래)","studioLayout"), press("편집기 닫기","studioHide","E"),
+      press("재생 / 일시정지","studioPause"), press("시간·프레임 초기화","studioResetFrames"), press("도구 서랍 열기/닫기","studioToolsToggle","Ctrl+B","Mod-b"),
+      press("집중 모드 전환","studioMaximize","Ctrl+K Z",["Mod-k z","Mod-k Z"]), press("편집기 배치 바꾸기 (오른쪽 ↔ 아래)","studioLayout","Ctrl+\\","Mod-\\"), press("편집기 닫기","studioHide","E"),
       press("코드 조각 모음 열기","studioSnippets"), press("파라미터 패널 열기","studioParameters"), press("도움말 · 단축키","studioHelp","?"),
       press(".frag 파일로 저장","studioSaveGLSL"), press(".frag 파일 열기","studioOpenGLSL"), press("전체 프로젝트 저장 (Pack)","studioExportPack"), press("Pack 열기","studioImportPack"),
       press("이미지 파일 불러오기","studioTextureAdd"), press("새 프로젝트 (기본 장면)","studioReset")]);
+    // Ctrl+P: VS Code의 '파일로 이동' 자리에 패스(Image · Buffer A…) 목록을 둔다.
+    editor.setFiles?.(() => [...$("studioPassTabs").children].map((tab, index) => ({label:tab.textContent, hint:index ? "버퍼 패스" : "최종 출력", current:tab.classList.contains("is-active"), run:() => tab.click()})));
     return {open,close,toggle,apply,setProject,getPlaybackState,togglePlayback,loadFromRenderer,removeAllPasses,exampleRaymarch,examplePipeline,exampleFeedback,loadExample,insertSnippet,insertCode,getEditorSource:()=>$("studioCode").value,
       undo:()=>historyMove(true),redo:()=>historyMove(false),getProject:()=>copy(project),exportPack,importPack,dispose:()=>{
         disposed=true;if(timer)clearTimeout(timer);if(draftTimer)clearTimeout(draftTimer);

@@ -215,20 +215,118 @@ import * as Features from "./cm-glsl-features.js";
       }), {scrollIntoView:true, userEvent:"input.indent"});
       return true;
     };
+    // ---- VS Code와 같은 동작을 위한 명령(번들에 없는 것은 직접 만든다) ----
+    // Ctrl+K Ctrl+C / Ctrl+K Ctrl+U: 줄 주석을 (전환이 아니라) 항상 추가 / 제거한다. 빈 줄은 건드리지 않는다.
+    const selectedLines = state => {
+      const numbers = new Set();
+      for(const range of state.selection.ranges) {
+        const first = state.doc.lineAt(range.from).number; let last = state.doc.lineAt(range.to).number;
+        if(last > first && state.doc.line(last).from === range.to) last--;   // 다음 줄 맨 앞에서 끝난 선택은 그 줄을 빼고
+        for(let n = first; n <= last; n++) numbers.add(n);
+      }
+      return [...numbers].map(n => state.doc.line(n));
+    };
+    const lineComment = add => editorView => {
+      const lines = selectedLines(editorView.state).filter(line => line.text.trim()); if(!lines.length) return true;
+      const changes = [];
+      if(add) { const indent = Math.min(...lines.map(line => /^\s*/.exec(line.text)[0].length)); for(const line of lines) changes.push({from:line.from + indent, insert:"// "}); }
+      else for(const line of lines) { const match = /^(\s*)\/\/ ?/.exec(line.text); if(match) changes.push({from:line.from + match[1].length, to:line.from + match[0].length}); }
+      if(changes.length) editorView.dispatch({changes, scrollIntoView:true, userEvent:add ? "input.comment" : "delete.comment"});
+      return true;
+    };
+    // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(Ctrl+Enter는 이 앱에서 셰이더 실행).
+    const insertLineAbove = editorView => {
+      const state = editorView.state;
+      editorView.dispatch(state.changeByRange(range => {
+        const line = state.doc.lineAt(range.head), indent = /^\s*/.exec(line.text)[0];
+        return {changes:{from:line.from, insert:indent + "\n"}, range:CM.EditorSelection.cursor(line.from + indent.length)};
+      }), {scrollIntoView:true, userEvent:"input"});
+      return true;
+    };
+    // Shift+Alt+I: 선택한 줄마다 줄 끝에 커서
+    const cursorsAtLineEnds = editorView => {
+      const lines = selectedLines(editorView.state); if(lines.length < 2) return false;
+      editorView.dispatch({selection:CM.EditorSelection.create(lines.map(line => CM.EditorSelection.cursor(line.to))), scrollIntoView:true, userEvent:"select"});
+      return true;
+    };
+    // Ctrl+Shift+L · Ctrl+F2: 선택이 비어 있으면 커서 아래 단어로 시작해 같은 항목을 모두 선택
+    const selectAllOccurrences = editorView => { if(editorView.state.selection.main.empty) CM.selectNextOccurrence(editorView); return CM.selectSelectionMatches(editorView); };
+    // Ctrl+↑ / Ctrl+↓: 커서가 숫자 위면 값 조절(cm-glsl-features), 아니면 VS Code처럼 화면만 한 줄 스크롤
+    const scrollLines = direction => editorView => { editorView.scrollDOM.scrollTop += direction * editorView.defaultLineHeight; return true; };
+    // Ctrl+J: 아래 패널(오류 목록) 열기/닫기
+    // 패널은 열어도 초점은 코드에 둔다(그래야 Ctrl+J를 다시 눌러 닫을 수 있다). 목록을 키보드로 고르려면 Ctrl+Shift+M.
+    const toggleLintPanel = editorView => {
+      if(editorView.dom.querySelector(".cm-panel-lint")) CM.closeLintPanel(editorView); else { CM.openLintPanel(editorView); editorView.focus(); }
+      return true;
+    };
+    const zoom = step => () => { fontSize = Math.max(10, Math.min(20, fontSize + step)); applyPresentation(); return true; };
+    // Shift+Alt+→ / ←: 선택 영역 확장 / 축소. 구문 트리가 없으므로 단어 → 줄 내용 → 괄호 안 → 괄호 포함 → … → 문서 전체 순서로,
+    // 지금 선택을 감싸는 후보 가운데 가장 작은 것으로 넓힌다. 축소는 넓히기 전 선택으로 차례로 돌아간다.
+    const CLOSE_OF = {"(":")", "[":"]", "{":"}"};
+    const matchClose = (text, open) => { const stack = []; for(let i = open; i < text.length; i++) { const c = text[i]; if(CLOSE_OF[c]) stack.push(CLOSE_OF[c]); else if(c === ")" || c === "]" || c === "}") { if(stack.pop() !== c) return -1; if(!stack.length) return i; } } return -1; };
+    const enclosingPair = (text, from, to) => {
+      const stack = [];
+      for(let i = from - 1; i >= 0; i--) {
+        const c = text[i];
+        if(c === ")" || c === "]" || c === "}") stack.push(c);
+        else if(CLOSE_OF[c]) { if(stack.length) { if(stack.pop() !== CLOSE_OF[c]) return null; } else { const close = matchClose(text, i); if(close >= to) return {open:i, close}; } }
+      }
+      return null;
+    };
+    const growRange = (state, text, from, to) => {
+      const candidates = [], line = state.doc.lineAt(from);
+      const word = state.wordAt(from); if(word) candidates.push(word);
+      if(state.doc.lineAt(to).number === line.number) { const start = line.from + /^\s*/.exec(line.text)[0].length, end = line.from + line.text.replace(/\s+$/, "").length; if(end > start) candidates.push({from:start, to:end}); }
+      const pair = enclosingPair(text, from, to); if(pair) candidates.push({from:pair.open + 1, to:pair.close}, {from:pair.open, to:pair.close + 1});
+      candidates.push({from:0, to:state.doc.length});
+      return candidates.filter(c => c.from <= from && c.to >= to && c.to - c.from > to - from).sort((a, b) => (a.to - a.from) - (b.to - b.from))[0] || null;
+    };
+    let growHistory = [], grownSelection = null;
+    const expandSelection = editorView => {
+      const state = editorView.state, text = state.doc.toString();
+      if(!grownSelection || !grownSelection.eq(state.selection)) growHistory = [];
+      const next = CM.EditorSelection.create(state.selection.ranges.map(range => { const grown = growRange(state, text, range.from, range.to); return grown ? CM.EditorSelection.range(grown.from, grown.to) : range; }), state.selection.mainIndex);
+      if(next.eq(state.selection)) return true;
+      growHistory.push(state.selection); grownSelection = next; editorView.dispatch({selection:next, scrollIntoView:true, userEvent:"select"});
+      return true;
+    };
+    const shrinkSelection = editorView => {
+      if(!grownSelection || !grownSelection.eq(editorView.state.selection) || !growHistory.length) return false;
+      grownSelection = growHistory.pop(); editorView.dispatch({selection:grownSelection, scrollIntoView:true, userEvent:"select"});
+      return true;
+    };
+    const run = command => () => { command(); return true; };
+    // 키 이름은 CodeMirror 형식(Mod = Ctrl, Mac은 Cmd). "Mod-k Mod-0"처럼 띄어 쓰면 VS Code식 연속 입력(chord)이다.
+    // keyCode가 없는 키 이벤트(합성 이벤트·일부 키보드 배열)는 Shift+글자를 대문자 이름으로만 보내므로 대문자 이름에도 같이 묶는다.
+    const both = (key, command) => [{key, run:command}, {key:key.replace(/-([a-z])$/, (_, c) => `-${c.toUpperCase()}`), run:command}];
     const editorKeys = [
       ...(acceptCompletion ? [{key:"Tab", run:acceptCompletion}] : []),
-      {key:"Mod-Space", run:CM.startCompletion},
-      {key:"Mod-g", run:() => { openPalette(":"); return true; }},
-      {key:"Mod-Shift-o", run:() => { openPalette("@"); return true; }},
-      {key:"Mod-Shift-\\", run:CM.cursorMatchingBracket},
-      {key:"Alt-z", run:() => { wrap = !wrap; applyPresentation(); return true; }},
+      // 탐색: 명령(>) · 패스(파일) · 함수·변수(@) · 줄(:)
+      ...both("Mod-Shift-p", run(() => openPalette(">"))), {key:"F1", run:run(() => openPalette(">"))},
+      {key:"Mod-p", run:run(() => openPalette(""))},
+      ...both("Mod-Shift-o", run(() => openPalette("@"))), {key:"Mod-g", run:run(() => openPalette(":"))},
+      {key:"Mod-h", run:run(() => showFind(true))},
+      // 자동 완성
+      {key:"Mod-Space", run:CM.startCompletion}, {key:"Mod-i", run:CM.startCompletion},
+      // 선택
+      {key:"Mod-l", run:CM.selectLine}, ...both("Mod-Shift-l", selectAllOccurrences), {key:"Mod-F2", run:selectAllOccurrences},
       {key:"Mod-Alt-ArrowUp", run:CM.addCursorAbove}, {key:"Mod-Alt-ArrowDown", run:CM.addCursorBelow},
-      // 예전 편집기와 같은 키: 줄 선택 · 줄 복제 · 찾아 바꾸기
-      {key:"Mod-l", run:CM.selectLine}, {key:"Mod-Shift-d", run:CM.copyLineDown}, {key:"Mod-h", run:() => { showFind(true); return true; }},
-      // keyCode가 없는 키 이벤트(합성 이벤트·일부 키보드 배열)는 Shift+글자를 대문자 이름으로만 보낸다. 같은 동작을 대문자 이름에도 묶는다.
-      {key:"Mod-Shift-D", run:CM.copyLineDown}, {key:"Mod-Shift-O", run:() => { openPalette("@"); return true; }}, {key:"Mod-Shift-P", run:() => { openPalette(); return true; }},
-      {key:"F1", run:() => { openPalette(); return true; }}, {key:"Mod-Shift-p", run:() => { openPalette(); return true; }}
+      ...both("Shift-Alt-i", cursorsAtLineEnds),
+      {key:"Shift-Alt-ArrowRight", run:expandSelection}, {key:"Shift-Alt-ArrowLeft", run:shrinkSelection},
+      // 편집
+      {key:"Mod-Shift-Enter", run:insertLineAbove},
+      {key:"Mod-k Mod-c", run:lineComment(true)}, {key:"Mod-k Mod-u", run:lineComment(false)},
+      ...both("Mod-Shift-d", CM.copyLineDown),   // 예전 편집기의 줄 복제 키(VS Code는 Shift+Alt+↓)
+      {key:"Mod-Shift-\\", run:CM.cursorMatchingBracket},
+      // 접기 · 오류 · 보기
+      {key:"Mod-k Mod-0", run:CM.foldAll}, {key:"Mod-k Mod-j", run:CM.unfoldAll},
+      {key:"Shift-F8", run:CM.previousDiagnostic}, {key:"Mod-j", run:toggleLintPanel},
+      {key:"Alt-z", run:run(() => { wrap = !wrap; applyPresentation(); })},
+      {key:"Mod-=", run:zoom(1)}, {key:"Mod-+", run:zoom(1)}, {key:"Mod--", run:zoom(-1)},
+      {key:"Mod-ArrowUp", run:scrollLines(-1)}, {key:"Mod-ArrowDown", run:scrollLines(1)}
     ];
+    // studio가 등록하는 편집기 바깥 명령(도구 서랍·집중 모드 등)의 키는 registerCommands 때 이 칸에 다시 묶는다.
+    const commandKeys = new CM.Compartment();
     // CodeMirror 내장 UI(검색 창·접기·오류 목록·자동 완성) 문구를 한국어로 (EditorState.phrases)
     const PHRASES = {"Find":"찾기", "Replace":"바꿀 내용", "next":"다음", "previous":"이전", "all":"모두 선택", "match case":"대소문자", "by word":"단어 단위", "regexp":"정규식",
       "replace":"바꾸기", "replace all":"모두 바꾸기", "close":"닫기", "current match":"현재 일치", "on line":"줄", "replaced match on line $":"$번째 줄에서 바꿈", "replaced $ matches":"$곳을 바꿈",
@@ -239,12 +337,13 @@ import * as Features from "./cm-glsl-features.js";
       state:CM.EditorState.create({doc:textarea.value, extensions:[
         CM.lineNumbers(), CM.highlightActiveLineGutter(), CM.foldGutter(), CM.codeFolding(), braceFold,
         CM.highlightSpecialChars(), CM.drawSelection(), CM.dropCursor(), CM.EditorState.allowMultipleSelections.of(true),
-        CM.rectangularSelection(), CM.crosshairCursor(), CM.highlightActiveLine(), CM.highlightSelectionMatches(),
+        // 사각(열) 선택은 VS Code처럼 Shift+Alt+드래그. Alt+클릭은 커서 추가, 숫자 위 Alt+드래그는 값 조절로 쓴다.
+        CM.rectangularSelection({eventFilter:event => event.altKey && event.shiftKey}), CM.highlightActiveLine(), CM.highlightSelectionMatches(),
         CM.indentOnInput(), CM.bracketMatching(), CM.closeBrackets(), glsl, CM.syntaxHighlighting(glslStyle),
         CM.autocompletion({override:[completionSource], icons:true, activateOnTyping:true}), hover, CM.lintGutter(),
         CM.search({top:true}), forwardKeys, beforeUserEdit, ...features.extensions, CM.scrollPastEnd(),
         CM.EditorView.clickAddsSelectionRange.of(event => event.altKey && !event.ctrlKey && !event.metaKey),   // Alt+클릭: 커서 추가 (Ctrl+클릭은 정의로 이동)
-        CM.keymap.of([...editorKeys, ...CM.closeBracketsKeymap, ...CM.completionKeymap, ...CM.searchKeymap, ...CM.foldKeymap, ...CM.lintKeymap, ...CM.defaultKeymap, {key:"Tab", run:insertSoftTab, shift:CM.indentLess}]),
+        commandKeys.of([]), CM.keymap.of([...editorKeys, ...CM.closeBracketsKeymap, ...CM.completionKeymap, ...CM.searchKeymap, ...CM.foldKeymap, ...CM.lintKeymap, ...CM.defaultKeymap, {key:"Tab", run:insertSoftTab, shift:CM.indentLess}]),
         fontComp.of(fontTheme()), wrapComp.of(wrap ? CM.EditorView.lineWrapping : []), tabComp.of(tabConfig()), editorTheme,
         CM.EditorView.contentAttributes.of({"aria-label":"GLSL 코드 편집기", spellcheck:"false", autocorrect:"off", autocapitalize:"off"}),
         CM.EditorState.phrases.of(PHRASES), CM.placeholder("// GLSL 코드를 입력하세요 · Ctrl+Space 자동 완성 · Ctrl+Shift+P 명령 팔레트"),
@@ -299,32 +398,39 @@ import * as Features from "./cm-glsl-features.js";
     // ---- 명령 팔레트: 기본 편집기와 같은 모양(.studio-palette) · @ 함수·변수로 이동 · : 줄 번호 ----
     const palette = document.createElement("div"), paletteInput = document.createElement("input"), paletteList = document.createElement("div");
     palette.className = "studio-palette"; palette.hidden = true; palette.setAttribute("role", "dialog"); palette.setAttribute("aria-label", "명령 팔레트");
-    paletteInput.className = "studio-palette-input"; paletteInput.placeholder = "명령 검색 · @ 함수·변수로 이동 · : 줄 번호"; paletteInput.setAttribute("aria-label", "명령 검색");
+    paletteInput.className = "studio-palette-input"; paletteInput.placeholder = "패스 이름 · > 명령 · @ 함수·변수 · : 줄 번호"; paletteInput.setAttribute("aria-label", "명령 검색");
     paletteList.className = "studio-palette-list"; paletteList.setAttribute("role", "listbox"); palette.append(paletteInput, paletteList); pane?.append(palette);
     let paletteItems = [], paletteChoice = 0;
     const builtInCommands = () => [
       {label:"찾기", key:"Ctrl+F", run:() => showFind()}, {label:"찾아 바꾸기", key:"Ctrl+H", run:() => showFind(true)},
       {label:"줄 번호로 이동", key:"Ctrl+G", run:() => openPalette(":")}, {label:"함수·변수로 이동", key:"Ctrl+Shift+O", run:() => openPalette("@")},
-      {label:"자동 완성 열기", key:"Ctrl+Space", run:() => CM.startCompletion(view)},
+      {label:"패스로 이동 (Image · Buffer)", key:"Ctrl+P", run:() => openPalette("")},
+      {label:"자동 완성 열기", key:"Ctrl+Space · Ctrl+I", run:() => CM.startCompletion(view)},
       {label:"줄 주석 전환", key:"Ctrl+/", run:() => CM.toggleComment(view)}, {label:"블록 주석 전환 (/* */)", key:"Shift+Alt+A", run:() => CM.toggleBlockComment(view)},
-      {label:"다음 일치 항목 선택 추가", key:"Ctrl+D", run:() => CM.selectNextOccurrence(view)}, {label:"모든 일치 항목 선택", key:"Ctrl+Shift+L", run:() => CM.selectSelectionMatches(view)},
+      {label:"줄 주석 추가", key:"Ctrl+K Ctrl+C", run:() => lineComment(true)(view)}, {label:"줄 주석 제거", key:"Ctrl+K Ctrl+U", run:() => lineComment(false)(view)},
+      {label:"다음 일치 항목 선택 추가", key:"Ctrl+D", run:() => CM.selectNextOccurrence(view)}, {label:"모든 일치 항목 선택", key:"Ctrl+Shift+L · Ctrl+F2", run:() => selectAllOccurrences(view)},
+      {label:"선택 영역 확장 / 축소", key:"Shift+Alt+→ / ←", run:() => expandSelection(view)},
+      {label:"선택한 줄마다 줄 끝에 커서", key:"Shift+Alt+I", run:() => cursorsAtLineEnds(view)},
+      {label:"위에 줄 삽입", key:"Ctrl+Shift+Enter", run:() => insertLineAbove(view)},
       {label:"줄 삭제", key:"Ctrl+Shift+K", run:() => CM.deleteLine(view)}, {label:"짝 괄호로 이동", key:"Ctrl+Shift+\\", run:() => CM.cursorMatchingBracket(view)},
       {label:"들여쓰기", key:"Ctrl+]", run:() => CM.indentMore(view)}, {label:"내어쓰기", key:"Ctrl+[", run:() => CM.indentLess(view)},
       {label:"정의로 이동", key:"F12 · Ctrl+클릭", run:() => features.goToDefinition(view)}, {label:"이름 바꾸기 (같은 이름 모두)", key:"F2", run:() => features.renameSymbol(view)},
       {label:"색상 선택기 열기 (커서 위치의 vec3/vec4)", run:() => features.openColorPicker(view)},
-      {label:"커서 위 숫자 올리기 / 내리기", key:"Ctrl+↑ / Ctrl+↓", run:() => features.nudge(1, 1)(view) || notify("커서를 숫자 위에 두세요")},
+      {label:"커서 위 숫자 올리기 / 내리기 (숫자 밖에서는 한 줄 스크롤)", key:"Ctrl+↑ / Ctrl+↓", run:() => features.nudge(1, 1)(view) || notify("커서를 숫자 위에 두세요")},
       {label:"커서를 위에 추가", key:"Ctrl+Alt+↑", run:() => CM.addCursorAbove(view)}, {label:"커서를 아래에 추가", key:"Ctrl+Alt+↓", run:() => CM.addCursorBelow(view)},
       {label:"줄을 위로 이동", key:"Alt+↑", run:() => CM.moveLineUp(view)}, {label:"줄을 아래로 이동", key:"Alt+↓", run:() => CM.moveLineDown(view)},
       {label:"줄을 위로 복사", key:"Shift+Alt+↑", run:() => CM.copyLineUp(view)}, {label:"줄을 아래로 복사", key:"Shift+Alt+↓", run:() => CM.copyLineDown(view)},
       {label:"현재 블록 접기", key:"Ctrl+Shift+[", run:() => CM.foldCode(view)}, {label:"현재 블록 펴기", key:"Ctrl+Shift+]", run:() => CM.unfoldCode(view)},
-      {label:"모두 접기", key:"Ctrl+Alt+[", run:() => CM.foldAll(view)}, {label:"모두 펴기", key:"Ctrl+Alt+]", run:() => CM.unfoldAll(view)},
-      {label:"오류 목록 열기", key:"Ctrl+Shift+M", run:() => CM.openLintPanel(view)}, {label:"다음 오류로", key:"F8", run:() => CM.nextDiagnostic(view)}, {label:"이전 오류로", key:"Shift+F8", run:() => CM.previousDiagnostic(view)},
+      {label:"모두 접기", key:"Ctrl+K Ctrl+0", run:() => CM.foldAll(view)}, {label:"모두 펴기", key:"Ctrl+K Ctrl+J", run:() => CM.unfoldAll(view)},
+      {label:"오류 목록 열기", key:"Ctrl+Shift+M", run:() => CM.openLintPanel(view)}, {label:"아래 패널(오류 목록) 열기/닫기", key:"Ctrl+J", run:() => toggleLintPanel(view)}, {label:"다음 오류로", key:"F8", run:() => CM.nextDiagnostic(view)}, {label:"이전 오류로", key:"Shift+F8", run:() => CM.previousDiagnostic(view)},
       {label:"Tab 키로 포커스 이동 켜기/끄기 (접근성)", key:"Ctrl+M", run:() => CM.toggleTabFocusMode(view)},
       {label:"긴 줄 자동 줄바꿈 켜기/끄기", key:"Alt+Z", run:() => { wrap = !wrap; applyPresentation(); }},
-      {label:"글자 크게", run:() => { fontSize = Math.min(20, fontSize + 1); applyPresentation(); }}, {label:"글자 작게", run:() => { fontSize = Math.max(10, fontSize - 1); applyPresentation(); }},
+      {label:"글자 크게", key:"Ctrl+=", run:zoom(1)}, {label:"글자 작게", key:"Ctrl+-", run:zoom(-1)},
       {label:"들여쓰기 크기 2 ↔ 4 바꾸기", run:() => { tabSize = tabSize === 4 ? 2 : 4; applyPresentation(); }}];
     const paletteEntries = () => {
       const value = paletteInput.value;
+      // VS Code와 같은 접두어: 없음 = 패스(파일)로 이동(Ctrl+P) · > 명령(Ctrl+Shift+P) · @ 함수·변수(Ctrl+Shift+O) · : 줄 번호(Ctrl+G)
+      if(value.startsWith(">")) return {items:[...commands, ...builtInCommands()].map(c => ({label:c.label, hint:c.key || "", run:c.run})), query:value.slice(1).trim()};
       if(value.startsWith(":")) { const line = Number(value.slice(1)); return [{label:line ? `${line}번째 줄로 이동` : `줄 번호 입력 (1–${view.state.doc.lines})`, run:() => line && goToLine(line)}]; }
       if(value.startsWith("@")) {
         // 문서 순서대로, 종류 아이콘(ƒ 함수 · U uniform · O out · # define · S struct)과 함께. 고르는 동안 그 위치를 미리 보여 준다.
@@ -336,14 +442,19 @@ import * as Features from "./cm-glsl-features.js";
           ...sym.defines.map(d => symbol("define", d.name, d.offset, d.line, `#define${d.value ? ` ${d.value.slice(0, 24)}` : ""}`))].sort((a, b) => a.offset - b.offset);
         return {items, query};
       }
-      return {items:[...commands, ...builtInCommands()].map(c => ({label:c.label, hint:c.key || "", run:c.run})), query:value.trim()};
+      const files = fileProvider();
+      const fileItems = files.map(file => ({label:file.label, kind:"file", hint:file.current ? `${file.hint || ""} · 지금 편집 중`.replace(/^ · /, "") : file.hint || "", run:file.run}));
+      // 패스 이름이 아닌 글자를 치면 명령도 함께 찾는다(> 없이 바로 명령을 찾던 예전 습관도 그대로 동작).
+      const commandItems = value.trim() ? [...commands, ...builtInCommands()].map(c => ({label:c.label, hint:c.key || "", run:c.run})) : [];
+      return {items:[...fileItems, ...commandItems], query:value.trim()};
     };
+    let fileProvider = () => [];
     const renderPalette = () => {
       const entries = paletteEntries(), items = Array.isArray(entries) ? entries : entries.items, query = Array.isArray(entries) ? "" : entries.query;
       paletteItems = query ? items.map(item => ({item, m:fuzzy(item.label, query)})).filter(x => x.m).sort((a, b) => b.m.score - a.m.score).map(x => x.item) : items;
       paletteChoice = Math.min(paletteChoice, Math.max(0, paletteItems.length - 1));
       // 종류 아이콘은 CSS(.palette-kind.is-*)가 SVG 마스크로 그린다. 글자는 넣지 않고 종류 이름은 title로 알린다.
-      const KIND_LABEL = {function:"함수", struct:"구조체", uniform:"uniform", output:"출력", define:"#define"};
+      const KIND_LABEL = {function:"함수", struct:"구조체", uniform:"uniform", output:"출력", define:"#define", file:"패스"};
       paletteList.replaceChildren(...paletteItems.map((item, i) => {
         const button = document.createElement("button"); button.type = "button"; button.dataset.index = i; button.className = `${i === paletteChoice ? "is-selected" : ""}${item.kind ? " has-kind" : ""}`.trim(); button.setAttribute("role", "option");
         button.setAttribute("aria-selected", String(i === paletteChoice));
@@ -370,7 +481,7 @@ import * as Features from "./cm-glsl-features.js";
       if(!paletteOrigin) return; const {selection, top, left} = paletteOrigin; paletteOrigin = null;
       view.dispatch({selection, annotations:External.of(true)}); setScroll("scrollTop", top); setScroll("scrollLeft", left);
     };
-    const openPalette = (prefix = "") => {
+    const openPalette = (prefix = ">") => {
       palette.hidden = false; paletteInput.value = prefix; paletteChoice = 0;
       paletteOrigin = {selection:view.state.selection, top:view.scrollDOM.scrollTop, left:view.scrollDOM.scrollLeft};
       if(prefix === "@") {   // 지금 커서가 들어 있는 함수(없으면 커서 바로 앞의 항목)를 먼저 고른다
@@ -383,7 +494,11 @@ import * as Features from "./cm-glsl-features.js";
     };
     const closePalette = (refocus = true) => { if(palette.hidden) return; palette.hidden = true; paletteOrigin = null; symbols?.setAttribute("aria-expanded", "false"); if(refocus) view.focus(); };
     const runPaletteItem = index => { const item = paletteItems[index]; if(!item) return; paletteOrigin = null; closePalette(); item.run?.(); };
-    listen(paletteInput, "input", () => { paletteChoice = 0; renderPalette(); });
+    listen(paletteInput, "input", () => {
+      // 명령 모드(>)에서 @ 나 : 를 치면 그 모드로 바꾼다(VS Code에서 > 를 지우고 치는 것과 같은 결과).
+      const switched = /^>\s*([@:].*)$/.exec(paletteInput.value); if(switched) paletteInput.value = switched[1];
+      paletteChoice = 0; renderPalette();
+    });
     listen(paletteInput, "keydown", event => {
       if(event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); if(paletteItems.length) { paletteChoice = (paletteChoice + (event.key === "ArrowDown" ? 1 : -1) + paletteItems.length) % paletteItems.length; renderPalette(); } }
       else if(event.key === "Enter") { event.preventDefault(); runPaletteItem(paletteChoice); }
@@ -392,7 +507,14 @@ import * as Features from "./cm-glsl-features.js";
     listen(paletteInput, "blur", () => setTimeout(() => { if(!palette.contains(document.activeElement)) closePalette(false); }, 0));
     listen(paletteList, "pointerdown", event => event.preventDefault());
     listen(paletteList, "click", event => { const item = event.target.closest("button[data-index]"); if(item) runPaletteItem(Number(item.dataset.index)); });
-    const registerCommands = list => { commands = [...commands, ...list.filter(c => c && typeof c.run === "function" && c.label)]; };
+    // 명령에 bind(CodeMirror 키 이름 또는 그 배열)가 있으면 편집기 안에서 그 키로도 실행한다.
+    const registerCommands = list => {
+      commands = [...commands, ...list.filter(c => c && typeof c.run === "function" && c.label)];
+      const bindings = commands.flatMap(c => [].concat(c.bind || []).map(key => ({key, run:() => { c.run(); return true; }})));
+      view.dispatch({effects:commandKeys.reconfigure(CM.keymap.of(bindings))});
+    };
+    // Ctrl+P 목록(패스 = VS Code의 파일). studio가 [{label, hint, current, run}]을 돌려주는 함수를 넘긴다.
+    const setFiles = provider => { fileProvider = typeof provider === "function" ? () => provider() || [] : () => []; };
 
     // ---- 편집기 도구 버튼 ----
     listen($("studioFind"), "click", () => showFind()); listen($("studioReplace"), "click", () => showFind(true));
@@ -415,7 +537,7 @@ import * as Features from "./cm-glsl-features.js";
 
     return {
       update:() => { CM.closeCompletion(view); updateStatus(view.state); updateFunctions(); },
-      goToLine, showFind, setDiagnostics, registerCommands, openPalette, view:() => view,
+      goToLine, showFind, setDiagnostics, registerCommands, setFiles, openPalette, view:() => view,
       // 접힌 블록 목록([from, to]). studio가 패스를 바꿀 때 패스별로 보관했다가 돌아오면 다시 접는다.
       getFolds:() => { const list = []; CM.foldedRanges(view.state).between(0, view.state.doc.length, (from, to) => { list.push([from, to]); }); return list; },
       setFolds:list => {

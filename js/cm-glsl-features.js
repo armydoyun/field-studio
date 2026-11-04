@@ -259,7 +259,7 @@
           const pos = view.posAtCoords({x:event.clientX, y:event.clientY}); if(pos == null) return false;
           event.preventDefault(); view.dispatch({selection:{anchor:pos}}); goToDefinition(view, pos); return true;
         }
-        if(event.altKey && !event.ctrlKey && !event.metaKey) {   // 숫자 위 Alt+드래그: 값 조절(숫자가 아니면 사각 선택)
+        if(event.altKey && !event.ctrlKey && !event.metaKey) {   // 숫자 위 Alt+드래그: 값 조절(숫자가 아니면 Alt+클릭 커서 추가로 넘긴다. 사각 선택은 Shift+Alt+드래그)
           const pos = view.posAtCoords({x:event.clientX, y:event.clientY}), found = pos == null ? null : numberAt(docText(view.state), pos); if(!found) return false;
           event.preventDefault(); view.focus(); view.dispatch({selection:{anchor:found.start, head:found.end}});
           scrub = {view, x:event.clientX, base:parseFloat(found.text), start:found.start, end:found.end, text:found.text, format:numberFormat(found.text)};

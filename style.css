@@ -61,6 +61,7 @@ svg { display:block;flex-shrink:0; }
 /* 함수·변수 종류 아이콘(명령 팔레트 @ 목록, breadcrumb) */
 .palette-kind::before,.studio-crumb-kind::before { content:"";display:block;width:14px;height:14px;background:currentColor;-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat; }
 .palette-kind.is-function,.studio-crumb-kind[data-kind="function"],.studio-crumb-kind:not([data-kind]) { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='3.5' width='17' height='17' rx='3'/%3E%3Cpath d='M9 17c1.8 0 2.6-1 2.6-2.8v-4.4C11.6 8 12.6 7 14.8 7M9 11.5h5.5'/%3E%3C/svg%3E"); }
+.palette-kind.is-file { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z'/%3E%3Cpath d='M14 3v5h5'/%3E%3C/svg%3E"); }
 .studio-crumb-kind[data-kind="list"] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 6h16M4 12h16M4 18h10'/%3E%3C/svg%3E"); }
 .palette-kind.is-uniform { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 7h9M19 7h1M4 17h3M13 17h7'/%3E%3Ccircle cx='16' cy='7' r='2.5'/%3E%3Ccircle cx='10' cy='17' r='2.5'/%3E%3C/svg%3E"); }
 .palette-kind.is-output { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9'/%3E%3C/svg%3E"); }
@@ -742,6 +743,7 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .palette-kind.is-output { color:var(--syn-string); }
 .palette-kind.is-define { color:var(--syn-directive); }
 .palette-kind.is-struct { color:var(--syn-struct); }
+.palette-kind.is-file { color:var(--muted); }
 .palette-hint { min-width:0;overflow:hidden;color:var(--faint);font:11px/1.4 var(--mono);text-overflow:ellipsis;white-space:nowrap; }
 .studio-palette-list kbd { font-size:10px; }
 .palette-empty { margin:6px 10px;color:var(--muted);font-size:12px; }

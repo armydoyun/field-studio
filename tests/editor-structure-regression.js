@@ -10,7 +10,7 @@ for(const id of ['studioHighlight','studioLines','studioCompletion','studioSigna
 check(/<textarea id="studioCode" class="studio-code-model" hidden/.test(html),'#studioCode는 숨은 소스 창구(textarea)');
 check(/class="studio-editor-frame"/.test(html)&&/frame\?\.append\(host\)/.test(editor),'CodeMirror 화면은 편집 프레임 안에 만든다');
 check(/^export \{ load \};\s*$/m.test(vendor)&&/CodeMirror\.load\(\)/.test(editor),'vendor CodeMirror는 load() 때 초기화');
-for(const [name,re] of [['코드 접기',/CM\.foldGutter\(\)/],['여러 커서',/allowMultipleSelections\.of\(true\)/],['사각 선택',/CM\.rectangularSelection\(\)/],['검색',/CM\.search\(/],
+for(const [name,re] of [['코드 접기',/CM\.foldGutter\(\)/],['여러 커서',/allowMultipleSelections\.of\(true\)/],['사각 선택',/CM\.rectangularSelection\(\{eventFilter:event => event\.altKey && event\.shiftKey\}\)/],['검색',/CM\.search\(/],
   ['자동 완성',/CM\.autocompletion\(/],['오류 표시',/CM\.lintGutter\(\)/],['마우스 설명',/CM\.hoverTooltip\(/],['한국어 문구',/CM\.EditorState\.phrases\.of\(PHRASES\)/],['GLSL 도우미',/\.\.\.features\.extensions/]])
   check(re.test(editor),`편집기 기능 연결: ${name}`);
 for(const [name,re] of [['시그니처 도움말',/CM\.showTooltip\.from/],['색 견본 위젯',/class ColorSwatch extends CM\.WidgetType/],['들여쓰기 안내선',/cm-indent-guides/],['줄 끝 오류',/class LensWidget/],
@@ -20,4 +20,12 @@ for(const id of ['studioFunctions','studioFind','studioGoto','studioComplete','s
   check(html.includes(`id="${id}"`)&&editor.includes(`$("${id}")`),`도구 버튼 연결: #${id}`);
 check(/\.cm-glsl-swatch/.test(css)&&/\.cm-error-lens/.test(css)&&/\.cm-indent-guides/.test(css)&&/\.studio-cm-host/.test(css),'CodeMirror 화면 스타일');
 check(!/#studioHighlight|\.studio-gutter|\.studio-completion|\.studio-find-panel|\.deco-/.test(css),'예전 편집기 스타일 제거');
+// VS Code 기본 단축키와 같은 키(편집기 안). 연속 입력(chord)은 "Mod-k Mod-0"처럼 띄어 쓴다.
+for(const [name,key] of [['패스로 이동(Ctrl+P)','Mod-p'],['모두 접기(Ctrl+K Ctrl+0)','Mod-k Mod-0'],['모두 펴기(Ctrl+K Ctrl+J)','Mod-k Mod-j'],['줄 주석 추가(Ctrl+K Ctrl+C)','Mod-k Mod-c'],
+  ['줄 주석 제거(Ctrl+K Ctrl+U)','Mod-k Mod-u'],['이전 오류(Shift+F8)','Shift-F8'],['아래 패널(Ctrl+J)','Mod-j'],['위에 줄 삽입(Ctrl+Shift+Enter)','Mod-Shift-Enter'],
+  ['선택 확장(Shift+Alt+→)','Shift-Alt-ArrowRight'],['선택 축소(Shift+Alt+←)','Shift-Alt-ArrowLeft'],['모든 일치 선택(Ctrl+F2)','Mod-F2'],['자동 완성(Ctrl+I)','Mod-i'],['글자 크게(Ctrl+=)','Mod-='],['글자 작게(Ctrl+-)','Mod--']])
+  check(editor.includes(`key:"${key}"`),`VS Code 단축키: ${name}`);
+check(/both\("Mod-Shift-p"/.test(editor)&&/both\("Mod-Shift-l", selectAllOccurrences\)/.test(editor)&&/both\("Shift-Alt-i"/.test(editor),'VS Code 단축키: 명령 팔레트 · 모든 일치 선택 · 줄 끝 커서');
+check(/"Mod-b"/.test(studio)&&/"Mod-\\\\"/.test(studio)&&/"Mod-k z"/.test(studio),'VS Code 단축키: 사이드바(Ctrl+B) · 배치(Ctrl+\\) · Zen(Ctrl+K Z)');
+check(/key==="Enter" && !event\.shiftKey/.test(studio),'Ctrl+Shift+Enter는 실행이 아니라 위에 줄 삽입');
 console.log(`Editor structure: ${passed} checks passed`);
