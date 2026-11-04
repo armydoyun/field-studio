@@ -17,7 +17,8 @@ check(has(studio,'Editor.mount($("studioCode"),ask')&&has(editor,"const mount = 
 check(has(dialog,"valueInput.disabled=!hasValue","valueInput.reportValidity()"),"숫자 입력 제한·숨김 입력 제외");
 check(has(dialog,'on(dialog,"cancel"','on(dialog,"keydown"'),"Esc 취소 및 하위 키 전달 방지");
 check(has(studio,"Dialog.create({$, on,","const ask = dialogs.ask;"),"studio는 공용 대화상자 모듈 하나만 만든다");
-check(has(studio,"if(!await confirmReplace())","proceed(confirmReplace()"),"비동기 확인과 기존 동기 API 호환");
+// Prettier는 `!await x()`를 `!(await x())`로 감싸므로 괄호는 있어도 없어도 된다.
+check(/if\(!\(?awaitconfirmReplace\(\)\)?\)/.test(studio)&&has(studio,"proceed(confirmReplace()"),"비동기 확인과 기존 동기 API 호환");
 check(has(studio,"const wasLive=!!timer","if(wasLive&&dirty"),"모달 표시 중 자동 적용 타이머 정지/복구");
 for(const file of ["js/studio.js","js/studio-dialog.js","js/cm-editor.js","js/cm-glsl-features.js"])execFileSync(process.execPath,["--check",path.join(root,file)]);
 console.log(`커스텀 모달 구조 검증 ${passed}개 통과`);
