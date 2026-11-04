@@ -22,4 +22,4 @@
     }
     assert(!r.getUserUniforms().some(x => x.name === id), "테스트 Uniform 정리");
     console.log("설정 분리 및 저장 회귀 테스트 완료");
-})().catch(console.error);
+})();

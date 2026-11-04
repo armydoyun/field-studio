@@ -25,4 +25,4 @@
     if(id)await renderer.removeTexture(id);
     if(!wasRunning&&renderer.getStats().running)renderer.stop();
   }
-})().catch(console.error);
+})();

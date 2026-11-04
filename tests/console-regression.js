@@ -35,4 +35,4 @@
     assert(r.getStats().debugHeatmap !== stats.debugHeatmap, "범용 Ray Steps Heatmap");
     r.setDebugHeatmap(stats.debugHeatmap);
     console.log("Shader Art Workspace 회귀 테스트 통과");
-})().catch(console.error);
+})();
