@@ -1,0 +1,32 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test tools
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          python -m pip install -r requirements-test.txt
+          python -m playwright install chromium
+
+      # node · browser(콘솔 테스트 + GPU 검사) · py 세 묶음. --strict: 준비 안 된 묶음도 실패로 친다.
+      - name: Run all tests
+        run: npm run test:ci

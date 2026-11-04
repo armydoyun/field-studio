@@ -10,7 +10,9 @@ assert(!fs.existsSync(path.join(jsdir,'loader.js')),'AMD loader must be absent')
 const manifest=fs.readFileSync(path.join(root,'SOURCE_SHA256_Runtime.txt'),'utf8').trim().split(/\r?\n/);
 const hashes=new Map();for(const line of manifest){const m=/^([a-f0-9]{64})  (.+)$/.exec(line);assert(m,'SHA256 format');assert(!hashes.has(m[2]),'duplicate manifest entry');hashes.set(m[2],m[1]);}
 assert.deepEqual([...hashes.keys()].sort(),files,'Runtime SHA manifest mismatch');
-for(const name of files){const sha=crypto.createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex');assert.equal(sha,hashes.get(name),name);}
+// 줄바꿈은 LF로 맞춰 해시한다. Windows 체크아웃(core.autocrlf)은 CRLF로 풀리므로 원본 바이트로 비교하면 내용이 같아도 실패한다. tools/update_sha_manifest.py와 같은 규칙.
+const normalizedSha=file=>crypto.createHash('sha256').update(fs.readFileSync(file,'utf8').replace(/\r\n/g,'\n'),'utf8').digest('hex');
+for(const name of files)assert.equal(normalizedSha(path.join(root,name)),hashes.get(name),`${name} (python tools/update_sha_manifest.py로 갱신)`);
 const names=new Set(files.filter(x=>x.startsWith('js/')).map(x=>path.basename(x,'.js'))),graph=new Map();
 for(const name of names){const source=fs.readFileSync(path.join(jsdir,name+'.js'),'utf8');
   // AMD define() 호출만 찾는다(Facet.define( 같은 메서드 호출은 제외). codemirror.js는 tools/codemirror/build.mjs가 만든 서드파티 번들이다(`static define(` 메서드가 있다).

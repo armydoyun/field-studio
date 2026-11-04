@@ -1,0 +1,19 @@
+{
+  "name": "field-studio",
+  "private": true,
+  "description": "WebGL2 셰이더 스튜디오 — 개발·테스트 도구 정의(앱 자체는 의존성 없음)",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node tests/run.mjs",
+    "test:node": "node tests/run.mjs node",
+    "test:browser": "node tests/run.mjs browser",
+    "test:py": "node tests/run.mjs py",
+    "test:list": "node tests/run.mjs --list",
+    "test:ci": "node tests/run.mjs --strict"
+  },
+  "devDependencies": {
+    "playwright": "1.48.2"
+  }
+}

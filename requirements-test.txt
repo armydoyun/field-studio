@@ -1,0 +1,2 @@
+# python tests/*-regression.py 실행용 (npm run test:py)
+playwright==1.48.0

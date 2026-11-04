@@ -67,10 +67,31 @@ deploy/js/min.js
 
 ## 검증
 
-- `node tests/runtime-integrity.js` — ESM 의존성, 순환 참조, DOM ID, SHA-256, 배포 산출물 구조.
-- 기존 Node 기반 회귀 테스트는 `tests/esm-vm-bridge.cjs`를 통해 ESM 소스를 모의 DOM/GPU에서 테스트합니다. 이 호환 변환기는 테스트 전용입니다.
-- `tests/gpu-validation.html`은 로컬 HTTP 서버에서 열어서 실제 Chrome/Edge의 WebGL2 검증을 실행합니다.
-- 브라우저 에디터 테스트 스크립트도 테스트 전용 ESM 변환 도우미를 사용합니다.
+모든 테스트는 `tests/run.mjs` 하나로 돌립니다. 앱 자체는 여전히 의존성이 없고, `package.json`·`requirements-test.txt`는 테스트 도구만 정의합니다.
+
+```shell
+npm install                                   # playwright (browser 묶음용)
+npx playwright install chromium
+python -m pip install -r requirements-test.txt # py 묶음용
+python -m playwright install chromium
+
+npm test              # 세 묶음 모두
+npm run test:node     # node 묶음만 — 설치 없이 Node만 있으면 됨
+npm run test:list     # 어떤 파일이 어느 묶음인지
+node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 실행
+```
+
+| 묶음 | 대상 | 방식 |
+|---|---|---|
+| `node` | `tests/*.js` 중 `require()`를 쓰는 파일 | 모의 DOM/GPU. `tests/esm-vm-bridge.cjs`로 ESM 소스를 읽는다 |
+| `browser` | 나머지 `tests/*.js`(개발자 콘솔용) + `tests/gpu-validation.html` | 실행기가 임시 정적 서버를 띄우고 Playwright Chromium(SwiftShader WebGL2)에서 실제 앱에 붙여 넣듯 실행. 테스트마다 빈 저장소의 새 컨텍스트 |
+| `py` | `tests/*-regression.py` | Python Playwright. 실행기가 `PYTHONUTF8=1`을 넣어 Windows에서도 UTF-8로 읽는다 |
+
+- 준비되지 않은 묶음(playwright·Python 없음)은 SKIP으로 표시하고 계속합니다. `--strict`(=`npm run test:ci`)는 SKIP도 실패로 칩니다.
+- GitHub Actions(`.github/workflows/test.yml`)가 push·PR마다 `npm run test:ci`를 돌립니다.
+- 새 테스트는 `tests/`에 두기만 하면 위 규칙으로 자동 분류됩니다. 다른 파일이 불러 쓰는 도우미는 `tests/run.mjs`의 `HELPERS`에 추가합니다.
+- `index.html`·`style.css`·`js/*.js`를 고친 뒤에는 `python tools/update_sha_manifest.py`로 `SOURCE_SHA256_Runtime.txt`를 갱신합니다(해시는 줄바꿈을 LF로 맞춰 계산하므로 Windows·Linux 결과가 같습니다).
+- 콘솔용 테스트는 예전처럼 개발자 콘솔에 붙여 넣어 돌릴 수도 있고, `tests/gpu-validation.html`도 브라우저에서 직접 열어 실제 GPU로 검사할 수 있습니다.
 
 **검증 한계:** 자동화 테스트 환경은 페이지 네비게이션 및 WebGL2가 제한되어 개발용 ES Module의 실제 HTTP 구동, `file://`로 연 배포본의 실제 GPU 렌더링은 대상 브라우저에서 직접 최종 확인해야 합니다.
 
