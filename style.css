@@ -615,8 +615,10 @@ kbd { border-color:var(--line-strong);border-bottom-width:2px;background:var(--e
 /* 들여쓰기 안내선: 줄마다 --guide-levels 단계만큼, 한 단계 = --tab-size 글자 */
 .studio-cm-host .cm-line.cm-indent-guides { background-image:repeating-linear-gradient(to right,#ffffff2e 0 1px,transparent 1px calc(var(--tab-size,4) * 1ch));background-repeat:no-repeat;background-position:6px 0;background-size:calc(var(--guide-levels) * var(--tab-size,4) * 1ch) 100%; }
 /* 컴파일 오류 메시지를 줄 끝에 표시. 편집 후 다음 컴파일 전까지는 흐리게 */
-.cm-error-lens { margin-left:2.5em;padding:0 6px;border-radius:3px;background:#ff5a6a14;color:#ff8a95;font:11px/1.6 var(--sans);white-space:pre; }
-.cm-error-lens.is-warning { background:#f3c46e14;color:#f3c46e; }
+.cm-error-lens { padding-left:2.5em;color:#ff8a95;font:11px/1.6 var(--sans);white-space:pre; }
+.cm-error-lens-text { padding:0 6px;border-radius:3px;background:#ff5a6a14; }
+.cm-error-lens.is-warning { color:#f3c46e; }
+.cm-error-lens.is-warning .cm-error-lens-text { background:#f3c46e14; }
 .cm-error-lens.is-stale { opacity:.45; }
 .studio-cm-host .is-scrubbing .cm-content { cursor:ew-resize; }
 .studio-cm-host .cm-panel.cm-panel-lint ul { max-height:140px;font:12px var(--mono); }

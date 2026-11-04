@@ -219,7 +219,12 @@
     class LensWidget extends CM.WidgetType {
       constructor(message, severity, count, stale) { super(); Object.assign(this, {message, severity, count, stale}); }
       eq(other) { return other.message === this.message && other.severity === this.severity && other.count === this.count && other.stale === this.stale; }
-      toDOM() { const span = document.createElement("span"); span.className = `cm-error-lens is-${this.severity}${this.stale ? " is-stale" : ""}`; span.textContent = this.count > 1 ? `${this.message} (+${this.count - 1})` : this.message; return span; }
+      // 바깥 span은 여백을 margin이 아닌 padding으로 둔다: 커서가 줄 끝 위젯 쪽에 붙으면(→ 키로 돌아오기·줄 비우기) 위젯 왼쪽 끝에 그려지는데,
+      // margin이면 그 끝이 글자에서 떨어져 글자 뒤에 빈칸·들여쓰기가 생긴 것처럼 보인다. 색 상자는 안쪽 span이 그린다.
+      toDOM() {
+        const span = document.createElement("span"), text = document.createElement("span"); span.className = `cm-error-lens is-${this.severity}${this.stale ? " is-stale" : ""}`;
+        text.className = "cm-error-lens-text"; text.textContent = this.count > 1 ? `${this.message} (+${this.count - 1})` : this.message; span.append(text); return span;
+      }
       ignoreEvent() { return false; }
     }
     const lensDecorations = (doc, list, stale) => {
