@@ -11,6 +11,8 @@ import * as Insert from "./code-insert.js";
 import * as Store from "./storage.js";
 import * as Layout from "./studio-layout.js";
 import * as Pack from "./studio-pack.js";
+import * as ProjectStore from "./project-store.js";
+import * as Projects from "./studio-projects.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -905,7 +907,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       ok: "계속",
       danger: true,
     });
+  // 프로젝트 보관함 화면(studio-projects.js). 아래쪽 초기화 때 만든다.
+  let projects = null;
+  // 다른 작업(예제·새 프로젝트·Pack·보관함 항목)으로 통째로 바뀐다. 보관함의 "작업 중" 표시는 잊는다(열기 경로는 성공 후 다시 정한다).
   const adoptProject = (next, tab = "Image") => {
+    projects?.forget();
     clearChange();
     views.clear();
     shown = null;
@@ -1085,7 +1091,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       button.removeAttribute("aria-busy");
     }
   };
-  const exportPack = async () => {
+  // 지금 작업을 Pack 텍스트로 만든다. 파일 내보내기와 프로젝트 보관함이 같이 쓴다. 도중에 Studio가 닫히면 null.
+  const buildPack = async () => {
     rememberEditor();
     const scene = copy(project),
       tab = selected,
@@ -1094,14 +1101,16 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const files = Pack.collectTextures(scene, renderer.getTextures(), id => renderer.getTextureFile(id));
     for (const { id, meta, file } of files)
       textures.push({ id, name: meta.name, type: file.type, data: await Pack.readData(file), sampling: meta.sampling });
-    if (disposed) return;
-    download(
-      "shader-studio-pack.json",
-      Pack.encode({ project: scene, selected: tab, textures, settings: state }),
-      "application/json",
-      PACK_LIMIT
-    );
-    setStatus(`Pack 내보냄 · 코드·파라미터·설정·이미지 ${textures.length}개 포함`);
+    if (disposed) return null;
+    const text = Pack.encode({ project: scene, selected: tab, textures, settings: state });
+    if (text.length > PACK_LIMIT) throw new Error("프로젝트가 너무 큽니다(최대 64MiB). 연결된 이미지를 줄이세요.");
+    return { text, passes: scene.passes.length, images: textures.length };
+  };
+  const exportPack = async () => {
+    const pack = await buildPack();
+    if (!pack) return;
+    download("shader-studio-pack.json", pack.text, "application/json", PACK_LIMIT);
+    setStatus(`Pack 내보냄 · 코드·파라미터·설정·이미지 ${pack.images}개 포함`);
   };
   let loadSerial = 0;
   const beginLoad = (full = false) => {
@@ -1121,10 +1130,28 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         throw new Error("작업이 변경되었거나 종료되어 파일 불러오기를 취소했습니다.");
     };
   };
-  const importPack = async file => {
+  const importPack = file =>
+    loadPackText(() => {
+      if (file.size > PACK_LIMIT) throw new Error("Pack 파일은 최대 64MiB입니다.");
+      return file.text();
+    });
+  // 이미 등록된 이미지와 바이트·형식·샘플링이 모두 같으면 그 ID를 돌려준다(보관함 프로젝트를 여러 번 열어도 이미지가 쌓이지 않게).
+  const sameTexture = async asset => {
+    const wanted = { filter: "linear", wrapS: "clamp", wrapT: "clamp", ...(asset.sampling || {}) };
+    const bytes = new Uint8Array(await asset.file.arrayBuffer());
+    for (const meta of renderer.getTextures()) {
+      const file = renderer.getTextureFile(meta.id);
+      if (!file || file.size !== asset.file.size || file.type !== asset.file.type) continue;
+      if (["filter", "wrapS", "wrapT"].some(key => meta.sampling?.[key] !== wanted[key])) continue;
+      const other = new Uint8Array(await file.arrayBuffer());
+      if (other.every((value, index) => value === bytes[index])) return meta.id;
+    }
+    return null;
+  };
+  // loadText(): Pack 텍스트(또는 그 Promise). reuse: 같은 이미지는 새로 등록하지 않고 다시 쓴다.
+  const loadPackText = async (loadText, { reuse = false } = {}) => {
     const check = beginLoad(true);
-    if (file.size > PACK_LIMIT) throw new Error("Pack 파일은 최대 64MiB입니다.");
-    const text = await file.text();
+    const text = await loadText();
     check();
     const { data, project: next } = Pack.parse(text);
     const state = data.version === 3 ? settings?.validatePack(data.settings) : null;
@@ -1150,6 +1177,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       beforeTab = selected;
     try {
       for (const asset of decoded) {
+        const existing = reuse ? await sameTexture(asset) : null;
+        check();
+        if (existing) {
+          map.set(asset.id, existing);
+          continue;
+        }
         const result = await renderer.addTexture(asset.file, asset.sampling || {});
         added.push(result.id);
         check();
@@ -1481,7 +1514,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         const next = validateProject(data.project),
           count = detachMissing(next);
         const ok = setProject(next);
-        if (ok) revealCode();
+        if (ok) {
+          projects?.forget();
+          revealCode();
+        }
         if (ok && count) setStatus(`${count}개 이미지 연결이 해제됐습니다. 원본 이미지를 다시 가져오세요.`, "is-dirty");
       }
     } catch (error) {
@@ -1598,6 +1634,17 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   let afterFullscreen = null;
   // 화면 배치·리사이저·도구 서랍·접이식 묶음(studio-layout.js). 편집기 열림 상태는 전체화면 중이면 전체화면 전 상태를 남긴다.
   const workspace = Layout.create({ $, on, editor, editorOpen: () => (afterFullscreen ? true : openState) });
+  projects = Projects.create({
+    $,
+    on,
+    element,
+    ask,
+    store: ProjectStore.create(),
+    buildPack,
+    openPack: loadText => loadPackText(loadText, { reuse: true }),
+    setStatus,
+    showError,
+  });
   renderEditor();
   restore();
   loadDraft(savedDraft);
@@ -1685,6 +1732,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press("도움말 · 단축키", "studioHelp", "?"),
     press(".frag 파일로 저장", "studioSaveGLSL"),
     press(".frag 파일 열기", "studioOpenGLSL"),
+    press("브라우저에 프로젝트 저장", "studioProjectSave"),
+    press("다른 이름으로 프로젝트 저장", "studioProjectSaveAs"),
     press("전체 프로젝트 저장 (Pack)", "studioExportPack"),
     press("Pack 열기", "studioImportPack"),
     press("이미지 파일 불러오기", "studioTextureAdd"),
@@ -1721,6 +1770,16 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     getProject: () => copy(project),
     exportPack,
     importPack,
+    // 브라우저 프로젝트 보관함: save(asNew) · list() · open(id) · rename(id) · remove(id) · current()
+    projects: {
+      save: asNew => projects.save(asNew),
+      list: () => projects.list(),
+      open: id => projects.open(id),
+      rename: id => projects.rename(id),
+      remove: id => projects.remove(id),
+      current: () => projects.current(),
+      ready: () => projects.ready,
+    },
     dispose: () => {
       disposed = true;
       if (timer) clearTimeout(timer);

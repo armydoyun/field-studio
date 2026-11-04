@@ -283,6 +283,19 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-group-body>button { width:100%;min-height:36px;margin:0;padding:8px 10px;justify-content:flex-start;text-align:left; }
 .studio-group .studio-file-actions { display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:0; }
 .studio-file-actions button { width:100%;min-height:36px; }
+/* 프로젝트 보관함: 지금 작업 이름 · 저장 버튼 · 저장한 프로젝트 목록(열기 · 이름 바꾸기 · 삭제) */
+.studio-projects { display:grid;gap:8px;min-width:0; }
+.studio-project-current { margin:0;color:var(--muted);font-size:12px;overflow-wrap:anywhere; }
+.studio-project-current[data-saved="true"] { color:var(--text-soft); }
+.studio-project-list { display:grid;gap:6px;min-width:0;max-height:260px;overflow:auto; }
+.studio-project-list>.studio-hint { margin:0; }
+.studio-project { display:grid;grid-template-columns:minmax(0,1fr) 28px 28px;align-items:center;gap:6px;padding:4px 4px 4px 0;border:1px solid var(--line);border-radius:8px;background:var(--surface); }
+.studio-project[data-current="true"] { border-color:var(--line-strong); }
+.studio-project-open { display:grid;gap:2px;min-width:0;min-height:40px;padding:6px 10px;border:0;background:transparent;text-align:left;justify-items:start; }
+.studio-project-open strong { min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--text-soft); }
+.studio-project-open small { color:var(--muted);font-size:10px;word-break:keep-all; }
+.studio-project[data-current="true"] .studio-project-open strong { color:var(--text); }
+.studio-project .glyph-icon { width:28px;min-height:28px;height:28px;padding:0; }
 .studio-hint { margin:8px 0 0;overflow-wrap:anywhere; }
 .studio-group-body>.studio-hint { margin:0; }
 #studioChannels { display:grid;gap:8px; }

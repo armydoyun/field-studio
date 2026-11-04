@@ -96,6 +96,16 @@ const pass=(name,channels={})=>({name,fragment:SRC,format:'rgba8',scale:1,channe
   assert.throws(()=>P.collectTextures(withImages,[meta('img1'),meta('img2')],()=>big),/32MB/);
   check(true,'collectTextures: 원본이 없거나 합계 32MB를 넘으면 오류');
 
+  // ---- project-store (이름 규칙 · IndexedDB 없는 환경) ----
+  const PS=await load('project-store');
+  check(PS.cleanName('  내   셰이더\n작업 ')==='내 셰이더 작업','cleanName: 앞뒤 공백 제거, 연속 공백·줄바꿈은 한 칸');
+  assert.throws(()=>PS.cleanName('   '),/이름/);assert.throws(()=>PS.cleanName('x'.repeat(PS.NAME_LIMIT+1)),/이하/);
+  check(true,'cleanName: 빈 이름과 너무 긴 이름은 거부');
+  const hadIDB='indexedDB' in globalThis,oldIDB=globalThis.indexedDB;
+  try{Object.defineProperty(globalThis,'indexedDB',{configurable:true,writable:true,value:undefined});
+    await assert.rejects(PS.create().list(),/IndexedDB/);check(true,'IndexedDB가 없으면 list()는 안내 오류로 거부(예외로 멈추지 않음)');}
+  finally{if(hadIDB)globalThis.indexedDB=oldIDB;else delete globalThis.indexedDB;}
+
   // ---- studio-layout (창 크기에 따른 기본값) ----
   const L=await load('studio-layout'),hadWindow='window' in globalThis,oldWindow=globalThis.window;
   try{
