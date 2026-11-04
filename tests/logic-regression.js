@@ -7,7 +7,7 @@ const {mockGL}=require('./architecture-regression');
 const root=process.env.SHADER_TEST_ROOT || path.resolve(__dirname,'..');
 let passed=0,failed=0;
 async function test(name,run){try{await run();passed++;console.log('PASS',name);}catch(e){failed++;console.error('FAIL',name,'—',e.message);}}
-function fixture(realEditor=false,compact=false,initialStorage={}){
+function fixture(_realEditor=false,compact=false,initialStorage={}){
   const metrics={stringify:0,locations:0,maxQueries:0,arrays:0,paints:0};
   const gl=mockGL(),nodes=new Map(),storage=new Map(Object.entries(initialStorage)),frames=[],reads=[],outputs=[],errors=[];let pendingBitmap=null,closed=0,textureCreates=0;
   const getLocation=gl.getUniformLocation,getParameter=gl.getParameter;

@@ -133,7 +133,7 @@ const runBrowser = async () => {
       const started = Date.now(), logs = [];
       const context = await browser.newContext({viewport:{width:1440, height:900}});
       // 첫 실행 안내(갤러리)가 모달로 뜨지 않게 한다. 나머지 저장소는 비어 있는 새 상태.
-      await context.addInitScript(() => { try { if(!localStorage.getItem("field.onboarded.v1")) localStorage.setItem("field.onboarded.v1", "1"); } catch(_) {} });
+      await context.addInitScript(() => { try { if(!localStorage.getItem("field.onboarded.v1")) localStorage.setItem("field.onboarded.v1", "1"); } catch(_) { /* 저장소가 막혀도 테스트는 계속 */ } });
       const page = await context.newPage();
       page.on("console", message => logs.push(`[${message.type()}] ${message.text()}`));
       page.on("pageerror", error => logs.push(`[pageerror] ${error.message}`));

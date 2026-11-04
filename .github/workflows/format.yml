@@ -28,6 +28,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
 
       - uses: actions/setup-python@v6
         with:
@@ -35,7 +36,7 @@ jobs:
 
       - name: Install tools
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
           python -m pip install -r requirements-test.txt
           python -m playwright install chromium

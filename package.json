@@ -13,10 +13,12 @@
     "test:py": "node tests/run.mjs py",
     "test:list": "node tests/run.mjs --list",
     "test:ci": "node tests/run.mjs --strict",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write js tools",
-    "format:check": "prettier --check js tools"
+    "format:check": "prettier --check js tools",
+    "sha": "python3 tools/update_sha_manifest.py",
+    "sha:check": "python3 tools/update_sha_manifest.py --check"
   },
   "devDependencies": {
     "@eslint/js": "9.17.0",

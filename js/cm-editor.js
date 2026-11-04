@@ -6,6 +6,7 @@ import * as CodeMirror from "./codemirror.js";
 import * as Highlight from "./glsl-highlight.js";
 import * as Language from "./glsl-language.js";
 import * as Features from "./cm-glsl-features.js";
+import * as Store from "./storage.js";
 const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], options = {}) => {
   const CM = CodeMirror.load(); // CodeMirror는 편집기를 처음 붙일 때 초기화한다
   const $ = id => document.getElementById(id),
@@ -28,18 +29,11 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
 
   // ---- 표시 설정(글자 크기·줄바꿈·들여쓰기). 예전 편집기와 같은 저장값을 이어서 쓴다 ----
   const STATE_KEY = "webgl.shader-studio.editor.v2";
-  let saved = {};
-  try {
-    saved = JSON.parse(localStorage.getItem(STATE_KEY) || "{}") || {};
-  } catch (_) {}
+  const saved = Store.readJSON(STATE_KEY, {}) || {};
   let fontSize = Number.isInteger(saved.fontSize) ? Math.max(10, Math.min(20, saved.fontSize)) : 12,
     wrap = !!saved.wrap,
     tabSize = saved.tabSize === 2 ? 2 : 4;
-  const save = () => {
-    try {
-      localStorage.setItem(STATE_KEY, JSON.stringify({ ...saved, fontSize, wrap, tabSize }));
-    } catch (_) {}
-  };
+  const save = () => Store.writeJSON(STATE_KEY, { ...saved, fontSize, wrap, tabSize });
   const fontComp = new CM.Compartment(),
     wrapComp = new CM.Compartment(),
     tabComp = new CM.Compartment();

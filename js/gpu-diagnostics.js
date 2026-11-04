@@ -175,7 +175,9 @@ const createGpuTimer = gl => {
     if (active) {
       try {
         gl.endQuery(ext.TIME_ELAPSED_EXT);
-      } catch (_) {}
+      } catch (_) {
+        /* 이미 끝났거나 컨텍스트를 잃은 쿼리: 지우기만 하면 된다. */
+      }
       free.push(active);
       active = null;
     }

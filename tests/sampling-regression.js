@@ -2,7 +2,7 @@ require('./esm-vm-bridge.cjs'); // Test-only ESM mock adapter.
 // node tests/sampling-regression.js — 샘플러 상태, 저장, 복구, 실패 롤백.
 "use strict";
 const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),vm=require("node:vm");
-const root=path.resolve(__dirname,"..");let api,serial=0,bound=null,errorCode=0,live=0;
+const root=path.resolve(__dirname,"..");let api,serial=0,bound=null,errorCode=0;
 const uploads=[],params=[],deleted=[],records=new Map();
 const gl={};
 for(const key of ["MAX_TEXTURE_SIZE","TEXTURE_BINDING_2D","TEXTURE_2D","RGBA","UNSIGNED_BYTE","TEXTURE_MIN_FILTER","TEXTURE_MAG_FILTER","TEXTURE_WRAP_S","TEXTURE_WRAP_T","LINEAR","NEAREST","CLAMP_TO_EDGE","REPEAT","MIRRORED_REPEAT"]) gl[key]=key;

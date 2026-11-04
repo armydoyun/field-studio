@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {fixture,src,scene}=require('./logic-regression');
+const {fixture,scene}=require('./logic-regression');
 const equal=(a,b)=>assert.equal(JSON.stringify(a),JSON.stringify(b));
 let passed=0,failed=0;
 async function test(name,fn){try{await fn();passed++;console.log('PASS',name);}catch(e){failed++;console.error('FAIL',name,e.message);}}

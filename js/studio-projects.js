@@ -74,9 +74,13 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
     openButton.type = "button";
     openButton.className = "studio-project-open";
     title.textContent = item.name;
-    meta.textContent = [when(item.updated), `버퍼 ${item.passes || 0}`, `이미지 ${item.images || 0}`].filter(Boolean).join(" · ");
+    meta.textContent = [when(item.updated), `버퍼 ${item.passes || 0}`, `이미지 ${item.images || 0}`]
+      .filter(Boolean)
+      .join(" · ");
     openButton.append(title, meta);
-    openButton.title = isCurrent ? `${item.name} · 지금 작업 중 · 다시 열면 저장한 상태로 돌아갑니다` : `${item.name} 열기`;
+    openButton.title = isCurrent
+      ? `${item.name} · 지금 작업 중 · 다시 열면 저장한 상태로 돌아갑니다`
+      : `${item.name} 열기`;
     if (isCurrent) openButton.setAttribute("aria-current", "true");
     on(openButton, "click", () => openItem(item));
     for (const [button, icon, label, action] of [
@@ -141,11 +145,22 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
   const save = (asNew = false) =>
     exclusive(async () => {
       const overwrite = current && !asNew;
-      const name = overwrite ? current.name : await askName(asNew ? "다른 이름으로 저장" : "브라우저에 저장", asNew ? `${current?.name || suggestName()} 사본` : suggestName());
+      const name = overwrite
+        ? current.name
+        : await askName(
+            asNew ? "다른 이름으로 저장" : "브라우저에 저장",
+            asNew ? `${current?.name || suggestName()} 사본` : suggestName()
+          );
       if (name === null || name === undefined) return false;
       const pack = await buildPack();
       if (!pack) return false;
-      const record = await store.save({ id: overwrite ? current.id : null, name, text: pack.text, passes: pack.passes, images: pack.images });
+      const record = await store.save({
+        id: overwrite ? current.id : null,
+        name,
+        text: pack.text,
+        passes: pack.passes,
+        images: pack.images,
+      });
       current = { id: record.id, name: record.name };
       remember();
       setStatus(`프로젝트 '${record.name}' 저장됨 · 이 브라우저의 보관함`);
@@ -162,7 +177,13 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
     });
   const renameItem = item =>
     exclusive(async () => {
-      const name = await ask({ title: "이름 바꾸기", message: "", value: item.name, label: "프로젝트 이름", ok: "바꾸기" });
+      const name = await ask({
+        title: "이름 바꾸기",
+        message: "",
+        value: item.name,
+        label: "프로젝트 이름",
+        ok: "바꾸기",
+      });
       if (name === null || name === undefined) return false;
       const record = await store.rename(item.id, name);
       if (current?.id === item.id) {

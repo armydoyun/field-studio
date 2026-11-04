@@ -131,7 +131,7 @@ await test('Compact parameters button opens the panel over the editor without cl
  assert.equal(f.document.body.classList.contains('panel-hidden'),false);assert.equal(n('stage').inert,true);
  await n('panelBackdrop').click();assert.equal(n('stage').inert,false);assert.equal(n('studioDock').hidden,false,'closing the panel returns to the editor');
 },true);
-await test('Editor open state is saved and reopened on the next start',async(f,n)=>{
+await test('Editor open state is saved and reopened on the next start',async(f)=>{
  f.studio.open();assert.equal(JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1')).editor,true);
  f.studio.close();assert.equal(JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1')).editor,false);
 });

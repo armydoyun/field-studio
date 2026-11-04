@@ -12,7 +12,6 @@ uniform sampler2D iChannel0;
 out vec4 fragColor;
 void main(){fragColor=vec4(0.3,0.5,0.8,1.0);}`;
     try {
-        const before = r.getStats().frame;
         ok(studio.setProject({image:source,passes:[
             {name:"A",fragment:source,scale:0.5,format:"rgba8",channels:{0:{buffer:"A",frame:"previous"}}},
             {name:"B",fragment:source,scale:1,format:"rgba8",channels:{0:{buffer:"A",frame:"current"}}}
