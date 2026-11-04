@@ -1,15 +1,31 @@
 // 프로젝트 메뉴: 뷰포트 머리줄의 프로젝트 이름 버튼으로 여는 팝오버.
 // 편집기를 열지 않아도 보관함 저장·열기, Pack·소스 JSON, 새 프로젝트, 이미지를 다룬다(버튼 동작은 studio.js · studio-projects.js가 단다).
 // 바깥을 누르거나 Esc를 누르면 닫힌다. 이름 입력 대화상자(<dialog>) 안을 누르는 것은 바깥으로 치지 않는다.
+// 미리보기 영역은 overflow:hidden이라, 그 안에서 absolute로 띄우면 편집기 쪽으로 나가는 부분이 잘린다.
+// 그래서 메뉴는 position:fixed로 창 기준에 두고, 열 때·창 크기가 바뀔 때 버튼 바로 아래에 맞춘다(편집기 위로 올라온다).
 const create = ({ $, on }) => {
   const toggle = $("projectMenuToggle"),
     menu = $("projectMenu");
   menu.hidden = true;
   toggle.setAttribute("aria-expanded", "false");
   const isOpen = () => !menu.hidden;
+  const GAP = 6,
+    MARGIN = 12;
+  const place = () => {
+    const rect = toggle.getBoundingClientRect?.();
+    if (!rect || !menu.style) return;
+    const width = Math.min(340, window.innerWidth - MARGIN * 2),
+      left = Math.max(MARGIN, Math.min(rect.left, window.innerWidth - MARGIN - width)),
+      top = rect.bottom + GAP;
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu.style.width = `${width}px`;
+    menu.style.maxHeight = `${Math.max(160, window.innerHeight - top - MARGIN)}px`;
+  };
   const firstAction = () => menu.querySelector?.("button:not([disabled]):not([hidden])");
   const open = ({ focus = true } = {}) => {
     menu.hidden = false;
+    place();
     toggle.setAttribute("aria-expanded", "true");
     if (focus) firstAction()?.focus?.();
   };
@@ -25,6 +41,9 @@ const create = ({ $, on }) => {
     const target = event.target;
     if (menu.contains?.(target) || toggle.contains?.(target) || target?.closest?.("dialog")) return;
     close();
+  });
+  on(window, "resize", () => {
+    if (isOpen()) place();
   });
   on(menu, "keydown", event => {
     if (event.key !== "Escape") return;
