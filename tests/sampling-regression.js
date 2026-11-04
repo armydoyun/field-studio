@@ -60,9 +60,9 @@ const file={type:"image/png",name:"tile.png",size:30,width:3,height:5};
   assert.equal(await legacy.restoreSaved(),true);
   assert.equal(legacy.get("tex90").sampling.wrapS,"clamp");
   assert.equal(legacy.get("tex90").sampling.filter,"linear");
-  const html=fs.readFileSync(path.join(root,"js/studio.js"),"utf8");
-  assert(html.includes("studio-sampling") && html.includes("renderer.setTextureSampling"));
-  const renderer=fs.readFileSync(path.join(root,"js/renderer.js"),"utf8");
-  assert(renderer.includes("setTextureSampling, getPasses:"));
+  // UI 연결: studio가 샘플링 선택 상자를 만들고 renderer.setTextureSampling을 부르며, renderer가 그 함수를 공개한다.
+  const {code,has}=require("./source-check.cjs"),studio=code("js/studio.js"),renderer=code("js/renderer.js");
+  assert(has(studio,'"studio-sampling"',"renderer.setTextureSampling(asset.id,"));
+  assert(has(renderer,"setTextureSampling, getPasses:"));
   legacy.dispose();console.log("PASS sampling: default / GPU sampler / no reupload / validation / rollback / restore / legacy / UI");
 })().catch(e=>{console.error(e);process.exitCode=1;});

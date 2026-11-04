@@ -33,7 +33,7 @@ test('Doom Fire code, button, and API are removed',f=>{
  assert.equal(f.studio.exampleFire,undefined);assert(!/Doom Fire|studioExampleFire/.test(html));assert(!/fireColor|const fire =|exampleFire/.test(studio));
  // 편집기 서랍의 옛 "시작 예제" 묶음은 갤러리와 겹쳐 제거됐다. 같은 예제는 갤러리 카드가 Studio API로 연다.
  assert(!/id="studioStarters"|id="studioExample(Pipeline|Feedback|Raymarch)"/.test(html));
- const gallery=fs.readFileSync(path.join(root,'js/gallery.js'),'utf8');for(const action of ['examplePipeline','exampleFeedback','exampleRaymarch'])assert(gallery.includes(`action:"${action}"`)&&typeof f.studio[action]==='function',action);
+ const {code,has}=require('./source-check.cjs'),gallery=code('js/gallery.js');for(const action of ['examplePipeline','exampleFeedback','exampleRaymarch'])assert(has(gallery,`action:"${action}"`)&&typeof f.studio[action]==='function',action);
  assert(/id="studioReset"[^>]*>새 프로젝트/.test(html.slice(html.indexOf('id="studioFiles"'))),'new-project button lives in the project files group');
 });
 console.log(`Learning examples: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;

@@ -14,7 +14,7 @@ assert(!html.includes('id="studioExampleRaymarch"')&&!html.includes('id="studioS
 for(const id of ['rayMaxSteps','rayStepsRange','rayMaxDistance','raySurfaceEpsilon','rayNormalEpsilon','debugHeatmap']){
   assert(!html.includes(`id="${id}"`)&&!ui.includes(`$("${id}")`),`${id} still exposed in Render`);
 }
-assert(studio.includes('const exampleRaymarch')&&studio.includes('renderer.applyPortable(next,users)'));
-assert(studio.includes('image:Shader.raymarch,passes:[],imageChannels:{}')&&studio.includes('adoptProject(next)'));
-assert(read('js/renderer.js').includes('setRaymarchSettings'),'legacy shader API retained');
+// Ray Marching 예제가 이전 파라미터를 지우고 Ray 파라미터 6개로 바꾸는 동작은 starter-ownership-regression.js가 실제로 실행해 본다.
+assert(/\bexampleRaymarch\b/.test(studio)&&/\bShader\.raymarch\b/.test(studio)&&/\bShader\.rayUniforms\b/.test(studio),'Ray Marching 예제는 shader.js의 프리셋을 쓴다');
+assert(/\bsetRaymarchSettings\b/.test(read('js/renderer.js')),'legacy shader API retained');
 console.log('PASS generic Shader Art default, optional Ray Starter, custom sliders, rollback, legacy compatibility');
