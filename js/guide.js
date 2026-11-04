@@ -14,7 +14,7 @@ import * as SnippetPreview from "./snippet-preview.js";
       {p:"FIELD Studio는 브라우저에서 GLSL 프래그먼트 셰이더를 작성하고 결과를 바로 보는 오프라인 셰이더 작업실입니다. 서버나 인터넷이 필요 없습니다."},
       {steps:[
         "**예제 고르기** — 뷰포트 툴바의 격자 아이콘(또는 `X`)으로 갤러리를 열고 마음에 드는 예제를 선택합니다.",
-        "**코드 고치기** — `E`로 편집기를 열고 숫자 하나를 바꿔 보세요. 0.9초 뒤 자동으로 적용됩니다(`Ctrl+Enter`는 즉시 실행).",
+        "**코드 고치기** — `E`로 편집기를 열고 숫자 하나를 바꿔 보세요. 0.9초 뒤 자동으로 적용됩니다(`Ctrl+S`는 즉시 실행).",
         "**값 조절하기** — 설정 패널의 **파라미터** 탭에서 슬라이더·색상으로 Uniform 값을 실시간으로 바꿉니다.",
         "**확인하기** — **성능** 탭에서 GPU 시간과 버퍼 내용을 들여다봅니다."]},
       {p:"**가장 작은 셰이더** — 아래 코드는 화면 좌표를 색으로 바꿉니다. **이 코드로 시작**을 누른 뒤 `0.5`나 `sin` 안의 값을 바꿔 보세요."},
@@ -55,7 +55,7 @@ void main() {
     vec3 color = 0.5 + 0.5 * cos(uTime + uv.xyx + vec3(0, 2, 4));
     fragColor = vec4(color, 1.0);
 }`, title:"가장 작은 셰이더", insert:"replace"},
-      {list:["**자동**이 켜져 있으면 입력을 멈춘 뒤 0.9초에 자동 적용, 꺼져 있으면 **실행**(`Ctrl+Enter`/`Ctrl+S`)으로 적용합니다.",
+      {list:["**자동**이 켜져 있으면 입력을 멈춘 뒤 0.9초에 자동 적용, 꺼져 있으면 **실행**(`Ctrl+S`)으로 적용합니다.",
         "컴파일 오류는 해당 줄이 **빨간 띠**로 표시되고 줄 끝에 메시지가 나옵니다. 아래 목록을 누르면 그 줄로 이동합니다.",
         "오류가 있어도 화면은 마지막으로 성공한 결과를 유지합니다.",
         "`Ctrl+Space` 자동 완성, `Ctrl+F` 검색, `Ctrl+/` 주석, `Alt+↑↓` 줄 이동을 지원합니다."]},
@@ -170,13 +170,13 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       {keys:[["가이드 열기/닫기","?"],["셰이더 편집기","E"],["예제 갤러리","X"],["재생/일시정지 (뷰포트 선택 시)","Space"],["전체화면","F"],["설정 패널","H"],["HUD 표시","G"],["파라미터 검색","/"],
         ["3D 카메라 회전 / 확대","드래그 / 휠"],["카메라 이동 · 가속","WASD·방향키 / Shift"],["카메라 초기화","R"]]},
       {p:"**편집기 안에서** — VS Code 기본 단축키와 같습니다(Mac은 Ctrl 대신 Cmd). `Ctrl+K Ctrl+0`처럼 적힌 키는 두 번 이어서 누릅니다. Ctrl+W·Ctrl+N·Ctrl+Tab·Ctrl+PageUp/PageDown은 브라우저가 먼저 가져가므로, 패스 전환은 `Alt+PageUp/PageDown`을 씁니다."},
-      {keys:[["코드 적용 (이 앱 전용)","Ctrl+Enter / Ctrl+S"],["되돌리기 / 다시 실행","Ctrl+Z / Ctrl+Y · Ctrl+Shift+Z"],["자동 완성","Ctrl+Space / Ctrl+I"],
+      {keys:[["코드 적용 (이 앱 전용)","Ctrl+S"],["되돌리기 / 다시 실행","Ctrl+Z / Ctrl+Y · Ctrl+Shift+Z"],["자동 완성","Ctrl+Space / Ctrl+I"],
         ["명령 팔레트","Ctrl+Shift+P / F1"],["패스(Image · Buffer)로 이동","Ctrl+P"],["함수·Uniform으로 이동","Ctrl+Shift+O"],["줄 번호로 이동","Ctrl+G"],["검색 / 치환","Ctrl+F / Ctrl+H"],
         ["정의로 이동","F12 / Ctrl+클릭"],["이름 바꾸기","F2"],
         ["주석 전환 / 블록 주석","Ctrl+/ / Shift+Alt+A"],["줄 주석 추가 / 제거","Ctrl+K Ctrl+C / Ctrl+K Ctrl+U"],
         ["다음 일치 항목 선택 추가 / 모든 일치 선택","Ctrl+D / Ctrl+Shift+L · Ctrl+F2"],["선택 영역 확장 / 축소","Shift+Alt+→ / Shift+Alt+←"],["줄 선택 (반복하면 다음 줄까지)","Ctrl+L"],
         ["커서 추가 (클릭 · 위아래 줄 · 선택 줄 끝마다)","Alt+클릭 · Ctrl+Alt+↑↓ · Shift+Alt+I"],["사각(열) 선택","Shift+Alt+드래그"],
-        ["줄 위/아래 이동","Alt+↑ / Alt+↓"],["줄 위/아래로 복사","Shift+Alt+↑ / Shift+Alt+↓ (예전 키 Ctrl+Shift+D)"],["줄 삭제","Ctrl+Shift+K"],["위에 줄 삽입","Ctrl+Shift+Enter"],
+        ["줄 위/아래 이동","Alt+↑ / Alt+↓"],["줄 위/아래로 복사","Shift+Alt+↑ / Shift+Alt+↓ (예전 키 Ctrl+Shift+D)"],["줄 삭제","Ctrl+Shift+K"],["아래 / 위에 줄 삽입","Ctrl+Enter / Ctrl+Shift+Enter"],
         ["들여쓰기 / 내어쓰기","Tab / Shift+Tab · Ctrl+] / Ctrl+["],["짝 괄호로 이동","Ctrl+Shift+\\"],
         ["블록 접기 / 펴기","Ctrl+Shift+[ / Ctrl+Shift+]"],["모두 접기 / 모두 펴기","Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J"],
         ["다음 · 이전 오류 / 오류 목록 / 아래 패널","F8 · Shift+F8 / Ctrl+Shift+M / Ctrl+J"],
@@ -203,7 +203,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
     {target:"#view-profile", title:"성능 · 디버그", text:"패스별 GPU 시간, 버퍼 썸네일, 픽셀 값, Uniform 진단을 확인합니다. 셰이더가 느리거나 결과가 이상할 때 먼저 보세요.", prepare:"panel:profile"},
     {target:"#studioPassTabs", title:"패스 탭", text:"Image(화면)와 Buffer 패스를 오갑니다. 옆의 +로 오프스크린 패스를 추가해 여러 단계를 연결할 수 있어요.", prepare:"open-editor"},
     {target:".studio-editor-frame", title:"코드 편집기", text:"GLSL을 고치면 0.9초 뒤 자동 적용됩니다. 오류가 나면 해당 줄이 빨갛게 표시되고 줄 끝에 이유가 나와요.", prepare:"open-editor"},
-    {target:"#studioRun", title:"실행 · 되돌리기", text:"Ctrl+Enter로 즉시 실행, Ctrl+Z로 코드·버퍼·파라미터 변경을 되돌립니다.", prepare:"open-editor"},
+    {target:"#studioRun", title:"실행 · 되돌리기", text:"Ctrl+S로 즉시 실행, Ctrl+Z로 코드·버퍼·파라미터 변경을 되돌립니다.", prepare:"open-editor"},
     {target:"#helpToggle", title:"가이드는 언제든", text:"이 버튼이나 ? 키로 가이드를 다시 열 수 있어요. 각 패널의 작은 ? 버튼은 해당 주제로 바로 이동합니다.", prepare:"close-editor"}
   ];
   const mount = ({studio, gallery}) => {

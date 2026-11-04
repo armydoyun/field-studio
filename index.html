@@ -233,7 +233,7 @@
                             <button id="studioUndo" type="button" class="glyph-icon icon-undo" aria-label="되돌리기" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled></button>
                             <button id="studioRedo" type="button" class="glyph-icon icon-redo" aria-label="다시 실행" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled></button>
                             <label class="studio-live" title="코드를 고치면 0.9초 뒤 자동으로 적용"><input id="studioLive" type="checkbox" checked> 자동</label>
-                            <button id="studioRun" type="button" class="studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Ctrl+Enter 또는 Ctrl+S)">실행 <span>Ctrl+↵</span></button>
+                            <button id="studioRun" type="button" class="studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Ctrl+S)">실행 <span>Ctrl+S</span></button>
                         </div>
                         <span class="studio-tool-sep" aria-hidden="true"></span>
                         <button id="studioPause" type="button" class="glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
@@ -369,7 +369,7 @@
         </header>
         <div class="gallery-body">
             <ol class="gallery-steps gallery-welcome-only">
-                <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Ctrl+Enter</kbd>로 즉시 실행</span></li>
+                <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Ctrl+S</kbd>로 즉시 실행</span></li>
                 <li><kbd>/</kbd><span><b>파라미터</b> — 슬라이더로 값을 조절하고 Uniform을 추가</span></li>
                 <li><kbd>성능</kbd><span><b>프로파일러</b> — 패스별 GPU 시간과 미등록 Uniform을 확인</span></li>
                 <li><kbd>?</kbd><span><b>가이드</b> — 모든 기능 설명·코드 예시, 처음이라면 아래 <b>UI 둘러보기</b></span></li>
@@ -402,7 +402,7 @@
             <div class="help-list"><span>셰이더 편집기 열기/닫기</span><kbd>E</kbd><span>예제 갤러리</span><kbd>X</kbd><span>재생/일시정지 (뷰포트 선택)</span><kbd>Space</kbd><span>전체화면</span><kbd>F</kbd><span>설정 패널 표시/숨김</span><kbd>H</kbd><span>FPS HUD 표시/숨김</span><kbd>G</kbd><span>Uniform 검색</span><kbd>/</kbd><span>이 도움말 열기/닫기</span><kbd>?</kbd><span>카메라 회전 / 확대</span><kbd>드래그 / 휠</kbd><span>회전·확대 / 속도 증가</span><kbd>WASD·방향키 / Shift</kbd><span>카메라 초기화 (뷰포트 선택)</span><kbd>R</kbd></div>
             <h3>GLSL 편집</h3>
             <p class="help-note">편집기 단축키는 VS Code 기본값을 따릅니다. Ctrl은 Mac에서 Cmd입니다. Ctrl+W·Ctrl+N·Ctrl+Tab처럼 브라우저가 먼저 가져가는 키는 쓸 수 없습니다.</p>
-            <div class="help-list"><span>현재 코드 적용 (이 앱 전용)</span><kbd>Ctrl+Enter / Ctrl+S</kbd><span>명령 / 패스 / 함수·변수 / 줄로 이동</span><kbd>Ctrl+Shift+P / Ctrl+P / Ctrl+Shift+O / Ctrl+G</kbd><span>검색 / 치환</span><kbd>Ctrl+F / Ctrl+H</kbd><span>GLSL 이름 자동 완성</span><kbd>Ctrl+Space</kbd><span>다음 / 이전 검색 결과</span><kbd>F3 / Shift+F3</kbd><span>줄 주석 전환 / 추가 / 제거</span><kbd>Ctrl+/ · Ctrl+K Ctrl+C · Ctrl+K Ctrl+U</kbd><span>들여쓰기 / 내어쓰기</span><kbd>Tab / Shift+Tab</kbd><span>선택 줄 들여쓰기</span><kbd>Ctrl+] / Ctrl+[</kbd><span>줄 위/아래로 복사</span><kbd>Shift+Alt+↑ / Shift+Alt+↓</kbd><span>선택 줄 위/아래 이동</span><kbd>Alt+↑ / Alt+↓</kbd><span>모두 접기 / 모두 펴기</span><kbd>Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J</kbd><span>편집 취소 / 다시 실행</span><kbd>Ctrl+Z / Ctrl+Y</kbd><span>앞 / 뒤 패스 전환 (편집 중)</span><kbd>Alt+PageUp / Alt+PageDown</kbd><span>패스 탭 간 이동 (탭 선택 중)</span><kbd>← → / Home End</kbd><span>들여쓰기 폭 / 자동 줄바꿈</span><kbd>Tab 2·4 / Wrap</kbd></div>
+            <div class="help-list"><span>현재 코드 적용 (이 앱 전용)</span><kbd>Ctrl+S</kbd><span>명령 / 패스 / 함수·변수 / 줄로 이동</span><kbd>Ctrl+Shift+P / Ctrl+P / Ctrl+Shift+O / Ctrl+G</kbd><span>검색 / 치환</span><kbd>Ctrl+F / Ctrl+H</kbd><span>GLSL 이름 자동 완성</span><kbd>Ctrl+Space</kbd><span>다음 / 이전 검색 결과</span><kbd>F3 / Shift+F3</kbd><span>줄 주석 전환 / 추가 / 제거</span><kbd>Ctrl+/ · Ctrl+K Ctrl+C · Ctrl+K Ctrl+U</kbd><span>들여쓰기 / 내어쓰기</span><kbd>Tab / Shift+Tab</kbd><span>선택 줄 들여쓰기</span><kbd>Ctrl+] / Ctrl+[</kbd><span>줄 위/아래로 복사</span><kbd>Shift+Alt+↑ / Shift+Alt+↓</kbd><span>선택 줄 위/아래 이동</span><kbd>Alt+↑ / Alt+↓</kbd><span>모두 접기 / 모두 펴기</span><kbd>Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J</kbd><span>편집 취소 / 다시 실행</span><kbd>Ctrl+Z / Ctrl+Y</kbd><span>앞 / 뒤 패스 전환 (편집 중)</span><kbd>Alt+PageUp / Alt+PageDown</kbd><span>패스 탭 간 이동 (탭 선택 중)</span><kbd>← → / Home End</kbd><span>들여쓰기 폭 / 자동 줄바꿈</span><kbd>Tab 2·4 / Wrap</kbd></div>
             <h3>버퍼 · 데이터</h3>
             <p>패스 탭 옆 <b>+</b>로 패스를 추가하고 <b>iChannel0~3</b>에서 Texture 또는 Buffer를 연결합니다. <b>current</b>는 먼저 실행된 패스, <b>previous</b>는 직전 프레임의 결과입니다. <b>자동</b>은 코드 변경 시 자동 적용, 재생 버튼은 정지/재생, 시간 초기화 버튼은 프레임/피드백 초기화, <b>Undo/Redo</b>는 컴파일 실패를 포함한 편집 이력을 되돌립니다. 연속 타이핑은 묶어서 저장하며, 편집기에서 <b>Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z</b>를 사용할 수 있습니다.</p>
             </article>

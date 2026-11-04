@@ -631,7 +631,7 @@ void main() {
       } else if(event.altKey && ["PageUp","PageDown"].includes(event.key)) {
         event.preventDefault();const tabs=["Image",...project.passes.map(p=>p.name)],index=tabs.indexOf(selected);
         select(tabs[(index+(event.key==="PageDown"?1:-1)+tabs.length)%tabs.length]);$("studioCode").focus();
-      } else if(((event.key==="Enter" && !event.shiftKey) || event.key.toLowerCase()==="s")&&(event.ctrlKey||event.metaKey)) {   // Ctrl+Shift+Enter는 편집기의 '위에 줄 삽입'
+      } else if(event.key.toLowerCase()==="s"&&(event.ctrlKey||event.metaKey)) {   // Ctrl+Enter · Ctrl+Shift+Enter는 편집기의 '아래/위에 줄 삽입'(VS Code)
         event.preventDefault();rememberEditor();apply();
       }
     }); on($("studioRun"),"click",()=>{rememberEditor();apply();});
@@ -800,7 +800,7 @@ void main() {
     const press = (label, id, key, bind) => ({label, key, bind, run:() => { const button=$(id); if(button && !button.disabled) button.click(); }});
     const stepPass = step => { const tabs=[...$("studioPassTabs").children], at=tabs.findIndex(tab=>tab.classList.contains("is-active")); tabs[(at+step+tabs.length)%tabs.length]?.click(); };
     editor.registerCommands?.([
-      press("셰이더 실행 (적용)","studioRun","Ctrl+Enter"), press("되돌리기","studioUndo","Ctrl+Z"), press("다시 실행","studioRedo","Ctrl+Y"),
+      press("셰이더 실행 (적용)","studioRun","Ctrl+S"), press("되돌리기","studioUndo","Ctrl+Z"), press("다시 실행","studioRedo","Ctrl+Y"),
       {label:"자동 적용 켜기/끄기", run:() => $("studioLive").click()},
       press("버퍼 패스 추가","studioAdd"), {label:"다음 패스로", key:"Alt+PageDown", run:() => stepPass(1)}, {label:"이전 패스로", key:"Alt+PageUp", run:() => stepPass(-1)},
       press("재생 / 일시정지","studioPause"), press("시간·프레임 초기화","studioResetFrames"), press("도구 서랍 열기/닫기","studioToolsToggle","Ctrl+B","Mod-b"),

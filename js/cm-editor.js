@@ -234,7 +234,7 @@ import * as Features from "./cm-glsl-features.js";
       if(changes.length) editorView.dispatch({changes, scrollIntoView:true, userEvent:add ? "input.comment" : "delete.comment"});
       return true;
     };
-    // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(Ctrl+Enter는 이 앱에서 셰이더 실행).
+    // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(아래는 Ctrl+Enter = CM.insertBlankLine, 셰이더 실행은 Ctrl+S).
     const insertLineAbove = editorView => {
       const state = editorView.state;
       editorView.dispatch(state.changeByRange(range => {
@@ -314,7 +314,7 @@ import * as Features from "./cm-glsl-features.js";
       ...both("Shift-Alt-i", cursorsAtLineEnds),
       {key:"Shift-Alt-ArrowRight", run:expandSelection}, {key:"Shift-Alt-ArrowLeft", run:shrinkSelection},
       // 편집
-      {key:"Mod-Shift-Enter", run:insertLineAbove},
+      {key:"Mod-Enter", run:CM.insertBlankLine}, {key:"Mod-Shift-Enter", run:insertLineAbove},
       {key:"Mod-k Mod-c", run:lineComment(true)}, {key:"Mod-k Mod-u", run:lineComment(false)},
       ...both("Mod-Shift-d", CM.copyLineDown),   // 예전 편집기의 줄 복제 키(VS Code는 Shift+Alt+↓)
       {key:"Mod-Shift-\\", run:CM.cursorMatchingBracket},
@@ -411,7 +411,7 @@ import * as Features from "./cm-glsl-features.js";
       {label:"다음 일치 항목 선택 추가", key:"Ctrl+D", run:() => CM.selectNextOccurrence(view)}, {label:"모든 일치 항목 선택", key:"Ctrl+Shift+L · Ctrl+F2", run:() => selectAllOccurrences(view)},
       {label:"선택 영역 확장 / 축소", key:"Shift+Alt+→ / ←", run:() => expandSelection(view)},
       {label:"선택한 줄마다 줄 끝에 커서", key:"Shift+Alt+I", run:() => cursorsAtLineEnds(view)},
-      {label:"위에 줄 삽입", key:"Ctrl+Shift+Enter", run:() => insertLineAbove(view)},
+      {label:"아래에 줄 삽입", key:"Ctrl+Enter", run:() => CM.insertBlankLine(view)}, {label:"위에 줄 삽입", key:"Ctrl+Shift+Enter", run:() => insertLineAbove(view)},
       {label:"줄 삭제", key:"Ctrl+Shift+K", run:() => CM.deleteLine(view)}, {label:"짝 괄호로 이동", key:"Ctrl+Shift+\\", run:() => CM.cursorMatchingBracket(view)},
       {label:"들여쓰기", key:"Ctrl+]", run:() => CM.indentMore(view)}, {label:"내어쓰기", key:"Ctrl+[", run:() => CM.indentLess(view)},
       {label:"정의로 이동", key:"F12 · Ctrl+클릭", run:() => features.goToDefinition(view)}, {label:"이름 바꾸기 (같은 이름 모두)", key:"F2", run:() => features.renameSymbol(view)},
