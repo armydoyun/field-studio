@@ -13,7 +13,8 @@ import * as Store from "./storage.js";
 // 같은 사각형(RectangleMarker.forRange)을 얻은 뒤 위·아래 가장자리를 가장 가까운 줄 경계(줄바꿈된 줄이면 화면 행 경계)로 옮긴다.
 // drawSelection의 원래 선택 레이어는 CSS로 숨기고(.studio-selection-layer가 아닌 .cm-selectionLayer), 커서·기본 선택 숨김은 그대로 쓴다.
 // iOS는 기본 선택을 그대로 쓰는 CodeMirror 동작을 따라 이 레이어를 쓰지 않는다.
-const IOS = /iP(hone|ad|od)/.test(navigator.platform) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+const IOS =
+  /iP(hone|ad|od)/.test(navigator.platform) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
 const lineAlignedSelection = CM => {
   if (IOS) return [];
   // y: 문서 좌표(첫 줄 위 = 0). 가장 가까운 행 경계를 돌려준다.
