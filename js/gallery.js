@@ -1,6 +1,7 @@
 // 예제 갤러리와 첫 실행 안내. 썸네일은 별도의 작은 WebGL2 컨텍스트에서 한 번만 그리고 즉시 해제한다.
 // 예제 적용은 Studio API(loadExample/example*)만 사용하므로 Undo·미적용 변경 확인이 그대로 동작한다.
 import * as Annotations from "./annotations.js";
+import * as Store from "./storage.js";
 const ONBOARD_KEY = "field.onboarded.v1";
 const head = params => `#version 300 es
 precision highp float;
@@ -548,11 +549,7 @@ const mount = ({ studio, Shader }) => {
     button.addEventListener("click", () => onPick(item));
     return button;
   };
-  const finishOnboarding = () => {
-    try {
-      localStorage.setItem(ONBOARD_KEY, "1");
-    } catch (_) {}
-  };
+  const finishOnboarding = () => Store.write(ONBOARD_KEY, "1");
   const pick = async item => {
     if (dialog.open) dialog.close();
     finishOnboarding();
@@ -674,7 +671,9 @@ const mount = ({ studio, Shader }) => {
   let first = false;
   try {
     first = !localStorage.getItem(ONBOARD_KEY);
-  } catch (_) {}
+  } catch (_) {
+    /* 읽기가 막힌 브라우저: 안내를 띄우지 않는다. */
+  }
   if (first) setTimeout(() => open(true), 400);
   return { open, close, loadLesson, dispose: () => controller.abort() };
 };

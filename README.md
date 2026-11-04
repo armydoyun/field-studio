@@ -95,7 +95,8 @@ node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 �
 - 준비되지 않은 묶음(playwright·Python 없음)은 SKIP으로 표시하고 계속합니다. `--strict`(=`npm run test:ci`)는 SKIP도 실패로 칩니다.
 - GitHub Actions(`.github/workflows/test.yml`)가 push·PR마다 `npm run test:ci`를 돌립니다.
 - 새 테스트는 `tests/`에 두기만 하면 위 규칙으로 자동 분류됩니다. 다른 파일이 불러 쓰는 도우미는 `tests/run.mjs`의 `HELPERS`에 추가합니다.
-- `index.html`·`style.css`·`js/*.js`를 고친 뒤에는 `python tools/update_sha_manifest.py`로 `SOURCE_SHA256_Runtime.txt`를 갱신합니다(해시는 줄바꿈을 LF로 맞춰 계산하므로 Windows·Linux 결과가 같습니다).
+- `index.html`·`style.css`·`js/*.js`를 고친 뒤에는 `npm run sha`(= `python tools/update_sha_manifest.py`)로 `SOURCE_SHA256_Runtime.txt`를 갱신합니다(해시는 줄바꿈을 LF로 맞춰 계산하므로 Windows·Linux 결과가 같습니다). CI의 lint 작업이 `npm run sha:check`로 갱신 누락을 바로 알려 줍니다.
+- 커밋 전에 `npm run lint`(경고도 실패), `npm run format:check`를 돌립니다. 포맷은 `npm run format`으로 맞춥니다.
 - 콘솔용 테스트는 예전처럼 개발자 콘솔에 붙여 넣어 돌릴 수도 있고, `tests/gpu-validation.html`도 브라우저에서 직접 열어 실제 GPU로 검사할 수 있습니다.
 
 **검증 한계:** 자동화 테스트 환경은 페이지 네비게이션 및 WebGL2가 제한되어 개발용 ES Module의 실제 HTTP 구동, `file://`로 연 배포본의 실제 GPU 렌더링은 대상 브라우저에서 직접 최종 확인해야 합니다.

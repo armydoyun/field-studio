@@ -7,6 +7,7 @@ import * as Course from "./course.js";
 import * as Reference from "./glsl-reference.js";
 import * as Highlight from "./glsl-highlight.js";
 import * as SnippetPreview from "./snippet-preview.js";
+import * as Store from "./storage.js";
 // 블록 형식: {p}, {list:[…]}, {steps:[…]}, {table:{head, rows}}, {code, title, insert?:true}, {keys:[[설명, 키]…]},
 //            {note}, {actions:[{label, run:"tour"|"gallery"|"topic:<id>"|"example:<id>"}]}
 const TOPICS = [
@@ -565,22 +566,12 @@ const mount = ({ studio, gallery }) => {
   const PROGRESS_KEY = "field.guide.course.v1",
     LAST_KEY = "field.guide.last.v1";
   const done = (() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "[]");
-      return new Set(Array.isArray(saved) ? saved.filter(id => LESSON_IDS.includes(id)) : []);
-    } catch (_) {
-      return new Set();
-    }
+    const saved = Store.readJSON(PROGRESS_KEY, []);
+    return new Set(Array.isArray(saved) ? saved.filter(id => LESSON_IDS.includes(id)) : []);
   })();
-  const saveDone = () => {
-    try {
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify([...done]));
-    } catch (_) {}
-  };
-  try {
-    const last = localStorage.getItem(LAST_KEY);
-    if (ALL.some(topic => topic.id === last)) current = last;
-  } catch (_) {}
+  const saveDone = () => Store.writeJSON(PROGRESS_KEY, [...done]);
+  const last = Store.read(LAST_KEY);
+  if (ALL.some(topic => topic.id === last)) current = last;
   // `code`와 **강조**만 해석한다. 나머지는 모두 텍스트 노드.
   const rich = (tag, text, className = "") => {
     const node = element(tag, className);
@@ -1007,9 +998,7 @@ const mount = ({ studio, gallery }) => {
   const show = id => {
     const topic = ALL.find(item => item.id === id) || ALL[0];
     current = topic.id;
-    try {
-      localStorage.setItem(LAST_KEY, topic.id);
-    } catch (_) {}
+    Store.write(LAST_KEY, topic.id);
     const header = element("header", "guide-topic-head");
     if (topic.step)
       header.append(

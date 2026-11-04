@@ -24,7 +24,8 @@ const newId = () => `p${Date.now().toString(36)}${Math.random().toString(36).sli
 const create = ({ dbName = DB_NAME, now = () => Date.now() } = {}) => {
   const open = () =>
     new Promise((resolve, reject) => {
-      if (!globalThis.indexedDB) return reject(new Error("이 브라우저에서는 프로젝트 보관함(IndexedDB)을 쓸 수 없습니다."));
+      if (!globalThis.indexedDB)
+        return reject(new Error("이 브라우저에서는 프로젝트 보관함(IndexedDB)을 쓸 수 없습니다."));
       const request = indexedDB.open(dbName, 1);
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -33,7 +34,8 @@ const create = ({ dbName = DB_NAME, now = () => Date.now() } = {}) => {
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error("프로젝트 보관함을 열 수 없습니다."));
-      request.onblocked = () => reject(new Error("다른 탭이 프로젝트 보관함을 쓰고 있습니다. 다른 탭을 닫고 다시 시도하세요."));
+      request.onblocked = () =>
+        reject(new Error("다른 탭이 프로젝트 보관함을 쓰고 있습니다. 다른 탭을 닫고 다시 시도하세요."));
     });
   // stores의 저장소를 mode로 열고 work(저장소들)를 실행한다. 트랜잭션이 끝나야 결과를 돌려준다.
   const run = async (mode, work) => {

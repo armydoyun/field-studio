@@ -13,7 +13,7 @@ const load = (name) => {
   vm.runInNewContext(source,scope,{filename:name+".js"});
   return modules[name];
 };
-const shader=load("shader"), PM=load("pass-manager"), R=load("renderer");
+const shader=load("shader"), PM=load("pass-manager"), _R=load("renderer");
 const src=`#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){fragColor=vec4(1.0);}`;
 function mockGL(){
   let seq=0,drawFB=null,readFB=null;const deleted=[];let failFBO=false, failDraw=false;

@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   # 정적 검사. 테스트와 따로 돌려서, lint가 실패해도 테스트 결과는 그대로 볼 수 있다.
-  # 오류(버그 규칙)만 실패로 치고, 경고는 로그에만 남긴다.
+  # ESLint 경고·Prettier 어긋남·SHA 목록 누락 모두 실패로 친다.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -29,6 +29,13 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+      - name: Check formatting (Prettier)
+        run: npm run format:check
+
+      # js/*.js · index.html · style.css를 고치고 SHA 목록을 갱신하지 않았으면 여기서 바로 알려 준다.
+      - name: Check SHA manifest
+        run: npm run sha:check
 
   test:
     runs-on: ubuntu-latest

@@ -1,6 +1,6 @@
 // ESLint 설정 (flat config, ESLint 9)
 // 원칙: 실제 버그로 이어지는 규칙만 오류(error)로 두고, 모양·정리 성격의 규칙은 경고(warn)로 둔다.
-// `npm run lint`는 오류가 있을 때만 실패한다. 경고는 출력만 한다.
+// `npm run lint`는 경고도 실패로 친다(--max-warnings=0). 경고는 "고칠 것"이지 "무시해도 되는 것"이 아니다.
 import js from "@eslint/js";
 import globals from "globals";
 
@@ -79,6 +79,12 @@ export default [
       globals: {...globals.node},
     },
     rules: {...softened, ...bugs},
+  },
+
+  // GLSL 코드 조각은 편집기 자리표시자 문법(${1:이름})을 문자열에 그대로 담는다. 템플릿 리터럴 실수가 아니다.
+  {
+    files: ["js/glsl-language.js", "js/cm-editor.js"],
+    rules: {"no-template-curly-in-string": "off"},
   },
 
   // 테스트 실행기는 page.evaluate(() => …) 안에서 브라우저 전역(window·document·localStorage)을 쓴다.

@@ -6,7 +6,7 @@ const files=['index.html','style.css',...fs.readdirSync(jsdir).filter(x=>x.endsW
 // 배포본은 esbuild가 main.js의 import를 따라 묶으므로(tools/build.mjs) 모듈 목록을 따로 관리하지 않는다. 배포본 검사는 tests/build-regression.js.
 assert(!fs.existsSync(path.join(jsdir,'loader.js')),'AMD loader must be absent');
 const manifest=fs.readFileSync(path.join(root,'SOURCE_SHA256_Runtime.txt'),'utf8').trim().split(/\r?\n/);
-const hashes=new Map();for(const line of manifest){const m=/^([a-f0-9]{64})  (.+)$/.exec(line);assert(m,'SHA256 format');assert(!hashes.has(m[2]),'duplicate manifest entry');hashes.set(m[2],m[1]);}
+const hashes=new Map();for(const line of manifest){const m=/^([a-f0-9]{64}) {2}(.+)$/.exec(line);assert(m,'SHA256 format');assert(!hashes.has(m[2]),'duplicate manifest entry');hashes.set(m[2],m[1]);}
 assert.deepEqual([...hashes.keys()].sort(),files,'Runtime SHA manifest mismatch');
 // 줄바꿈은 LF로 맞춰 해시한다. Windows 체크아웃(core.autocrlf)은 CRLF로 풀리므로 원본 바이트로 비교하면 내용이 같아도 실패한다. tools/update_sha_manifest.py와 같은 규칙.
 const normalizedSha=file=>crypto.createHash('sha256').update(fs.readFileSync(file,'utf8').replace(/\r\n/g,'\n'),'utf8').digest('hex');
@@ -25,6 +25,6 @@ const done=new Set(),stack=new Set();function visit(name){assert(!stack.has(name
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert(html.includes('<script type="module" src="./js/main.js"></script>'),'ESM HTML entry missing');
 assert(!html.includes('loader.js'),'Legacy loader reference');
-const ids=new Set([...html.matchAll(/\bid\s*=\s*"([^\"]+)"/g)].map(x=>x[1]));
+const ids=new Set([...html.matchAll(/\bid\s*=\s*"([^"]+)"/g)].map(x=>x[1]));
 for(const name of names){const source=fs.readFileSync(path.join(jsdir,name+'.js'),'utf8');for(const m of source.matchAll(/\$\("([A-Za-z][\w-]*)"\)|document\.getElementById\("([A-Za-z][\w-]*)"\)/g)) assert(ids.has(m[1]||m[2]),`#${m[1]||m[2]} absent in ${name}`);}
 console.log(`PASS ${files.length} runtime files SHA-256, ${names.size} ES Modules, import cycle, ${ids.size} DOM IDs`);

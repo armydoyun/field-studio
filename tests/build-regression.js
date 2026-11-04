@@ -38,7 +38,7 @@ const has=name=>{try{require.resolve(name);return true;}catch{return false;}};
     try{
       const context=await browser.newContext({viewport:{width:1440,height:900}}),errors=[],requests=[];
       // 첫 실행 안내(갤러리 모달)가 E 키를 가로채지 않게 한다.
-      await context.addInitScript(()=>{try{localStorage.setItem('field.onboarded.v1','1');}catch(_){}});
+      await context.addInitScript(()=>{try{localStorage.setItem('field.onboarded.v1','1');}catch(_){/* 저장소가 막혀도 테스트는 계속 */}});
       const page=await context.newPage();
       page.on('pageerror',error=>errors.push(error.message));
       page.on('request',request=>{if(!/^(file|data|blob):/.test(request.url()))requests.push(request.url());});

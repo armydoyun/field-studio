@@ -75,7 +75,7 @@ await test('Boolean parameter uses an accessible switch with explicit true/false
   input.checked=true;await input.dispatchEvent({type:'change'});assert.equal(f.renderer.getUserUniforms()[0].value,true);assert.match(text.textContent,/true/);
   f.renderer.setUniform=()=>{throw Error('forced failure');};input.checked=false;await input.dispatchEvent({type:'change'});assert.equal(input.checked,true);assert.match(text.textContent,/true/);
 });
-await test('Large values keep every integer digit while long fractions are shortened',async(f,n,row)=>{
+await test('Large values keep every integer digit while long fractions are shortened',async(f,n)=>{
   f.renderer.defineUniform('uFar','float',123456.789);f.renderer.defineUniform('uPhase','float',0.5239193476851991);await n('uniformSearch').dispatchEvent({type:'input'});
   const list=n('uniformList').children,[far]=list[0].children[1].children,[phase]=list[1].children[1].children;
   assert.equal(far.value,'123456.789');assert.equal(phase.value,'0.523919');assert.equal(phase.title,'0.5239193476851991');
