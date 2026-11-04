@@ -40,7 +40,7 @@ await test('Replacing a pass source invalidates its old cursor bookmark',async(f
 });
 await test('Image hides inapplicable Buffer actions and disables pixel inspection',async(f,n)=>{
  f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});assert.equal(n('studioPassTools').hidden,true);
- await select(f,'A');assert.equal(n('studioPassTools').hidden,false);assert.equal(n('studioInputsTitle').textContent,'A · 입력 채널');
+ await select(f,'A');assert.equal(n('studioPassTools').hidden,false);assert.equal(n('studioInputsTitle').textContent,'A · 입력');
 });
 await test('Buffer count cap disables Add and pass tabs identify their controlled editor',async(f,n)=>{
  f.studio.setProject({image:src,passes:[...'ABCDEFGH'].map(pass),imageChannels:{}});assert.equal(n('studioAdd').disabled,true);
@@ -57,8 +57,18 @@ await test('Paused focus mode does not resume after user changes the intended pl
 await test('Final Image button exits Buffer preview without changing the editing pass',async(f,n)=>{
  f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});await select(f,'A');assert.equal(f.renderer.getStats().previewPass,'A');await n('previewImage').click();assert.equal(f.renderer.getStats().previewPass,null);assert.equal(n('studioCodeTitle').textContent,'Buffer A.frag');assert.equal(n('previewImage').disabled,true);assert.equal(n('studioPreviewTarget').textContent,'미리보기 · Image');
 });
-await test('Tools disclosure updates hidden and expanded state together',async(f,n)=>{
- await n('studioToolsToggle').click();assert.equal(n('studioTools').hidden,true);assert.equal(n('studioToolsToggle').attrs['aria-expanded'],'false');await n('studioToolsToggle').click();assert.equal(n('studioTools').hidden,false);
+await test('Project menu opens from the viewport without the editor and closes with Escape',async(f,n)=>{
+ assert.equal(n('studioDock').hidden,true);assert.equal(n('projectMenu').hidden,true);
+ await n('projectMenuToggle').click();assert.equal(n('projectMenu').hidden,false);assert.equal(n('projectMenuToggle').attrs['aria-expanded'],'true');
+ await n('projectMenu').dispatchEvent({type:'keydown',key:'Escape'});assert.equal(n('projectMenu').hidden,true);assert.equal(n('projectMenuToggle').attrs['aria-expanded'],'false');
+ await f.document.dispatchEvent({type:'keydown',key:'o',ctrlKey:true});assert.equal(n('projectMenu').hidden,false,'Ctrl+O opens the project menu');
+ await f.document.dispatchEvent({type:'keydown',key:'o',ctrlKey:true});assert.equal(n('projectMenu').hidden,true,'Ctrl+O again closes it');
+ assert.equal(n('studioDock').hidden,true,'the editor stays closed');
+});
+await test('Ctrl+Shift+S saves to the project store from anywhere',async(f,n)=>{
+ let clicks=0;n('studioProjectSave').click=()=>{clicks++;};
+ await f.document.dispatchEvent({type:'keydown',key:'S',ctrlKey:true,shiftKey:true});assert.equal(clicks,1);
+ assert.equal(n('studioDock').hidden,true,'saving does not open the editor');
 });
 await test('Resizer supports limits and a default-height reset',async(f,n)=>{
  const heights=[];n('studioDock').style.setProperty=(_,value)=>heights.push(value);
@@ -90,22 +100,21 @@ await test('Mobile drawer blocks the stage, and editor opening releases the stag
  assert.equal(n('stage').inert,true);f.studio.open();assert.equal(f.document.body.classList.contains('panel-hidden'),true);assert.equal(n('stage').inert,false);assert.equal(f.document.activeElement,n('studioCode'));
  await n('panelToggle').click();assert.equal(n('stage').inert,true);await n('panelBackdrop').click();assert.equal(n('stage').inert,false);
 },true);
-await test('Compact layout starts with hidden project tools and a reset height of 75%',async(f,n)=>{
- assert.equal(n('studioTools').hidden,true);let height;n('studioDock').style.setProperty=(_,v)=>height=v;await n('studioResize').dispatchEvent({type:'dblclick'});assert.equal(height,'75%');
+await test('Compact layout resets the editor height to 75%',async(f,n)=>{
+ let height;n('studioDock').style.setProperty=(_,v)=>height=v;await n('studioResize').dispatchEvent({type:'dblclick'});assert.equal(height,'75%');
 },true);
 await test('Viewport Space shortcut toggles playback and preserves normal editor typing',async(f,n)=>{
  n('stage').focus();await f.document.dispatchEvent({type:'keydown',code:'Space',key:' '});assert.equal(f.renderer.getStats().running,true);
  n('studioCode').focus();await f.document.dispatchEvent({type:'keydown',code:'Space',key:' '});assert.equal(f.renderer.getStats().running,true);
 });
-await test('Workspace disclosures and tool visibility are saved together',async(f,n)=>{
- n('studioImages').open=true;await n('studioImages').dispatchEvent({type:'toggle'});const value=JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1'));assert.equal(value.open.studioImages,true);
- await n('studioToolsToggle').click();assert.equal(JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1')).toolsHidden,true);
+await test('Editor menu disclosure is saved with the workspace',async(f,n)=>{
+ n('studioCodeTools').open=true;await n('studioCodeTools').dispatchEvent({type:'toggle'});const value=JSON.parse(f.storage.get('webgl.shader-studio.workspace.v1'));assert.equal(value.open.studioCodeTools,true);assert.equal('toolsHidden' in value,false);
 });
 await test('Saved workspace preferences restore only typed booleans',async(f,n)=>{
- assert.equal(n('studioTools').hidden,true);assert.equal(n('studioImages').open,true);assert.equal(n('studioCodeTools').open,false);
+ assert.equal(n('studioCodeTools').open,false);
 },false,{'webgl.shader-studio.workspace.v1':JSON.stringify({toolsHidden:true,open:{studioImages:true,studioCodeTools:false,studioInputs:'bad'}})});
-await test('Malformed workspace preferences do not prevent editing',async(f,n)=>{
- assert(f.studio.apply());assert.equal(n('studioTools').hidden,false);
+await test('Malformed workspace preferences do not prevent editing',async(f)=>{
+ assert(f.studio.apply());
 },false,{'webgl.shader-studio.workspace.v1':'{broken'});
 await test('Pack export exposes busy state and restores its label even after failure',async(f,n)=>{
  const label=n('studioExportPack').textContent;const promise=n('studioExportPack').click();assert.equal(n('studioExportPack').disabled,true);assert.equal(n('studioExportPack').attrs['aria-busy'],'true');await promise;assert.equal(n('studioExportPack').disabled,false);assert.equal(n('studioExportPack').textContent,label);assert.equal(n('studioExportPack').attrs['aria-busy'],undefined);
@@ -149,9 +158,9 @@ await test('Fullscreen hides the editor and restores it (with focus mode) afterw
  f.studio.close();f.document.fullscreenElement=n('stage');await f.document.dispatchEvent({type:'fullscreenchange'});
  f.document.fullscreenElement=null;await f.document.dispatchEvent({type:'fullscreenchange'});assert.equal(n('studioDock').hidden,true,'a closed editor stays closed');
 });
-await test('Starting a project in the side layout closes the tools drawer over the code',async(f,n)=>{
- f.studio.open();if(n('studioTools').hidden)await n('studioToolsToggle').click();assert.equal(n('studioTools').hidden,false);
- assert(await f.studio.examplePipeline()!==false);assert.equal(f.studio.getProject().passes.length,2);assert.equal(n('studioTools').hidden,true);
+await test('Starting a project from the project menu closes the menu to show the new scene',async(f,n)=>{
+ f.studio.open();await n('projectMenuToggle').click();assert.equal(n('projectMenu').hidden,false);
+ assert(await f.studio.examplePipeline()!==false);assert.equal(f.studio.getProject().passes.length,2);assert.equal(n('projectMenu').hidden,true);
 },false,{'webgl.shader-studio.layout.v1':JSON.stringify({layout:'right'})});
 console.log(`Workspace UX: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
 })();

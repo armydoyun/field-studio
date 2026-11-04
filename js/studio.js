@@ -13,6 +13,7 @@ import * as Layout from "./studio-layout.js";
 import * as Pack from "./studio-pack.js";
 import * as ProjectStore from "./project-store.js";
 import * as Projects from "./studio-projects.js";
+import * as ProjectMenu from "./project-menu.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -27,6 +28,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     signal = controller.signal;
   const element = tag => document.createElement(tag);
   const on = (target, type, callback) => target.addEventListener(type, callback, { signal });
+  // 프로젝트 메뉴(project-menu.js): 머리줄 버튼의 팝오버. 안의 버튼 동작은 아래에서 단다.
+  const projectMenu = ProjectMenu.create({ $, on });
   const original = Shader.fragment;
   const snapshot = () => ({
     image: renderer.getFragmentSource(),
@@ -395,7 +398,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       channels = activeChannels(),
       assets = renderer.getTextures(),
       blocked = project.passes.filter(pass => !validCurrent(selected, pass.name));
-    $("studioInputsTitle").textContent = `${selected} · 입력 채널`;
+    $("studioInputsTitle").textContent = `${selected} · 입력`;
     $("studioChannelRules").textContent =
       selected === "Image"
         ? "Image는 버퍼 실행이 끝난 뒤 그려집니다. 모든 버퍼의 current 또는 previous를 읽을 수 있습니다."
@@ -407,11 +410,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         select = element("select"),
         hint = element("p");
       row.className = "studio-channel";
-      label.textContent = `iChannel${i}`;
+      // 칩이 한 줄에 들어가도록 짧게 쓴다. 전체 이름은 title로.
+      label.textContent = `iCh${i}`;
+      label.title = `iChannel${i}`;
       label.htmlFor = select.id = `studioChannel${i}`;
       hint.id = `studioChannelHelp${i}`;
       hint.className = "studio-channel-help";
-      select.title = `iChannel${i}의 입력 이미지/버퍼 선택`;
       select.setAttribute("aria-describedby", `${hint.id} studioChannelRules`);
       const addOption = (value, text, disabled = false) => {
         const opt = element("option");
@@ -421,6 +425,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         select.append(opt);
       };
       addOption("", "연결 안 함");
+      addOption("load", "이미지 불러오기…");
       for (const asset of assets)
         addOption(`tex:${asset.id}`, `이미지 · ${asset.name} (${asset.width}×${asset.height})`);
       // 출력이 여럿(MRT)인 버퍼는 출력마다 선택지를 둔다. 값 형식: 이름:frame[:출력번호]
@@ -444,12 +449,20 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           ? `tex:${current.texture}`
           : `${current.buffer}:${current.frame}${current.attachment ? `:${current.attachment}` : ""}`
         : "";
+      const shown = select.value;
       const describe = () => {
         const info = inputInfo(channels?.[i], assets);
         hint.textContent = `${info.source} · ${info.frame} — ${info.help}`;
+        select.title = `iChannel${i} · ${hint.textContent}`;
       };
       describe();
       select.addEventListener("change", () => {
+        // 이미지 불러오기: 선택은 원래대로 두고 파일을 고르게 한다. 불러오면 이 채널에 바로 연결한다.
+        if (select.value === "load") {
+          select.value = shown;
+          pickImage(i);
+          return;
+        }
         if (!select.value) delete channels[i];
         else if (select.value.startsWith("tex:")) channels[i] = { texture: select.value.slice(4) };
         else {
@@ -472,9 +485,22 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
     syncTextureTargets();
   };
+  // 패스 탭에 마우스를 올리면 그 패스가 읽는 입력을 보여 준다(전체 그래프는 성능 탭의 패스 연결).
+  const tabTitle = name => {
+    const channels = (name === "Image" ? project.imageChannels : find(name)?.channels) || {},
+      assets = renderer.getTextures(),
+      inputs = Object.entries(channels)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([i, ref]) => `iChannel${i} ← ${inputInfo(ref, assets).source}`);
+    return `${name} 패스 편집 (Alt+PageUp/Down)${inputs.length ? `\n${inputs.join("\n")}` : ""}`;
+  };
   const renderGraph = () => {
     const holder = $("studioGraph"),
       assets = renderer.getTextures();
+    for (const name of ["Image", ...project.passes.map(pass => pass.name)]) {
+      const tab = $(`studioTab-${name}`);
+      if (tab) tab.title = tabTitle(name);
+    }
     holder.replaceChildren();
     for (const entry of [...project.passes, { name: "Image", channels: project.imageChannels }]) {
       const row = element("button"),
@@ -507,15 +533,19 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         line.append(channel, source, frame);
         row.append(line);
       }
-      row.addEventListener("click", () => select(entry.name));
+      row.addEventListener("click", () => {
+        if (!openState) open();
+        select(entry.name);
+      });
       holder.append(row);
     }
   };
-  // 새 이미지는 사용 중인 연결을 덮어쓰지 않고 첫 빈 채널에만 연결한다.
-  const connectTexture = id => {
+  // 새 이미지는 사용 중인 연결을 덮어쓰지 않고 첫 빈 채널에만 연결한다. target: 채널 선택 목록에서 고른 채널(덮어씀)
+  const connectTexture = (id, target) => {
     rememberEditor();
     const channels = activeChannels(),
-      slot = freeChannel();
+      slot = target ?? freeChannel(),
+      previous = channels[slot];
     if (slot === undefined) {
       setStatus("빈 입력 채널이 없습니다. 기존 채널을 해제한 뒤 연결하세요.", "is-error");
       return false;
@@ -528,7 +558,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       setStatus(`${inputInfo({ texture: id }, renderer.getTextures()).source} → ${selected}.iChannel${slot} 연결됨`);
       return true;
     }
-    delete channels[slot];
+    if (previous) channels[slot] = previous;
+    else delete channels[slot];
     renderChannels();
     renderGraph();
     return false;
@@ -663,7 +694,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       btn.setAttribute("aria-selected", String(selected === name));
       btn.tabIndex = selected === name ? 0 : -1;
       btn.textContent = name === "Image" ? "Image" : `Buffer ${name}`;
-      btn.title = `${name} 패스 편집 (Alt+PageUp/Down)`;
+      btn.title = tabTitle(name);
       btn.addEventListener("click", () => select(name));
       parent.append(btn);
     }
@@ -925,10 +956,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     saveLocal();
     revealCode();
   };
-  // 옆 배치의 도구 서랍은 코드를 덮으므로, 서랍에서 예제·파일로 프로젝트를 바꾸면 서랍을 닫아 새 코드를 보여 준다.
-  const revealCode = () => {
-    if (workspace.splitRight()) workspace.closeToolsDrawer();
-  };
+  // 프로젝트 메뉴에서 프로젝트를 바꾸면 메뉴를 닫아 새 화면을 보여 준다.
+  const revealCode = () => projectMenu.close();
   const replaceProject = (next, users = []) => {
     try {
       rememberEditor();
@@ -1253,7 +1282,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   renderTextures();
   const savedDraft = Store.read(DRAFT_KEY);
-  const loadImage = async file => {
+  const loadImage = async (file, slot) => {
     const check = beginLoad(),
       result = await renderer.addTexture(file);
     if (disposed) return;
@@ -1264,7 +1293,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       setStatus(`${file.name} 추가됨 · 작업 변경으로 자동 채널 연결을 취소했습니다.`);
       return;
     }
-    const connected = connectTexture(result.id);
+    const connected = connectTexture(result.id, slot);
     renderChannels();
     if (connected && !result.saved) setStatus(`${$("studioMessage").textContent} · 로컬 저장 불가`);
     else if (!result.saved) setStatus(`이미지 추가됨 · 로컬 저장 불가: ${result.error}`);
@@ -1324,12 +1353,20 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       showError(error);
     }
   });
-  on($("studioTextureAdd"), "click", () => $("studioTextureFile").click());
+  // 이미지 파일 고르기. slot을 주면(채널 선택 목록의 "이미지 불러오기…") 그 채널에, 없으면 첫 빈 채널에 연결한다.
+  let imageSlot;
+  const pickImage = slot => {
+    imageSlot = slot;
+    $("studioTextureFile").click();
+  };
+  on($("studioTextureAdd"), "click", () => pickImage());
   on($("studioTextureFile"), "change", async event => {
-    const file = event.target.files?.[0];
+    const file = event.target.files?.[0],
+      slot = imageSlot;
+    imageSlot = undefined;
     event.target.value = "";
     if (!file) return;
-    await runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file));
+    await runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, slot));
   });
   on($("studioCode"), "input", event => {
     rememberEditor();
@@ -1353,7 +1390,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         index = tabs.indexOf(selected);
       select(tabs[(index + (event.key === "PageDown" ? 1 : -1) + tabs.length) % tabs.length]);
       $("studioCode").focus();
-    } else if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey)) {
+    } else if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
       // Ctrl+Enter · Ctrl+Shift+Enter는 편집기의 '아래/위에 줄 삽입'(VS Code)
       event.preventDefault();
       rememberEditor();
@@ -1575,6 +1612,26 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       menu.querySelector?.("summary")?.focus();
     }
   });
+  // 앱 어디서나 쓰는 단축키. 편집기 안에서 CodeMirror가 먼저 처리한 키(defaultPrevented)는 건드리지 않는다.
+  //   Ctrl+Shift+S 보관함에 저장 · Ctrl+O 프로젝트 메뉴 · Ctrl+Shift+P / F1 명령 팔레트(편집기가 닫혀 있으면 연다)
+  on(document, "keydown", event => {
+    if (event.defaultPrevented || event.isComposing || event.altKey) return;
+    if (document.querySelector?.("dialog[open]")) return;
+    const mod = event.ctrlKey || event.metaKey,
+      key = event.key.toLowerCase();
+    if (mod && event.shiftKey && key === "s") {
+      event.preventDefault();
+      if (!$("studioProjectSave").disabled) $("studioProjectSave").click();
+    } else if (mod && !event.shiftKey && key === "o") {
+      event.preventDefault();
+      projectMenu.isOpen() ? projectMenu.close({ refocus: true }) : projectMenu.open();
+    } else if ((mod && event.shiftKey && key === "p") || (!mod && !event.shiftKey && event.key === "F1")) {
+      event.preventDefault();
+      projectMenu.close();
+      if (!openState) open();
+      editor.openPalette(">");
+    }
+  });
   on(document, "keydown", event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
     if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
@@ -1600,9 +1657,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   });
   let afterFullscreen = null;
-  // 화면 배치·리사이저·도구 서랍·접이식 묶음(studio-layout.js). 편집기 열림 상태는 전체화면 중이면 전체화면 전 상태를 남긴다.
+  // 화면 배치·리사이저·편집기 메뉴(studio-layout.js). 편집기 열림 상태는 전체화면 중이면 전체화면 전 상태를 남긴다.
   const workspace = Layout.create({ $, on, editor, editorOpen: () => (afterFullscreen ? true : openState) });
   projects = Projects.create({
+    onCurrent: current => projectMenu.setLabel(current ? current.name : "저장 안 한 작업", !!current),
     $,
     on,
     element,
@@ -1691,7 +1749,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     { label: "이전 패스로", key: "Alt+PageUp", run: () => stepPass(-1) },
     press("재생 / 일시정지", "studioPause"),
     press("시간·프레임 초기화", "studioResetFrames"),
-    press("도구 서랍 열기/닫기", "studioToolsToggle", "Ctrl+B", "Mod-b"),
+    press("프로젝트 메뉴 열기", "projectMenuToggle", "Ctrl+O"),
     press("집중 모드 전환", "studioMaximize", "Ctrl+K Z", ["Mod-k z", "Mod-k Z"]),
     press("편집기 배치 바꾸기 (오른쪽 ↔ 아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
     press("편집기 닫기", "studioHide", "E"),

@@ -15,7 +15,8 @@ const when = time => {
 // store: project-store.js의 create() 결과
 // buildPack(): Promise<{text, passes, images} | null>
 // openPack(loadText): Promise<boolean> — loadText()가 돌려준 Pack 텍스트로 현재 작업을 바꾼다(미적용 변경 확인 포함).
-const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, showError }) => {
+// onCurrent(current, busy): 지금 작업 이름이 바뀔 때마다(프로젝트 메뉴 버튼 표시용)
+const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, showError, onCurrent = () => {} }) => {
   let current = Store.readJSON(CURRENT_KEY, null),
     items = [],
     busy = false,
@@ -36,6 +37,7 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
       : "이 브라우저의 프로젝트 보관함에 새로 저장 · 코드·파라미터·설정·이미지 포함";
     $("studioProjectSaveAs").hidden = !current;
     for (const button of [$("studioProjectSave"), $("studioProjectSaveAs")]) button.disabled = busy || !available;
+    onCurrent(current ? { ...current } : null, busy);
   };
   const setCurrent = record => {
     current = record ? { id: record.id, name: record.name } : null;

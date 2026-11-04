@@ -122,6 +122,12 @@
                         </div>
                         <output id="profilePixel" class="studio-pixel-readout profile-pixel">버퍼를 선택하고 뷰포트 위에 포인터를 올리면 그 위치의 실제 값을 읽습니다.</output>
                     </section>
+                    <section id="studioDependencies" class="control-section">
+                        <div class="section-heading"><h2>패스 연결 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법"></button></h2><span class="section-note">GRAPH</span></div>
+                        <p class="help section-description">패스마다 어떤 입력을 읽는지 실행 순서대로 보여 줍니다. 누르면 편집기에서 그 패스를 엽니다.</p>
+                            <p id="studioGraphState" class="studio-hint" role="status">실행에 반영된 구성</p><div id="studioGraph" class="studio-graph" aria-label="버퍼 의존성 흐름"></div>
+                        
+                    </section>
                     <section class="control-section">
                         <div class="section-heading"><h2>Uniform 진단 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="uniforms" aria-label="내장 Uniform 가이드" title="내장 Uniform 목록"></button></h2><span id="profileUniformCount" class="count-badge">0</span></div>
                         <p class="help section-description">드라이버가 최적화로 제거하지 않은 활성 Uniform입니다. <b>미등록</b> 항목은 값이 항상 0이므로 <b>등록</b>해서 파라미터로 조절하세요.</p>
@@ -187,6 +193,29 @@
             </div>
             <header id="stageHeader" class="stage-header">
                 <div class="stage-label"><span class="live-indicator" aria-hidden="true"></span><span id="renderState">재생 중</span><span class="stage-separator">/</span><span>FIELD / WEBGL 2</span></div>
+                <div class="project-menu-wrap">
+                    <button id="projectMenuToggle" type="button" class="project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+Shift+S)"><span id="projectMenuLabel">저장 안 한 작업</span></button>
+                    <div id="projectMenu" class="project-menu" role="dialog" aria-label="프로젝트" hidden>
+                        <section id="studioFiles" class="project-menu-section" aria-labelledby="projectMenuFilesTitle"><h2 id="projectMenuFilesTitle">프로젝트</h2>
+                            <div class="studio-projects">
+                                <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">보관함에 저장하지 않은 작업</p>
+                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" title="이 브라우저의 프로젝트 보관함에 새로 저장 · 코드·파라미터·설정·이미지 포함">브라우저에 저장</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장" hidden>다른 이름으로 저장</button></div>
+                                <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
+                            </div>
+                            <p class="studio-hint">다른 컴퓨터로 옮길 때는 Pack 파일을 사용하세요. 소스 JSON에는 파라미터·이미지 원본이 포함되지 않습니다.</p>
+                            <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 Pack으로 저장">전체 프로젝트 저장</button><button id="studioImportPack" type="button" title="다른 컴퓨터에서 이미지까지 복원할 수 있는 프로젝트 열기">Pack 열기</button></div>
+                        <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
+                            <div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트를 JSON 파일로 저장 (이미지 파일 제외)">소스 JSON 저장</button><button id="studioImport" type="button" title="JSON 프로젝트 파일 불러오기">소스 JSON 열기</button></div>
+                            <button id="studioReset" type="button" title="모든 패스와 파라미터를 지우고 기본 Shader Art 장면으로 새로 시작 · Undo 가능">새 프로젝트 (기본 장면)</button>
+                        <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
+                        </section>
+                        <section id="studioImages" class="project-menu-section" aria-labelledby="projectMenuImagesTitle"><h2 id="projectMenuImagesTitle">이미지</h2>
+                            <button id="studioTextureAdd" type="button" title="로컬 이미지 파일을 불러와 Texture로 등록">+ 이미지 파일 불러오기</button>
+                        <input id="studioTextureFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                        <div id="studioTextureList" class="studio-textures"></div>
+                        </section>
+                    </div>
+                </div>
                 <div id="stageToolbar">
                     <button id="previewPause" type="button" class="tool-button glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 뷰포트에서 Space"></button>
                     <button id="previewImage" type="button" class="tool-button glyph-icon icon-image" title="최종 Image 보기" aria-label="최종 Image 보기"></button>
@@ -235,11 +264,16 @@
                         <span class="studio-tool-sep" aria-hidden="true"></span>
                         <button id="studioPause" type="button" class="glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
                         <button id="studioResetFrames" type="button" class="glyph-icon icon-reset" aria-label="시간 초기화" title="시간·프레임 카운터와 피드백 버퍼 데이터 초기화"></button>
-                        <button id="studioToolsToggle" type="button" class="glyph-icon icon-sidebar" aria-controls="studioTools" aria-expanded="true" aria-label="도구 서랍" title="입력 채널·프로젝트 파일·예제·이미지 도구 표시/숨기기"></button>
                         <button id="studioMaximize" type="button" aria-pressed="false" aria-label="집중 모드 전환" title="집중 모드 · 미리보기를 일시정지하고 코드 영역 확대" class="glyph-icon icon-expand"></button>
                         <button id="studioHide" type="button" title="셰이더 편집기 닫기 (E)" aria-label="편집기 닫기" class="glyph-icon icon-close"></button>
                     </div>
                 </header>
+                <div id="studioInputs" class="studio-inputs" role="group" aria-labelledby="studioInputsTitle">
+                    <span id="studioInputsTitle" class="studio-inputs-title">Image · 입력</span>
+                    <div id="studioChannels" class="studio-channel-bar"></div>
+                    <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="입력 채널 연결 규칙" title="iChannel0–3 연결 규칙: current는 앞선 패스, previous는 직전 프레임"></button>
+                    <p id="studioChannelRules" class="studio-channel-rules" hidden></p>
+                </div>
                 <details id="studioPassTools" class="studio-pass-settings">
                     <summary><span class="studio-pass-settings-label">버퍼 설정</span><span id="studioPassSummary" class="studio-pass-summary"></span></summary>
                     <div class="studio-pass-settings-body">
@@ -262,33 +296,6 @@
                     </div>
                 </details>
                 <div class="studio-main">
-                    <aside id="studioTools" class="studio-patchbay" aria-label="프로젝트 및 패스 도구">
-                        <details id="studioInputs" class="studio-group" open><summary id="studioInputsTitle">Image · 입력 채널</summary><div class="studio-group-body">
-                            <p class="studio-hint">선택한 패스의 iChannel0–3 입력입니다. current는 앞선 패스, previous는 직전 프레임을 읽습니다. <button type="button" class="guide-link" data-guide="buffers">연결 규칙 자세히 →</button></p>
-                            <div id="studioChannels"></div><p id="studioChannelRules" class="studio-hint"></p>
-                        </div></details>
-                        <details id="studioFiles" class="studio-group" open><summary>프로젝트 파일</summary><div class="studio-group-body">
-                            <div class="studio-projects">
-                                <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">보관함에 저장하지 않은 작업</p>
-                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" title="이 브라우저의 프로젝트 보관함에 새로 저장 · 코드·파라미터·설정·이미지 포함">브라우저에 저장</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장" hidden>다른 이름으로 저장</button></div>
-                                <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
-                            </div>
-                            <p class="studio-hint">다른 컴퓨터로 옮길 때는 Pack 파일을 사용하세요. 소스 JSON에는 파라미터·이미지 원본이 포함되지 않습니다.</p>
-                            <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 Pack으로 저장">전체 프로젝트 저장</button><button id="studioImportPack" type="button" title="다른 컴퓨터에서 이미지까지 복원할 수 있는 프로젝트 열기">Pack 열기</button></div>
-                        <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
-                            <div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트를 JSON 파일로 저장 (이미지 파일 제외)">소스 JSON 저장</button><button id="studioImport" type="button" title="JSON 프로젝트 파일 불러오기">소스 JSON 열기</button></div>
-                            <button id="studioReset" type="button" title="모든 패스와 파라미터를 지우고 기본 Shader Art 장면으로 새로 시작 · Undo 가능">새 프로젝트 (기본 장면)</button>
-                        <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
-                        </div></details>
-                        <details id="studioImages" class="studio-group"><summary>이미지</summary><div class="studio-group-body">
-                            <button id="studioTextureAdd" type="button" title="로컬 이미지 파일을 불러와 Texture로 등록">+ 이미지 파일 불러오기</button>
-                        <input id="studioTextureFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-                        <div id="studioTextureList" class="studio-textures"></div>
-                        </div></details>
-                        <details id="studioDependencies" class="studio-group"><summary>패스 연결</summary><div class="studio-group-body">
-                            <p id="studioGraphState" class="studio-hint" role="status">실행에 반영된 구성</p><div id="studioGraph" class="studio-graph" aria-label="버퍼 의존성 흐름"></div>
-                        </div></details>
-                    </aside>
                     <div class="studio-code-pane">
                         <!-- 코드 머리줄: 파일 이름·상태 | 함수 이동·검색·줄 이동·자동 완성·코드 조각·더보기 메뉴 -->
                         <div class="studio-code-label">

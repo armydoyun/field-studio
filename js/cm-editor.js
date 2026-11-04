@@ -723,7 +723,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { key: "Mod-ArrowUp", run: scrollLines(-1) },
     { key: "Mod-ArrowDown", run: scrollLines(1) },
   ];
-  // studio가 등록하는 편집기 바깥 명령(도구 서랍·집중 모드 등)의 키는 registerCommands 때 이 칸에 다시 묶는다.
+  // studio가 등록하는 편집기 바깥 명령(집중 모드·프로젝트 메뉴 등)의 키는 registerCommands 때 이 칸에 다시 묶는다.
   const commandKeys = new CM.Compartment();
   // CodeMirror 내장 UI(검색 창·접기·오류 목록·자동 완성) 문구를 한국어로 (EditorState.phrases)
   const PHRASES = {

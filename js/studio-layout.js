@@ -1,11 +1,11 @@
-// 편집기 화면 배치: 높이·너비 리사이저, 옆(right)·아래(bottom) 배치, 도구 서랍, 접이식 묶음 열림 상태 저장.
+// 편집기 화면 배치: 높이·너비 리사이저, 옆(right)·아래(bottom) 배치, 편집기 메뉴 열림 상태 저장.
 // 사용자가 직접 정한 높이·배치만 저장한다. 정하기 전에는 창 크기(반·4분할 창 포함)에 맞는 기본값을 따른다.
 import * as Store from "./storage.js";
 
 const HEIGHT_KEY = "webgl.shader-studio.height.v2",
   LAYOUT_KEY = "webgl.shader-studio.layout.v1",
   WORKSPACE_KEY = "webgl.shader-studio.workspace.v1";
-const GROUPS = ["studioInputs", "studioFiles", "studioImages", "studioDependencies", "studioCodeTools"];
+const GROUPS = ["studioCodeTools"];
 const HEIGHT = { min: 25, max: 85 },
   WIDTH = { min: 30, max: 75, initial: 46 };
 const clamp = (value, { min, max }) => Math.max(min, Math.min(max, value));
@@ -94,25 +94,12 @@ const create = ({ $, on, editor, editorOpen }) => {
   const saveWorkspace = () => {
     if (!workspaceReady) return;
     Store.writeJSON(WORKSPACE_KEY, {
-      toolsHidden: $("studioTools").hidden,
       editor: editorOpen(),
       open: Object.fromEntries(GROUPS.map(id => [id, $(id).open])),
     });
   };
-  // 옆 배치의 도구 서랍은 코드 위에 겹치므로, 코드를 누르거나 프로젝트를 바꾸면 닫아 편집 영역을 돌려준다.
-  const closeToolsDrawer = () => {
-    if (!$("studioTools").hidden) {
-      $("studioTools").hidden = true;
-      $("studioToolsToggle").setAttribute("aria-expanded", "false");
-    }
-  };
 
   $("studioDock").style.setProperty("--studio-height", `${dockHeight}%`);
-  on($("studioToolsToggle"), "click", () => {
-    const hidden = ($("studioTools").hidden = !$("studioTools").hidden);
-    $("studioToolsToggle").setAttribute("aria-expanded", String(!hidden));
-    saveWorkspace();
-  });
   const resizer = $("studioResize");
   let sizing = false;
   on(resizer, "pointerdown", e => {
@@ -151,9 +138,6 @@ const create = ({ $, on, editor, editorOpen }) => {
     }
   });
   on($("studioLayout"), "click", toggleLayout);
-  on($("studioCode"), "pointerdown", () => {
-    if (splitRight()) closeToolsDrawer();
-  });
 
   setDockHeight(dockHeight, false);
   setDockWidth(dockWidth, false);
@@ -165,21 +149,14 @@ const create = ({ $, on, editor, editorOpen }) => {
     if (!layoutChosen && layout !== fit) {
       layout = fit;
       applyLayout();
-      if (splitRight()) closeToolsDrawer();
     }
   });
-  $("studioTools").hidden = window.matchMedia("(max-width:600px)").matches || layout === "right";
   const state = Store.readJSON(WORKSPACE_KEY, {});
-  if (typeof state?.toolsHidden === "boolean") $("studioTools").hidden = state.toolsHidden;
   for (const id of GROUPS) if (typeof state?.open?.[id] === "boolean") $(id).open = state.open[id];
-  // 옆 배치에서 도구는 코드를 덮는 서랍이므로, 아래 배치에서 저장된 "도구 표시" 상태와 관계없이 닫힌 채로 시작한다.
-  if (splitRight()) $("studioTools").hidden = true;
   for (const id of GROUPS) on($(id), "toggle", saveWorkspace);
-  $("studioToolsToggle").setAttribute("aria-expanded", String(!$("studioTools").hidden));
 
   return {
     splitRight,
-    closeToolsDrawer,
     saveWorkspace,
     // 지난번에 편집기를 연 채로 떠났는지
     reopenEditor: state?.editor === true,
