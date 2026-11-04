@@ -1,4 +1,4 @@
-// GLSL 문법 강조 공용 모듈. 편집기(code-editor.js)와 가이드(guide.js)의 코드 예시가 같은 규칙·색(.glsl-* 클래스)을 쓴다.
+// GLSL 문법 강조 공용 모듈. 편집기(cm-editor.js)와 가이드(guide.js)의 코드 예시가 같은 규칙·색(.glsl-* 클래스)을 쓴다.
 // DOM 노드(텍스트 + span)만 만들며 HTML 문자열은 해석하지 않는다.
 const KEYWORDS =
   "uniform|out|in|inout|const|precision|highp|mediump|lowp|if|else|for|while|do|break|continue|return|discard|struct|layout|switch|case|default|true|false|flat|smooth";

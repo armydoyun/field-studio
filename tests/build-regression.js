@@ -17,7 +17,6 @@ const has=name=>{try{require.resolve(name);return true;}catch{return false;}};
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'field-build-')),outFile=path.join(dir,'index.html');
   try{
     const result=await build({outFile});
-    assert.deepEqual(result.removed,[],'임시 위치로 빌드할 때는 deploy/를 건드리지 않는다');
     assert.deepEqual(fs.readdirSync(dir),['index.html'],'결과는 파일 하나');
     const html=fs.readFileSync(outFile,'utf8'),source=fs.readFileSync(path.join(root,'index.html'),'utf8');
     const markup=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');

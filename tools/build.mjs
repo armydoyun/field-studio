@@ -1,8 +1,8 @@
 // npm run build → deploy/index.html : HTML · CSS · JS를 모두 담은 한 파일짜리 오프라인 배포본.
 // file://로 더블클릭해 열어도 동작한다(인라인 classic script라 ES Module의 CORS 제한이 없다).
 //
-//   node tools/build.mjs                 deploy/index.html을 만들고, 예전 3파일 배포본의 style.css·js/min.js를 지운다
-//   node tools/build.mjs --out=a.html    다른 곳에 만든다(예전 파일은 건드리지 않음)
+//   node tools/build.mjs                 deploy/index.html을 만든다 (deploy/는 git에 올리지 않는다)
+//   node tools/build.mjs --out=a.html    다른 곳에 만든다
 import { build as esbuild, transform } from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
@@ -38,25 +38,11 @@ export const build = async ({ outFile = path.join(DEPLOY, "index.html") } = {}) 
   const html = inlineHtml({ html: fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), css, js });
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, html, "utf8");
-  // 기본 위치에 만들 때만 예전 3파일 배포본의 남은 파일을 지운다.
-  const removed = [];
-  if (path.resolve(outFile) === path.join(DEPLOY, "index.html")) {
-    for (const name of ["style.css", path.join("js", "min.js")]) {
-      const file = path.join(DEPLOY, name);
-      if (fs.existsSync(file)) {
-        fs.rmSync(file);
-        removed.push(`deploy/${name.replace(/\\/g, "/")}`);
-      }
-    }
-    const jsDir = path.join(DEPLOY, "js");
-    if (fs.existsSync(jsDir) && !fs.readdirSync(jsDir).length) fs.rmdirSync(jsDir);
-  }
   return {
     outFile,
     bytes: Buffer.byteLength(html),
     jsBytes: Buffer.byteLength(js),
     cssBytes: Buffer.byteLength(css),
-    removed,
   };
 };
 
@@ -68,7 +54,6 @@ if (path.resolve(process.argv[1] || "") === fileURLToPath(import.meta.url)) {
     console.log(
       `${path.relative(ROOT, result.outFile)}: ${kb(result.bytes)} (JS ${kb(result.jsBytes)} · CSS ${kb(result.cssBytes)})`
     );
-    if (result.removed.length) console.log(`예전 배포 파일 삭제: ${result.removed.join(", ")}`);
   } catch (error) {
     console.error(
       error.errors?.length
