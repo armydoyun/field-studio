@@ -124,7 +124,7 @@ with sync_playwright() as p:
     check('\n    float a  = 1;' in val() and sel()==[at+1,at+1],'Tab with a single caret inserts spaces up to the next tab stop instead of indenting the line')
     load(SRC2);at=SRC2.index('float a = 1;');place(at,at+5);page.keyboard.press('Tab')   # 4번째 칸의 "float" → 다음 탭 위치(8)까지 공백
     check('\n         a = 1;' in val() and sel()==[at+4,at+4],'Tab over a selection inside one line replaces it with spaces')
-    place(SRC2.index('float a'));page.keyboard.press('Control+/');check('    // float a = 1;' in val(),'Ctrl+/ comments the line')
+    load(SRC2);place(SRC2.index('float a'));page.keyboard.press('Control+/');check('    // float a = 1;' in val(),'Ctrl+/ comments the line')   # 위 Tab 검사가 "float"를 공백으로 바꿨으므로 원본을 다시 넣는다
     page.keyboard.press('Control+/');check('    float a = 1;' in val() and '// float a' not in val(),'Ctrl+/ again uncomments it')
     page.keyboard.press('Alt+ArrowDown');check(val().index('float b = 2;')<val().index('float a = 1;'),'Alt+↓ moves the line down')
     page.keyboard.press('Alt+ArrowUp');page.keyboard.press('Control+Shift+KeyD');check(val().count('float a = 1;')==2,'Ctrl+Shift+D duplicates the line')

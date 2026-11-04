@@ -69,7 +69,9 @@ with sync_playwright() as p:
     page.locator('#studioUndo').click()
     check(selection()[:2]==[point,point],'undo of custom Tab command restores caret')
     page.locator('#studioRedo').click()
-    check(selection()[:2]==[point+4,point+4],'redo of Tab command restores caret')
+    # Tab은 VS Code처럼 다음 탭 위치(4칸 단위)까지 공백을 넣는다: 14번째 칸이면 2칸.
+    column=point-(original.rfind('\n',0,point)+1);tab=point+4-column%4
+    check(selection()[:2]==[tab,tab],f'redo of Tab command restores caret {selection()} expected {tab}')
     # Even a long document restores scroll position as well as the caret.
     long_code=original+'\n'+'\n'.join('// test line '+str(i) for i in range(170))
     js("""(src) => testStudio.setProject({image:src,passes:[],imageChannels:{}})""", long_code)

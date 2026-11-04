@@ -108,7 +108,6 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 #bufferClear { color:var(--text-soft); }
 #bufferInfo { overflow-wrap:anywhere; }
 .studio-launch,.primary { min-height:40px;font-size:12px; }
-.studio-launch:hover,.primary:hover { border-color:var(--accent-strong); }
 .studio-launch { width:100%;margin-top:12px; }
 /* 파라미터 카드와 생성 폼. */
 .uniform-search-wrap { position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin:0 20px 20px; }
@@ -133,9 +132,9 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .is-scrub { cursor:ew-resize;user-select:none;-webkit-user-select:none;touch-action:none; }
 .is-scrub:hover,.is-scrubbing { color:var(--accent-strong); }
 /* 숫자 칸: 고정폭 글꼴·오른쪽 정렬. 내용 길이만큼 넓어져(field-sizing) 큰 값도 잘리지 않는다. */
-.uniform-row input[type="number"],.uniform-hex { min-height:30px;padding:4px 8px;font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums;text-align:right; }
-/* 스핀 버튼은 칸 폭을 잡아먹어 숫자를 가린다. 값은 ↑↓ 키 · 슬라이더 · 이름 끌기로 바꾼다. */
-.uniform-row input[type="number"] { -moz-appearance:textfield;appearance:textfield; }
+.uniform-row input[type="number"],.uniform-hex { min-height:30px;padding:4px 8px;font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums; }
+/* 스핀 버튼은 칸 폭을 잡아먹어 숫자를 가린다. 값은 ↑↓ 키 · 슬라이더 · 이름 끌기로 바꾼다. HEX 칸은 아래 .uniform-hex에서 왼쪽 정렬. */
+.uniform-row input[type="number"] { text-align:right;-moz-appearance:textfield;appearance:textfield; }
 .uniform-row input[type="number"]::-webkit-inner-spin-button,.uniform-row input[type="number"]::-webkit-outer-spin-button { margin:0;-webkit-appearance:none;appearance:none; }
 .uniform-pair { display:flex;align-items:center;gap:10px;min-width:0; }
 .uniform-pair input[type="number"] { flex:1 1 auto;width:100%; }
@@ -269,7 +268,6 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-live { min-height:32px;padding:0 4px;cursor:pointer; }
 .studio-run-tools .studio-primary { min-width:100px; }
 .studio-primary span {font-size:9px;font-weight:500; }
-.studio-run-tools #studioRun[data-pending="true"] { border-color:var(--warning); }
 .studio-main { display:grid;grid-template-columns:248px minmax(0,1fr);flex:1;min-width:0;min-height:0; }
 .studio-main:has(.studio-patchbay[hidden]) { grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr); }
 .studio-patchbay { min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;border-right:1px solid var(--line);scrollbar-width:thin;scrollbar-gutter:stable; }
@@ -337,7 +335,7 @@ dialog { margin:auto;padding:0;border:1px solid var(--line-strong);color:var(--t
 .studio-prompt-dialog { width:min(460px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto; }
 .studio-prompt-dialog form { margin:0; }
 .studio-dialog-head { display:grid;grid-template-columns:36px minmax(0,1fr) 36px;align-items:start;gap:12px;padding:20px; }
-.studio-dialog-mark { display:grid;place-items:center;width:36px;height:36px;border-radius:9px;font-size:17px;font-weight:750;line-height:1; }
+.studio-dialog-mark { display:grid;place-items:center;width:36px;height:36px;font-size:17px;font-weight:750;line-height:1; }
 .studio-dialog-head>div:nth-child(2) { min-width:0; }
 .studio-dialog-head h2 { display:flex;align-items:center;min-height:36px;margin:0;font-size:16px;font-weight:700;line-height:1.5; }
 .studio-dialog-head p { margin:6px 0 0;font-size:12px;line-height:1.75;overflow-wrap:anywhere; }
@@ -682,7 +680,7 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-cm-host .cm-panel.cm-search br { flex-basis:100%;height:0;content:""; }
 .studio-cm-host .cm-panel.cm-search .cm-textfield { flex:1 1 180px;min-width:120px;min-height:28px;margin:0;padding:3px 8px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);color:var(--text);font:12px/1.4 var(--mono); }
 .studio-cm-host .cm-panel.cm-search .cm-textfield:focus { border-color:var(--accent);outline:none; }
-.studio-cm-host .cm-panel.cm-search button[name=close] { position:absolute;top:8px;right:8px;width:24px;min-height:24px;padding:0;border:0;background:transparent;color:var(--muted);font-size:16px;line-height:1; }
+.studio-cm-host .cm-panel.cm-search button[name=close] { position:absolute;top:8px;right:8px;width:24px;min-height:24px;padding:0;border:0;background:transparent;line-height:1; }
 .studio-cm-host .cm-panel.cm-search input[type="checkbox"] { width:auto; }
 .studio-cm-host .cm-panel.cm-search .cm-button { min-height:28px;margin:0;padding:3px 10px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface);background-image:none;color:var(--text-soft);font:500 11px var(--sans); }
 .studio-cm-host .cm-panel.cm-search .cm-button:hover { background:var(--surface-hover);color:var(--text); }

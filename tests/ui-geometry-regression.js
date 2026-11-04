@@ -27,8 +27,12 @@ console.log(`PASS CSS ${count} selector scopes parsed: no repeated selector/prop
 console.log('PASS Centered controls / unit placement / modal grid / toolbar groups / shared HUD / editor host fills the frame');
 console.log('Static CSS contracts, not a rendered pixel measurement.');
 
+// .glyph-icon은 아이콘만 있는 버튼과 "아이콘 + 글자" 버튼 둘 다에 쓴다(디자인 v3).
+// 아이콘만 있으면 aria-label이 이름이 되고, 글자가 있으면 그 글자가 이름이다. 어느 쪽이든 아이콘을 글꼴 기호(▶ ✓ ƒ ↺ ↗ ●)로 그리지 않는다.
 for(const m of html.matchAll(/<button\b([^>]*)class="[^"]*glyph-icon[^"]*"([^>]*)>([\s\S]*?)<\/button>/g)){
- assert(/aria-label="[^" ]/.test(m[1]+m[2]),'Icon-only buttons need an accessible name');assert.equal(m[3].trim(),'','Icon-only controls must not depend on font glyph metrics');
+ const text=m[3].replace(/<[^>]*>/g,'').trim();
+ if(!text)assert(/aria-label="[^" ]/.test(m[1]+m[2]),'Icon-only buttons need an accessible name');
+ assert(!/[▶▸►✓✔ƒ↺↻↗●◐☀☾]/.test(text),`Icon must be an SVG mask, not a font glyph: ${text}`);
 }
 for(const selector of ['.glyph-icon::before','.studio-group>summary::after']){
  assert.equal(base(selector).get('width'),'16px');assert.equal(base(selector).get('height'),'16px');assert.equal(base(selector).get('content'),'""');assert.equal(base(selector).get('mask'),'var(--icon) center/contain no-repeat');
