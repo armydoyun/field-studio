@@ -28,4 +28,4 @@
         if(created)renderer.removeUniform("uCameraOrbit");else if(old)input.setCamera(old);
         if(previousFocus && typeof previousFocus.focus === "function") previousFocus.focus({preventScroll:true});
     }
-})().catch(console.error);
+})();

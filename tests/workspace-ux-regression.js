@@ -39,8 +39,8 @@ await test('Replacing a pass source invalidates its old cursor bookmark',async(f
  f.studio.setProject({image:src,passes:[{...pass(),fragment:src+'\n// new'}],imageChannels:{}});await select(f,'A');assert.equal(n('studioCode').selectionStart,0);
 });
 await test('Image hides inapplicable Buffer actions and disables pixel inspection',async(f,n)=>{
- f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});assert.equal(n('studioPassTools').hidden,true);assert.equal(n('studioInspect').disabled,true);
- await select(f,'A');assert.equal(n('studioPassTools').hidden,false);assert.equal(n('studioInspect').disabled,false);assert.equal(n('studioInputsTitle').textContent,'A · 입력 채널');
+ f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});assert.equal(n('studioPassTools').hidden,true);
+ await select(f,'A');assert.equal(n('studioPassTools').hidden,false);assert.equal(n('studioInputsTitle').textContent,'A · 입력 채널');
 });
 await test('Buffer count cap disables Add and pass tabs identify their controlled editor',async(f,n)=>{
  f.studio.setProject({image:src,passes:[...'ABCDEFGH'].map(pass),imageChannels:{}});assert.equal(n('studioAdd').disabled,true);

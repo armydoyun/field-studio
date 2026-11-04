@@ -27,4 +27,4 @@
         if(!studio.setProject(before)) console.error("테스트 이전 프로젝트 복원 실패: 수동 확인 필요");
         if(!wasRunning&&r.getStats().running)r.stop();
     }
-})().catch(console.error);
+})();

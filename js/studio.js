@@ -700,8 +700,6 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioRemove").title = p
       ? `${selected} 삭제${refs.length ? ` · 함께 해제: ${refs.join(", ")}` : ""} · Undo로 복원`
       : "Image는 삭제할 수 없습니다.";
-    $("studioInspect").disabled = !p;
-    if (!p) $("studioInspect").checked = false;
     if (p) {
       $("studioFormat").value = p.format;
       // 해상도: 화면 비율(scale) 또는 고정 크기(size). 목록에 없는 고정 크기는 임시 선택지로 보여준다.
@@ -1018,35 +1016,6 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     workspace.saveWorkspace();
   };
   const toggle = () => (openState ? close() : open());
-  const inspectPixel = event => {
-    if (!$("studioInspect").checked) return;
-    const output = $("studioPixelReadout");
-    if (selected === "Image") {
-      output.textContent = "먼저 Buffer A/B 패스를 선택하세요. Image는 기본 Canvas 출력입니다.";
-      return;
-    }
-    const pass = renderer.getPasses().find(p => p.name === selected),
-      canvas = $("screen");
-    if (!pass?.width || !pass?.height) {
-      output.textContent = "이 버퍼는 아직 렌더링되지 않았습니다.";
-      return;
-    }
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.max(
-      0,
-      Math.min(pass.width - 1, Math.floor(((event.clientX - rect.left) / rect.width) * pass.width))
-    );
-    const y = Math.max(
-      0,
-      Math.min(pass.height - 1, Math.floor(((rect.bottom - event.clientY) / rect.height) * pass.height))
-    );
-    try {
-      const values = renderer.readPassPixel(selected, x, y);
-      output.textContent = `${selected} (${x}, ${y}) · ${pass.format.toUpperCase()}\nRGBA: ${values.map(n => Number(n).toPrecision(5)).join(", ")}`;
-    } catch (error) {
-      output.textContent = error.message;
-    }
-  };
   const download = (name, text, type, limit = Infinity) => {
     const blob = new Blob([text], { type });
     if (blob.size > limit) throw new Error(`내보내기 파일은 최대 ${limit / 1048576}MiB입니다.`);
@@ -1541,7 +1510,6 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on($("studioHide"), "click", close);
   on($("studioOpenFromPanel"), "click", open);
   on($("studioMaximize"), "click", maximize);
-  on($("screen"), "click", inspectPixel);
   on($("studioPause"), "click", () => togglePlayback());
   on($("studioResetFrames"), "click", () => {
     renderer.resetSimulation();

@@ -15,6 +15,7 @@
 //   --jobs=N   동시에 돌릴 개수(기본: node 묶음은 CPU 수, 브라우저 묶음은 3)
 //   --list     실행하지 않고 분류만 보여 준다
 //
+// 콘솔용 테스트는 끝날 때까지 console.error나 잡히지 않은 오류(pageerror)가 한 번이라도 나오면 실패로 친다.
 // 콘솔용 테스트는 테스트마다 새 브라우저 컨텍스트(빈 localStorage·IndexedDB)에서 돌므로 사용자의 작업 초안을 건드리지 않는다.
 import {spawn} from "node:child_process";
 import fs from "node:fs";
@@ -130,13 +131,16 @@ const runBrowser = async () => {
   const server = await serve(), base = `http://127.0.0.1:${server.address().port}/`;
   try {
     await pool(plan.browser, jobs || 3, async name => {
-      const started = Date.now(), logs = [];
+      const started = Date.now(), logs = [], errors = [];
       const context = await browser.newContext({viewport:{width:1440, height:900}});
       // 첫 실행 안내(갤러리)가 모달로 뜨지 않게 한다. 나머지 저장소는 비어 있는 새 상태.
       await context.addInitScript(() => { try { if(!localStorage.getItem("field.onboarded.v1")) localStorage.setItem("field.onboarded.v1", "1"); } catch(_) { /* 저장소가 막혀도 테스트는 계속 */ } });
       const page = await context.newPage();
-      page.on("console", message => logs.push(`[${message.type()}] ${message.text()}`));
-      page.on("pageerror", error => logs.push(`[pageerror] ${error.message}`));
+      page.on("console", message => {
+        logs.push(`[${message.type()}] ${message.text()}`);
+        if(message.type() === "error") errors.push(`[console.error] ${message.text()}`);
+      });
+      page.on("pageerror", error => { logs.push(`[pageerror] ${error.message}`); errors.push(`[pageerror] ${error.message}`); });
       try {
         if(name === "gpu-validation.html") {
           await page.goto(base + "tests/gpu-validation.html");
@@ -152,6 +156,10 @@ const runBrowser = async () => {
           await page.waitForFunction(() => window.shaderStudio && window.shaderPlayground, null, {timeout:30_000});
           // 개발자 콘솔에 붙여 넣은 것과 같게 전역 eval로 실행한다. async IIFE면 끝날 때까지 기다린다.
           await withTimeout(page.evaluate(async code => { await (0, eval)(code); }, source), 180_000, name);
+          // 테스트가 실패를 .catch(console.error)로 삼키거나, 정리 단계의 실패를 console.error로만 남겨도 PASS가 되지 않게 한다.
+          // 통과하는 테스트는 console.error를 내지 않는다(일부러 내는 경우가 생기면 console.warn을 쓴다).
+          await page.waitForTimeout(50);
+          if(errors.length) throw new Error(`테스트 중 오류 출력 ${errors.length}건:\n${errors.join("\n")}`);
         }
         record("browser", name, "PASS", Date.now() - started);
       } catch(error) {

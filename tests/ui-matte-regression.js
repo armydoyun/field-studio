@@ -3,8 +3,8 @@
 const fs=require("fs"),assert=require("assert"),path=require("path");
 const root=path.join(__dirname,".."),css=fs.readFileSync(path.join(root,"style.css"),"utf8"),html=fs.readFileSync(path.join(root,"index.html"),"utf8");
 const check=(ok,name)=>{assert(ok,name);console.log("PASS",name);};
-for(const id of ["panelTabs","bufferDemo","bufferClear","studioRun","studioPassTabs","uniformSearch","studioDock","quickHelp","themeToggle"])check(html.includes(`id="${id}"`),id+" 존재");
-check(css.includes("#bufferDemo")&&css.includes("#bufferClear")&&css.includes(".buffer-actions button"),"Render 예제/해제 버튼 스타일");
+for(const id of ["panelTabs","openBufferViewer","studioRun","studioPassTabs","uniformSearch","studioDock","quickHelp","themeToggle"])check(html.includes(`id="${id}"`),id+" 존재");
+check(css.includes("#openBufferViewer")&&css.includes(".buffer-actions button"),"Render 버퍼 뷰어 버튼 스타일");
 // 디자인 v3 계약: 장식용 그라데이션·발광 그림자·블러 없음. 계층은 선과 면의 명도 차이로만 나눈다.
 check(!css.includes("text-shadow"),"글자 번짐 없음");
 const bare=css.replace(/\/\*[\s\S]*?\*\//g,"");

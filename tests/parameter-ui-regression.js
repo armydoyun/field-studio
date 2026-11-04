@@ -99,8 +99,11 @@ await test('Dragging the parameter name scrubs by the slider step and respects i
   await name.dispatchEvent({type:'pointermove',clientX:400});assert.equal(f.renderer.getUserUniforms()[0].value,10);
   await name.dispatchEvent({type:'pointermove',clientX:-400});assert.equal(f.renderer.getUserUniforms()[0].value,0);
 });
-await test('Render panel example shortcut opens the current-frame pipeline',async(f,n)=>{
-  f.window.shaderStudio=f.studio;await n('bufferDemo').click();const p=f.studio.getProject();assert.equal(p.passes.length,2);assert.equal(Object.keys(p.passes[0].channels).length,0);assert.equal(p.passes[1].channels[0].frame,'current');
+await test('Buffer viewer shortcut moves to the profile tab',async(f,n)=>{
+  await n('openBufferViewer').click(); // 탭 전환 자체는 브라우저 테스트(panel-dedupe-browser-regression.js)가 검사한다.
+});
+await test('Pipeline example opens the current-frame pipeline',async(f)=>{
+  f.studio.examplePipeline();const p=f.studio.getProject();assert.equal(p.passes.length,2);assert.equal(Object.keys(p.passes[0].channels).length,0);assert.equal(p.passes[1].channels[0].frame,'current');
 });
 console.log(`Parameter UI: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
 })();

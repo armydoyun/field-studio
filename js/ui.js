@@ -582,47 +582,6 @@ const mount = (renderer, input, settings) => {
   listen($("maxPixels"), "change", event =>
     attempt(() => renderer.setMaxPixels(parseValue("int", event.target.value)))
   );
-  // Shader Image와 오프스크린 Buffer A/B/C/D를 같은 Preview 메뉴에서 확인한다.
-  const syncBuffers = () => {
-    const select = $("bufferPreview"),
-      passes = renderer.getPasses();
-    const keys = ["", ...passes.map(p => p.name)];
-    const old = [...select.options].map(o => o.value);
-    if (JSON.stringify(old) !== JSON.stringify(keys)) {
-      select.replaceChildren();
-      for (const name of keys) {
-        const option = element("option");
-        option.value = name;
-        option.textContent = name ? `Buffer ${name}` : "Image · 최종 렌더링";
-        select.append(option);
-      }
-    }
-    const stats = renderer.getStats();
-    select.value = stats.previewPass || "";
-    const memory = (stats.bufferMemoryBytes / 1048576).toFixed(1);
-    const timing = name => {
-      const item = stats.gpu?.passes?.find(entry => entry.label === name);
-      return item ? ` · ${item.ms.toFixed(2)}ms` : "";
-    };
-    $("bufferInfo").textContent = passes.length
-      ? passes.map(p => `${p.name}: ${p.width}×${p.height} · ${p.format}${timing(p.name)}`).join("  |  ") +
-        ` · GPU ≈ ${memory} MiB`
-      : "등록된 버퍼가 없습니다. 아래 예제로 A/B 패스를 확인할 수 있습니다.";
-  };
-  listen($("bufferPreview"), "change", event => attempt(() => renderer.setPreviewPass(event.target.value || null)));
-  listen($("bufferDemo"), "click", () =>
-    attempt(() => {
-      window.shaderStudio?.examplePipeline();
-      syncBuffers();
-    })
-  );
-  listen($("bufferClear"), "click", () =>
-    attempt(() => {
-      if (window.shaderStudio) window.shaderStudio.removeAllPasses();
-      else renderer.setPasses([]);
-      syncBuffers();
-    })
-  );
   const stage = $("stage"),
     tabScroll = new Map();
   let activeTab = "render";
@@ -650,6 +609,11 @@ const mount = (renderer, input, settings) => {
     syncPanel();
     setActiveTab("uniforms");
     focusSearch();
+  });
+  // 버퍼 결과·픽셀 값은 성능 탭의 버퍼 뷰어 한 곳에서 본다.
+  listen($("openBufferViewer"), "click", () => {
+    setActiveTab("profile");
+    $("profileBuffers").closest?.("section")?.scrollIntoView?.({ block: "start" });
   });
   const tabButtons = [...document.querySelectorAll("#panelTabs [data-tab]")];
   for (const button of tabButtons) listen(button, "click", () => setActiveTab(button.dataset.tab));
@@ -826,7 +790,6 @@ const mount = (renderer, input, settings) => {
       pause.title = `${label} · 뷰포트에서는 Space`;
     }
     $("previewImage").disabled = !s.previewPass;
-    $("bufferClear").disabled = !renderer.getPasses().length;
     const active = document.activeElement;
     if (active !== $("fpsLimit")) $("fpsLimit").value = s.fpsLimit;
     if (active !== $("resolutionScale")) $("resolutionScale").value = s.resolutionScale;
@@ -869,7 +832,6 @@ const mount = (renderer, input, settings) => {
       `${s.fps.toFixed(1)} FPS · ${s.width}×${s.height} · Frame ${s.frame} · GPU ${gpuText} · CPU ${(s.cpuMs ?? 0).toFixed(2)}ms`;
     $("viewportMode").textContent = s.previewPass ? `BUFFER ${s.previewPass}` : "IMAGE";
     $("studioPreviewTarget").textContent = `미리보기 · ${s.previewPass ? `Buffer ${s.previewPass}` : "Image"}`;
-    syncBuffers();
     syncFpsPresets(s.fpsLimit);
   };
   listen(document, "shader-settings-applied", () => {

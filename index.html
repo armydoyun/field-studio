@@ -62,15 +62,11 @@
                     </section>
 
                     <section class="control-section">
-                        <div class="section-heading"><h2>버퍼 미리보기 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법"></button></h2><span class="section-note">MULTI-PASS</span></div>
-                        <div class="field"><label for="bufferPreview">출력 선택</label>
-                            <select id="bufferPreview"><option value="">Image · 최종 렌더링</option></select>
-                            <p id="bufferInfo" class="help">등록된 버퍼가 없습니다. 아래 예제로 A/B 패스를 확인할 수 있습니다.</p>
-                        </div>
+                        <div class="section-heading"><h2>버퍼 · 멀티패스 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법"></button></h2><span class="section-note">MULTI-PASS</span></div>
+                        <p class="help section-description">버퍼 패스의 추가·연결·삭제는 셰이더 편집기에서, 버퍼별 결과·GPU 시간·픽셀 값 확인은 성능 탭의 버퍼 뷰어에서 합니다. 연결 예제는 예제 갤러리(X 키)의 기법 배우기에 있습니다.</p>
                         <button id="studioOpenFromPanel" type="button" class="studio-launch glyph-icon icon-code">셰이더 편집기 열기</button>
                         <div class="buffer-actions">
-                            <button id="bufferDemo" type="button" class="glyph-icon icon-play" title="A 원본 → B 색상 후처리 → Image 비교 화면">버퍼 연결 배우기</button>
-                            <button id="bufferClear" type="button" title="추가한 버퍼 패스를 모두 해제하고 Image만 남기기">패스 모두 해제</button>
+                            <button id="openBufferViewer" type="button" class="glyph-icon icon-image" title="성능 탭의 버퍼 뷰어로 이동">버퍼 뷰어 열기</button>
                         </div>
                         <p class="help">각 패스는 RGBA Texture 두 장을 번갈아 사용합니다. 저장된 픽셀은 JS API 또는 다음 패스에서 읽을 수 있습니다.</p>
                     </section>
@@ -155,8 +151,9 @@
                         <button id="cameraReset" type="button" class="secondary-action glyph-icon icon-reset">카메라 초기화</button>
                     </section>
                     <section class="control-section">
-                        <div class="section-heading"><h2>작업공간 단축키</h2><span class="section-note">SHORTCUTS</span></div>
-                        <div class="shortcut-grid"><div><span>전체화면 전환</span><kbd>F</kbd></div><div><span>설정 패널</span><kbd>H</kbd></div><div><span>화면 HUD</span><kbd>G</kbd></div><div><span>Uniform 검색</span><kbd>/</kbd></div></div>
+                        <div class="section-heading"><h2>단축키</h2><span class="section-note">SHORTCUTS</span></div>
+                        <p class="help">전체화면(F) · 설정 패널(H) · HUD(G) · 파라미터 검색(/)을 포함한 모든 단축키는 가이드의 단축키 주제에 모아 두었습니다.</p>
+                        <button type="button" class="secondary-action glyph-icon icon-help" data-guide="shortcuts">단축키 전체 보기</button>
                     </section>
                     <section class="control-section">
                         <div class="section-heading"><h2>화면 테마</h2><span class="section-note">THEME</span></div>
@@ -291,11 +288,6 @@
                         <details id="studioDependencies" class="studio-group"><summary>패스 연결</summary><div class="studio-group-body">
                             <p id="studioGraphState" class="studio-hint" role="status">실행에 반영된 구성</p><div id="studioGraph" class="studio-graph" aria-label="버퍼 의존성 흐름"></div>
                         </div></details>
-                        <details id="studioInspector" class="studio-group"><summary>픽셀 검사</summary><div class="studio-group-body">
-                            <label class="studio-inspect-label"><input id="studioInspect" type="checkbox"> Pick buffer pixel</label>
-                        <output id="studioPixelReadout" class="studio-pixel-readout">Buffer를 선택하고 뷰포트를 클릭하면 해당 픽셀의 RGBA 값을 읽습니다.</output>
-                        <p class="studio-hint">Buffer를 선택하고 뷰포트를 클릭하면 RGBA를 읽습니다.</p>
-                        </div></details>
                     </aside>
                     <div class="studio-code-pane">
                         <!-- 코드 머리줄: 파일 이름·상태 | 함수 이동·검색·줄 이동·자동 완성·코드 조각·더보기 메뉴 -->
@@ -399,18 +391,7 @@
         </header>
         <div class="guide-body">
             <nav id="guideNav" class="guide-nav" aria-label="가이드 주제"></nav>
-            <article id="guideContent" class="guide-content help-body" tabindex="-1" aria-live="polite">
-            <h3>처음 사용할 때</h3>
-            <p><b>1.</b> &lt;/&gt; 버튼으로 편집기 열기 → <b>2.</b> 예제 갤러리(X)에서 예제를 고르거나 Image/Buffer 탭 선택 → <b>3.</b> GLSL 작성 후 Run. 다른 패스를 읽으려면 iChannel에서 입력을 선택하세요.</p>
-            <h3>파일 저장 범위</h3><p><b>전체 프로젝트 저장(Pack)</b>은 코드·파라미터·연결된 이미지와 설정을 함께 보관합니다. <b>소스 JSON</b>은 코드와 연결 구성만, 편집기 ⋯ 메뉴의 <b>.frag 파일로 저장</b>은 현재 패스의 코드만 저장합니다. 브라우저 자동 저장과 별도로 Pack을 보관할 수 있습니다.</p>
-            <h3>화면·카메라 (3D 셰이더에서 사용)</h3>
-            <div class="help-list"><span>셰이더 편집기 열기/닫기</span><kbd>E</kbd><span>예제 갤러리</span><kbd>X</kbd><span>재생/일시정지 (뷰포트 선택)</span><kbd>Space</kbd><span>전체화면</span><kbd>F</kbd><span>설정 패널 표시/숨김</span><kbd>H</kbd><span>FPS HUD 표시/숨김</span><kbd>G</kbd><span>Uniform 검색</span><kbd>/</kbd><span>이 도움말 열기/닫기</span><kbd>?</kbd><span>카메라 회전 / 확대</span><kbd>드래그 / 휠</kbd><span>회전·확대 / 속도 증가</span><kbd>WASD·방향키 / Shift</kbd><span>카메라 초기화 (뷰포트 선택)</span><kbd>R</kbd></div>
-            <h3>GLSL 편집</h3>
-            <p class="help-note">편집기 단축키는 VS Code 기본값을 따릅니다. Ctrl은 Mac에서 Cmd입니다. Ctrl+W·Ctrl+N·Ctrl+Tab처럼 브라우저가 먼저 가져가는 키는 쓸 수 없습니다.</p>
-            <div class="help-list"><span>현재 코드 적용 (이 앱 전용)</span><kbd>Ctrl+S</kbd><span>명령 / 패스 / 함수·변수 / 줄로 이동</span><kbd>Ctrl+Shift+P / Ctrl+P / Ctrl+Shift+O / Ctrl+G</kbd><span>검색 / 치환</span><kbd>Ctrl+F / Ctrl+H</kbd><span>GLSL 이름 자동 완성</span><kbd>Ctrl+Space</kbd><span>다음 / 이전 검색 결과</span><kbd>F3 / Shift+F3</kbd><span>줄 주석 전환 / 추가 / 제거</span><kbd>Ctrl+/ · Ctrl+K Ctrl+C · Ctrl+K Ctrl+U</kbd><span>들여쓰기 / 내어쓰기</span><kbd>Tab / Shift+Tab</kbd><span>선택 줄 들여쓰기</span><kbd>Ctrl+] / Ctrl+[</kbd><span>줄 위/아래로 복사</span><kbd>Shift+Alt+↑ / Shift+Alt+↓</kbd><span>선택 줄 위/아래 이동</span><kbd>Alt+↑ / Alt+↓</kbd><span>모두 접기 / 모두 펴기</span><kbd>Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J</kbd><span>편집 취소 / 다시 실행</span><kbd>Ctrl+Z / Ctrl+Y</kbd><span>앞 / 뒤 패스 전환 (편집 중)</span><kbd>Alt+PageUp / Alt+PageDown</kbd><span>패스 탭 간 이동 (탭 선택 중)</span><kbd>← → / Home End</kbd><span>들여쓰기 폭 / 자동 줄바꿈</span><kbd>Tab 2·4 / Wrap</kbd></div>
-            <h3>버퍼 · 데이터</h3>
-            <p>패스 탭 옆 <b>+</b>로 패스를 추가하고 <b>iChannel0~3</b>에서 Texture 또는 Buffer를 연결합니다. <b>current</b>는 먼저 실행된 패스, <b>previous</b>는 직전 프레임의 결과입니다. <b>자동</b>은 코드 변경 시 자동 적용, 재생 버튼은 정지/재생, 시간 초기화 버튼은 프레임/피드백 초기화, <b>Undo/Redo</b>는 컴파일 실패를 포함한 편집 이력을 되돌립니다. 연속 타이핑은 묶어서 저장하며, 편집기에서 <b>Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z</b>를 사용할 수 있습니다.</p>
-            </article>
+            <article id="guideContent" class="guide-content help-body" tabindex="-1" aria-live="polite"></article>
         </div>
     </dialog>
 

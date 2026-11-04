@@ -50,4 +50,4 @@
     async function assertReject(promise,name) {
         let failed=false;try {await promise;} catch (_) {failed=true;} assert(failed,name);
     }
-})().catch(error=>console.error(error));
+})();
