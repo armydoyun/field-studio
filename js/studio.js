@@ -427,14 +427,16 @@ void main() {
       $("studioToggle").setAttribute("aria-label","셰이더 편집기 닫기");$("studioToggle").setAttribute("aria-expanded","true");
       if(window.matchMedia("(max-width:820px)").matches) {document.body.classList.add("panel-hidden");document.dispatchEvent(new Event("shader-panel-changed"));}$("studioCode").focus({preventScroll:true});saveWorkspace();
     }; // 재생 버튼은 아이콘(정지 중이면 ▶)과 접근 가능한 이름으로 상태를 알린다. 집중 모드에서는 복귀 후 재생 여부를 고른다.
+    // 집중 모드는 미리보기가 가려지므로 재생을 붙잡아 둔다(held). 미리보기를 별도 창으로 뺐으면(popout.js) 계속 보이므로 붙잡지 않는다.
+    const previewPopped = () => document.body.classList.contains("preview-popped"), previewHeld = () => expanded && !previewPopped();
     const syncPauseButton = () => {
-      const button=$("studioPause"), playing=expanded?resumeAfterMaximize:renderer.getStats().running;
-      const label=expanded?(resumeAfterMaximize?"복귀 시 재생":"복귀 시 정지"):playing?"일시정지":"재생";
+      const held=previewHeld(), button=$("studioPause"), playing=held?resumeAfterMaximize:renderer.getStats().running;
+      const label=held?(resumeAfterMaximize?"복귀 시 재생":"복귀 시 정지"):playing?"일시정지":"재생";
       button.setAttribute("aria-pressed",String(!playing));button.setAttribute("aria-label",label);button.title=`${label} · 뷰포트에서는 Space`;
     }; const maximize = () => {
       if(!expanded) {
-        resumeAfterMaximize=renderer.getStats().running; if(resumeAfterMaximize) renderer.stop();
-      } else if(resumeAfterMaximize) renderer.start(); expanded=!expanded;$("stage").classList.toggle("studio-maximized",expanded);
+        resumeAfterMaximize=renderer.getStats().running; if(resumeAfterMaximize && !previewPopped()) renderer.stop();
+      } else if(resumeAfterMaximize && !previewPopped()) renderer.start(); expanded=!expanded;$("stage").classList.toggle("studio-maximized",expanded);
       $("studioResize").hidden=expanded;$("studioMaximize").setAttribute("aria-pressed",String(expanded));
       syncPauseButton();
     }; const close = () => {if(expanded)maximize();openState=false;$("studioDock").hidden=true;
@@ -673,9 +675,14 @@ void main() {
     }); on($("studioErrorToggle"),"click",()=>{$("studioError").hidden=!$("studioError").hidden;});
     on($("studioToggle"),"click",toggle);on($("studioHide"),"click",close); on($("studioOpenFromPanel"),"click",open);
     on($("studioMaximize"),"click",maximize); on($("screen"),"click",inspectPixel); on($("studioPause"),"click",()=>togglePlayback()); on($("studioResetFrames"),"click",()=>{renderer.resetSimulation();setStatus("버퍼와 시뮬레이션 시간이 초기화됐습니다.");});
-    const getPlaybackState = () => expanded?resumeAfterMaximize:renderer.getStats().running;
-    const togglePlayback = () => {if(expanded)resumeAfterMaximize=!resumeAfterMaximize;else if(renderer.getStats().running)renderer.stop();else renderer.start();
+    const getPlaybackState = () => previewHeld()?resumeAfterMaximize:renderer.getStats().running;
+    const togglePlayback = () => {if(previewHeld())resumeAfterMaximize=!resumeAfterMaximize;else if(renderer.getStats().running)renderer.stop();else renderer.start();
       syncPauseButton();return getPlaybackState();};
+    // 집중 모드 중에 미리보기를 빼거나 되돌리면 붙잡기 상태를 넘겨준다: 빼면 붙잡아 둔 재생을 풀고, 되돌리면 다시 붙잡는다.
+    on(document,"preview-popout-changed",event=>{
+      if(expanded) { if(event.detail?.open) { if(resumeAfterMaximize) renderer.start(); } else { resumeAfterMaximize=renderer.getStats().running; if(resumeAfterMaximize) renderer.stop(); } }
+      syncPauseButton();
+    });
     on($("studioToolsToggle"),"click",()=>{const hidden=$("studioTools").hidden=!$("studioTools").hidden;$("studioToolsToggle").setAttribute("aria-expanded",String(!hidden));saveWorkspace();});
     const resizer=$("studioResize");let sizing=false;
     on(resizer,"pointerdown",e=>{if(e.button!==0)return;sizing=true;resizer.setPointerCapture(e.pointerId);e.preventDefault();});

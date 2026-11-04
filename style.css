@@ -57,6 +57,7 @@ svg { display:block;flex-shrink:0; }
 .icon-monitor { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='12' rx='2'/%3E%3Cpath d='M8 20h8M12 16v4'/%3E%3C/svg%3E"); }
 .icon-warning { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z'/%3E%3Cpath d='M12 9.5v4M12 17h.01'/%3E%3C/svg%3E"); }
 .icon-edit { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z'/%3E%3Cpath d='m13.5 6.5 4 4'/%3E%3C/svg%3E"); }
+.icon-popout { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 11V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h5'/%3E%3Crect x='13' y='14' width='8' height='6' rx='1.2'/%3E%3C/svg%3E"); }
 /* 함수·변수 종류 아이콘(명령 팔레트 @ 목록, breadcrumb) */
 .palette-kind::before,.studio-crumb-kind::before { content:"";display:block;width:14px;height:14px;background:currentColor;-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat; }
 .palette-kind.is-function,.studio-crumb-kind[data-kind="function"],.studio-crumb-kind:not([data-kind]) { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='3.5' width='17' height='17' rx='3'/%3E%3Cpath d='M9 17c1.8 0 2.6-1 2.6-2.8v-4.4C11.6 8 12.6 7 14.8 7M9 11.5h5.5'/%3E%3C/svg%3E"); }
@@ -508,7 +509,16 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 #stageToolbar { gap:2px;padding:3px;border-radius:var(--radius); }
 .tool-button { border-radius:var(--radius-sm);color:var(--text-soft); }
 .tool-button:hover { border-color:transparent;background:var(--surface-hover);color:var(--text); }
-.tool-button[aria-expanded="true"],#hudToggle[aria-pressed="false"] { background:var(--accent-soft);color:var(--accent-strong); }
+.tool-button[aria-expanded="true"],#hudToggle[aria-pressed="false"],#previewPopout[aria-pressed="true"] { background:var(--accent-soft);color:var(--accent-strong); }
+/* 미리보기 분리: 메인 뷰포트에는 안내만 남기고, 분리 창은 캔버스 하나로 꽉 채운다. */
+.preview-popout-notice { position:absolute;inset:0;z-index:1;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:var(--stage-bg);color:var(--muted);text-align:center; }
+.preview-popout-notice p { display:grid;gap:4px;max-width:340px;margin:0;font-size:12px;line-height:1.6; }
+.preview-popout-notice b { color:var(--text);font-size:13px;font-weight:600; }
+.preview-popout-mark { display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line-strong);border-radius:var(--radius);color:var(--faint); }
+.preview-popout-mark.glyph-icon::before { flex-basis:20px;width:20px;height:20px; }
+.preview-popout-window { background:var(--stage-bg); }
+.preview-popout-window #screen { width:100vw;height:100vh; }
+@container preview (max-height:220px) { .preview-popout-notice p span { display:none; } }
 .stage-hint { border-radius:var(--radius);color:var(--text-soft);font-size:12px; }
 .viewport-footer { inset:auto 12px 12px; }
 .viewport-info { border-radius:var(--radius);color:var(--text-soft);font:500 10px/1.4 var(--mono); }
