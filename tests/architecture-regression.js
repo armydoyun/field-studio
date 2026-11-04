@@ -178,7 +178,7 @@ async function main(){
   r.dispose();check(texEvents.dispose===1,"Renderer 폐기 시에만 CPU 이미지 해제");
   // DOM 계약 검사: 코드에서 직접 참조하는 정적 ID가 실제 HTML에 존재해야 한다.
   const html=fs.readFileSync(path.join(root,"index.html"),"utf8");
-  for(const key of ["screenshotButton","studioUndo","studioRedo","studioDuplicate","studioRun","bufferPreview","studioDraft"])check(html.includes(`id="${key}"`),`UI 요소 ${key}`);
+  for(const key of ["screenshotButton","studioUndo","studioRedo","studioDuplicate","studioRun","openBufferViewer","studioDraft"])check(html.includes(`id="${key}"`),`UI 요소 ${key}`);
   console.log(`검증 완료: ${passed}개 API/구조 회귀 테스트 통과`);
 }
 if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1;});

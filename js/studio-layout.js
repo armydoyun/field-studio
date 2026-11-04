@@ -5,14 +5,7 @@ import * as Store from "./storage.js";
 const HEIGHT_KEY = "webgl.shader-studio.height.v2",
   LAYOUT_KEY = "webgl.shader-studio.layout.v1",
   WORKSPACE_KEY = "webgl.shader-studio.workspace.v1";
-const GROUPS = [
-  "studioInputs",
-  "studioFiles",
-  "studioImages",
-  "studioDependencies",
-  "studioInspector",
-  "studioCodeTools",
-];
+const GROUPS = ["studioInputs", "studioFiles", "studioImages", "studioDependencies", "studioCodeTools"];
 const HEIGHT = { min: 25, max: 85 },
   WIDTH = { min: 30, max: 75, initial: 46 };
 const clamp = (value, { min, max }) => Math.max(min, Math.min(max, value));

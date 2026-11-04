@@ -105,8 +105,7 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 /* 두 버튼이 한 줄에 들어가지 않으면 단어 중간에서 줄바꿈하지 않고 위아래로 쌓는다. */
 .buffer-actions { display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:12px; }
 .buffer-actions button { min-width:0;min-height:40px;padding:8px;white-space:nowrap; }
-#bufferClear { color:var(--text-soft); }
-#bufferInfo { overflow-wrap:anywhere; }
+.buffer-actions+.help { margin-top:12px; }
 .studio-launch,.primary { min-height:40px;font-size:12px; }
 .studio-launch { width:100%;margin-top:12px; }
 /* 파라미터 카드와 생성 폼. */
@@ -321,8 +320,6 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-sampling { grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .studio-sampling label { min-width:0;color:var(--muted);font-size:10px; }
 .studio-sampling select { width:100%;min-height:30px;margin-top:6px;padding:4px;font-size:10px; }
-.studio-inspect-label { display:flex;align-items:center;gap:8px;min-height:32px;margin:0;color:var(--text-soft);font:11px/1.5 var(--mono); }
-.studio-inspect-label:has(input:disabled) { opacity:.6; }
 .studio-pixel-readout { display:block;min-height:56px;margin:0;padding:12px;border:1px solid var(--line-strong);border-radius:7px;font:10px/1.7 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere; }
 /* 코드 레이어·줄 번호는 글꼴/행간/상단 padding을 공유한다. */
 .studio-code-pane { display:flex;flex-direction:column;min-width:0;min-height:0; }
@@ -368,10 +365,7 @@ dialog { margin:auto;padding:0;border:1px solid var(--line-strong);color:var(--t
 
 .help-body { flex:1;min-height:0;padding:20px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;font-size:12px;line-height:1.75; }
 .help-body h3 { margin:24px 0 8px;font-size:12px;font-weight:700; }.help-body h3:first-child { margin-top:0; }
-.help-body p { margin:0 0 12px; }.help-note { color:var(--muted);font-size:11px; }
-.help-list { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:0 16px; }
-.help-list>span,.help-list>kbd { display:flex;align-items:center;min-height:36px;margin:0;padding:8px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent; }
-.help-list>kbd { justify-self:end;color:var(--text-soft);font-size:10px; }
+.help-body p { margin:0 0 12px; }
 .panel-backdrop { display:none; }.panel-hidden #panel { display:none; }.panel-hidden #workspace { grid-template-columns:minmax(0,1fr); }
 /* 반응형 변경은 기본 스타일 뒤에서만 적용한다. */
 @media (max-width:1100px) {
@@ -394,7 +388,7 @@ dialog { margin:auto;padding:0;border:1px solid var(--line-strong);color:var(--t
  .studio-editor-tools { gap:6px;padding:6px 8px; }#studioFunctions { max-width:150px; }
 .studio-code-label,.studio-bottom { padding-inline:8px; }
  .studio-dialog-head { gap:10px;padding:16px; }.studio-dialog-field { margin:0 16px 16px; }.studio-dialog-actions { padding:12px 16px; }
- .help-body { padding:16px; }.help-list { grid-template-columns:minmax(0,1fr);gap:0; }.help-list>span { min-height:0;padding-bottom:2px;border-bottom:0; }.help-list>kbd { justify-self:start;min-height:28px;padding-top:2px; }
+ .help-body { padding:16px; }
 }
 @container preview (max-width:620px) {
  .stage-label,.stage-hint { display:none; }.stage-header { justify-content:flex-end;padding:8px; }#stageToolbar { gap:2px; }
@@ -477,8 +471,8 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .theme-choice button:hover { border-color:transparent;background:transparent;color:var(--text); }
 .theme-choice button.is-selected { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
 .theme-choice+.help { margin-top:10px; }
-#bufferDemo { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
-#bufferClear:hover,.remove-uniform:hover,.danger-action:hover { border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger); }
+#openBufferViewer { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
+.remove-uniform:hover,.danger-action:hover { border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger); }
 .uniform-row:focus-within { background:color-mix(in srgb,var(--accent) 4%,var(--surface)); }
 .uniform-name { color:var(--text); }
 .uniform-type { color:var(--faint); }
@@ -777,7 +771,6 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .studio-dialog-actions { border-top-color:var(--line);background:var(--panel); }
 .help-body p { color:var(--muted); }
 .help-body h3 { color:var(--accent-strong); }
-.help-list>span,.help-list>kbd { border-bottom-color:var(--line); }
 
 /* 편집기 배치: 캔버스 오른쪽 분할(넓은 화면). 도구 패널은 코드 위로 열리는 서랍이 된다. */
 #studioLayout { width:32px;min-height:32px;padding:0; }
