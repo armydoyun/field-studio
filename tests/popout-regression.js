@@ -37,7 +37,7 @@ const setup = ({pip = true, popup} = {}) => {
   doc.documentElement.dataset.theme = "dark";
   const win = makeWindow(), view = new El("#main-window"), calls = {toggle:0};
   view.shaderStudio = {togglePlayback() { calls.toggle++; }};
-  if(pip) view.documentPictureInPicture = {requestWindow:async options => { calls.options = options; return win; }};
+  if(pip) view.documentPictureInPicture = {requestWindow:async options => { calls.options = options; if(pip instanceof Error) throw pip; return win; }};
   view.open = (url, name, features) => { calls.open = {url, name, features}; return popup === undefined ? win : popup; };
   doc.defaultView = view;
   // 안내 문구 자동 숨김 타이머는 검사에 필요 없으므로 가짜로 넘긴다(프로세스가 6초 기다리지 않게).
@@ -81,6 +81,16 @@ const check = (ok, name) => { assert(ok, name); console.log("PASS", name); };
   {
     const t = setup({pip:false}); t.button.click(); await flush();
     check(t.calls.open.name === "field-preview" && /popup/.test(t.calls.open.features) && t.canvas.parent === t.win.document.body, "PiP가 없으면 일반 팝업으로 연다");
+  }
+  {
+    const broken = Object.assign(new Error("Internal error: no window"), {name:"InvalidStateError"});
+    const t = setup({pip:broken}); t.button.click(); await flush();
+    check(t.calls.options && t.calls.open?.name === "field-preview" && t.canvas.parent === t.win.document.body, "PiP 창을 못 만드는 환경이면 일반 팝업으로 대신한다");
+  }
+  {
+    const denied = Object.assign(new Error("requires user activation"), {name:"NotAllowedError"});
+    const t = setup({pip:denied}); t.button.click(); await flush();
+    check(!t.calls.open && t.canvas.parent === t.viewport && /실패/.test(t.status.textContent), "클릭 없이 열려고 하면(NotAllowedError) 팝업을 띄우지 않고 알린다");
   }
   {
     const t = setup({pip:false, popup:null}); t.button.click(); await flush();

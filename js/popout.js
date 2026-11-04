@@ -48,9 +48,13 @@ const mount = ({doc = document} = {}) => {
     if(target) { target.focus(); return target; }
     const rect = canvas.getBoundingClientRect(), aspect = rect.width && rect.height ? rect.height / rect.width : 9 / 16;
     const width = Math.round(Math.min(Math.max(rect.width * 0.5, 320), 960)), height = Math.round(Math.min(Math.max(width * aspect, 180), 720));
-    const win = "documentPictureInPicture" in view
-      ? await view.documentPictureInPicture.requestWindow({width, height})
-      : view.open("", POPUP_NAME, `popup,width=${width},height=${height}`);
+    const popup = () => view.open("", POPUP_NAME, `popup,width=${width},height=${height}`);
+    let win = null;
+    if("documentPictureInPicture" in view) {
+      // PiP를 지원한다고 알려도 실행 환경(내장 브라우저·정책 등)에 따라 창을 못 만들 수 있다. 클릭이 없어서 거절된 경우만 그대로 알리고, 나머지는 일반 팝업으로 대신한다.
+      try { win = await view.documentPictureInPicture.requestWindow({width, height}); }
+      catch(error) { if(error?.name === "NotAllowedError") throw error; win = popup(); }
+    } else win = popup();
     if(!win) throw new Error("팝업이 차단되었습니다. 주소창에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.");
     const d = win.document; d.head.replaceChildren(); d.body.replaceChildren();
     const meta = d.createElement("meta"); meta.setAttribute("charset", "utf-8"); d.head.append(meta);

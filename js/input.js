@@ -53,8 +53,11 @@
     }; const stopDrag = () => {
       if(pointerId === null) return; const id = pointerId; pointerId = null; canvas.classList.remove("is-dragging");
       if(canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
-    }; const onPointerDown = event => {
-      if(disposed || event.button !== 0 || pointerId !== null) return; stage.focus({preventScroll:true});
+    };
+    // 캔버스가 별도 창으로 분리돼 있으면(popout.js) 메인 stage에 초점을 주지 않는다. 주면 분리 창의 키 입력(Space·Esc)을 메인이 가져간다.
+    const focusStage = () => { if(stage.contains?.(canvas) !== false) stage.focus({preventScroll:true}); };
+    const onPointerDown = event => {
+      if(disposed || event.button !== 0 || pointerId !== null) return; focusStage();
       readCamera(); pointerId = event.pointerId; lastX = event.clientX; lastY = event.clientY;
       canvas.setPointerCapture(pointerId); canvas.classList.add("is-dragging"); event.preventDefault();
     }; const onPointerMove = event => {
@@ -63,7 +66,7 @@
       if(readCamera()){camera.yaw-=dx*0.005;camera.pitch=clamp(camera.pitch-dy*0.005,-1.4,1.4);syncCamera();}
       for(const callback of dragListeners) callback({dx, dy, yaw:camera.yaw, pitch:camera.pitch, event});
     }; const onWheel = event => {
-      if(disposed || !readCamera())return;event.preventDefault();stage.focus({preventScroll:true});
+      if(disposed || !readCamera())return;event.preventDefault();focusStage();
       const amount = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? stage.clientHeight : 1);
       camera.distance = clamp(camera.distance * Math.exp(clamp(amount, -1000, 1000) * 0.001), 1.5, 30); syncCamera();
     }; const onPointerEnd = event => { if(event.pointerId === pointerId) stopDrag(); };
