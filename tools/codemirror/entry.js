@@ -30,6 +30,8 @@ export {
   placeholder,
   highlightTrailingWhitespace,
   closeHoverTooltips,
+  layer,
+  RectangleMarker,
 } from "@codemirror/view";
 export {
   defaultKeymap,

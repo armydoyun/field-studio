@@ -28,10 +28,9 @@ npm run build    # → deploy/index.html
 ```
 
 - `tools/build.mjs`가 esbuild로 `js/main.js`부터 import를 따라 모든 모듈을 묶고 압축한 뒤, `tools/inline-html.mjs`가 `index.html`의 `<link>`·`<script type="module">` 자리에 넣습니다. 모듈 목록을 따로 관리하지 않습니다.
-- 예전 3파일 배포본(`deploy/style.css`, `deploy/js/min.js`)이 남아 있으면 빌드가 지웁니다.
+- `deploy/`는 빌드 결과라 git에 올리지 않습니다(`.gitignore`). 받아 쓰는 사람은 직접 빌드하거나 아래 Artifacts에서 받습니다.
 - GitHub Actions는 lint와 테스트가 모두 통과하면 같은 빌드를 만들어 실행 페이지의 **Artifacts → field-studio-deploy-<커밋 SHA>**에 올립니다. 셸이 없는 환경에서도 거기서 받으면 됩니다.
 - `tests/build-regression.js`가 임시 폴더에 빌드해 보고, 만든 파일을 `file://`로 Chromium에서 열어 앱이 오류·네트워크 요청 없이 뜨는지 확인합니다.
-- `python tools/build_deploy.py`(예전 Python 번들러)는 더 이상 쓰지 않습니다.
 
 ## 프로젝트 구조
 
@@ -39,35 +38,52 @@ npm run build    # → deploy/index.html
 index.html            # 개발용 ESM 진입점
 style.css
 js/
-  main.js             # type=module 진입점
-  renderer.js
-  gpu-diagnostics.js  # GL 오류 격리, Uniform 리플렉션, GPU 타이머 (README_확장기반_정비.md)
-  profiler.js         # 성능·디버그 탭 (README_UX_v2_재설계.md)
-  gallery.js          # 예제 갤러리·첫 실행 안내
-  annotations.js      # GLSL 주석 @range/@color 파서 (README_파라미터_버퍼_업데이트.md)
-  snippets.js         # GLSL 코드 조각 라이브러리(16범주 · 의존성 정보 · 실수/정수 해시) — 조각 추가는 여기 CATEGORIES에
-  snippet-preview.js  # 코드 조각 결과 미리보기(조각 id → 그림 함수 PREVIEWS · 공용 WebGL2 컨텍스트) — 새 조각의 그림은 여기에
-  guide.js            # 앱 내장 가이드(주제·검색·코드 삽입)·UI 둘러보기·문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리
-  pass-manager.js
-  texture-input.js
-  studio.js
-  codemirror.js       # CodeMirror 6 (MIT, 미리 번들링 · tools/codemirror에서 재생성) — 손으로 고치지 않는다
-  cm-editor.js        # GLSL 코드 편집기: CodeMirror 화면 + studio용 #studioCode 창구 · 팔레트 · 툴바
+  main.js             # type=module 진입점 · 앱 조립
+  # 렌더링 (GPU 자원 소유)
+  renderer.js         # WebGL 리소스 · 애니메이션 루프 · 입력 · 컨텍스트 복구
+  pass-manager.js     # 버퍼 패스의 프로그램 · 출력 Texture · FBO
+  texture-input.js    # 로컬 이미지 Texture (본문은 IndexedDB)
+  gpu-diagnostics.js  # GL 오류 격리 · Uniform 리플렉션 · GPU 타이머
+  shader.js           # 시작 화면 기본 GLSL
+  # 편집기 (Shader Studio)
+  studio.js           # 사용자 편집 상태 · 적용 · Undo
+  studio-layout.js    # 편집기 배치 · 리사이저 · 도구 서랍
+  studio-pack.js      # Pack 파일 형식 (순수 함수)
+  studio-projects.js  # 프로젝트 보관함 화면
+  studio-examples.js  # Studio가 만드는 예제 프로젝트
+  studio-dialog.js    # 공용 입력·확인 대화상자
+  project-model.js    # 프로젝트 데이터 규칙 (순수 함수)
+  project-store.js    # 프로젝트 보관함 저장소 (IndexedDB)
+  code-insert.js      # 코드 삽입 위치 계산 (순수 함수)
+  cm-editor.js        # GLSL 코드 편집기: CodeMirror 화면 + studio용 #studioCode 창구 · 팔레트 · 툴바 · 선택 영역 레이어
   cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류
   glsl-language.js    # GLSL 언어 정보(키워드·타입·앱 Uniform·심볼 표·자동 완성 후보)
-  glsl-highlight.js   # 가이드 코드 예시의 GLSL 강조
-  ui.js
-  input.js
-  settings.js
-  shader.js
+  glsl-highlight.js   # GLSL 강조 (편집기·가이드 공용)
+  codemirror.js       # CodeMirror 6 (MIT, 미리 번들링 · tools/codemirror에서 재생성) — 손으로 고치지 않는다
+  # 설정 패널 · 화면
+  ui.js               # 설정 패널(렌더링 · 파라미터 · 작업공간 탭)
+  profiler.js         # 성능 탭: 프레임·패스별 GPU 시간 · 버퍼 뷰어 · 픽셀 값 · Uniform 진단
+  annotations.js      # GLSL 주석 @range/@color 파서
+  input.js            # 포인터·키 입력 → 카메라 Uniform
+  settings.js         # 렌더링 설정 저장
+  storage.js          # localStorage 창구 (실패를 삼키지 않음)
+  theme.js            # 라이트·다크·시스템 테마
+  popout.js           # 미리보기 분리 창
+  # 학습 · 도움말 (내용은 데이터 모듈에)
+  gallery.js          # 예제 갤러리 · 첫 실행 안내
+  guide.js            # 앱 내장 가이드 · UI 둘러보기 · 문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리
+  course.js           # 입문 과정 수업 내용
+  glsl-reference.js   # GLSL 내장 함수·변수 레퍼런스
+  snippets.js         # GLSL 코드 조각 라이브러리 — 조각 추가는 여기 CATEGORIES에
+  snippet-preview.js  # 코드 조각 결과 미리보기 — 새 조각의 그림은 여기에
   package.json        # Node.js 검증을 위한 ESM 지정
-  (loader.js 제거됨)
 tools/build.mjs       # npm run build: esbuild로 묶어 한 파일짜리 배포본 생성
 tools/inline-html.mjs # index.html에 CSS·JS를 넣는 순수 함수(빌드와 검사가 같이 씀)
 tools/codemirror/     # js/codemirror.js 생성 도구 (이 파일을 다시 만들 때만 필요)
-tools/update_sha_manifest.py # 실행 소스 SHA-256 목록 갱신
+tools/update_sha_manifest.py # 실행 소스 SHA-256 목록 갱신 (npm run sha / sha:check)
 tests/run.mjs         # npm test: 모든 테스트 실행기
-deploy/index.html     # 한 파일짜리 오프라인 배포본 (npm run build가 생성, file://로 실행)
+docs/history/         # 기능별 작업 기록 (예전 루트의 README_*.md)
+deploy/index.html     # 한 파일짜리 오프라인 배포본 — npm run build가 만든다, git에는 없음
 ```
 
 ## 검증
@@ -103,4 +119,4 @@ node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 �
 
 **검증 한계:** 자동화 테스트 환경은 페이지 네비게이션 및 WebGL2가 제한되어 개발용 ES Module의 실제 HTTP 구동, `file://`로 연 배포본의 실제 GPU 렌더링은 대상 브라우저에서 직접 최종 확인해야 합니다.
 
-원본 2026-10-15 AMD 개발 기록은 `README_2026-10-15_AMD_기록.md`에 보존했습니다.
+기능별 작업 기록(예전 `README_*.md`)은 `docs/history/`에 모아 두었습니다. 원본 2026-10-15 AMD 개발 기록은 `docs/history/README_2026-10-15_AMD_기록.md`입니다.

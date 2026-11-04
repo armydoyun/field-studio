@@ -7,6 +7,48 @@ import * as Highlight from "./glsl-highlight.js";
 import * as Language from "./glsl-language.js";
 import * as Features from "./cm-glsl-features.js";
 import * as Store from "./storage.js";
+// 선택 영역을 줄 높이에 맞춰 그린다.
+// drawSelection은 줄 일부만 선택된 첫·마지막 줄을 글자 상자 높이(coordsAtPos)로 칠하고, 가운데 줄은 그 사이를 꽉 채운다.
+// 이 편집기는 줄 간격이 1.65라서 첫·마지막 줄의 띠만 얇고 위치도 어긋나 보였다.
+// 같은 사각형(RectangleMarker.forRange)을 얻은 뒤 위·아래 가장자리를 가장 가까운 줄 경계(줄바꿈된 줄이면 화면 행 경계)로 옮긴다.
+// drawSelection의 원래 선택 레이어는 CSS로 숨기고(.studio-selection-layer가 아닌 .cm-selectionLayer), 커서·기본 선택 숨김은 그대로 쓴다.
+// iOS는 기본 선택을 그대로 쓰는 CodeMirror 동작을 따라 이 레이어를 쓰지 않는다.
+const IOS = /iP(hone|ad|od)/.test(navigator.platform) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+const lineAlignedSelection = CM => {
+  if (IOS) return [];
+  // y: 문서 좌표(첫 줄 위 = 0). 가장 가까운 행 경계를 돌려준다.
+  const snap = (view, y) => {
+    const block = view.lineBlockAtHeight(y),
+      rows = Math.max(1, Math.round(block.height / view.defaultLineHeight)),
+      row = block.height / rows,
+      k = Math.max(0, Math.min(rows, Math.round((y - block.top) / row)));
+    return block.top + k * row;
+  };
+  return [
+    CM.layer({
+      above: false,
+      class: "cm-selectionLayer", // 포커스·테마 규칙이 이 이름을 본다. 원래 레이어와 구분하는 이름은 mount에서 붙인다.
+      mount: dom => dom.classList.add("studio-selection-layer"),
+      markers(view) {
+        // 레이어 좌표(스크롤 영역 기준) ↔ 문서 좌표. CodeMirror 레이어와 같은 기준점을 쓴다.
+        const rect = view.scrollDOM.getBoundingClientRect(),
+          offset = view.documentTop - (rect.top - view.scrollDOM.scrollTop),
+          out = [];
+        for (const range of view.state.selection.ranges) {
+          if (range.empty) continue;
+          for (const marker of CM.RectangleMarker.forRange(view, "cm-selectionBackground", range)) {
+            const top = snap(view, marker.top - offset) + offset,
+              bottom = snap(view, marker.top + marker.height - offset) + offset;
+            if (bottom > top)
+              out.push(new CM.RectangleMarker("cm-selectionBackground", marker.left, top, marker.width, bottom - top));
+          }
+        }
+        return out;
+      },
+      update: update => update.docChanged || update.selectionSet || update.viewportChanged || update.geometryChanged,
+    }),
+  ];
+};
 const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], options = {}) => {
   const CM = CodeMirror.load(); // CodeMirror는 편집기를 처음 붙일 때 초기화한다
   const $ = id => document.getElementById(id),
@@ -725,6 +767,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
         braceFold,
         CM.highlightSpecialChars(),
         CM.drawSelection(),
+        lineAlignedSelection(CM),
         CM.dropCursor(),
         CM.EditorState.allowMultipleSelections.of(true),
         // 사각(열) 선택은 VS Code처럼 Shift+Alt+드래그. Alt+클릭은 커서 추가, 숫자 위 Alt+드래그는 값 조절로 쓴다.
