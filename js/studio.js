@@ -14,6 +14,7 @@ import * as Pack from "./studio-pack.js";
 import * as ProjectStore from "./project-store.js";
 import * as Projects from "./studio-projects.js";
 import * as ProjectMenu from "./project-menu.js";
+import * as ChannelPicker from "./channel-picker.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -393,9 +394,32 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
                 ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
                 : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
           };
+  // 입력 채널 칩과 고르기 팝오버(channel-picker.js). 바뀐 연결은 여기서 초안에 넣고, 자동이면 바로 적용한다.
+  const channelPicker = ChannelPicker.create({
+    $,
+    on,
+    element,
+    inputInfo,
+    onChange: (i, ref) => {
+      const channels = activeChannels();
+      if (!channels) return;
+      if (ref) channels[i] = ref;
+      else delete channels[i];
+      schedule();
+      renderGraph();
+      syncTextureTargets();
+      if (!$("studioLive").checked) return;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      apply();
+    },
+    onLoadImage: i => pickImage(i),
+    onDropImage: (i, file) => runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, i)),
+  });
   const renderChannels = () => {
-    const holder = $("studioChannels"),
-      channels = activeChannels(),
+    const channels = activeChannels(),
       assets = renderer.getTextures(),
       blocked = project.passes.filter(pass => !validCurrent(selected, pass.name));
     $("studioInputsTitle").textContent = `${selected} · 입력`;
@@ -403,86 +427,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       selected === "Image"
         ? "Image는 버퍼 실행이 끝난 뒤 그려집니다. 모든 버퍼의 current 또는 previous를 읽을 수 있습니다."
         : `current는 앞서 실행되는 버퍼만 선택할 수 있습니다.${blocked.length ? ` ${blocked.map(pass => pass.name).join(", ")}는 자기 자신 또는 뒤에서 실행되는 버퍼이므로 previous로 연결하세요.` : ""}`;
-    holder.replaceChildren();
-    for (let i = 0; i < 4; i++) {
-      const row = element("div"),
-        label = element("label"),
-        select = element("select"),
-        hint = element("p");
-      row.className = "studio-channel";
-      // 칩이 한 줄에 들어가도록 짧게 쓴다. 전체 이름은 title로.
-      label.textContent = `iCh${i}`;
-      label.title = `iChannel${i}`;
-      label.htmlFor = select.id = `studioChannel${i}`;
-      hint.id = `studioChannelHelp${i}`;
-      hint.className = "studio-channel-help";
-      select.setAttribute("aria-describedby", `${hint.id} studioChannelRules`);
-      const addOption = (value, text, disabled = false) => {
-        const opt = element("option");
-        opt.value = value;
-        opt.textContent = text;
-        opt.disabled = disabled;
-        select.append(opt);
-      };
-      addOption("", "연결 안 함");
-      addOption("load", "이미지 불러오기…");
-      for (const asset of assets)
-        addOption(`tex:${asset.id}`, `이미지 · ${asset.name} (${asset.width}×${asset.height})`);
-      // 출력이 여럿(MRT)인 버퍼는 출력마다 선택지를 둔다. 값 형식: 이름:frame[:출력번호]
-      for (const pass of project.passes) {
-        const allowed = validCurrent(selected, pass.name),
-          outputs = pass.outputs || 1;
-        for (let att = 0; att < outputs; att++) {
-          const suffix = att ? `:${att}` : "",
-            shown = outputs > 1 ? `${pass.name}[${att}]` : pass.name;
-          addOption(
-            `${pass.name}:current${suffix}`,
-            `${shown} · current${allowed ? " · 이번 프레임" : pass.name === selected ? " · 자기 참조 불가" : " · 실행 순서상 불가"}`,
-            !allowed
-          );
-          addOption(`${pass.name}:previous${suffix}`, `${shown} · previous · 지난 프레임`);
-        }
-      }
-      const current = channels?.[i];
-      select.value = current
-        ? current.texture
-          ? `tex:${current.texture}`
-          : `${current.buffer}:${current.frame}${current.attachment ? `:${current.attachment}` : ""}`
-        : "";
-      const shown = select.value;
-      const describe = () => {
-        const info = inputInfo(channels?.[i], assets);
-        hint.textContent = `${info.source} · ${info.frame} — ${info.help}`;
-        select.title = `iChannel${i} · ${hint.textContent}`;
-      };
-      describe();
-      select.addEventListener("change", () => {
-        // 이미지 불러오기: 선택은 원래대로 두고 파일을 고르게 한다. 불러오면 이 채널에 바로 연결한다.
-        if (select.value === "load") {
-          select.value = shown;
-          pickImage(i);
-          return;
-        }
-        if (!select.value) delete channels[i];
-        else if (select.value.startsWith("tex:")) channels[i] = { texture: select.value.slice(4) };
-        else {
-          const [buffer, frame, att] = select.value.split(":");
-          channels[i] = att ? { buffer, frame, attachment: Number(att) } : { buffer, frame };
-        }
-        describe();
-        schedule();
-        renderGraph();
-        syncTextureTargets();
-        if (!$("studioLive").checked) return;
-        if (timer) {
-          clearTimeout(timer);
-          timer = null;
-        }
-        apply();
-      });
-      row.append(label, select, hint);
-      holder.append(row);
-    }
+    channelPicker.render({
+      target: selected,
+      channels,
+      assets,
+      passes: project.passes.map(pass => ({ name: pass.name, outputs: pass.outputs || 1 })),
+      validCurrent: name => validCurrent(selected, name),
+      // 편집기 문서는 renderEditor가 이 다음에 바꾸므로, 선택한 패스의 소스를 직접 읽는다.
+      source: activeSource() || "",
+    });
     syncTextureTargets();
   };
   // 패스 탭에 마우스를 올리면 그 패스가 읽는 입력을 보여 준다(전체 그래프는 성능 탭의 패스 연결).
@@ -1370,6 +1323,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   on($("studioCode"), "input", event => {
     rememberEditor();
+    channelPicker.syncUsage($("studioCode").value);
     schedule(
       (event.inputType === "insertText" && event.data?.length === 1) ||
         /^(deleteContent|insertCompositionText|insertReplacementText)/.test(event.inputType || "")

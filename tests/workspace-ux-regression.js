@@ -118,7 +118,7 @@ await test('Malformed workspace preferences do not prevent editing',async(f)=>{
 },false,{'webgl.shader-studio.workspace.v1':'{broken'});
 await test('Pack export exposes busy state and restores its label even after failure',async(f,n)=>{
  const label=n('studioExportPack').textContent;const promise=n('studioExportPack').click();assert.equal(n('studioExportPack').disabled,true);assert.equal(n('studioExportPack').attrs['aria-busy'],'true');await promise;assert.equal(n('studioExportPack').disabled,false);assert.equal(n('studioExportPack').textContent,label);assert.equal(n('studioExportPack').attrs['aria-busy'],undefined);
- const input=n('studioChannels').children[0].children[1];input.value='tex:missing';await input.dispatchEvent({type:'change'});await n('studioExportPack').click();assert.equal(n('studioExportPack').disabled,false);assert.equal(n('studioExportPack').textContent,label);assert.match(n('studioMessage').textContent,/원본 이미지/);
+ const list=f.renderer.getTextures;f.renderer.getTextures=()=>[...list(),{id:'missing',name:'gone.png',width:1,height:1}];f.studio.setProject({image:f.studio.getProject().image,passes:[],imageChannels:{}});await n('studioChannels').children[0].children[1].click();const all=x=>[x,...(x.children||[]).flatMap(all)];await all(n('studioInputs')).find(x=>x.dataset?.value==='tex:missing').click();f.renderer.getTextures=list;await n('studioExportPack').click();assert.equal(n('studioExportPack').disabled,false);assert.equal(n('studioExportPack').textContent,label);assert.match(n('studioMessage').textContent,/원본 이미지/);
 });
 // ---- 화면 전환 상태 유지 ----
 await test('Adding then removing a pass returns to the Image cursor and scroll',async(f,n)=>{

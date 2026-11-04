@@ -49,20 +49,55 @@
     test(studio.setProject({ image: fragment, passes: [{ name: "A", fragment, format: "rgba8", scale: 1, channels: {} }], imageChannels: { 0: { buffer: "A", frame: "current" } } }), "버퍼 하나 있는 프로젝트");
     await frame();
     test(visible($("studioInputs")), "입력 줄 표시");
-    const selects = [0, 1, 2, 3].map(i => $(`studioChannel${i}`));
-    test(selects.every(visible), "iChannel0–3 칩 4개");
-    test(selects.every(s => [...s.options].some(o => o.value === "load")), "칩마다 이미지 불러오기…");
-    test(/A/.test(selects[0].title), "칩 title에 연결 설명");
+    const chips = [0, 1, 2, 3].map(i => $(`studioChannel${i}`));
+    test(chips.every(visible), "iChannel0–3 칩 4개");
+    const rows = new Set(chips.map(c => Math.round(c.getBoundingClientRect().top)));
+    test(rows.size <= 2, "칩은 한두 줄 안에 들어감");
+    test(chips[0].dataset.kind === "buffer" && /A\s*cur/.test(chips[0].textContent) && chips[2].dataset.kind === "empty", "칩: 버퍼는 배지·시점, 빈 칸은 ＋");
 
-    // 이미지 불러오기…를 고르면 파일 고르기가 열리고, 선택은 원래대로 돌아간다
+    // 칩을 누르면 팝오버: 시점 · 버퍼 · 이미지 · 해제. 키보드로 이동하고 Esc로 닫는다.
+    chips[1].click();
+    await frame();
+    const picker = $("studioChannelPicker");
+    test(visible(picker) && chips[1].getAttribute("aria-expanded") === "true", "칩 → 고르기 팝오버");
+    test(picker.querySelector('[data-frame="previous"]') && picker.querySelector('[data-value="A:current"]'), "시점과 버퍼 선택지");
+    test(document.activeElement && picker.contains(document.activeElement), "팝오버 안으로 포커스");
+    const pbox = picker.getBoundingClientRect(), dock = $("studioDock").getBoundingClientRect();
+    test(pbox.left >= dock.left - 1 && pbox.right <= dock.right + 1, "팝오버가 편집기 폭 안에");
+    test(document.elementFromPoint(pbox.left + pbox.width / 2, pbox.top + pbox.height / 2)?.closest("#studioChannelPicker"), "팝오버가 코드 위에 보임");
+    picker.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    test(picker.hidden && document.activeElement === chips[1], "Esc → 닫고 칩으로");
+
+    // 이미지 불러오기…를 고르면 파일 고르기가 열리고, 연결은 그대로다
     let picked = 0;
     const input = $("studioTextureFile"), click = input.click;
     input.click = () => { picked++; };
-    const old = selects[1].value;
-    selects[1].value = "load";
-    selects[1].dispatchEvent(new Event("change", { bubbles: true }));
+    const old = chips[1].value;
+    chips[1].click();
+    await frame();
+    picker.querySelector('[data-value="load"]').click();
     input.click = click;
-    test(picked === 1 && $("studioChannel1").value === old, "이미지 불러오기… → 파일 고르기, 선택 유지");
+    test(picked === 1 && $("studioChannel1").value === old && picker.hidden, "이미지 불러오기… → 파일 고르기, 연결 유지");
+
+    // 버퍼 고르기 → 칩에 배지·시점 표시
+    chips[1].click();
+    await frame();
+    picker.querySelector('[data-frame="previous"]').click();
+    picker.querySelector('[data-value="A:previous"]').click();
+    await frame();
+    test($("studioChannel1").value === "A:previous" && /A\s*prev/.test($("studioChannel1").textContent), "A previous 연결 → 칩에 A prev");
+
+    // 이미지 파일을 칩에 끌어다 놓으면 그 채널에 연결된다
+    const canvas = Object.assign(document.createElement("canvas"), { width: 2, height: 2 });
+    canvas.getContext("2d").fillRect(0, 0, 2, 2);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    const drop = new DataTransfer();
+    drop.items.add(new File([blob], "drop-test.png", { type: "image/png" }));
+    chips[2].dispatchEvent(new DragEvent("dragover", { dataTransfer: drop, bubbles: true, cancelable: true }));
+    chips[2].dispatchEvent(new DragEvent("drop", { dataTransfer: drop, bubbles: true, cancelable: true }));
+    for (let i = 0; i < 50 && !studio.getProject().imageChannels[2]?.texture; i++) await new Promise(r => setTimeout(r, 50));
+    test(!!studio.getProject().imageChannels[2]?.texture && $("studioChannel2").dataset.kind === "image", "칩에 이미지 드롭 → 그 채널에 연결");
+    test(studio.getProject().imageChannels[0]?.buffer === "A", "다른 채널 연결은 그대로");
 
     // 패스 탭 title에 입력 요약
     test(/iChannel0 ← Buffer A/.test($("studioTab-Image").title), "Image 탭 title에 입력 요약");
