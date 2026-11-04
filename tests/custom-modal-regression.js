@@ -2,7 +2,8 @@
 "use strict";
 const fs=require("fs"),path=require("path"),assert=require("assert"),{execFileSync}=require("child_process");
 const root=path.join(__dirname,".."),read=file=>fs.readFileSync(path.join(root,file),"utf8");
-const html=read("index.html"),css=read("style.css"),studio=read("js/studio.js"),editor=read("js/cm-editor.js")+read("js/cm-glsl-features.js");
+// 대화상자 본체는 js/studio-dialog.js, 자동 적용 타이머 연결은 js/studio.js에 있다.
+const html=read("index.html"),css=read("style.css"),dialog=read("js/studio-dialog.js"),studio=read("js/studio.js")+dialog,editor=read("js/cm-editor.js")+read("js/cm-glsl-features.js");
 let passed=0;const check=(condition,label)=>{assert.ok(condition,label);console.log("PASS",label);passed++;};
 for(const id of ["studioPromptDialog","studioDialogForm","studioDialogTitle","studioDialogMessage","studioDialogField","studioDialogInput","studioDialogOK","studioDialogCancel","studioDialogClose"])
   check((html.match(new RegExp(`id="${id}"`,"g"))||[]).length===1,`모달 요소 고유 ID ${id}`);
@@ -11,9 +12,10 @@ check(css.includes(".studio-prompt-dialog::backdrop")&&css.includes('data-danger
 check(!/(?:window\.)?(?:prompt|confirm|alert)\s*\(/.test(studio+editor),"기본 입력/확인 대화상자 미사용");
 // 편집기는 studio의 모달 함수 ask를 받아 이름 바꾸기 등에 쓴다(GLSL 도우미까지 전달).
 check(studio.includes('Editor.mount($("studioCode"),ask')&&editor.includes("const mount = (textarea, ask")&&editor.includes("Features.create({CM, language, options, ask")&&editor.includes("await ask({title:"),"단일 모달 함수의 편집기 공유");
-check(studio.includes("valueInput.disabled=!hasValue")&&studio.includes("valueInput.reportValidity()"),"숫자 입력 제한·숨김 입력 제외");
-check(studio.includes('on(dialog,"cancel"')&&studio.includes('on(dialog,"keydown"'),"Esc 취소 및 하위 키 전달 방지");
+check(dialog.includes("valueInput.disabled=!hasValue")&&dialog.includes("valueInput.reportValidity()"),"숫자 입력 제한·숨김 입력 제외");
+check(dialog.includes('on(dialog,"cancel"')&&dialog.includes('on(dialog,"keydown"'),"Esc 취소 및 하위 키 전달 방지");
+check(/Dialog\.create\(\{\$, on,/.test(studio)&&/const ask = dialogs\.ask;/.test(studio),"studio는 공용 대화상자 모듈 하나만 만든다");
 check(studio.includes('if(!await confirmReplace())')&&studio.includes('proceed(confirmReplace()'),"비동기 확인과 기존 동기 API 호환");
 check(studio.includes("const wasLive=!!timer")&&studio.includes("if(wasLive&&dirty"),"모달 표시 중 자동 적용 타이머 정지/복구");
-for(const file of ["js/studio.js","js/cm-editor.js","js/cm-glsl-features.js"])execFileSync(process.execPath,["--check",path.join(root,file)]);
+for(const file of ["js/studio.js","js/studio-dialog.js","js/cm-editor.js","js/cm-glsl-features.js"])execFileSync(process.execPath,["--check",path.join(root,file)]);
 console.log(`커스텀 모달 구조 검증 ${passed}개 통과`);

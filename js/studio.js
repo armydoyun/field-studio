@@ -1,77 +1,18 @@
 // 사용자 편집 상태만 소유한다. GPU 자원과 연결 규칙은 Renderer/PassManager가 검증한다.
 // 외부 코드 에디터나 네트워크 요청은 사용하지 않는다. file:// 배포는 deploy/ 번들을 사용한다.
+// 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
 import * as Editor from "./cm-editor.js";
 import * as Annotations from "./annotations.js";
+import * as Model from "./project-model.js";
+import * as Examples from "./studio-examples.js";
+import * as Dialog from "./studio-dialog.js";
+import * as Insert from "./code-insert.js";
+import * as Store from "./storage.js";
 
-  const STORAGE_KEY = "webgl.shader-studio.project.v1", DRAFT_KEY = "webgl.shader-studio.draft.v2", JSON_LIMIT=16*1024*1024, PACK_LIMIT=64*1024*1024; const copy = x => x && typeof x==="object" ? Array.isArray(x) ? x.map(copy) : Object.fromEntries(Object.entries(x).map(([k,v])=>[k,copy(v)])) : x;
-    const comparison = `#version 300 es
-precision highp float;
-// Image: iChannel0 = B (current), iChannel1 = A (current).
-// 왼쪽은 A 원본, 오른쪽은 B 처리 결과. 각 화면에 같은 UV를 사용한다.
-uniform vec2 uResolution;
-uniform sampler2D iChannel0;
-uniform sampler2D iChannel1;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
-    bool original = uv.x < 0.5;
-    uv.x = fract(uv.x * 2.0);
-    vec3 color = original ? texture(iChannel1, uv).rgb : texture(iChannel0, uv).rgb;
-    fragColor = vec4(color, 1.0);
-}`;
-    const blank = `#version 300 es
-precision highp float;
-uniform vec2 uResolution;
-uniform float uTime;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
-    fragColor = vec4(uv, 0.5 + 0.5 * sin(uTime), 1.0);
-}`;
-    const movingDot = `#version 300 es
-precision highp float;
-// Buffer A: 외부 입력 없이 움직이는 원을 만든다. B가 A의 current를 읽는다.
-uniform vec2 uResolution;
-uniform float uTime;
-out vec4 fragColor;
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
-    vec2 center = 0.5 * vec2(cos(uTime), sin(uTime * 1.4));
-    float dotMask = 1.0 - smoothstep(0.09, 0.11, length(p - center));
-    fragColor = vec4(vec3(0.1, 0.65, 1.0) * dotMask, 1.0);
-}`;
-    const colorFilter = `#version 300 es
-precision highp float;
-// Buffer B: iChannel0 = A (current). 반드시 A 다음에 실행한다.
-// A의 이번 프레임 결과를 읽어 RGB 순서를 바꾼다. 자기 자신은 읽지 않는다.
-uniform vec2 uResolution;
-uniform sampler2D iChannel0;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
-    vec3 source = texture(iChannel0, uv).rgb;
-    fragColor = vec4(source.brg, 1.0);
-}`;
-    const feedback = `#version 300 es
-precision highp float;
-// Buffer B: iChannel0 = A (current), iChannel1 = B (previous).
-// A의 새 원을 현재 프레임에서 읽고, B의 직전 프레임에 남은 잔상과 합친다.
-// B를 current로 자기 참조하면 안 된다. previous는 별도 Texture를 읽는다.
-uniform vec2 uResolution;
-uniform float uDeltaTime;
-uniform int uFrame;
-uniform sampler2D iChannel0;
-uniform sampler2D iChannel1;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
-    vec3 source = texture(iChannel0, uv).rgb;
-    // 첫 프레임에는 이전 누적 결과를 사용하지 않는다. Reset으로 다시 시작한다.
-    vec3 history = uFrame == 0 ? vec3(0.0) : texture(iChannel1, uv).rgb;
-    // 초 단위로 밝기를 줄이되, RGBA8에서 반올림되어 잔상이 고착되지 않게 최소 1단계 감쇠한다.
-    float fade = max(0.8 * uDeltaTime, 1.0 / 255.0);
-    fragColor = vec4(max(source, history - fade), 1.0);
-}`;
+  // localStorage 키. 작업 상태(project·draft)와 화면 배치(height·layout·workspace)를 따로 둔다.
+  const STORAGE_KEY = "webgl.shader-studio.project.v1", DRAFT_KEY = "webgl.shader-studio.draft.v2", HEIGHT_KEY = "webgl.shader-studio.height.v2",
+    LAYOUT_KEY = "webgl.shader-studio.layout.v1", WORKSPACE_KEY = "webgl.shader-studio.workspace.v1", JSON_LIMIT=16*1024*1024, PACK_LIMIT=64*1024*1024;
+  const {copy, same, validateProject} = Model;
   // options.lookup(name): 내장 함수 설명 {sig, desc} 또는 null — 편집기 시그니처 힌트에 쓴다(main.js가 레퍼런스에서 만들어 넘긴다).
   const mount = (renderer, Shader, settings = null, options = {}) => {
     const $ = id => document.getElementById(id); const controller = new AbortController(), signal = controller.signal;
@@ -79,31 +20,11 @@ void main() {
     const on = (target, type, callback) => target.addEventListener(type, callback, {signal}); const original = Shader.fragment;
     const snapshot = () => ({image:renderer.getFragmentSource(),passes:renderer.getPassDefinitions(),imageChannels:renderer.getImageChannels()});
     let textureButtons=[];let project = snapshot(); let selected = "Image", timer = null, draftTimer = null, dirty = false, compileFailed = false, changeText = "", openState = false, disposed = false;
-    // One native dialog serves input and confirmation requests; no window.prompt/confirm is used.
-    const dialog=$("studioPromptDialog"), form=$("studioDialogForm"), field=$("studioDialogField"), valueInput=$("studioDialogInput"); let pending=null;
-    const finish = accepted => {
-      if(!pending)return; if(accepted&&pending.hasValue&&!valueInput.reportValidity())return;
-      const {resolve,hasValue,wasLive}=pending;pending=null;dialog.close();
-      if(wasLive&&dirty&&!disposed&&$("studioLive").checked)timer=setTimeout(apply,900);
-      resolve(accepted?(hasValue?valueInput.value:true):(hasValue?null:false));
-    };
-    on(form,"submit",event=>{event.preventDefault();finish(true);});
-    on($("studioDialogCancel"),"click",()=>finish(false));on($("studioDialogClose"),"click",()=>finish(false));
-    on(dialog,"cancel",event=>{event.preventDefault();finish(false);});on(dialog,"close",()=>{if(!dialog.open)finish(false);});
-    on(dialog,"click",event=>{if(event.target===dialog)finish(false);});on(dialog,"keydown",event=>{event.stopPropagation();if(event.key!=="Enter"||event.isComposing||event.keyCode===229)return;
-      event.preventDefault();if(!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey)finish(true);});
-    const ask = ({title,message="",value,ok="확인",danger=false,label="값",type="text",min,max}) => new Promise(resolve=>{
-      const hasValue=value!==undefined;if(pending)return resolve(hasValue?null:false);
-      $("studioDialogTitle").textContent=title;$("studioDialogMessage").textContent=message;
-      $("studioDialogOK").firstChild.textContent=ok+" ";dialog.dataset.danger=String(danger);
-      field.hidden=!hasValue;valueInput.disabled=!hasValue;if(hasValue) {field.firstChild.textContent=label;valueInput.type=type;valueInput.value=String(value);
-        if(min===undefined)valueInput.removeAttribute("min");else valueInput.min=String(min);
-        if(max===undefined)valueInput.removeAttribute("max");else valueInput.max=String(max);
-        valueInput.required=true;
-      } const wasLive=!!timer;if(timer){clearTimeout(timer);timer=null;}pending={resolve,hasValue,wasLive};
-      try{dialog.showModal();(hasValue?valueInput:$("studioDialogCancel")).focus();if(hasValue)valueInput.select();}
-      catch(error){pending=null;if(wasLive&&dirty&&!disposed)timer=setTimeout(apply,900);resolve(hasValue?null:false);}
-    });
+    // 공용 입력·확인 대화상자(studio-dialog.js). 열려 있는 동안 자동 적용(0.9초) 타이머를 멈췄다가, 닫을 때 미적용 변경이 남아 있으면 다시 건다.
+    const dialogs = Dialog.create({$, on,
+      pause:() => { const wasLive=!!timer;if(timer){clearTimeout(timer);timer=null;} return wasLive; },
+      resume:wasLive => { if(wasLive&&dirty&&!disposed&&$("studioLive").checked)timer=setTimeout(apply,900); }});
+    const ask = dialogs.ask;
     const proceed = (decision,action) => decision instanceof Promise?decision.then(ok=>ok&&action()):decision&&action();
     const defaultHeight=window.matchMedia("(max-width:600px), (max-height:650px)").matches?75:55;let expanded = false, resumeAfterMaximize = false, dockHeight = defaultHeight, navigatingHistory = false; const undoStack = [], redoStack = [], views = new Map();
     const syncHistory = () => { $("studioUndo").disabled = !undoStack.length; $("studioRedo").disabled = !redoStack.length; };
@@ -132,13 +53,13 @@ void main() {
     for(const type of ["beforeinput","select","click","keyup","scroll"])on($("studioCode"),type,captureCursor);
     // 사용자가 직접 정한 높이·배치만 저장한다. 정하기 전에는 창 크기(반·4분할 창 포함)에 맞는 기본값을 따른다.
     let heightChosen = false, layoutChosen = false;
-    try { const storedHeight = Number(localStorage.getItem("webgl.shader-studio.height.v2")); heightChosen = storedHeight > 0; dockHeight = Math.max(25,Math.min(85,storedHeight||defaultHeight)); } catch (_) {}
+    { const storedHeight = Number(Store.read(HEIGHT_KEY)); heightChosen = storedHeight > 0; dockHeight = Math.max(25,Math.min(85,storedHeight||defaultHeight)); }
     $("studioDock").style.setProperty("--studio-height",`${dockHeight}%`);
     const find = name => name === "Image" ? null : project.passes.find(p => p.name === name);
     const clearChange = () => {changeText="";$("studioChangeNotice").hidden=true;};
     const showChange = text => {changeText=text;$("studioChangeText").textContent=text+(dirty?" · 미적용 변경":"");$("studioChangeNotice").hidden=false;};
     const setStorage = (state,text,detail="") => {const node=$("studioStorageState");node.dataset.state=state;node.textContent=text;node.title=`${detail?detail+" · ":""}브라우저 보관은 소스·채널 구성만 포함합니다. 전체 작업은 Pack으로 내보내세요.`;};
-    const references = name => [...project.passes,{name:"Image",channels:project.imageChannels}].filter(p=>p.name!==name).flatMap(p=>Object.entries(p.channels).filter(([,ref])=>ref.buffer===name).map(([channel])=>`${p.name}.iChannel${channel}`));
+    const references = name => Model.references(project,name);
     const activeSource = () => selected === "Image" ? project.image : find(selected)?.fragment; const setStatus = (message, style = "") => {
       if($("studioMessage").textContent!==message)$("studioMessage").textContent=message;$("studioMessage").title=message; $("studioMessage").className = style;
       const state=dirty&&compileFailed?"error":dirty?"dirty":"applied",label=state==="error"?"오류 확인":dirty?"미적용 변경":"실행 반영됨";
@@ -165,33 +86,18 @@ void main() {
       }
       panel.hidden = !matches.length; syncDiagnostics();
       setStatus(`${error?.passName?`${error.passName} 컴파일 오류`:"작업 오류"}: ${text.split("\n")[0]}`, "is-error");
-    }; const clearDraft = () => {if(draftTimer)clearTimeout(draftTimer);draftTimer=null;$("studioDraft").hidden=true;
-      try {localStorage.removeItem(DRAFT_KEY);}catch (_){} };
+    }; const clearDraft = () => {if(draftTimer)clearTimeout(draftTimer);draftTimer=null;$("studioDraft").hidden=true;Store.remove(DRAFT_KEY);};
     const scheduleDraft = () => {if(draftTimer)clearTimeout(draftTimer);
-      setStorage("pending","소스 · 편집본 보관 대기");draftTimer=setTimeout(()=>{draftTimer=null;rememberEditor();try {localStorage.setItem(DRAFT_KEY,JSON.stringify({version:1,project,selected}));setStorage("draft","소스 · 미적용 편집본 보관됨");}
-        catch(error){setStorage("error","소스 · 브라우저 보관 실패",error.message);}},550);
+      setStorage("pending","소스 · 편집본 보관 대기");draftTimer=setTimeout(()=>{draftTimer=null;rememberEditor();
+        const error=Store.writeJSON(DRAFT_KEY,{version:1,project,selected});
+        if(error)setStorage("error","소스 · 브라우저 보관 실패",error.message);else setStorage("draft","소스 · 미적용 편집본 보관됨");},550);
     }; const saveLocal = () => {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({version:1,project,selected}));setStorage("saved","소스 · 브라우저 보관됨"); }
-      catch(error) {setStorage("error","소스 · 브라우저 보관 실패",error.message);}
+      const error=Store.writeJSON(STORAGE_KEY,{version:1,project,selected});
+      if(error)setStorage("error","소스 · 브라우저 보관 실패",error.message);else setStorage("saved","소스 · 브라우저 보관됨");
     }; const preview = () => {
       const name = selected === "Image" ? null : selected;
       if(renderer.getPasses().some(p => p.name === name) || !name) renderer.setPreviewPass(name);
-    }; const validateProject = candidate => {
-      if(!candidate || typeof candidate !== "object" || Array.isArray(candidate)) throw new Error("프로젝트는 객체여야 합니다.");
-      if(typeof candidate.image !== "string" || candidate.image.length > 262144 || !candidate.image.startsWith("#version 300 es")) throw new Error("Image GLSL 소스가 올바르지 않습니다.");
-      if(!Array.isArray(candidate.passes) || candidate.passes.length > 8) throw new Error("버퍼는 최대 8개입니다.");
-      const names = new Set(); for(const p of candidate.passes) {
-        if(!p || typeof p.name !== "string" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(p.name) || p.name === "Image" || names.has(p.name) || typeof p.fragment !== "string" || !p.fragment.startsWith("#version 300 es") || p.fragment.length > 262144) throw new Error("Buffer 이름 또는 GLSL 소스를 확인하세요.");
-                if(!["rgba8","rgba16f","rgba32f"].includes(p.format) || !Number.isFinite(p.scale) || p.scale < 0.125 || p.scale > 1 || !p.channels || typeof p.channels !== "object" || Array.isArray(p.channels)) throw new Error(`${p.name}: Buffer 속성이 올바르지 않습니다.`);
-        // 선택 항목(고정 해상도·출력 수·샘플링)은 모양만 확인하고 세부 범위는 Renderer가 검증한다.
-        if((p.size!==undefined && !(Array.isArray(p.size) && p.size.length===2)) || (p.outputs!==undefined && !Number.isInteger(p.outputs))
-          || (p.filter!==undefined && typeof p.filter!=="string") || (p.wrap!==undefined && typeof p.wrap!=="string") || (p.mipmap!==undefined && typeof p.mipmap!=="boolean"))
-          throw new Error(`${p.name}: Buffer 선택 속성(size/outputs/filter/wrap/mipmap)이 올바르지 않습니다.`);
-        names.add(p.name);
-      }
-      if(!candidate.imageChannels || typeof candidate.imageChannels !== "object" || Array.isArray(candidate.imageChannels)) throw new Error("Image 채널 연결이 올바르지 않습니다.");
-      return copy(candidate);
-    }; const same = (a,b) => a===b || !!(a && b && typeof a==="object" && typeof b==="object" && Array.isArray(a)===Array.isArray(b) && Object.keys(a).length===Object.keys(b).length && Object.keys(a).every(k=>Object.hasOwn(b,k)&&same(a[k],b[k])));
+    };
     // 구조 변경은 전체 Pass 교체. 소스·채널만 바뀌면 해당 패스만 갱신하여 이전 Texture를 보존한다.
     const apply = (users = null) => {
       if(disposed) return false; if(timer) { clearTimeout(timer); timer = null; }
@@ -232,7 +138,7 @@ void main() {
     const activeChannels = () => selected==="Image"?project.imageChannels:find(selected)?.channels;
     const freeChannel = () => [0,1,2,3].find(index=>!activeChannels()?.[index]);
     const syncTextureTargets = () => {const slot=freeChannel(),target=selected==="Image"?"Image":`Buffer ${selected}`;for(const button of textureButtons){button.disabled=slot===undefined;button.textContent=slot===undefined?`${target} · 빈 채널 없음`:`${target} · iChannel${slot}에 연결`;button.title=slot===undefined?"입력 채널 4개가 모두 사용 중입니다. 기존 연결을 해제하세요.":`${target}.iChannel${slot}에 연결 · 기존 입력을 덮어쓰지 않습니다.`;button.setAttribute("aria-label",`${button.dataset.assetName} · ${button.textContent}`);}};
-    const validCurrent = (target,buffer) => target === "Image" || project.passes.findIndex(p=>p.name===buffer) < project.passes.findIndex(p=>p.name===target);
+    const validCurrent = (target,buffer) => Model.validCurrent(project,target,buffer);
     const inputInfo = (ref,assets) => !ref?{source:"연결 안 함",frame:"입력 없음",help:"사용할 이미지나 버퍼를 선택하세요."}:ref.texture?
       {source:assets.find(asset=>asset.id===ref.texture)?.name||"사용할 수 없는 이미지",frame:"이미지",help:"이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다."}:
       {source:`Buffer ${ref.buffer}${ref.attachment?`[${ref.attachment}]`:""}`,frame:ref.frame==="current"?"current · 이번 프레임":"previous · 지난 프레임",help:ref.frame==="current"?"이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다.":"지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다."};
@@ -357,14 +263,11 @@ void main() {
       if(name !== "Image" && !find(name)) return; if(name === selected) return; rememberEditor(); selected = name; renderEditor(); checkpoint.selected=selected;preview();rememberTab();
     };
     // 고른 패스 탭은 새로 고침 뒤에도 이어지도록 저장된 프로젝트의 selected만 갱신한다(소스는 실행 성공 때만 저장).
-    const rememberTab = () => {try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;const data=JSON.parse(raw);if(data?.version!==1||data.selected===selected)return;data.selected=selected;localStorage.setItem(STORAGE_KEY,JSON.stringify(data));}catch(_){}}; const normalizeDependencies = () => {
-      const changed=[];for(const p of project.passes) for(const [channel,ref] of Object.entries(p.channels)) {
-        if(ref.frame === "current" && !validCurrent(p.name,ref.buffer)){changed.push(`${p.name}.iChannel${channel} ← ${ref.buffer}`);p.channels[channel] = {...ref,frame:"previous"};}
-      }return changed;
-    }; const add = () => {
+    const rememberTab = () => {const data=Store.readJSON(STORAGE_KEY);if(data?.version!==1||data.selected===selected)return;data.selected=selected;Store.writeJSON(STORAGE_KEY,data);};
+    const normalizeDependencies = () => Model.normalizeDependencies(project); const add = () => {
       rememberEditor(); const names = new Set(project.passes.map(p=>p.name));
       if(project.passes.length >= 8) return showError("Buffer는 최대 8개까지 추가할 수 있습니다."); const name = [..."ABCDEFGH"].find(n=>!names.has(n));
-      project.passes.push({name,fragment:blank,format:"rgba8",scale:1,channels:{}}); selected = name;renderEditor();schedule();apply();
+      project.passes.push({name,fragment:Examples.blank,format:"rgba8",scale:1,channels:{}}); selected = name;renderEditor();schedule();apply();
     }; const duplicate = () => {
       const source=find(selected); if(!source || project.passes.length>=8)return;
       rememberEditor();const names=new Set(project.passes.map(p=>p.name));
@@ -412,14 +315,8 @@ void main() {
     const startProject = (next,users=[]) => proceed(confirmReplace(),()=>replaceProject(next,users));
     const exampleRaymarch = () => startProject({image:Shader.raymarch,passes:[],imageChannels:{}},
       Shader.rayUniforms.map(([name,type,value,options])=>({name,type,value,options:options||{}})));
-    const examplePipeline = () => startProject({image:comparison,passes:[
-      {name:"A",fragment:movingDot,format:"rgba8",scale:1,channels:{}},
-      {name:"B",fragment:colorFilter,format:"rgba8",scale:1,channels:{0:{buffer:"A",frame:"current"}}}
-    ],imageChannels:{0:{buffer:"B",frame:"current"},1:{buffer:"A",frame:"current"}}});
-    const exampleFeedback = () => startProject({image:comparison,passes:[
-      {name:"A",fragment:movingDot,format:"rgba8",scale:1,channels:{}},
-      {name:"B",fragment:feedback,format:"rgba8",scale:1,channels:{0:{buffer:"A",frame:"current"},1:{buffer:"B",frame:"previous"}}}
-    ],imageChannels:{0:{buffer:"B",frame:"current"},1:{buffer:"A",frame:"current"}}}); const loadFromRenderer = () => proceed(confirmReplace(),()=>{
+    const examplePipeline = () => startProject(Examples.pipelineProject());
+    const exampleFeedback = () => startProject(Examples.feedbackProject()); const loadFromRenderer = () => proceed(confirmReplace(),()=>{
       project = snapshot();selected = "Image";renderEditor();recordEdit();clearError();dirty=false;clearDraft();
       setStatus("렌더러의 현재 버퍼 구성을 불러왔습니다.");saveLocal();return true;
     }); const open = () => {
@@ -444,15 +341,15 @@ void main() {
     const responsiveHeight = () => window.matchMedia("(max-width:600px), (max-height:650px)").matches?75:55;
     const setDockHeight = (value, persist = true) => {dockHeight=Math.max(25,Math.min(85,value));$("studioDock").style.setProperty("--studio-height",`${dockHeight}%`);
       if(layout==="bottom")$("studioResize").setAttribute("aria-valuenow",String(Math.round(dockHeight)));
-      if(persist){heightChosen=true;try{localStorage.setItem("webgl.shader-studio.height.v2",String(dockHeight));}catch (_){}} };
+      if(persist){heightChosen=true;Store.write(HEIGHT_KEY,String(dockHeight));} };
     // 두 번 클릭 복원: 저장한 높이를 지우고 다시 창 크기 기본값을 따른다.
-    const resetDockHeight = () => {heightChosen=false;try{localStorage.removeItem("webgl.shader-studio.height.v2");}catch (_){}setDockHeight(responsiveHeight(),false);};
+    const resetDockHeight = () => {heightChosen=false;Store.remove(HEIGHT_KEY);setDockHeight(responsiveHeight(),false);};
     // 편집기 배치: right(캔버스 옆 분할) 또는 bottom(캔버스 아래). 넓은 화면은 right가 기본이다.
     // 넓은 화면, 또는 4분할 창처럼 가로로 길고 낮은 창은 아래 배치가 미리보기와 코드를 모두 납작하게 만드므로 옆 배치가 기본이다.
     const fitLayout = () => {const w=window.innerWidth||0,h=window.innerHeight||0;return w>=1200||(w>=900&&h>0&&w>=h*1.6)?"right":"bottom";};
-    const LAYOUT_KEY="webgl.shader-studio.layout.v1";let layout=fitLayout(),dockWidth=46;
-    try{const saved=JSON.parse(localStorage.getItem(LAYOUT_KEY)||"{}");if(["right","bottom"].includes(saved.layout)){layout=saved.layout;layoutChosen=true;}if(Number.isFinite(saved.width))dockWidth=Math.max(30,Math.min(75,saved.width));}catch(_){}
-    const saveLayout=()=>{layoutChosen=true;try{localStorage.setItem(LAYOUT_KEY,JSON.stringify({layout,width:dockWidth}));}catch(_){}};
+    let layout=fitLayout(),dockWidth=46;
+    {const saved=Store.readJSON(LAYOUT_KEY,{})||{};if(["right","bottom"].includes(saved.layout)){layout=saved.layout;layoutChosen=true;}if(Number.isFinite(saved.width))dockWidth=Math.max(30,Math.min(75,saved.width));}
+    const saveLayout=()=>{layoutChosen=true;Store.writeJSON(LAYOUT_KEY,{layout,width:dockWidth});};
     const setDockWidth = (value, persist = true) => {dockWidth=Math.max(30,Math.min(75,value));$("stage").style.setProperty("--studio-width",`${dockWidth}%`);
       if(layout==="right")$("studioResize").setAttribute("aria-valuenow",String(Math.round(dockWidth)));if(persist)saveLayout();};
     const applyLayout = () => {
@@ -495,7 +392,7 @@ void main() {
       const reader=new FileReader();reader.onload=()=>resolve(reader.result);
       reader.onerror=()=>reject(reader.error || new Error("이미지를 읽을 수 없습니다."));reader.readAsDataURL(file);
     });
-    const getChannels = config => [...config.passes.map(pass=>pass.channels),config.imageChannels];
+    const getChannels = Model.channelGroups;
     const exportPack = async () => {
       rememberEditor();const scene=copy(project), tab=selected, state=settings?.snapshot(), ids=new Set();
       for(const channels of getChannels(scene))for(const ref of Object.values(channels))if(ref.texture)ids.add(ref.texture);
@@ -569,16 +466,11 @@ void main() {
       }
     };
     // 프로젝트 JSON은 이미지 파일 본문을 담지 않으므로 존재하지 않는 연결은 제거한다.
-    const detachMissing = next => {
-      const available=new Set(renderer.getTextures().map(asset=>asset.id));let count=0;
-      for(const channels of [...next.passes.map(p=>p.channels),next.imageChannels])
-      for(const key of Object.keys(channels)) if(channels[key].texture && !available.has(channels[key].texture)){delete channels[key];count++;}
-      return count;
-    };
+    const detachMissing = next => Model.detachMissing(next,new Set(renderer.getTextures().map(asset=>asset.id)));
     // 성공적으로 컴파일된 프로젝트를 자동 복원하고, 실패한 저장값은 실행하지 않는다.
     const restore = () => {
       try {
-        const raw=localStorage.getItem(STORAGE_KEY);if(!raw) return; const data=JSON.parse(raw);
+        const raw=Store.read(STORAGE_KEY);if(!raw) return; const data=JSON.parse(raw);
         if(data.version!==1) throw new Error("저장된 프로젝트 버전이 다릅니다.");
         const next=validateProject(data.project), before=copy(project); const detached=detachMissing(next);
         project=next;selected="Image";renderEditor();
@@ -590,13 +482,13 @@ void main() {
         if(!raw)return;const data=JSON.parse(raw);if(data.version!==1)return;
         validateProject(data.project);if(same(data.project,project))return; $("studioDraft").hidden=false;
       // 초기화 과정에서 apply()가 draft 키를 지웠더라도 선택 전까지 복구 가능해야 한다.
-        try{localStorage.setItem(DRAFT_KEY,raw);}catch(_){}
+        Store.write(DRAFT_KEY,raw);
         on($("studioDraftRestore"),"click",()=>{project=copy(data.project);
           selected=data.selected==="Image"||find(data.selected)?data.selected:"Image";
           renderEditor();recordEdit();dirty=true;$("studioDraft").hidden=true;scheduleDraft(); setStatus("미적용 편집본 복원됨 · Run으로 컴파일", "is-dirty");});
         on($("studioDraftDiscard"),"click",clearDraft);
       }catch(error){console.warn("임시 저장본 검증 실패:",error);}}; renderTextures();
-    const savedDraft = (()=>{try{return localStorage.getItem(DRAFT_KEY);}catch(_){return null;}})(); const loadImage = async file => {
+    const savedDraft = Store.read(DRAFT_KEY); const loadImage = async file => {
       const check=beginLoad(),result=await renderer.addTexture(file);if(disposed)return;renderTextures();
       try {check();}catch(error){setStatus(`${file.name} 추가됨 · 작업 변경으로 자동 채널 연결을 취소했습니다.`);return;}
       const connected=connectTexture(result.id);renderChannels();
@@ -723,16 +615,16 @@ void main() {
       if(document.fullscreenElement){if(openState){afterFullscreen={expanded};close();}}
       else if(afterFullscreen){const state=afterFullscreen;afterFullscreen=null;if(!openState){open();if(state.expanded&&!expanded)maximize();}}
     });let afterFullscreen=null;
-    let workspaceReady=false;const workspaceKey="webgl.shader-studio.workspace.v1",groups=["studioInputs","studioFiles","studioImages","studioDependencies","studioInspector","studioCodeTools"];
+    let workspaceReady=false;const groups=["studioInputs","studioFiles","studioImages","studioDependencies","studioInspector","studioCodeTools"];
     // editor: 편집기 열림 상태 — 새로 고침해도 편집하던 화면으로 돌아온다(전체화면 중에는 전체화면 전 상태를 남긴다).
-    const saveWorkspace=()=>{if(!workspaceReady)return;try{localStorage.setItem(workspaceKey,JSON.stringify({toolsHidden:$("studioTools").hidden,editor:afterFullscreen?true:openState,open:Object.fromEntries(groups.map(id=>[id,$(id).open]))}));}catch(_){}};
+    const saveWorkspace=()=>{if(!workspaceReady)return;Store.writeJSON(WORKSPACE_KEY,{toolsHidden:$("studioTools").hidden,editor:afterFullscreen?true:openState,open:Object.fromEntries(groups.map(id=>[id,$(id).open]))});};
     setDockHeight(dockHeight,false);setDockWidth(dockWidth,false);applyLayout();
     // 창 크기를 바꾸면(화면 분할 등) 사용자가 정하지 않은 높이·배치는 새 크기의 기본값으로 다시 맞춘다.
     on(window,"resize",()=>{
       if(!heightChosen&&dockHeight!==responsiveHeight())setDockHeight(responsiveHeight(),false);
       const fit=fitLayout();if(!layoutChosen&&layout!==fit){layout=fit;applyLayout();if(splitRight())closeToolsDrawer();}
     });$("studioTools").hidden=window.matchMedia("(max-width:600px)").matches||layout==="right";
-    let reopenEditor=false;try{const state=JSON.parse(localStorage.getItem(workspaceKey)||"{}");if(typeof state?.toolsHidden==="boolean")$("studioTools").hidden=state.toolsHidden;for(const id of groups)if(typeof state?.open?.[id]==="boolean")$(id).open=state.open[id];reopenEditor=state?.editor===true;}catch(_){}
+    let reopenEditor=false;{const state=Store.readJSON(WORKSPACE_KEY,{});if(typeof state?.toolsHidden==="boolean")$("studioTools").hidden=state.toolsHidden;for(const id of groups)if(typeof state?.open?.[id]==="boolean")$(id).open=state.open[id];reopenEditor=state?.editor===true;}
     // 옆 배치에서 도구는 코드를 덮는 서랍이므로, 아래 배치에서 저장된 "도구 표시" 상태와 관계없이 닫힌 채로 시작한다.
     if(splitRight())$("studioTools").hidden=true;
     for(const id of groups)on($(id),"toggle",saveWorkspace);$("studioToolsToggle").setAttribute("aria-expanded",String(!$("studioTools").hidden));renderEditor();restore();loadDraft(savedDraft);undoStack.length=redoStack.length=0;checkpoint=historyState();syncHistory();
@@ -741,58 +633,20 @@ void main() {
     // 갤러리 등 외부 예제: 미적용 변경 확인 → 코드·버퍼·파라미터 일괄 교체(Undo 가능).
     const loadExample = (next,users=[]) => startProject(next,users);
     // 가이드 코드 예시 삽입. replace=true면 현재 패스 전체를 교체한다(Undo로 복원 가능).
-    // 커서가 #version/precision 줄보다 앞에 있으면 컴파일이 깨지므로 precision 줄 다음으로 옮겨 넣는다.
+    // 커서가 #version/precision 줄보다 앞에 있으면 컴파일이 깨지므로 precision 줄 다음으로 옮겨 넣는다(code-insert.js).
     const insertSnippet = (text,replace=false) => {
       if(disposed||typeof text!=="string")return false; open();const area=$("studioCode");area.focus({preventScroll:true});
-      if(replace)area.setSelectionRange(0,area.value.length);
-      else {
-        const header=/^[\s\S]*?\bprecision\s+\w+\s+float\s*;[^\n]*\n?/.exec(area.value)?.[0]??(/^#version[^\n]*\n?/.exec(area.value)?.[0]||"");
-        if(area.selectionStart<header.length)area.setSelectionRange(header.length,header.length);
-        const at=area.selectionStart,lineStart=at===0||area.value[at-1]==="\n";
-        text=(lineStart?"":"\n")+text+(area.value[at]==="\n"||at===area.value.length?"":"\n")+(lineStart?"\n":"");
-      }
-      area.setRangeText(text,area.selectionStart,area.selectionEnd,"end");area.dispatchEvent(new Event("input",{bubbles:true}));
+      const edit=replace?{from:0,to:area.value.length,text}:Insert.snippetEdit(area.value,area.selectionStart,area.selectionEnd,text);
+      area.setRangeText(edit.text,edit.from,edit.to,"end");area.dispatchEvent(new Event("input",{bubbles:true}));
       setStatus(replace?"가이드 코드로 교체됨 · Ctrl+Z로 되돌리기":"가이드 코드 삽입됨 · 필요하면 위치를 조정하세요","is-dirty");return true;
     };
-    // 코드 조각 라이브러리 삽입: global(함수 정의)은 전역 위치에, main(문장)은 함수 안 커서 위치에 넣는다.
-    //  - 커서가 함수 본문 안이면 global은 그 함수 선언 바로 앞에 넣는다(함수 안 함수 정의 방지).
-    //  - 커서가 함수 밖이면 main 코드는 main() 본문 첫 줄에 넣는다.
+    // 코드 조각 라이브러리 삽입: global(함수 정의)은 전역 위치에, main(문장)은 함수 안에 넣는다. 위치 계산 규칙은 code-insert.js의 codeEdit.
     // 한 번의 input 이벤트로 반영하므로 Undo 한 번에 되돌아간다.
     const insertCode = ({global="",main="",replace="",note=""}={}) => {
       if(disposed)return false;open();const area=$("studioCode");area.focus({preventScroll:true});
       const done=()=>{if(note)setStatus(note,"is-dirty");return true;};
       if(replace){area.setRangeText(replace,0,area.value.length,"end");area.dispatchEvent(new Event("input",{bubbles:true}));return done();}
-      let src=area.value,caret=area.selectionStart;
-      // 주석을 같은 길이의 공백으로 지운 사본으로 괄호 깊이를 센다. 삽입할 때마다 다시 계산한다.
-      const strip=text=>text.replace(/\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*/g,m=>m.replace(/[^\n]/g," "));
-      const headerEnd=()=>{const clean=strip(src);return (/^[\s\S]*?\bprecision\s+\w+\s+float\s*;[^\n]*\n?/.exec(clean)?.[0]??(/^#version[^\n]*\n?/.exec(clean)?.[0]||"")).length;};
-      const scan=limit=>{const clean=strip(src),header=headerEnd();let depth=0,declStart=header;
-        for(let i=header;i<limit;i++){const c=clean[i];if(c==="{")depth++;else if(c==="}"){depth=Math.max(0,depth-1);if(!depth)declStart=i+1;}else if(c===";"&&!depth)declStart=i+1;}
-        return {depth,declStart,header};};
-      const lineStart=at=>src.lastIndexOf("\n",at-1)+1;
-      const insertAt=(at,text)=>{src=src.slice(0,at)+text+src.slice(at);if(at<=caret)caret+=text.length;};
-      caret=Math.max(caret,headerEnd());
-      if(global){
-        const {depth,declStart,header}=scan(caret),text=global.replace(/\s+$/,"")+"\n\n";let at;
-        if(depth>0){at=declStart;while(at<src.length&&/\s/.test(src[at]))at++;at=lineStart(at);}   // 감싼 함수 선언 바로 앞
-        else if(!src.slice(lineStart(caret),caret).trim())at=Math.max(header,lineStart(caret));      // 빈 줄 시작
-        else {const next=src.indexOf("\n",caret);at=next<0?src.length:next+1;if(next<0){src+="\n";at=src.length;}} // 현재 줄 다음
-        insertAt(at,text);
-      }
-      if(main){
-        const {depth}=scan(caret),indent="    ",body=main.replace(/\s+$/,"").split("\n").map(line=>line?indent+line:line).join("\n")+"\n";
-        if(depth>0){
-          // 줄 맨 앞이면 그 줄 위에, 줄 중간이면 다음 줄에 넣는다(문장을 쪼개지 않음).
-          const start=lineStart(caret),next=src.indexOf("\n",caret),at=!src.slice(start,caret).trim()?start:next<0?src.length:next+1;
-          if(at===src.length&&!src.endsWith("\n"))src+="\n";insertAt(at,body);caret=at+body.length;
-        }
-        else {
-          // 함수 밖이면 main() 본문의 끝(닫는 괄호 앞)에 넣는다. 앞에서 선언한 uv 같은 변수를 쓸 수 있다.
-          const clean=strip(src),m=/\bvoid\s+main\s*\(\s*\)\s*\{/.exec(clean);let at=src.length;
-          if(m){let d=0;for(let i=m.index+m[0].length-1;i<clean.length;i++){if(clean[i]==="{")d++;else if(clean[i]==="}"&&--d===0){at=lineStart(i);break;}}}
-          insertAt(at,body);caret=at+body.length;
-        }
-      }
+      const {src,caret}=Insert.codeEdit(area.value,area.selectionStart,{global,main});
       area.value=src;area.setSelectionRange(caret,caret);area.dispatchEvent(new Event("input",{bubbles:true}));return done();
     };
     // 명령 팔레트(Ctrl+Shift+P)에 편집기 바깥 기능도 등록한다. 대부분 기존 버튼을 누르는 것과 같다.
@@ -813,6 +667,6 @@ void main() {
     return {open,close,toggle,apply,setProject,getPlaybackState,togglePlayback,loadFromRenderer,removeAllPasses,exampleRaymarch,examplePipeline,exampleFeedback,loadExample,insertSnippet,insertCode,getEditorSource:()=>$("studioCode").value,
       undo:()=>historyMove(true),redo:()=>historyMove(false),getProject:()=>copy(project),exportPack,importPack,dispose:()=>{
         disposed=true;if(timer)clearTimeout(timer);if(draftTimer)clearTimeout(draftTimer);
-        if(dirty){try{rememberEditor();localStorage.setItem(DRAFT_KEY,JSON.stringify({version:1,project,selected}));}catch(_){}}
-        if(pending)finish(false);editor.dispose();controller.abort();}};
+        if(dirty){rememberEditor();Store.writeJSON(DRAFT_KEY,{version:1,project,selected});}
+        dialogs.close();editor.dispose();controller.abort();}};
   }; export {mount};

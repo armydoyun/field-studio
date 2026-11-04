@@ -70,13 +70,13 @@ with sync_playwright() as p:
     stale=[name for name,src in sources if OLD_HASH.search(src) and not name.startswith('gallery hashprecision')]
     check(not stale,f'no gallery shader uses the old float hash (except the comparison lesson): {stale}')
 
-    # ---- Studio 소유 예제: 기본 장면 · Ray Marching · 버퍼 예제(studio.js의 문자열) ----
-    studio_js=(root/'js/studio.js').read_text()
+    # ---- Studio 소유 예제: 기본 장면 · Ray Marching · 버퍼 예제(studio-examples.js의 문자열) ----
+    studio_js=(root/'js/studio-examples.js').read_text()
     shader=page.evaluate('() => ({fragment:__testModules.shader.fragment, raymarch:__testModules.shader.raymarch})')
     owned=[('default scene',shader['fragment']),('ray marching',shader['raymarch'])]
-    owned+=[(f'studio.js {name}',src) for name,src in re.findall(r'const (\w+)\s*=\s*`(#version 300 es[\s\S]*?)`;',studio_js)]
+    owned+=[(f'studio-examples.js {name}',src) for name,src in re.findall(r'const (\w+)\s*=\s*`(#version 300 es[\s\S]*?)`;',studio_js)]
     failures=compile_all(owned)
-    check(len(owned)>=4 and not failures,f'default scene, Ray Marching and Studio buffer examples compile ({len(owned)}): {failures}')
+    check(len(owned)>=7 and not failures,f'default scene, Ray Marching and Studio buffer examples compile ({len(owned)}): {failures}')
 
     # ---- 입문 과정 ----
     course=page.evaluate('''() => { const C = __testModules.course, out = [];

@@ -1,0 +1,67 @@
+// node tests/studio-modules-regression.js — studio.js에서 나눈 순수 모듈의 동작 검사(소스 문자열이 아니라 결과를 본다).
+//   project-model · code-insert · storage · studio-examples
+'use strict';
+const path=require('node:path'),assert=require('node:assert/strict'),{pathToFileURL}=require('node:url');
+const root=path.resolve(__dirname,'..'),load=name=>import(pathToFileURL(path.join(root,'js',name+'.js')).href);
+let passed=0;const check=(ok,label)=>{assert(ok,label);passed++;console.log('PASS',label);};
+const SRC='#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main() {\n    fragColor = vec4(1.0);\n}\n';
+const pass=(name,channels={})=>({name,fragment:SRC,format:'rgba8',scale:1,channels});
+
+(async()=>{
+  // ---- project-model ----
+  const M=await load('project-model');
+  const a={x:[1,{y:2}]},b=M.copy(a);
+  check(M.same(a,b)&&b!==a&&b.x[1]!==a.x[1],'copy는 깊은 복사, same은 깊은 비교');
+  check(M.same({p:1,q:2},{q:2,p:1})&&!M.same({p:1},{p:1,q:undefined})&&!M.same([1],{0:1}),'same: 키 순서 무관 · 키 수 · 배열/객체 구분');
+  const project={image:SRC,passes:[pass('A'),pass('B',{0:{buffer:'A',frame:'current'}})],imageChannels:{0:{buffer:'B',frame:'current'},1:{texture:'img1'}}};
+  check(M.same(M.validateProject(project),project)&&M.validateProject(project)!==project,'올바른 프로젝트는 복사본으로 통과');
+  for(const [label,bad] of [['이미지 소스',{...project,image:'void main(){}'}],['버퍼 9개',{...project,passes:'ABCDEFGHI'.split('').map(n=>pass(n))}],
+    ['이름 중복',{...project,passes:[pass('A'),pass('A')]}],['Image 이름',{...project,passes:[pass('Image')]}],['형식',{...project,passes:[{...pass('A'),format:'rgb8'}]}],
+    ['size 모양',{...project,passes:[{...pass('A'),size:[1]}]}],['imageChannels 배열',{...project,imageChannels:[]}]])
+    assert.throws(()=>M.validateProject(bad),undefined,label);
+  check(true,'잘못된 프로젝트 7가지를 거부');
+  check(M.same(M.references(project,'A'),['B.iChannel0'])&&M.same(M.references(project,'B'),['Image.iChannel0']),'references: 버퍼를 읽는 채널 목록');
+  check(M.validCurrent(project,'B','A')&&!M.validCurrent(project,'A','B')&&!M.validCurrent(project,'A','A')&&M.validCurrent(project,'Image','B'),'validCurrent: 앞선 버퍼만 current로 읽는다(Image는 모두)');
+  const swapped=M.copy(project);swapped.passes.reverse();const changed=M.normalizeDependencies(swapped);
+  check(M.same(changed,['B.iChannel0 ← A'])&&swapped.passes[0].channels[0].frame==='previous','normalizeDependencies: 순서가 바뀌면 current → previous');
+  const detached=M.copy(project);
+  check(M.detachMissing(detached,new Set())===1&&!detached.imageChannels[1]&&detached.imageChannels[0],'detachMissing: 없는 이미지 연결만 지운다');
+  check(M.channelGroups(project).length===3,'channelGroups: 버퍼 수 + Image');
+
+  // ---- code-insert ----
+  const I=await load('code-insert');
+  check(I.headerLength(SRC)===SRC.indexOf('out vec4'),'headerLength: precision 줄 끝까지');
+  check(I.headerLength('#version 300 es\nvoid main(){}')==='#version 300 es\n'.length&&I.headerLength('void main(){}')===0,'headerLength: precision 없으면 #version 줄, 둘 다 없으면 0');
+  check(I.stripComments('a/*{x}*/b//{\nc')==='a       b   \nc','stripComments: 같은 길이 공백으로 지운다');
+  let edit=I.snippetEdit(SRC,0,0,'float k = 1.0;');
+  check(edit.from===I.headerLength(SRC)&&edit.to===edit.from&&edit.text==='float k = 1.0;\n\n','snippetEdit: 머리 줄 앞 커서는 머리 줄 다음으로 옮긴다');
+  const mid=SRC.indexOf('fragColor =')+3;edit=I.snippetEdit(SRC,mid,mid,'x');
+  check(edit.text==='\nx\n','snippetEdit: 줄 중간이면 앞뒤로 줄을 띄운다');
+  let out=I.codeEdit(SRC,SRC.indexOf('fragColor ='),{global:'float f(float x) { return x; }'});
+  check(out.src.indexOf('float f(')<out.src.indexOf('void main')&&out.src.indexOf('float f(')>SRC.indexOf('precision'),'codeEdit: 함수 안 커서의 global 정의는 그 함수 선언 앞에');
+  out=I.codeEdit(SRC,0,{main:'float v = 2.0;'});
+  check(/void main\(\) \{\n {4}fragColor = vec4\(1\.0\);\n {4}float v = 2\.0;\n\}/.test(out.src)&&out.caret===out.src.indexOf('float v')+'float v = 2.0;\n'.length,'codeEdit: 함수 밖 커서의 main 코드는 main() 끝에, 커서는 넣은 코드 뒤');
+  out=I.codeEdit('#version 300 es\n// void main() {\nvoid main() {\n}\n',0,{main:'a;'});
+  check(out.src.endsWith('void main() {\n    a;\n}\n'),'codeEdit: 주석 속 main 선언은 무시한다');
+
+  // ---- storage ----
+  const S=await load('storage'),data=new Map();let blocked=false;const warn=console.warn;let warned=0;console.warn=()=>{warned++;};
+  // 최신 Node는 자체 localStorage를 둘 수 있으므로 덮어써 가짜 저장소로 바꾼다.
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,writable:true,value:{getItem:k=>{if(blocked)throw new Error('blocked');return data.has(k)?data.get(k):null;},setItem:(k,v)=>{if(blocked)throw new Error('quota');data.set(k,String(v));},removeItem:k=>{if(blocked)throw new Error('blocked');data.delete(k);}}});
+  try{
+    check(S.write('k','v')===null&&S.read('k')==='v'&&S.writeJSON('j',{a:1})===null&&S.readJSON('j').a===1,'storage: 쓰기 성공은 null, 읽기는 값');
+    data.set('bad','{broken');check(S.readJSON('bad','fallback')==='fallback'&&S.readJSON('none',7)===7,'storage: 깨졌거나 없는 JSON은 fallback');
+    blocked=true;const error=S.write('k','w');
+    check(error instanceof Error&&error.message==='quota'&&warned===1,'storage: 쓰기 실패는 오류를 돌려주고 콘솔에 경고한다(조용히 삼키지 않음)');
+    check(S.read('k')===null&&S.readJSON('j',0)===0,'storage: 막힌 저장소 읽기는 값 없음');
+    S.remove('k');check(true,'storage: 막힌 저장소 지우기는 예외 없이 지나간다');
+  }finally{console.warn=warn;delete globalThis.localStorage;}
+
+  // ---- studio-examples ----
+  const E=await load('studio-examples'),pipeline=E.pipelineProject(),feedback=E.feedbackProject();
+  check(M.same(M.validateProject(pipeline),pipeline)&&M.same(M.validateProject(feedback),feedback),'예제 프로젝트는 프로젝트 규칙을 지킨다');
+  check(E.pipelineProject()!==pipeline&&E.pipelineProject().passes!==pipeline.passes,'예제 프로젝트는 부를 때마다 새 객체(공유 상태 없음)');
+  check(feedback.passes[1].channels[1].frame==='previous'&&M.validCurrent(feedback,'B','A'),'피드백 예제: B는 자기 자신을 previous로, A를 current로 읽는다');
+  check(E.blank.startsWith('#version 300 es'),'새 버퍼의 시작 코드');
+  console.log(`studio modules: ${passed} checks passed`);
+})().catch(error=>{console.error(error);process.exit(1);});
