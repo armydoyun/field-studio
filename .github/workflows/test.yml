@@ -1,9 +1,15 @@
 name: test
 
+# 모든 브랜치의 push마다 실행한다. Actions 탭의 "Run workflow" 버튼으로 직접 돌릴 수도 있다.
 on:
   push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# 같은 브랜치에 새 커밋이 올라오면 이전 실행은 취소한다.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
