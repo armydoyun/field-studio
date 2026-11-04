@@ -614,6 +614,17 @@ kbd { border-color:var(--line-strong);border-bottom-width:2px;background:var(--e
 .cm-glsl-color-input { position:absolute;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none; }
 /* 들여쓰기 안내선: 줄마다 --guide-levels 단계만큼, 한 단계 = --tab-size 글자 */
 .studio-cm-host .cm-line.cm-indent-guides { background-image:repeating-linear-gradient(to right,#ffffff2e 0 1px,transparent 1px calc(var(--tab-size,4) * 1ch));background-repeat:no-repeat;background-position:6px 0;background-size:calc(var(--guide-levels) * var(--tab-size,4) * 1ch) 100%; }
+/* 접기 표시: 기본 글자(⌄ ›)는 글꼴에 따라 납작하고 치우쳐 보이므로 글자는 숨기고 같은 모양의 화살표(SVG)를 칸 가운데에 그린다.
+   펼친 블록(title=접기)은 아래, 접힌 블록(title=펴기)은 오른쪽을 가리킨다. */
+.studio-cm-host .cm-foldGutter .cm-gutterElement { display:flex;align-items:center;justify-content:center;width:16px;padding:0; }
+.studio-cm-host .cm-foldGutter span[title] { position:relative;display:block;width:16px;height:100%;min-height:14px;font-size:0;color:var(--faint);cursor:pointer;transition:color .12s; }
+.studio-cm-host .cm-foldGutter span[title]::before { content:"";position:absolute;inset:0;margin:auto;width:10px;height:10px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  transition:transform .12s; }
+.studio-cm-host .cm-foldGutter span[title="펴기"]::before { transform:rotate(-90deg); }
+.studio-cm-host .cm-foldGutter span[title="펴기"] { color:var(--accent); }
+.studio-cm-host .cm-foldGutter span[title]:hover { color:var(--text); }
 /* 컴파일 오류 메시지를 줄 끝에 표시. 편집 후 다음 컴파일 전까지는 흐리게 */
 .cm-error-lens { padding-left:2.5em;color:#ff8a95;font:11px/1.6 var(--sans);white-space:pre; }
 .cm-error-lens-text { padding:0 6px;border-radius:3px;background:#ff5a6a14; }
