@@ -12,6 +12,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 정적 검사. 테스트와 따로 돌려서, lint가 실패해도 테스트 결과는 그대로 볼 수 있다.
+  # 오류(버그 규칙)만 실패로 치고, 경고는 로그에만 남긴다.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install lint tools
+        run: npm install --no-audit --no-fund --ignore-scripts
+
+      - name: Run ESLint
+        run: npm run lint
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
