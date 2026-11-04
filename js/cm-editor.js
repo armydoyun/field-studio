@@ -85,7 +85,8 @@ import * as Features from "./cm-glsl-features.js";
     const toSnippet = body => body.replace(/\$\{(\d+):([^}]*)\}/g, "${$1:$2}").replace(/\$0/g, "${}").replace(/\$(\d+)/g, "${$1}");
     const applyItem = item => (editorView, completion, from, to) => {
       if(item.kind === "snippet") return CM.snippet(toSnippet(item.body))(editorView, completion, from, to);
-      editorView.dispatch({changes:{from, to, insert:item.label}, selection:{anchor:from + item.label.length}, userEvent:"input.complete"});
+      // 커서를 앞 글자 쪽(assoc -1)에 붙인다. 방향 없이 두면 줄 끝 위젯(오류 표시 등) 뒤에 그려져 글자 뒤에 빈칸이 생긴 것처럼 보인다.
+      editorView.dispatch({changes:{from, to, insert:item.label}, selection:CM.EditorSelection.create([CM.EditorSelection.cursor(from + item.label.length, -1)]), userEvent:"input.complete"});
       if(item.kind === "library" && options.library?.insert?.(item.id)) return;
       const src = editorView.state.doc.toString();
       if(item.declare && !new RegExp(`\\buniform\\s+\\w+\\s+${escapeRe(item.label)}\\b`).test(cleanOf(src))) {
@@ -184,7 +185,11 @@ import * as Features from "./cm-glsl-features.js";
     // 글자 입력(input.type)은 제외한다: 브라우저가 이미 커서 쪽으로 스크롤한 뒤라, 직전에 받은 beforeinput·select 시점의 위치가 맞다.
     const beforeUserEdit = CM.EditorState.transactionFilter.of(tr => { if(tr.docChanged && !tr.annotation(External) && !tr.isUserEvent("input.type")) beforeEdit(); return tr; });
     let commands = [];
+    // 자동 완성 목록이 열려 있으면 Tab도 Enter처럼 고른 후보를 넣는다(목록이 없으면 false → 아래 indentWithTab이 들여쓰기).
+    // 번들에 acceptCompletion이 따로 없으므로 completionKeymap의 Enter 명령(= acceptCompletion)을 그대로 쓴다.
+    const acceptCompletion = CM.completionKeymap.find(binding => binding.key === "Enter")?.run;
     const editorKeys = [
+      ...(acceptCompletion ? [{key:"Tab", run:acceptCompletion}] : []),
       {key:"Mod-Space", run:CM.startCompletion},
       {key:"Mod-g", run:() => { openPalette(":"); return true; }},
       {key:"Mod-Shift-o", run:() => { openPalette("@"); return true; }},
