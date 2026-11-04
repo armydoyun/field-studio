@@ -20,7 +20,7 @@ const shadowOK=([sel,value])=>value==="var(--shadow)"||value==="none"||/^\.guide
 check(declsOf("box-shadow").every(shadowOK),"그림자는 --shadow 또는 가림막만: "+declsOf("box-shadow").filter(d=>!shadowOK(d)).map(d=>d.join(" → ")));
 check(!/@keyframes live-pulse/.test(bare),"깜빡이는 발광 표시 없음");
 // 아이콘: 글자 기호로 그린 아이콘 대신 SVG 마스크를 쓴다.
-check(!/(?<!<kbd)>\s*[▶↺↻✓ƒ?]\s*(?:<|[가-힣])/.test(html),"HTML 버튼·표시에 글자 기호 아이콘 없음(<kbd> 키 이름은 제외)");
+check(!/(?<!<kbd)>\s*[▶↺↻✓ƒ?↗]\s*(?:<|[가-힣])/.test(html),"HTML 버튼·표시에 글자 기호 아이콘 없음(<kbd> 키 이름은 제외)");
 check(!/content:\s*"[✓●▶ƒ]/.test(bare),"CSS content에 글자 기호 아이콘 없음");
 // 테마: 다크(기본)·라이트 토큰이 모두 있고, 시스템 설정과 사용자 선택을 모두 따른다.
 const tokens=block=>new Set([...block.matchAll(/--([\w-]+)\s*:/g)].map(m=>m[1]));

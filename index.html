@@ -67,7 +67,7 @@
                             <select id="bufferPreview"><option value="">Image · 최종 렌더링</option></select>
                             <p id="bufferInfo" class="help">등록된 버퍼가 없습니다. 아래 예제로 A/B 패스를 확인할 수 있습니다.</p>
                         </div>
-                        <button id="studioOpenFromPanel" type="button" class="studio-launch">셰이더 편집기 열기 <span aria-hidden="true">↗</span></button>
+                        <button id="studioOpenFromPanel" type="button" class="studio-launch glyph-icon icon-code">셰이더 편집기 열기</button>
                         <div class="buffer-actions">
                             <button id="bufferDemo" type="button" class="glyph-icon icon-play" title="A 원본 → B 색상 후처리 → Image 비교 화면">버퍼 연결 배우기</button>
                             <button id="bufferClear" type="button" title="추가한 버퍼 패스를 모두 해제하고 Image만 남기기">패스 모두 해제</button>
@@ -92,7 +92,7 @@
                                 <div id="rangeFields" class="field" role="group" aria-labelledby="rangeFieldsLabel"><div class="section-heading"><span id="rangeFieldsLabel" class="field-legend">슬라이더 범위 <span class="field-hint">선택 사항</span></span></div>
                                     <div class="range-grid"><div><label for="uniformMin">최소</label><input id="uniformMin" type="number" step="any" placeholder="0" inputmode="decimal"></div><div><label for="uniformMax">최대</label><input id="uniformMax" type="number" step="any" placeholder="1" inputmode="decimal"></div><div><label for="uniformStep">간격</label><input id="uniformStep" type="number" step="any" placeholder="0.01" inputmode="decimal"></div></div>
                                 </div>
-                                <div class="uniform-form-actions"><button id="uniformCancel" type="button">취소</button><button id="uniformCreate" class="primary" type="submit">추가하고 적용 <span aria-hidden="true">↗</span></button></div>
+                                <div class="uniform-form-actions"><button id="uniformCancel" type="button">취소</button><button id="uniformCreate" class="primary" type="submit">추가하고 적용</button></div>
                             </form>
                         </details>
                         <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" hidden>삭제 되돌리기</button></div>

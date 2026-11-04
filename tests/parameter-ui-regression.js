@@ -75,6 +75,30 @@ await test('Boolean parameter uses an accessible switch with explicit true/false
   input.checked=true;await input.dispatchEvent({type:'change'});assert.equal(f.renderer.getUserUniforms()[0].value,true);assert.match(text.textContent,/true/);
   f.renderer.setUniform=()=>{throw Error('forced failure');};input.checked=false;await input.dispatchEvent({type:'change'});assert.equal(input.checked,true);assert.match(text.textContent,/true/);
 });
+await test('Large values keep every integer digit while long fractions are shortened',async(f,n,row)=>{
+  f.renderer.defineUniform('uFar','float',123456.789);f.renderer.defineUniform('uPhase','float',0.5239193476851991);await n('uniformSearch').dispatchEvent({type:'input'});
+  const list=n('uniformList').children,[far]=list[0].children[1].children,[phase]=list[1].children[1].children;
+  assert.equal(far.value,'123456.789');assert.equal(phase.value,'0.523919');assert.equal(phase.title,'0.5239193476851991');
+});
+await test('Ranged scalar shows its min and max under the slider',async(f,n,row)=>{
+  f.renderer.defineUniform('uGain','float',.5,{min:-2,max:8,step:.25});await n('uniformSearch').dispatchEvent({type:'input'});
+  const ends=row().children[2];assert.equal(ends.className,'uniform-range-ends');assert.deepEqual(ends.children.map(x=>x.textContent),['-2','8']);
+});
+await test('Color HEX field sets RGB and keeps the value on malformed input',async(f,n,row)=>{
+  f.renderer.defineUniform('uTint','vec3',[1,.5,.2],{color:true});await n('uniformSearch').dispatchEvent({type:'input'});
+  const [picker,hex]=row().children[1].children;assert.equal(hex.value,'#ff8033');
+  hex.value='#3366CC';await hex.dispatchEvent({type:'change'});assert.deepEqual(Array.from(f.renderer.getUserUniforms()[0].value).map(v=>+v.toFixed(3)),[.2,.4,.8]);assert.equal(picker.value,'#3366cc');
+  hex.value='zz12';await hex.dispatchEvent({type:'change'});assert.equal(hex.attrs['aria-invalid'],'true');assert.deepEqual(Array.from(f.renderer.getUserUniforms()[0].value).map(v=>+v.toFixed(3)),[.2,.4,.8]);
+  await hex.dispatchEvent({type:'keydown',key:'Escape'});assert.equal(hex.value,'#3366cc');
+});
+await test('Dragging the parameter name scrubs by the slider step and respects its bounds',async(f,n,row)=>{
+  f.renderer.defineUniform('uCount','int',2,{min:0,max:10,step:1});await n('uniformSearch').dispatchEvent({type:'input'});
+  const name=row().children[0].children[0].children[0],[range,number]=row().children[1].children;
+  await name.dispatchEvent({type:'pointerdown',button:0,clientX:100,pointerId:1});
+  await name.dispatchEvent({type:'pointermove',clientX:112});assert.equal(f.renderer.getUserUniforms()[0].value,5);assert.equal(number.value,'5');assert.equal(range.value,'5');
+  await name.dispatchEvent({type:'pointermove',clientX:400});assert.equal(f.renderer.getUserUniforms()[0].value,10);
+  await name.dispatchEvent({type:'pointermove',clientX:-400});assert.equal(f.renderer.getUserUniforms()[0].value,0);
+});
 await test('Render panel example shortcut opens the current-frame pipeline',async(f,n)=>{
   f.window.shaderStudio=f.studio;await n('bufferDemo').click();const p=f.studio.getProject();assert.equal(p.passes.length,2);assert.equal(Object.keys(p.passes[0].channels).length,0);assert.equal(p.passes[1].channels[0].frame,'current');
 });

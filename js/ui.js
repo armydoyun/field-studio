@@ -16,8 +16,46 @@
       if(!["true", "false", "1", "0"].includes(raw.toLowerCase())) throw new Error(`${type}은 true/false 또는 1/0으로 입력하세요.`);
       return raw.toLowerCase() === "true" || raw === "1";
     };
-    // 카메라 조작 등으로 생긴 0.5239193476851991 같은 값은 입력 칸에 유효숫자 6자리로만 표시한다.
-    const displayNumber = value => typeof value === "number" && Number.isFinite(value) && !Number.isInteger(value) ? String(Number(value.toPrecision(6))) : String(value);
+    // 카메라 조작 등으로 생긴 0.5239193476851991 같은 값은 소수부를 줄여 보이되, 정수부 자릿수는 절대 버리지 않는다
+    // (예전처럼 유효숫자 6자리로 자르면 123456.789가 123457로 바뀌어 보였다). 전체 값은 title로 확인할 수 있다.
+    const displayNumber = value => {
+      if(typeof value !== "number" || !Number.isFinite(value) || Number.isInteger(value)) return String(value);
+      const integerDigits = Math.max(1, Math.floor(Math.log10(Math.abs(value))) + 1);
+      return String(Number(value.toPrecision(Math.min(15, Math.max(6, integerDigits + 4)))));
+    };
+    const showNumber = (field, value) => { field.value = displayNumber(value); field.title = String(value); };
+    // 범위가 있는 숫자 칸의 폭: 최소·최대·step 소수 자릿수로 가장 긴 값을 계산해 고정한다(슬라이더 끝과 최소·최대 표시가 어긋나지 않게).
+    const rangedWidth = opts => {
+      const decimals = (String(opts.step).split(".")[1] || "").length, digits = Math.max(displayNumber(Math.trunc(opts.min)).replace("-","").length, displayNumber(Math.trunc(opts.max)).replace("-","").length);
+      const chars = Math.min(14, Math.max(3, digits + (decimals ? decimals + 1 : 0) + (opts.min < 0 ? 1 : 0)));
+      return `calc(${chars}ch + 20px)`;
+    };
+    // 슬라이더 아래 최소·최대 표시. 성분 슬라이더(axis)는 글자 칸만큼 들여 맞춘다.
+    const rangeEnds = (opts, axis) => {
+      const ends = element("div"); ends.className = axis ? "uniform-range-ends is-axis" : "uniform-range-ends"; ends.setAttribute("aria-hidden","true");
+      const low = element("span"), high = element("span"); low.textContent = displayNumber(opts.min); high.textContent = displayNumber(opts.max);
+      ends.append(low, high); return ends;
+    };
+    // 이름·성분 글자를 좌우로 끌어 값을 바꾼다(Blender·Figma 방식). 4px마다 한 걸음, Shift는 1/10, Ctrl은 10배.
+    // 걸음 크기: 슬라이더 step → 정수 1 → 실수는 현재 값 크기의 1%(최소 0.01).
+    const scrubbable = (handle, {kind, read, write, min, max, step}) => {
+      handle.classList.add("is-scrub"); handle.title = "좌우로 끌어 값 조절 · Shift 정밀 · Ctrl 크게";
+      handle.addEventListener("pointerdown", event => {
+        if(event.button !== 0) return; const start = read(); if(!Number.isFinite(start)) return;
+        event.preventDefault(); const originX = event.clientX, integer = kind === "i" || kind === "u";
+        const base = Number.isFinite(step) && step > 0 ? step : integer ? 1 : Math.max(Math.abs(start) * 0.01, 0.01);
+        const decimals = integer ? 0 : Math.min(10, Math.max(0, 1 - Math.floor(Math.log10(base))));
+        handle.setPointerCapture?.(event.pointerId); handle.classList.add("is-scrubbing");
+        const move = moveEvent => {
+          const factor = moveEvent.shiftKey ? 0.1 : moveEvent.ctrlKey || moveEvent.metaKey ? 10 : 1;
+          let next = start + Math.round((moveEvent.clientX - originX) / 4) * base * factor;
+          if(Number.isFinite(min)) next = Math.max(min, next); if(Number.isFinite(max)) next = Math.min(max, next); if(kind === "u") next = Math.max(0, next);
+          next = integer ? Math.round(next) : Number(next.toFixed(decimals)); if(next !== read()) write(next);
+        };
+        const end = () => { handle.removeEventListener("pointermove", move); handle.classList.remove("is-scrubbing"); };
+        handle.addEventListener("pointermove", move); handle.addEventListener("pointerup", end, {once:true}); handle.addEventListener("pointercancel", end, {once:true});
+      });
+    };
     const validNumber = (kind, value) => Number.isFinite(value) && (kind === "f" || kind === "m" || (Number.isInteger(value) && (kind !== "u" || value >= 0)));
     // 입력 중 숫자가 아닌 값이나 잘못된 차원의 벡터가 넘어가지 않도록 경계에서 검증한다.
     const parseValue = (type, text) => {
@@ -47,8 +85,8 @@
       userList.replaceChildren();
       $("uniformCount").textContent = `${items.length} / 64`;$("uniformCreate").disabled=items.length>=64; for(const item of items) {
                 if(search && !`${item.name} ${item.type}`.toLowerCase().includes(search)) continue;
-                const row = element("div"); row.className = "uniform-row";
-        const top = element("div"); top.className = "uniform-top"; const title = element("div");
+        const row = element("div"); row.className = "uniform-row"; row.dataset.type = item.type;
+        const top = element("div"); top.className = "uniform-top"; const title = element("div"); title.className = "uniform-title";
         const name = element("span"); name.className = "uniform-name"; name.textContent = item.name;
         const type = element("span"); type.className = "uniform-type"; type.textContent = item.type;
         title.append(name, type);
@@ -63,75 +101,104 @@
         row.append(top); if(item.type === "bool") {
           const label = element("label"); label.className = "uniform-switch";
           const input = element("input"); input.type = "checkbox"; input.checked = item.value; input.setAttribute("role","switch");
-          const text = element("span"); text.textContent = item.value ? "true · 켜짐" : "false · 꺼짐";
-          input.setAttribute("aria-label",item.name); input.addEventListener("change", () => {if(!commit(input,input.checked))input.checked=item.value;text.textContent=input.checked?"true · 켜짐":"false · 꺼짐";});
+          const text = element("span"); text.textContent = String(item.value);
+          input.setAttribute("aria-label",item.name); input.addEventListener("change", () => {if(!commit(input,input.checked))input.checked=item.value;text.textContent=String(input.checked);});
           label.append(input, text); row.append(label);
         } else if(item.options?.color) {
-          // 색상: RGB는 컬러 피커(0~1 선형 값을 그대로 8bit로 표시), vec4의 A는 별도 슬라이더.
+          // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
           const wrap = element("div"); wrap.className = "uniform-color";
           const picker = element("input"); picker.type = "color"; picker.setAttribute("aria-label",`${item.name} 색상`);
+          const hexField = element("input"); hexField.type = "text"; hexField.className = "uniform-hex"; hexField.spellcheck = false; hexField.maxLength = 7; hexField.setAttribute("aria-label",`${item.name} HEX`);
           const code = element("code"); const hex = values => "#" + values.slice(0,3).map(v => Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,"0")).join("");
-          const show = values => { picker.value = hex(values); code.textContent = values.map(v => Number(v).toFixed(3)).join(", "); };
+          const channels = item.type === "vec4" ? "RGBA" : "RGB";
+          let alpha = null, alphaNumber = null;
+          const show = values => {
+            picker.value = hex(values); hexField.value = picker.value; hexField.removeAttribute("aria-invalid");
+            code.textContent = values.slice(0,3).map(v => Number(v).toFixed(2)).join(" "); code.title = `${channels} ${values.map(v => Number(v).toFixed(4)).join(", ")}`;
+            if(alpha) { alpha.value = String(values[3]); showNumber(alphaNumber, values[3]); }
+          };
           const current = () => [...(renderer.getUserUniforms().find(u=>u.name===item.name)?.value || item.value)];
-          picker.addEventListener("input", () => {
-            const values = current(), rgb = picker.value.match(/[0-9a-f]{2}/gi).map(h => parseInt(h,16)/255);
-            values.splice(0,3,...rgb); if(commit(picker,values)) show(values);
-          }); wrap.append(picker, code);
+          const setRGB = (field, text) => {
+            const match = /^#?([0-9a-f]{6})$/i.exec(text.trim()); if(!match) { field.setAttribute("aria-invalid","true"); showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`); return; }
+            const values = current(); values.splice(0,3,...match[1].match(/../g).map(h => parseInt(h,16)/255)); if(commit(field,values)) show(values);
+          };
+          picker.addEventListener("input", () => setRGB(picker, picker.value)); hexField.addEventListener("change", () => setRGB(hexField, hexField.value));
+          hexField.addEventListener("keydown", event => { if(event.key === "Enter") { event.preventDefault(); setRGB(hexField, hexField.value); } else if(event.key === "Escape") { show(current()); showError(""); } });
+          wrap.append(picker, hexField, code); row.append(wrap);
           if(item.type === "vec4") {
-            const alpha = element("input"); alpha.type = "range"; alpha.min = "0"; alpha.max = "1"; alpha.step = "0.001"; alpha.value = String(item.value[3]);
-            alpha.setAttribute("aria-label",`${item.name} 알파`); alpha.title = "Alpha";
-            alpha.addEventListener("input", () => { const values = current(); values[3] = Number(alpha.value); if(commit(alpha,values)) show(values); });
-            wrap.append(alpha);
+            const line = element("div"); line.className = "uniform-axis is-ranged uniform-alpha";
+            const label = element("label"); label.className = "uniform-axis-label"; label.textContent = "A";
+            alpha = element("input"); alpha.type = "range"; alpha.min = "0"; alpha.max = "1"; alpha.step = "0.001";
+            alpha.setAttribute("aria-label",`${item.name} 알파`);
+            alphaNumber = element("input"); alphaNumber.type = "number"; alphaNumber.min = "0"; alphaNumber.max = "1"; alphaNumber.step = "0.01"; alphaNumber.setAttribute("aria-label",`${item.name} 알파 값`);
+            const setAlpha = (field, value) => { const values = current(); values[3] = Math.max(0, Math.min(1, value)); if(Number.isFinite(value) && commit(field,values)) show(values); else show(current()); };
+            alpha.addEventListener("input", () => setAlpha(alpha, Number(alpha.value)));
+            alphaNumber.addEventListener("change", () => setAlpha(alphaNumber, alphaNumber.value.trim() ? Number(alphaNumber.value) : NaN));
+            scrubbable(label, {kind:"f", read:() => current()[3], write:value => setAlpha(alpha, value), min:0, max:1, step:0.01});
+            line.append(label, alpha, alphaNumber); row.append(line);
           }
-          show(item.value); row.append(wrap);
+          show(item.value);
         } else if(typeInfo(item.type).components > 1) {
           // 벡터는 X/Y/Z/W, 행렬은 column-major 순서의 [열,행] 칸으로 편집한다. bvec 성분은 체크박스.
           // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
           const {kind} = typeInfo(item.type), dim = kind === "m" ? Math.round(Math.sqrt(item.value.length)) : 0;
+          // 배치: bvec은 X·Y… 토글 칩 한 줄, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
+          // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자], 행렬은 열 단위 격자.
           const opts = item.options || {}, ranged = !dim && kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
-          const grid = element("div"); grid.className = dim ? "uniform-vector is-matrix" : ranged ? "uniform-vector is-ranged" : "uniform-vector";
+          const layout = dim ? "is-matrix" : kind === "b" ? "is-bool" : ranged ? "is-ranged" : item.value.length <= 2 ? "is-inline" : "is-stacked";
+          const grid = element("div"); grid.className = `uniform-vector ${layout}`;
           if(dim) grid.style.setProperty("--uniform-columns", String(dim));
           item.value.forEach((value, index) => {
-            const field = element("div");
-            const label = element("label"); label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
-            const input = element("input"); input.setAttribute("aria-label",`${item.name} ${label.textContent}`);
+            const field = element(kind === "b" ? "label" : "div"); field.className = ranged ? "uniform-axis is-ranged" : "uniform-axis";
+            const label = element(kind === "b" ? "span" : "label"); label.className = "uniform-axis-label"; label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
+            const input = element("input"); input.setAttribute("aria-label",`${item.name} ${dim ? `열 ${Math.floor(index / dim)} 행 ${index % dim}` : label.textContent}`);
             if(kind === "b") { input.type = "checkbox"; input.checked = value; }
-            else { input.type = "number"; input.step = kind === "f" || kind === "m" ? "any" : "1"; if(kind === "u") input.min = "0"; input.value = displayNumber(value); }
+            else { input.type = "number"; input.step = kind === "f" || kind === "m" ? "any" : "1"; if(kind === "u") input.min = "0"; showNumber(input, value); }
             const update = (source, next) => {
               const values = renderer.getUserUniforms().find(u=>u.name===item.name)?.value;
               if(!values)return renderUniforms();
               item.value=[...values];values[index] = next;
-              if(!commit(source,values)) { if(kind === "b") input.checked = item.value[index]; else input.value=displayNumber(item.value[index]); return false; }
+              if(!commit(source,values)) { if(kind === "b") input.checked = item.value[index]; else showNumber(input, item.value[index]); return false; }
               return true;
             };
             let slider = null;
             input.addEventListener("change", () => { if(update(input, kind === "b" ? input.checked : input.value.trim() ? Number(input.value) : NaN) && slider) slider.value = input.value; });
+            if(kind !== "b" && !dim) scrubbable(label, {kind, min:opts.min, max:opts.max, step:opts.step,
+              read:() => renderer.getUserUniforms().find(u=>u.name===item.name)?.value?.[index],
+              write:next => { if(update(label, next)) { showNumber(input, next); if(slider) slider.value = String(next); } }});
             if(ranged) {
               slider = element("input"); slider.type = "range"; slider.min = String(opts.min); slider.max = String(opts.max); slider.step = String(opts.step);
               slider.value = String(value); slider.setAttribute("aria-label",`${item.name} ${label.textContent} 슬라이더`);
-              slider.addEventListener("input", () => { if(update(slider, Number(slider.value))) input.value = slider.value; });
+              slider.addEventListener("input", () => { if(update(slider, Number(slider.value))) showNumber(input, Number(slider.value)); });
               field.append(label, slider, input);
-            } else field.append(label, input);
+            } else if(kind === "b") field.append(input, label);
+            else field.append(label, input);
             grid.append(field);
           }); row.append(grid);
+          if(ranged) { row.style.setProperty("--number-width", rangedWidth(opts)); row.append(rangeEnds(opts, true)); }
         } else {
-          const pair = element("div"); pair.className = "uniform-pair";
-          const number = element("input"); number.type = "number"; number.step = typeInfo(item.type).kind === "f" ? "any" : "1"; if(item.type === "uint") number.min = "0"; number.value = displayNumber(item.value);
+          // 숫자 하나: 범위가 있으면 [슬라이더 | 숫자] + 아래에 최소·최대, 없으면 숫자 칸이 줄 전체를 쓴다. 이름을 끌면 값이 바뀐다.
+          const pair = element("div"); const {kind} = typeInfo(item.type);
+          const number = element("input"); number.type = "number"; number.step = kind === "f" ? "any" : "1"; if(item.type === "uint") number.min = "0"; showNumber(number, item.value);
           number.setAttribute("aria-label",item.name);
-          const opts = item.options || {}; let range;
+          const opts = item.options || {}, ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max); let range;
+          pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
           const changeNumber = () => {
-            let value;try {value=parseValue(item.type,number.value);}catch(error){showError(`${item.name}: ${error.message}`);number.setAttribute("aria-invalid","true");number.value=String(item.value);return;}
-            if(commit(number,value)){if(range)range.value=String(value);}else number.value=String(item.value);
+            let value;try {value=parseValue(item.type,number.value);}catch(error){showError(`${item.name}: ${error.message}`);number.setAttribute("aria-invalid","true");showNumber(number,item.value);return;}
+            if(commit(number,value)){if(range)range.value=String(value);showNumber(number,value);}else showNumber(number,item.value);
           };
           number.addEventListener("change",changeNumber);
-          if(Number.isFinite(opts.min) && Number.isFinite(opts.max)) {
+          if(ranged) {
             range = element("input"); range.type = "range";
             range.min = String(opts.min); range.max = String(opts.max); range.step = String(opts.step);
             range.setAttribute("aria-label",`${item.name} 슬라이더`);range.value = String(item.value);
-            range.addEventListener("input", () => {if(commit(range,Number(range.value)))number.value=displayNumber(item.value);});
+            range.addEventListener("input", () => {if(commit(range,Number(range.value)))showNumber(number,item.value);});
             pair.append(range);
           }
-          pair.append(number); row.append(pair);
+          pair.append(number); row.append(pair); if(ranged) { row.style.setProperty("--number-width", rangedWidth(opts)); row.append(rangeEnds(opts, false)); }
+          scrubbable(name, {kind, min:opts.min, max:opts.max, step:opts.step,
+            read:() => renderer.getUserUniforms().find(u=>u.name===item.name)?.value,
+            write:next => { if(commit(number, next)) { showNumber(number, next); if(range) range.value = String(next); } }});
         }
         userList.append(row);
       }
