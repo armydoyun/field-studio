@@ -21,7 +21,7 @@ assert.equal(base('.viewport-footer').get('align-items'),'center');assert(!base(
 assert.equal(base('.studio-top').get('grid-template-columns'),'minmax(0,1fr) auto');assert(html.includes('class="studio-window-tools"'));assert(html.includes('class="viewport-footer"'));
 // 편집기는 CodeMirror가 그린다: 호스트가 프레임을 채우고(flex), 편집 화면이 그 높이를 그대로 쓴다.
 assert.equal(base('.studio-cm-host').get('display'),'flex');assert.equal(base('.studio-cm-host').get('flex'),'1');assert.equal(base('.studio-cm-host>.cm-editor').get('height'),'100%');
-assert.equal(base('.studio-group-body').get('padding'),'12px 14px 16px');assert.equal(base('.studio-group-body').get('gap'),'12px');
+assert.equal(base('.project-menu-section').get('padding'),'14px');assert.equal(base('.project-menu-section').get('gap'),'10px');assert.equal(base('.project-menu[hidden]').get('display'),'none');
 assert([...rules.keys()].some(key=>key.includes('@container preview (max-height:220px)')),'HUD must adapt to actual preview height');
 console.log(`PASS CSS ${count} selector scopes parsed: no repeated selector/property pair in the same scope`);
 console.log('PASS Centered controls / unit placement / modal grid / toolbar groups / shared HUD / editor host fills the frame');
@@ -34,14 +34,15 @@ for(const m of html.matchAll(/<button\b([^>]*)class="[^"]*glyph-icon[^"]*"([^>]*
  if(!text)assert(/aria-label="[^" ]/.test(m[1]+m[2]),'Icon-only buttons need an accessible name');
  assert(!/[▶▸►✓✔ƒ↺↻↗●◐☀☾]/.test(text),`Icon must be an SVG mask, not a font glyph: ${text}`);
 }
-for(const selector of ['.glyph-icon::before','.studio-group>summary::after']){
+for(const selector of ['.glyph-icon::before']){
  assert.equal(base(selector).get('width'),'16px');assert.equal(base(selector).get('height'),'16px');assert.equal(base(selector).get('content'),'""');assert.equal(base(selector).get('mask'),'var(--icon) center/contain no-repeat');
 }
 assert.equal(base('.studio-texture .icon-close').get('width'),'28px');
 assert(base('#previewPause[aria-pressed="true"]').has('--icon'));assert(base('#studioMaximize[aria-pressed="true"]').has('--icon'));
 console.log('PASS Font-independent icon boxes / accessible icon buttons / state icons / square delete and navigation controls');
 
-assert.equal(base('.studio-channel-help').get('grid-column'),'1/-1');assert.equal(base('.studio-channel-help').get('margin'),'0');
+// 입력 채널은 한 줄짜리 칩이라 설명 문단은 화면에서 숨기고(title·aria-describedby로 전달) 칩은 줄을 넘기면 다음 줄로 간다.
+assert.equal(base('.studio-channel-help').get('display'),'none');assert.equal(base('.studio-channel-bar').get('flex-wrap'),'wrap');
 assert.equal(base('.studio-graph-input').get('grid-template-columns'),'54px minmax(0,1fr)');
 assert.equal(base('.studio-texture').get('grid-template-columns'),'minmax(0,1fr) 28px');assert.equal(base('.studio-texture .texture-connect').get('grid-column'),'1/-1');
-console.log('PASS Channel help alignment / source and frame columns / full-width image connection action');
+console.log('PASS Channel chips / source and frame columns / full-width image connection action');
