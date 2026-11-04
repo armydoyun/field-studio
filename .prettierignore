@@ -1,0 +1,14 @@
+# Prettier는 지금 js/와 tools/의 JavaScript에만 쓴다(npm run format).
+# HTML·CSS는 테스트가 소스 문자열을 찾고 있어서, 그 테스트를 고친 뒤에 따로 적용한다.
+deploy/
+node_modules/
+index.html
+style.css
+tests/
+*.md
+*.py
+
+# 서드파티 번들(tools/codemirror/build.mjs가 만든다)과 패키지 정의
+js/codemirror.js
+**/package.json
+**/package-lock.json
