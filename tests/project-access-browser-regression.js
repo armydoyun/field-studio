@@ -74,6 +74,15 @@
     row.click();
     await frame();
     test(!$("studioDock").hidden && $("studioTab-A").getAttribute("aria-selected") === "true", "그래프에서 누르면 편집기에서 A 열림");
+
+    // 편집기가 열려 있어도 메뉴는 미리보기에 잘리지 않고 편집기 위로 올라온다(미리보기 영역은 overflow:hidden).
+    $("projectMenuToggle").click();
+    await frame();
+    const box = $("projectMenu").getBoundingClientRect();
+    test(box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight, "메뉴가 창 안에 들어옴");
+    const points = [[box.left + 10, box.top + 10], [box.right - 10, box.top + box.height / 2], [box.left + box.width / 2, box.bottom - 10]];
+    test(points.every(([x, y]) => document.elementFromPoint(x, y)?.closest("#projectMenu")), "메뉴의 어느 곳도 편집기·손잡이에 가려지지 않음");
+    $("projectMenuToggle").click();
   } finally {
     if (!studio.setProject(before)) console.warn("테스트 이전 프로젝트 복원 실패");
   }

@@ -226,8 +226,10 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .project-toggle span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .project-toggle[data-saved="false"] span { color:var(--muted); }
 .project-toggle[aria-expanded="true"] { border-color:var(--accent);color:var(--text); }
-.project-menu { position:absolute;top:calc(100% + 6px);left:0;z-index:20;display:grid;gap:0;width:min(340px,calc(100vw - 24px));max-height:min(72vh,640px);overflow-y:auto;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);box-shadow:var(--shadow);scrollbar-width:thin; }
+.project-menu { position:fixed;top:56px;left:12px;z-index:40;display:grid;gap:0;width:min(340px,calc(100vw - 24px));max-height:calc(100vh - 80px);overflow-y:auto;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);box-shadow:var(--shadow);scrollbar-width:thin; }
 .project-menu[hidden] { display:none; }
+/* 메뉴가 열려 있는 동안 머리줄을 편집기 크기 조절 손잡이(z-index:4)·알림(7)보다 위로 올린다. 메뉴는 fixed라 머리줄 안에서만 쌓인다. */
+.stage-header:has(.project-menu:not([hidden])) { z-index:8; }
 .project-menu-section { display:grid;gap:10px;padding:14px; }
 .project-menu-section+.project-menu-section { border-top:1px solid var(--line); }
 .project-menu-section>h2 { margin:0;color:var(--text);font-size:12px;font-weight:650; }
