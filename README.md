@@ -29,7 +29,7 @@ npm run build    # → deploy/index.html
 
 - `tools/build.mjs`가 esbuild로 `js/main.js`부터 import를 따라 모든 모듈을 묶고 압축한 뒤, `tools/inline-html.mjs`가 `index.html`의 `<link>`·`<script type="module">` 자리에 넣습니다. 모듈 목록을 따로 관리하지 않습니다.
 - 예전 3파일 배포본(`deploy/style.css`, `deploy/js/min.js`)이 남아 있으면 빌드가 지웁니다.
-- GitHub Actions는 테스트가 통과하면 같은 빌드를 만들어 실행 페이지의 **Artifacts → field-studio-deploy**에 올립니다. 셸이 없는 환경에서도 거기서 받으면 됩니다.
+- GitHub Actions는 lint와 테스트가 모두 통과하면 같은 빌드를 만들어 실행 페이지의 **Artifacts → field-studio-deploy-<커밋 SHA>**에 올립니다. 셸이 없는 환경에서도 거기서 받으면 됩니다.
 - `tests/build-regression.js`가 임시 폴더에 빌드해 보고, 만든 파일을 `file://`로 Chromium에서 열어 앱이 오류·네트워크 요청 없이 뜨는지 확인합니다.
 - `python tools/build_deploy.py`(예전 Python 번들러)는 더 이상 쓰지 않습니다.
 
@@ -93,7 +93,8 @@ node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 �
 | `py` | `tests/*-regression.py` | Python Playwright. 실행기가 `PYTHONUTF8=1`을 넣어 Windows에서도 UTF-8로 읽는다 |
 
 - 준비되지 않은 묶음(playwright·Python 없음)은 SKIP으로 표시하고 계속합니다. `--strict`(=`npm run test:ci`)는 SKIP도 실패로 칩니다.
-- GitHub Actions(`.github/workflows/test.yml`)가 push·PR마다 `npm run test:ci`를 돌립니다.
+- GitHub Actions(`.github/workflows/test.yml`)는 push·PR마다 `lint` → `test (node)` · `test (browser)` · `test (py)` 세 작업을 나란히 돌리고(각각 `node tests/run.mjs <묶음> --strict`), 모두 통과하면 `build`가 배포본을 올립니다. 의존성은 `package-lock.json` 기준으로 `npm ci`로 설치하고, npm·pip·Playwright Chromium은 캐시합니다.
+- 개발 도구를 추가·변경할 때는 `npm install -D <패키지>@<버전>`으로 `package-lock.json`도 함께 갱신해 커밋합니다.
 - 새 테스트는 `tests/`에 두기만 하면 위 규칙으로 자동 분류됩니다. 다른 파일이 불러 쓰는 도우미는 `tests/run.mjs`의 `HELPERS`에 추가합니다.
 - `index.html`·`style.css`·`js/*.js`를 고친 뒤에는 `npm run sha`(= `python tools/update_sha_manifest.py`)로 `SOURCE_SHA256_Runtime.txt`를 갱신합니다(해시는 줄바꿈을 LF로 맞춰 계산하므로 Windows·Linux 결과가 같습니다). CI의 lint 작업이 `npm run sha:check`로 갱신 누락을 바로 알려 줍니다.
 - 커밋 전에 `npm run lint`(경고도 실패), `npm run format:check`를 돌립니다. 포맷은 `npm run format`으로 맞춥니다.

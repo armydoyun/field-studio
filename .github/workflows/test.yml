@@ -23,9 +23,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
 
       - name: Install lint tools
-        run: npm install --no-audit --no-fund --ignore-scripts
+        run: npm ci --no-audit --no-fund --ignore-scripts
 
       - name: Run ESLint
         run: npm run lint
@@ -37,37 +38,84 @@ jobs:
       - name: Check SHA manifest
         run: npm run sha:check
 
+  # 세 묶음을 따로 돌린다. 어느 묶음이 실패했는지 작업 이름에서 바로 보이고, 하나가 실패해도 나머지는 끝까지 돈다.
+  #   node    모의 DOM/GPU 테스트 + build-regression(빌드한 파일을 Chromium으로 열어 봄)
+  #   browser 실제 앱에 콘솔 테스트를 붙여 넣어 실행 + gpu-validation.html
+  #   py      Python Playwright 테스트
   test:
+    name: test (${{ matrix.suite }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [node, browser, py]
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
+
+      - name: Install npm tools
+        run: npm ci --no-audit --no-fund
 
       - uses: actions/setup-python@v6
+        if: matrix.suite == 'py'
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-test.txt
 
-      - name: Install test tools
+      - name: Install Python tools
+        if: matrix.suite == 'py'
+        run: python -m pip install -r requirements-test.txt
+
+      # Chromium 내려받기는 Playwright 버전(lock 파일·requirements)이 같으면 캐시에서 꺼낸다.
+      # 시스템 라이브러리(install-deps)는 캐시할 수 없으므로 매번 설치한다.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.suite }}-${{ hashFiles('package-lock.json', 'requirements-test.txt') }}
+
+      - name: Install Chromium
         run: |
-          npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium
-          python -m pip install -r requirements-test.txt
-          python -m playwright install chromium
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+          if [ "${{ matrix.suite }}" = "py" ]; then python -m playwright install chromium; fi
 
-      # node · browser(콘솔 테스트 + GPU 검사) · py 세 묶음. --strict: 준비 안 된 묶음도 실패로 친다.
-      - name: Run all tests
-        run: npm run test:ci
+      # --strict: 준비되지 않아 건너뛴 묶음(SKIP)도 실패로 친다.
+      - name: Run ${{ matrix.suite }} tests
+        run: node tests/run.mjs ${{ matrix.suite }} --strict
 
-      # 테스트가 모두 통과하면 한 파일짜리 배포본을 만들어 실행 페이지의 Artifacts에 올린다.
+  # lint와 세 묶음이 모두 통과하면 한 파일짜리 배포본을 만들어 실행 페이지의 Artifacts에 올린다.
+  # 이름에 커밋 SHA를 붙여 어느 소스에서 만든 파일인지 알 수 있게 한다.
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install build tools
+        run: npm ci --no-audit --no-fund
+
       - name: Build single-file deploy
         run: npm run build
 
       - uses: actions/upload-artifact@v5
         with:
-          name: field-studio-deploy
+          name: field-studio-deploy-${{ github.sha }}
           path: deploy/index.html
           if-no-files-found: error
