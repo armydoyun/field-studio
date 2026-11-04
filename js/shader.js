@@ -1,5 +1,5 @@
 // Shader Studio의 시작 화면에 사용할 기본 예제. 모든 GLSL을 한 곳에서 관리한다.
-  const vertex = `#version 300 es
+const vertex = `#version 300 es
 
 void main() {
     // VBO 없이 세 정점으로 화면 전체를 덮는 Fullscreen Triangle.
@@ -9,7 +9,7 @@ void main() {
     );
     gl_Position = vec4(position, 0.0, 1.0);
 }`;
-  const raymarch = `#version 300 es
+const raymarch = `#version 300 es
 precision highp float;
 
 uniform vec2 uResolution;
@@ -153,7 +153,7 @@ void main() {
     fragColor = vec4(color, 1.0);
 }
 `;
-  const fragment = `#version 300 es
+const fragment = `#version 300 es
 precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
@@ -166,14 +166,27 @@ void main() {
     vec3 color = 0.5 + 0.5 * cos(uTime * 0.3 + wave + vec3(0.0, 2.1, 4.2));
     fragColor = vec4(color, 1.0);
 }`;
-  const orbitHome=[0,Math.atan2(2.6,4.5),Math.hypot(4.5,2.6)];
-  const rayUniforms = [
-    ["uCameraOrbit","vec3",orbitHome],
-    ["uRMMaxSteps","int",128,{min:1,max:512,step:1}], ["uRMMaxDistance","float",100,{min:1,max:1000,step:1}],
-    // 슬라이더는 실제로 쓰는 구간만 다룬다. 기본값이 트랙의 1% 근처에 붙으면 조절할 수 없다.
-    ["uRMSurfaceEpsilon","float",0.001,{min:0.00001,max:0.01,step:0.00001}],
-    ["uRMNormalEpsilon","float",0.001,{min:0.00001,max:0.01,step:0.00001}], ["uRMHeatmap","bool",false]
-  ];
-  export default {vertex, fragment, raymarch:raymarch.replace(/uMaxSteps/g,"uRMMaxSteps").replace(/uMaxDistance/g,"uRMMaxDistance")
-    .replace(/uSurfaceEpsilon/g,"uRMSurfaceEpsilon").replace(/uNormalEpsilon/g,"uRMNormalEpsilon")
-    .replace(/uDebugRaySteps/g,"uRMHeatmap"), orbitHome, rayUniforms, passes:[], imageChannels:{}};
+const orbitHome = [0, Math.atan2(2.6, 4.5), Math.hypot(4.5, 2.6)];
+const rayUniforms = [
+  ["uCameraOrbit", "vec3", orbitHome],
+  ["uRMMaxSteps", "int", 128, { min: 1, max: 512, step: 1 }],
+  ["uRMMaxDistance", "float", 100, { min: 1, max: 1000, step: 1 }],
+  // 슬라이더는 실제로 쓰는 구간만 다룬다. 기본값이 트랙의 1% 근처에 붙으면 조절할 수 없다.
+  ["uRMSurfaceEpsilon", "float", 0.001, { min: 0.00001, max: 0.01, step: 0.00001 }],
+  ["uRMNormalEpsilon", "float", 0.001, { min: 0.00001, max: 0.01, step: 0.00001 }],
+  ["uRMHeatmap", "bool", false],
+];
+export default {
+  vertex,
+  fragment,
+  raymarch: raymarch
+    .replace(/uMaxSteps/g, "uRMMaxSteps")
+    .replace(/uMaxDistance/g, "uRMMaxDistance")
+    .replace(/uSurfaceEpsilon/g, "uRMSurfaceEpsilon")
+    .replace(/uNormalEpsilon/g, "uRMNormalEpsilon")
+    .replace(/uDebugRaySteps/g, "uRMHeatmap"),
+  orbitHome,
+  rayUniforms,
+  passes: [],
+  imageChannels: {},
+};

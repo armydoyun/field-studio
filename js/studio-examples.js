@@ -72,15 +72,29 @@ void main() {
 }`;
 
 // 버퍼 연결 배우기: A(움직이는 원) → B(색 바꾸기, A의 current) → Image(A·B 나란히 비교)
-const pipelineProject = () => ({image:comparison,passes:[
-  {name:"A",fragment:movingDot,format:"rgba8",scale:1,channels:{}},
-  {name:"B",fragment:colorFilter,format:"rgba8",scale:1,channels:{0:{buffer:"A",frame:"current"}}}
-],imageChannels:{0:{buffer:"B",frame:"current"},1:{buffer:"A",frame:"current"}}});
+const pipelineProject = () => ({
+  image: comparison,
+  passes: [
+    { name: "A", fragment: movingDot, format: "rgba8", scale: 1, channels: {} },
+    { name: "B", fragment: colorFilter, format: "rgba8", scale: 1, channels: { 0: { buffer: "A", frame: "current" } } },
+  ],
+  imageChannels: { 0: { buffer: "B", frame: "current" }, 1: { buffer: "A", frame: "current" } },
+});
 
 // 피드백(잔상): B가 A의 current와 자기 자신의 previous를 합친다.
-const feedbackProject = () => ({image:comparison,passes:[
-  {name:"A",fragment:movingDot,format:"rgba8",scale:1,channels:{}},
-  {name:"B",fragment:feedback,format:"rgba8",scale:1,channels:{0:{buffer:"A",frame:"current"},1:{buffer:"B",frame:"previous"}}}
-],imageChannels:{0:{buffer:"B",frame:"current"},1:{buffer:"A",frame:"current"}}});
+const feedbackProject = () => ({
+  image: comparison,
+  passes: [
+    { name: "A", fragment: movingDot, format: "rgba8", scale: 1, channels: {} },
+    {
+      name: "B",
+      fragment: feedback,
+      format: "rgba8",
+      scale: 1,
+      channels: { 0: { buffer: "A", frame: "current" }, 1: { buffer: "B", frame: "previous" } },
+    },
+  ],
+  imageChannels: { 0: { buffer: "B", frame: "current" }, 1: { buffer: "A", frame: "current" } },
+});
 
-export {blank, pipelineProject, feedbackProject};
+export { blank, pipelineProject, feedbackProject };
