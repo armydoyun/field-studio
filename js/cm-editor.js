@@ -202,6 +202,19 @@ import * as Features from "./cm-glsl-features.js";
     // 자동 완성 목록이 열려 있으면 Tab도 Enter처럼 고른 후보를 넣는다(목록이 없으면 false → 아래 indentWithTab이 들여쓰기).
     // 번들에 acceptCompletion이 따로 없으므로 completionKeymap의 Enter 명령(= acceptCompletion)을 그대로 쓴다.
     const acceptCompletion = CM.completionKeymap.find(binding => binding.key === "Enter")?.run;
+    // Tab: VS Code처럼 커서 위치에 다음 탭 위치까지 공백을 넣는다(한 줄 안의 선택은 공백으로 바꾼다).
+    // 여러 줄에 걸친 선택이 있을 때만 줄 전체를 들여쓴다. (CodeMirror indentWithTab은 커서만 있어도 줄 전체를 들여썼다)
+    const insertSoftTab = editorView => {
+      const state = editorView.state, size = state.tabSize;
+      if(state.selection.ranges.some(range => !range.empty && state.doc.lineAt(range.from).number !== state.doc.lineAt(range.to).number)) return CM.indentMore(editorView);
+      editorView.dispatch(state.changeByRange(range => {
+        const line = state.doc.lineAt(range.from); let column = 0;
+        for(const ch of line.text.slice(0, range.from - line.from)) column = ch === "\t" ? column + size - column % size : column + 1;
+        const spaces = " ".repeat(size - column % size);
+        return {changes:{from:range.from, to:range.to, insert:spaces}, range:CM.EditorSelection.cursor(range.from + spaces.length)};
+      }), {scrollIntoView:true, userEvent:"input.indent"});
+      return true;
+    };
     const editorKeys = [
       ...(acceptCompletion ? [{key:"Tab", run:acceptCompletion}] : []),
       {key:"Mod-Space", run:CM.startCompletion},
@@ -231,7 +244,7 @@ import * as Features from "./cm-glsl-features.js";
         CM.autocompletion({override:[completionSource], icons:true, activateOnTyping:true}), hover, CM.lintGutter(),
         CM.search({top:true}), forwardKeys, beforeUserEdit, ...features.extensions, CM.scrollPastEnd(),
         CM.EditorView.clickAddsSelectionRange.of(event => event.altKey && !event.ctrlKey && !event.metaKey),   // Alt+클릭: 커서 추가 (Ctrl+클릭은 정의로 이동)
-        CM.keymap.of([...editorKeys, ...CM.closeBracketsKeymap, ...CM.completionKeymap, ...CM.searchKeymap, ...CM.foldKeymap, ...CM.lintKeymap, ...CM.defaultKeymap, CM.indentWithTab]),
+        CM.keymap.of([...editorKeys, ...CM.closeBracketsKeymap, ...CM.completionKeymap, ...CM.searchKeymap, ...CM.foldKeymap, ...CM.lintKeymap, ...CM.defaultKeymap, {key:"Tab", run:insertSoftTab, shift:CM.indentLess}]),
         fontComp.of(fontTheme()), wrapComp.of(wrap ? CM.EditorView.lineWrapping : []), tabComp.of(tabConfig()), editorTheme,
         CM.EditorView.contentAttributes.of({"aria-label":"GLSL 코드 편집기", spellcheck:"false", autocorrect:"off", autocapitalize:"off"}),
         CM.EditorState.phrases.of(PHRASES), CM.placeholder("// GLSL 코드를 입력하세요 · Ctrl+Space 자동 완성 · Ctrl+Shift+P 명령 팔레트"),

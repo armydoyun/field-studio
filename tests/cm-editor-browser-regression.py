@@ -120,6 +120,10 @@ with sync_playwright() as p:
     load(SRC2);a=SRC2.index('float a');b=SRC2.index('float b = 2;')+5;place(a,b);page.keyboard.press('Tab')
     check('        float a = 1;\n        float b = 2;' in val(),'Tab indents every selected line')
     page.keyboard.press('Shift+Tab');check('    float a = 1;\n    float b = 2;' in val(),'Shift+Tab outdents them again')
+    load(SRC2);at=SRC2.index('float a = 1;')+len('float a');place(at);page.keyboard.press('Tab')   # 4칸 들여쓴 줄의 11번째 칸 → 다음 탭 위치(12)까지
+    check('\n    float a  = 1;' in val() and sel()==[at+1,at+1],'Tab with a single caret inserts spaces up to the next tab stop instead of indenting the line')
+    load(SRC2);at=SRC2.index('float a = 1;')+4;place(at,at+5);page.keyboard.press('Tab')
+    check('        a = 1;' in val() and sel()==[at+4,at+4],'Tab over a selection inside one line replaces it with spaces')
     place(SRC2.index('float a'));page.keyboard.press('Control+/');check('    // float a = 1;' in val(),'Ctrl+/ comments the line')
     page.keyboard.press('Control+/');check('    float a = 1;' in val() and '// float a' not in val(),'Ctrl+/ again uncomments it')
     page.keyboard.press('Alt+ArrowDown');check(val().index('float b = 2;')<val().index('float a = 1;'),'Alt+↓ moves the line down')
