@@ -574,8 +574,8 @@ const LESSONS = [
   {
     id: "raymarch",
     title: "Ray Marching SDF",
-    tag: "3D · Camera",
-    description: "SDF 장면, Orbit 카메라, 스텝 히트맵 디버그.",
+    tag: "3D · 키보드 카메라",
+    description: "SDF 장면, 키보드·드래그 카메라(상태 버퍼), 스텝 히트맵 디버그.",
     action: "exampleRaymarch",
     thumb: "raymarch",
   },

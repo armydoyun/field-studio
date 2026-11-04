@@ -365,11 +365,12 @@ vec4 texel = texelFetch(iChannel0, ivec2(gl_FragCoord.xy), 0);              // �
           ],
         },
       },
+      { keycode: true },
       {
         list: [
           "**뷰포트를 클릭해 포커스를 주면** 키가 셰이더로 갑니다. 화면 위쪽에 '키보드 입력 중'이 표시됩니다.",
-          "이 동안에는 E·X·H·F·Space 같은 한 글자 단축키와 카메라 키가 셰이더에 양보합니다. **Esc**로 빠져나오면 단축키가 돌아옵니다. Ctrl 조합(Ctrl+O 등)은 그대로 동작합니다.",
-          "키를 쌓아 쓰는 상태(위치·점수)는 버퍼에 저장하세요. 예제 갤러리의 **Keyboard Control**이 버퍼에 점의 위치를 저장하는 예입니다.",
+          "이 동안에는 E·X·H·F·Space 같은 한 글자 단축키가 셰이더에 양보합니다. **Esc**로 빠져나오면 단축키가 돌아옵니다. Ctrl 조합(Ctrl+O 등)은 그대로 동작합니다.",
+          "키를 쌓아 쓰는 상태(위치·점수·카메라)는 버퍼에 저장하세요. 예제 갤러리의 **Keyboard Control**은 점의 위치를, **Ray Marching SDF**는 카메라 시점(방향키·WASD·드래그, R 초기화)을 버퍼에 저장하는 예입니다.",
           "키보드 연결이 들어간 프로젝트는 이 기능이 없는 예전 버전에서 열리지 않을 수 있습니다.",
         ],
       },
@@ -437,11 +438,12 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           ["설정 패널", "H"],
           ["HUD 표시", "G"],
           ["파라미터 검색", "/"],
-          ["3D 카메라 회전 / 확대", "드래그 / 휠"],
-          ["카메라 이동 · 가속", "WASD·방향키 / Shift"],
-          ["카메라 초기화", "R"],
         ],
       },
+      {
+        p: "셰이더에서 쓸 키의 번호(키 코드)가 궁금하면 아래 칸을 누르고 키를 눌러 보세요.",
+      },
+      { keycode: true },
       {
         p: "**편집기 안에서** — VS Code 기본 단축키와 같습니다(Mac은 Ctrl 대신 Cmd). `Ctrl+K Ctrl+0`처럼 적힌 키는 두 번 이어서 누릅니다. Ctrl+W·Ctrl+N·Ctrl+Tab·Ctrl+PageUp/PageDown은 브라우저가 먼저 가져가므로, 패스 전환은 `Alt+PageUp/PageDown`을 씁니다.",
       },
@@ -850,6 +852,53 @@ const mount = ({ studio, gallery }) => {
     wrap.append(chips, intro, list);
     return wrap;
   };
+  // 키 코드 확인: 칸에 초점을 두고 키를 누르면 키보드 채널에서 쓰는 번호(event.keyCode)를 보여 준다.
+  // 누른 키는 앱 단축키로 넘기지 않는다(Esc는 가이드를 닫고, Tab은 초점을 옮긴다).
+  const keyCodeBlock = () => {
+    const box = element("div", "guide-keycode"),
+      pad = element("div", "guide-keycode-pad"),
+      number = element("strong", "guide-keycode-number", "?"),
+      detail = element("span", "guide-keycode-detail", "여기를 누르고 키를 눌러 보세요"),
+      line = element("code", "guide-keycode-line", "");
+    pad.tabIndex = 0;
+    pad.setAttribute("role", "textbox");
+    pad.setAttribute("aria-readonly", "true");
+    pad.setAttribute("aria-label", "키 코드 확인: 키를 누르면 번호를 알려 줍니다");
+    const status = element("span", "guide-keycode-status");
+    status.setAttribute("role", "status");
+    pad.append(number, detail);
+    let last = "";
+    const constName = event => {
+      const key = event.key;
+      if (/^[a-z0-9]$/i.test(key)) return `KEY_${key.toUpperCase()}`;
+      const named = { " ": "SPACE", ArrowLeft: "LEFT", ArrowRight: "RIGHT", ArrowUp: "UP", ArrowDown: "DOWN" };
+      if (named[key]) return `KEY_${named[key]}`;
+      return `KEY_${(event.code || key || "CODE")
+        .replace(/(Left|Right)$/, "")
+        .replace(/\W/g, "")
+        .toUpperCase()}`;
+    };
+    pad.addEventListener("keydown", event => {
+      if (event.isComposing) return;
+      const code = event.keyCode;
+      const name = event.key === " " ? "Space" : event.key;
+      number.textContent = String(code);
+      detail.textContent = `key "${name}" · code ${event.code || "-"}`;
+      last = code > 0 && code < 256 ? `const int ${constName(event)} = ${code};` : "";
+      line.textContent = last || "키보드 채널은 1~255 번호만 읽습니다";
+      status.textContent = `${name} 키의 번호는 ${code}입니다`;
+      if (event.key === "Escape" || event.key === "Tab") return;
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    const bar = element("div", "guide-keycode-bar");
+    bar.append(
+      line,
+      copyButton(() => last || line.textContent)
+    );
+    box.append(pad, bar, status);
+    return box;
+  };
   const renderBlock = block => {
     if (block.library) return renderLibrary();
     if (block.reference) return renderReference();
@@ -874,6 +923,7 @@ const mount = ({ studio, gallery }) => {
       wrap.append(table);
       return wrap;
     }
+    if (block.keycode) return keyCodeBlock();
     if (block.keys) {
       const list = element("div", "guide-keys");
       for (const [label, key] of block.keys) list.append(element("span", "", label), element("kbd", "", key));
@@ -1074,6 +1124,7 @@ const mount = ({ studio, gallery }) => {
         ...(b.list || b.steps || b.try || []),
         ...(b.table ? b.table.rows.flat() : []),
         ...(b.keys ? b.keys.flat() : []),
+        ...(b.keycode ? ["키 코드 확인 keyCode 키 번호"] : []),
         ...(b.library ? Snippets.ALL.flatMap(item => [item.title, item.desc, item.code]) : []),
         ...(b.reference ? Reference.ALL.flatMap(item => [item.name, item.sig, item.desc, item.c, item.ex]) : []),
       ]),

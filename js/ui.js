@@ -40,7 +40,7 @@ const mount = (renderer, input, settings) => {
       throw new Error(`${type}은 true/false 또는 1/0으로 입력하세요.`);
     return raw.toLowerCase() === "true" || raw === "1";
   };
-  // 카메라 조작 등으로 생긴 0.5239193476851991 같은 값은 소수부를 줄여 보이되, 정수부 자릿수는 절대 버리지 않는다
+  // 슬라이더·외부 JS로 생긴 0.5239193476851991 같은 값은 소수부를 줄여 보이되, 정수부 자릿수는 절대 버리지 않는다
   // (예전처럼 유효숫자 6자리로 자르면 123456.789가 123457로 바뀌어 보였다). 전체 값은 title로 확인할 수 있다.
   const displayNumber = value => {
     if (typeof value !== "number" || !Number.isFinite(value) || Number.isInteger(value)) return String(value);
@@ -665,7 +665,6 @@ const mount = (renderer, input, settings) => {
       showError(`전체화면 전환 실패: ${error.message}`);
     }
   };
-  listen($("cameraReset"), "click", () => input.resetCamera());
   listen($("panelClose"), "click", togglePanel);
   // 가이드(guide.js)가 있으면 그쪽에서 목록을 채운 뒤 연다. <dialog>의 toggle 이벤트는 구형 브라우저에서 발생하지 않으므로 그것에 기대지 않는다.
   const helpDialog = $("quickHelp"),
@@ -758,15 +757,6 @@ const mount = (renderer, input, settings) => {
   syncPanel();
   const updateStats = () => {
     const s = renderer.getStats();
-    const camera = !!input.getCamera();
-    $("cameraReset").disabled = !camera;
-    $("stageHint").textContent = camera ? "드래그 회전 · 휠 확대 · E 편집기" : "E 편집기 열기 · / 파라미터 찾기";
-    setText(
-      "cameraStatus",
-      camera
-        ? "Orbit 카메라 활성 · 드래그와 휠로 조작할 수 있습니다."
-        : "Orbit 카메라 비활성 · 현재 프로젝트는 일반 입력만 사용합니다."
-    );
     const storage = settings.status();
     setText("storageStatus", storage.message);
     $("storageStatus").classList.toggle("unavailable", !storage.available);

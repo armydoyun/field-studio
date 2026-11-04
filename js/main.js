@@ -55,7 +55,7 @@ const initialize = async () => {
       status.textContent = message;
       if (message) console.warn(message);
     });
-    input = Input.mount(canvas, renderer, Shader.orbitHome); // 카메라 Uniform은 Ray Marching 예제가 등록할 때만 사용한다.
+    input = Input.mount(canvas, renderer);
     settings = Settings.mount(renderer);
     settings.load(); // 저장 설정의 사용자 Uniform 복원
     await renderer.restoreTextures(); // 프로젝트 채널 연결을 복원하기 전에 이미지 파일을 복구한다.

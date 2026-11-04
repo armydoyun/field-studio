@@ -119,7 +119,7 @@ async function main(){
   });
   await test('Ray starter compiles new scene instead of injecting into old scene',()=>{
     const f=fixture();try{const old=src.replace('out vec4','uniform float uRMMaxSteps;\nout vec4');assert(f.studio.setProject(scene(old)));
-      assert.equal(f.studio.exampleRaymarch(),true);assert.equal(f.renderer.getFragmentSource(),f.shader.raymarch);assert.equal(f.renderer.getUserUniforms().length,6);
+      assert.equal(f.studio.exampleRaymarch(),true);assert.equal(f.renderer.getFragmentSource(),f.shader.raymarch);assert.equal(f.renderer.getUserUniforms().length,5);
     }finally{f.dispose();}
   });
   await test('Failed Ray starter preserves project and user Uniform registry',()=>{

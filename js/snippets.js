@@ -1395,16 +1395,6 @@ mat3 rotY(float a) { float c = cos(a), s = sin(a); return mat3(c, 0, -s, 0, 1, 0
 mat3 rotZ(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0, -s, c, 0, 0, 0, 1); }`,
       },
       {
-        id: "orbitCamera",
-        title: "마우스 궤도 카메라",
-        desc: "마우스 x = 방위각, y = 높이로 원점을 도는 카메라 위치 (uMouse 필요, 밖이면 자동 회전)",
-        scope: "main",
-        code: `vec2 m = uMouse.x < 0.0 ? vec2(0.5 + 0.05 * uTime, 0.35) : uMouse.xy / uResolution;
-float yaw = m.x * 6.2831853, pitch = mix(-0.2, 1.3, m.y), dist = 4.0;
-vec3 ro = dist * vec3(cos(pitch) * sin(yaw), sin(pitch), cos(pitch) * cos(yaw));
-vec3 ta = vec3(0.0);`,
-      },
-      {
         id: "kaleido",
         title: "만화경 접기",
         desc: "각도를 n조각으로 접고 반사 — 모든 조각이 거울처럼 이어짐",
