@@ -5,15 +5,18 @@
 // 코드가 읽는 채널은 진하게, 읽지 않는 채널은 흐리게 두고, "읽는데 비어 있음 / 연결했는데 안 읽음"은 경고 점으로 알린다.
 // 연결 규칙(current는 앞선 패스만)은 project-model.js가 정하고, 바뀐 연결을 적용하는 일은 studio.js가 한다.
 
-// 값 형식(이전 select와 같음): "" 연결 없음 · "tex:<id>" 이미지 · "<버퍼>:<current|previous>[:<출력>]"
+// 값 형식(이전 select와 같음): "" 연결 없음 · "tex:<id>" 이미지 · "keyboard" 키보드 · "<버퍼>:<current|previous>[:<출력>]"
 const valueOf = ref =>
   !ref
     ? ""
-    : ref.texture
-      ? `tex:${ref.texture}`
-      : `${ref.buffer}:${ref.frame}${ref.attachment ? `:${ref.attachment}` : ""}`;
+    : ref.keyboard
+      ? "keyboard"
+      : ref.texture
+        ? `tex:${ref.texture}`
+        : `${ref.buffer}:${ref.frame}${ref.attachment ? `:${ref.attachment}` : ""}`;
 const refOf = value => {
   if (!value) return null;
+  if (value === "keyboard") return { keyboard: true };
   if (value.startsWith("tex:")) return { texture: value.slice(4) };
   const [buffer, frame, att] = value.split(":");
   return att ? { buffer, frame, attachment: Number(att) } : { buffer, frame };
@@ -48,6 +51,7 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
 
   const short = ref => {
     if (!ref) return { badge: "＋", tag: "", kind: "empty" };
+    if (ref.keyboard) return { badge: "⌨", tag: "키보드", kind: "keyboard" };
     if (ref.texture) {
       const asset = state.assets.find(item => item.id === ref.texture);
       return { badge: "", tag: asset?.name || "없는 이미지", kind: asset ? "image" : "missing" };
@@ -213,6 +217,8 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
       })
     );
     images.push(button("load", "이미지 불러오기…", { className: "channel-load glyph-icon icon-plus" }));
+    // 입력: 키보드(쉐이더토이 호환 256×3 텍스처). 뷰포트를 클릭하면 키가 셰이더로 간다.
+    const inputs = [button("keyboard", "키보드", { pressed: current === "keyboard", className: "channel-keyboard" })];
     const clear = button("", "연결 해제", { disabled: !ref, className: "channel-clear" });
     const sections = [
       head,
@@ -225,6 +231,7 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
           : ""
       ),
       group("이미지", images),
+      group("입력", inputs, "키 상태 256×3: x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글"),
       clear,
     ];
     picker.replaceChildren(...sections);

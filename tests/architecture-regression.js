@@ -101,7 +101,7 @@ async function main(){
     return {...store,onLost:()=>{texEvents.lost++;store.onLost();},restore:()=>{texEvents.restore++;store.restore();},
       dispose:()=>{texEvents.dispose++;store.dispose();}};
   }};
-  vm.runInNewContext(rendererSource,{define:(deps,fac)=>Renderer=fac(PM,textureModule,load("gpu-diagnostics")),document:doc,window:{devicePixelRatio:1},
+  vm.runInNewContext(rendererSource,{define:(deps,fac)=>Renderer=fac(PM,textureModule,load("gpu-diagnostics"),load("keyboard-input")),document:doc,window:{devicePixelRatio:1},
     console,requestAnimationFrame:cb=>{raf.push(cb);return raf.length;},cancelAnimationFrame:()=>{},ImageData:fakeImageData,
     Uint8Array,Uint8ClampedArray,Float32Array,Blob,Map,Set,Object,Array,Number,Math,Error,TypeError,RangeError},
     {filename:"renderer.js"});

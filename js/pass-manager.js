@@ -50,7 +50,8 @@ const makeLocations = (gl, program) => {
   result.channelResolution = [0, 1, 2, 3].map(i => gl.getUniformLocation(program, `iChannelResolution[${i}]`));
   return result;
 };
-const createPassManager = (gl, createProgram, textureStore) => {
+// keyboard(선택): keyboard-input.js의 create(gl) 결과. 채널 {keyboard:true}가 이 텍스처를 읽는다.
+const createPassManager = (gl, createProgram, textureStore, keyboard = null) => {
   let passes = [],
     imageChannels = {},
     preview = null,
@@ -102,6 +103,11 @@ const createPassManager = (gl, createProgram, textureStore) => {
       if (typeof ref.texture === "string" && Object.keys(ref).length === 1) {
         if (!textureStore.get(ref.texture)) throw new Error(`존재하지 않는 이미지: ${ref.texture}`);
         result[key] = { texture: ref.texture };
+        continue;
+      }
+      if (ref.keyboard === true && Object.keys(ref).length === 1) {
+        if (!keyboard) throw new Error("키보드 입력을 쓸 수 없는 렌더러입니다.");
+        result[key] = { keyboard: true };
         continue;
       }
       if (!validName(ref.buffer) || !["current", "previous"].includes(ref.frame))
@@ -468,7 +474,11 @@ const createPassManager = (gl, createProgram, textureStore) => {
       let texture = null,
         width = 0,
         height = 0;
-      if (ref?.texture) {
+      if (ref?.keyboard) {
+        texture = keyboard.texture();
+        width = keyboard.width;
+        height = keyboard.height;
+      } else if (ref?.texture) {
         const asset = textureStore.get(ref.texture);
         if (asset) {
           texture = asset.tex;
@@ -765,6 +775,11 @@ void main(){
     resetTargets,
     getPasses,
     getImageChannels,
+    // 지금 실행 중인 구성에 키보드 입력을 읽는 채널이 있는지(input.js가 키를 셰이더에 넘길지 정한다)
+    usesKeyboard: () =>
+      [imageChannels, ...passes.map(pass => pass.channels)].some(channels =>
+        Object.values(channels || {}).some(ref => ref?.keyboard)
+      ),
     getPreview,
     getMemoryBytes,
     getReflection,
