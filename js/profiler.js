@@ -39,7 +39,7 @@
         if(!started) return; ctx.strokeStyle = stroke; ctx.lineWidth = 1.5 * dpr; ctx.lineJoin = "round"; ctx.stroke();
         if(fill) { ctx.lineTo(lastX, height); ctx.lineTo(firstX, height); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
       };
-      plot(series.frame, "#ffffff59"); plot(series.cpu, "#6fe0e6"); plot(series.gpu, color("--accent"), "#8f86ff26");
+      plot(series.frame, color("--faint")); plot(series.cpu, color("--syn-builtin")); plot(series.gpu, color("--accent"), color("--accent-soft"));
       ctx.fillStyle = color("--faint"); ctx.textAlign = "right"; ctx.textBaseline = "top"; ctx.fillText(`${Math.round(max)}ms`, width - 4 * dpr, 2 * dpr); ctx.textAlign = "left";
     };
     const renderKpis = stats => {

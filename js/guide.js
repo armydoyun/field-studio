@@ -55,13 +55,13 @@ void main() {
     vec3 color = 0.5 + 0.5 * cos(uTime + uv.xyx + vec3(0, 2, 4));
     fragColor = vec4(color, 1.0);
 }`, title:"가장 작은 셰이더", insert:"replace"},
-      {list:["**자동**이 켜져 있으면 입력을 멈춘 뒤 0.9초에 자동 적용, 꺼져 있으면 **▶ 실행**(`Ctrl+Enter`/`Ctrl+S`)으로 적용합니다.",
+      {list:["**자동**이 켜져 있으면 입력을 멈춘 뒤 0.9초에 자동 적용, 꺼져 있으면 **실행**(`Ctrl+Enter`/`Ctrl+S`)으로 적용합니다.",
         "컴파일 오류는 해당 줄이 **빨간 띠**로 표시되고 줄 끝에 메시지가 나옵니다. 아래 목록을 누르면 그 줄로 이동합니다.",
         "오류가 있어도 화면은 마지막으로 성공한 결과를 유지합니다.",
         "`Ctrl+Space` 자동 완성, `Ctrl+F` 검색, `Ctrl+/` 주석, `Alt+↑↓` 줄 이동을 지원합니다."]},
       {heading:"편집기 화면"},
       {table:{head:["위치","내용"], rows:[
-        ["맨 위 줄","패스 탭과 **+**(버퍼 추가) · 되돌리기/다시 실행 · **자동** · **▶ 실행** · 재생/정지 · 시간 초기화 · 도구 서랍 · 집중 모드 · 닫기"],
+        ["맨 위 줄","패스 탭과 **+**(버퍼 추가) · 되돌리기/다시 실행 · **자동** · **실행** · 재생/정지 · 시간 초기화 · 도구 서랍 · 집중 모드 · 닫기"],
         ["버퍼 설정","Buffer 탭을 고르면 나타나는 한 줄 요약. 누르면 형식·크기·출력 수·필터·가장자리·밉맵과 순서·복제·삭제가 펼쳐집니다."],
         ["코드 머리줄","파일 이름과 실행 상태 · 함수 목록 · 검색 · 줄 이동 · 자동 완성 · 코드 조각 · **⋯ 메뉴**(찾아 바꾸기, 텍스처 코드 삽입, .frag 파일, 글자 크기·들여쓰기·줄바꿈, 배치, 도움말)"],
         ["맨 아래 줄","최근 메시지 · 브라우저 보관 상태 · 커서 위치"]]}},
@@ -414,7 +414,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       const titleOfTopic = id => navTitle(ALL.find(item => item.id === id));
       foot.append(at > 0 ? go(COURSE_ORDER[at - 1], `← ${titleOfTopic(COURSE_ORDER[at - 1])}`, "guide-lesson-prev") : element("span"));
       if(topic.step) {
-        const finished = done.has(topic.id), mark = element("button", finished ? "guide-lesson-mark is-done" : "guide-lesson-mark", finished ? "✓ 완료함" : "완료로 표시");
+        const finished = done.has(topic.id), mark = element("button", finished ? "guide-lesson-mark is-done" : "guide-lesson-mark", finished ? "완료함" : "완료로 표시");
         mark.type = "button"; mark.setAttribute("aria-pressed", String(finished));
         mark.addEventListener("click", () => { if(done.has(topic.id)) done.delete(topic.id); else done.add(topic.id); saveDone(); markNav(); const fresh = lessonFoot(topic); foot.replaceWith(fresh); fresh.querySelector(".guide-lesson-mark")?.focus(); });
         foot.append(mark);

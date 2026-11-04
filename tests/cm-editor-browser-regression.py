@@ -122,8 +122,8 @@ with sync_playwright() as p:
     page.keyboard.press('Shift+Tab');check('    float a = 1;\n    float b = 2;' in val(),'Shift+Tab outdents them again')
     load(SRC2);at=SRC2.index('float a = 1;')+len('float a');place(at);page.keyboard.press('Tab')   # 4칸 들여쓴 줄의 11번째 칸 → 다음 탭 위치(12)까지
     check('\n    float a  = 1;' in val() and sel()==[at+1,at+1],'Tab with a single caret inserts spaces up to the next tab stop instead of indenting the line')
-    load(SRC2);at=SRC2.index('float a = 1;')+4;place(at,at+5);page.keyboard.press('Tab')
-    check('        a = 1;' in val() and sel()==[at+4,at+4],'Tab over a selection inside one line replaces it with spaces')
+    load(SRC2);at=SRC2.index('float a = 1;');place(at,at+5);page.keyboard.press('Tab')   # 4번째 칸의 "float" → 다음 탭 위치(8)까지 공백
+    check('\n         a = 1;' in val() and sel()==[at+4,at+4],'Tab over a selection inside one line replaces it with spaces')
     place(SRC2.index('float a'));page.keyboard.press('Control+/');check('    // float a = 1;' in val(),'Ctrl+/ comments the line')
     page.keyboard.press('Control+/');check('    float a = 1;' in val() and '// float a' not in val(),'Ctrl+/ again uncomments it')
     page.keyboard.press('Alt+ArrowDown');check(val().index('float b = 2;')<val().index('float a = 1;'),'Alt+↓ moves the line down')
@@ -136,7 +136,8 @@ with sync_playwright() as p:
     place(SRC2.index('float a'));js("document.getElementById('studioFunctions').click()");wait()
     rows=js("[...document.querySelectorAll('.studio-palette-list button')].map(b=>b.textContent)")
     check(page.is_visible('.studio-palette') and js("document.querySelector('.studio-palette-input').value")=='@','the breadcrumb opens the @ symbol palette')
-    check(rows[0].startswith('Ofrag') and rows[1].startswith('ƒwave') and rows[2].startswith('ƒmain'),f'symbols are listed in document order with kind icons: {rows}')
+    kinds=js("[...document.querySelectorAll('.studio-palette-list button')].map(b=>b.querySelector('.palette-kind')?.className||'')")
+    check(rows[0].startswith('frag') and rows[1].startswith('wave') and rows[2].startswith('main') and 'is-output' in kinds[0] and 'is-function' in kinds[1] and 'is-function' in kinds[2],f'symbols are listed in document order with kind icons: {rows} {kinds}')
     check('main' in js("document.querySelector('.studio-palette-list .is-selected').textContent"),'the current function is preselected')
     page.keyboard.press('ArrowUp');wait()
     check(sel()==[SRC2.index('wave('),SRC2.index('wave(')+4],'moving through the list previews the symbol in the editor')

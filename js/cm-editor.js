@@ -156,22 +156,22 @@ import * as Features from "./cm-glsl-features.js";
       if(!symbols || !crumbName) return; const current = functionAt(state.selection.main.head);
       const text = current ? `${current.name}()` : functionRanges.length ? `함수 ${functionRanges.length}개` : "함수 없음";
       if(crumbName.textContent !== text) crumbName.textContent = text;
-      symbols.classList.toggle("is-inside", !!current); if(crumbKind) crumbKind.textContent = current ? "ƒ" : "≡";
+      symbols.classList.toggle("is-inside", !!current); if(crumbKind) crumbKind.dataset.kind = current ? "function" : "list";
       symbols.title = current ? `지금 ${current.name}() 안 · 눌러서 함수·변수로 이동 (Ctrl+Shift+O)` : "함수·변수로 이동 (Ctrl+Shift+O)";
     };
     const editorTheme = CM.EditorView.theme({
-      "&":{height:"100%", backgroundColor:"var(--sunken)", color:"#d6dbe8"},
+      "&":{height:"100%", backgroundColor:"var(--sunken)", color:"var(--code-text)"},
       ".cm-scroller":{fontFamily:"var(--mono)", lineHeight:"1.65"},
       ".cm-content":{padding:"12px 0", caretColor:"var(--text)"},
       ".cm-gutters":{backgroundColor:"var(--sunken)", color:"var(--faint)", border:"none", borderRight:"1px solid var(--line)"},
-      ".cm-activeLine":{backgroundColor:"#ffffff07"}, ".cm-activeLineGutter":{backgroundColor:"#ffffff07", color:"var(--text-soft)"},
+      ".cm-activeLine":{backgroundColor:"var(--active-line)"}, ".cm-activeLineGutter":{backgroundColor:"var(--active-line)", color:"var(--text-soft)"},
       "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":{backgroundColor:"color-mix(in srgb, var(--accent) 34%, transparent) !important"},
       ".cm-cursor, .cm-dropCursor":{borderLeftColor:"var(--text)"},
       "&.cm-focused .cm-matchingBracket":{backgroundColor:"color-mix(in srgb, var(--accent) 22%, transparent)", outline:"1px solid color-mix(in srgb, var(--accent) 70%, transparent)"},
-      ".cm-selectionMatch":{backgroundColor:"#6fe0e620"},
-      ".cm-searchMatch":{backgroundColor:"#f3c46e2e", outline:"1px solid #f3c46e55"}, ".cm-searchMatch.cm-searchMatch-selected":{backgroundColor:"#f3c46e66"},
+      ".cm-selectionMatch":{backgroundColor:"color-mix(in srgb, var(--syn-builtin) 16%, transparent)"},
+      ".cm-searchMatch":{backgroundColor:"color-mix(in srgb, var(--warning) 20%, transparent)", outline:"1px solid color-mix(in srgb, var(--warning) 40%, transparent)"}, ".cm-searchMatch.cm-searchMatch-selected":{backgroundColor:"color-mix(in srgb, var(--warning) 40%, transparent)"},
       ".cm-panels":{backgroundColor:"var(--elevated)", color:"var(--text-soft)"}, ".cm-panels.cm-panels-top":{borderBottom:"1px solid var(--line)"},
-      ".cm-tooltip":{backgroundColor:"var(--elevated)", border:"1px solid var(--line-strong)", borderRadius:"8px", color:"var(--text-soft)"},
+      ".cm-tooltip":{backgroundColor:"var(--elevated)", border:"1px solid var(--line-strong)", borderRadius:"6px", color:"var(--text-soft)"},
       ".cm-tooltip-autocomplete > ul > li[aria-selected]":{backgroundColor:"var(--accent-soft)", color:"var(--text)"},
       ".cm-foldPlaceholder":{backgroundColor:"var(--surface)", border:"1px solid var(--line-strong)", color:"var(--muted)"}
     }, {dark:true});
@@ -342,11 +342,12 @@ import * as Features from "./cm-glsl-features.js";
       const entries = paletteEntries(), items = Array.isArray(entries) ? entries : entries.items, query = Array.isArray(entries) ? "" : entries.query;
       paletteItems = query ? items.map(item => ({item, m:fuzzy(item.label, query)})).filter(x => x.m).sort((a, b) => b.m.score - a.m.score).map(x => x.item) : items;
       paletteChoice = Math.min(paletteChoice, Math.max(0, paletteItems.length - 1));
-      const KIND_ICON = {function:"ƒ", struct:"S", uniform:"U", output:"O", define:"#"}, KIND_LABEL = {function:"함수", struct:"구조체", uniform:"uniform", output:"출력", define:"#define"};
+      // 종류 아이콘은 CSS(.palette-kind.is-*)가 SVG 마스크로 그린다. 글자는 넣지 않고 종류 이름은 title로 알린다.
+      const KIND_LABEL = {function:"함수", struct:"구조체", uniform:"uniform", output:"출력", define:"#define"};
       paletteList.replaceChildren(...paletteItems.map((item, i) => {
         const button = document.createElement("button"); button.type = "button"; button.dataset.index = i; button.className = `${i === paletteChoice ? "is-selected" : ""}${item.kind ? " has-kind" : ""}`.trim(); button.setAttribute("role", "option");
         button.setAttribute("aria-selected", String(i === paletteChoice));
-        if(item.kind) { const kind = document.createElement("span"); kind.className = `palette-kind is-${item.kind}`; kind.textContent = KIND_ICON[item.kind]; kind.title = KIND_LABEL[item.kind]; button.append(kind); }
+        if(item.kind) { const kind = document.createElement("span"); kind.className = `palette-kind is-${item.kind}`; kind.setAttribute("aria-hidden", "true"); kind.title = KIND_LABEL[item.kind]; button.append(kind); }
         const label = document.createElement("span"); label.textContent = item.label; const hint = document.createElement("span"); hint.className = "palette-hint"; hint.textContent = item.hint || "";
         button.append(label, hint); return button;
       }));

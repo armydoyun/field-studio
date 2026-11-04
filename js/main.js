@@ -10,6 +10,10 @@ import * as Gallery from "./gallery.js";
 import * as Guide from "./guide.js";
 import * as Reference from "./glsl-reference.js";
 import * as Snippets from "./snippets.js";
+import * as Theme from "./theme.js";
+
+  // 테마는 WebGL 초기화와 무관하게 먼저 연결한다(렌더러가 실패해도 화면 테마 전환은 동작해야 한다).
+  window.shaderTheme = Theme.mount();
 
   // 편집기 시그니처 힌트용 사전: "sin · cos · tan", "atan (2인수)"처럼 묶인 항목을 함수 이름별로 펼치고 같은 이름은 합친다.
   const builtinDocs = new Map();
