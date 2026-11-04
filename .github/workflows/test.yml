@@ -36,3 +36,13 @@ jobs:
       # node · browser(콘솔 테스트 + GPU 검사) · py 세 묶음. --strict: 준비 안 된 묶음도 실패로 친다.
       - name: Run all tests
         run: npm run test:ci
+
+      # 테스트가 모두 통과하면 한 파일짜리 배포본을 만들어 실행 페이지의 Artifacts에 올린다.
+      - name: Build single-file deploy
+        run: npm run build
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: field-studio-deploy
+          path: deploy/index.html
+          if-no-files-found: error

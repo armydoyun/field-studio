@@ -1,11 +1,12 @@
 {
   "name": "field-studio",
   "private": true,
-  "description": "WebGL2 셰이더 스튜디오 — 개발·테스트 도구 정의(앱 자체는 의존성 없음)",
+  "description": "WebGL2 셰이더 스튜디오 — 빌드·테스트 도구 정의(앱 자체는 의존성 없음)",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
+    "build": "node tools/build.mjs",
     "test": "node tests/run.mjs",
     "test:node": "node tests/run.mjs node",
     "test:browser": "node tests/run.mjs browser",
@@ -14,6 +15,7 @@
     "test:ci": "node tests/run.mjs --strict"
   },
   "devDependencies": {
+    "esbuild": "0.24.2",
     "playwright": "1.48.2"
   }
 }

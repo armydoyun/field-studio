@@ -1,6 +1,6 @@
 // npm install && npm run build  →  ../../js/codemirror.js
 // esbuild로 IIFE 하나를 만든 뒤, 앱의 정적 ES Module 형식(맨 끝 `export { … };`)으로 감싼다.
-// tools/build_deploy.py와 테스트 하네스는 이 형식만 읽는다.
+// 테스트 하네스(esm-vm-bridge · esm_for_browser)는 이 형식만 읽는다. 배포본은 tools/build.mjs가 esbuild로 다시 묶는다.
 import {build} from "esbuild";
 import {readFileSync, writeFileSync} from "node:fs";
 const names = [...readFileSync(new URL("./entry.js", import.meta.url), "utf8").matchAll(/export \{([^}]+)\}/g)].flatMap(m => m[1].split(",").map(s => s.trim()).filter(Boolean));

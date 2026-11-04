@@ -4,7 +4,7 @@ WebGL2 / GLSL ES 3.00 기반 Shader Art Studio. 개발 소스는 **표준 JavaSc
 
 ## 개발용 실행 (`index.html`)
 
-개발 소스 10개는 `import` / `export`로 연결되며 `js/loader.js`와 AMD `define()`은 제거되었습니다.
+개발 소스(`js/*.js`)는 `import` / `export`로 연결되며 `js/loader.js`와 AMD `define()`은 제거되었습니다.
 
 **주의:** Chrome/Edge에서 ES Module의 `file://` 상대 import는 CORS 정책으로 차단될 수 있습니다. 인터넷은 필요 없지만, 로컬 HTTP 서버로 열어야 합니다.
 
@@ -18,15 +18,20 @@ Windows Python Launcher라면 `py -m http.server 8000`도 됩니다. 브라우�
 
 ## 오프라인 배포 (`deploy/index.html`)
 
-`deploy/`에는 `index.html`, `style.css`, `js/min.js` 세 파일만 있습니다. `deploy/index.html`은 `file://`에서 일반 `<script>` 하나로 실행됩니다. **배포 대상에서는 Python, npm, 서버가 필요하지 않습니다.**
+배포본은 **`deploy/index.html` 파일 하나**입니다. HTML 안에 압축된 CSS(`<style>`)와 JS(`<script>`)가 모두 들어 있어, 파일을 더블클릭해 `file://`로 열어도 동작하고 메일·메신저로 그대로 보낼 수 있습니다. **배포 대상에서는 Python, npm, 서버, 인터넷이 필요하지 않습니다.**
 
-ESM 소스를 고친 다음에는 개발 컴퓨터에서 아래 명령으로 번들을 다시 생성합니다. Python 표준 라이브러리만 사용합니다.
+소스를 고친 다음에는 개발 컴퓨터에서 다시 만듭니다.
 
 ```shell
-python tools/build_deploy.py
+npm install      # 처음 한 번 (esbuild)
+npm run build    # → deploy/index.html
 ```
 
-이 번들러는 프로젝트의 현재 정적 ES Module 구문에 한정됩니다. 지원하지 않는 import/export 구문에서는 조용히 손실된 번들을 만들지 않고 오류를 냅니다. JS 문법 수준의 정교한 압축·트리셰이킹 도구는 아니며, 변수명 단축까지 원한다면 esbuild 같은 전문 번들러를 별도 이용할 수 있습니다. `min.js`는 기존 배포본과 이름을 맞추기 위한 것이고 완전한 미니파이 결과는 아닙니다.
+- `tools/build.mjs`가 esbuild로 `js/main.js`부터 import를 따라 모든 모듈을 묶고 압축한 뒤, `tools/inline-html.mjs`가 `index.html`의 `<link>`·`<script type="module">` 자리에 넣습니다. 모듈 목록을 따로 관리하지 않습니다.
+- 예전 3파일 배포본(`deploy/style.css`, `deploy/js/min.js`)이 남아 있으면 빌드가 지웁니다.
+- GitHub Actions는 테스트가 통과하면 같은 빌드를 만들어 실행 페이지의 **Artifacts → field-studio-deploy**에 올립니다. 셸이 없는 환경에서도 거기서 받으면 됩니다.
+- `tests/build-regression.js`가 임시 폴더에 빌드해 보고, 만든 파일을 `file://`로 Chromium에서 열어 앱이 오류·네트워크 요청 없이 뜨는지 확인합니다.
+- `python tools/build_deploy.py`(예전 Python 번들러)는 더 이상 쓰지 않습니다.
 
 ## 프로젝트 구조
 
@@ -57,17 +62,17 @@ js/
   shader.js
   package.json        # Node.js 검증을 위한 ESM 지정
   (loader.js 제거됨)
-tools/build_deploy.py # 순수 Python 배포 번들 생성기
-tools/codemirror/     # js/codemirror.js 생성 도구 (npm은 이 파일을 다시 만들 때만 필요)
+tools/build.mjs       # npm run build: esbuild로 묶어 한 파일짜리 배포본 생성
+tools/inline-html.mjs # index.html에 CSS·JS를 넣는 순수 함수(빌드와 검사가 같이 씀)
+tools/codemirror/     # js/codemirror.js 생성 도구 (이 파일을 다시 만들 때만 필요)
 tools/update_sha_manifest.py # 실행 소스 SHA-256 목록 갱신
-deploy/index.html      # file:// 오프라인 실행 가능
-deploy/style.css
-deploy/js/min.js
+tests/run.mjs         # npm test: 모든 테스트 실행기
+deploy/index.html     # 한 파일짜리 오프라인 배포본 (npm run build가 생성, file://로 실행)
 ```
 
 ## 검증
 
-모든 테스트는 `tests/run.mjs` 하나로 돌립니다. 앱 자체는 여전히 의존성이 없고, `package.json`·`requirements-test.txt`는 테스트 도구만 정의합니다.
+모든 테스트는 `tests/run.mjs` 하나로 돌립니다. 앱 자체는 여전히 의존성이 없고, `package.json`·`requirements-test.txt`는 빌드·테스트 도구만 정의합니다.
 
 ```shell
 npm install                                   # playwright (browser 묶음용)
