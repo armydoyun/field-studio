@@ -334,13 +334,14 @@ layout(location = 1) out vec4 outData;`,
   },
   {
     id: "inputs",
-    title: "이미지 입력",
-    summary: "PNG·JPEG·WebP를 채널에 연결",
+    title: "이미지 · 키보드 입력",
+    summary: "이미지 파일과 키보드를 채널에 연결",
     blocks: [
+      { heading: "이미지" },
       {
         list: [
-          "편집기 도구의 **이미지** 그룹에서 파일을 불러오면 현재 패스의 빈 채널에 자동 연결됩니다(편집기에 끌어다 놓기도 가능).",
-          "이미지마다 Filter(Linear/Nearest)와 Wrap(Clamp/Repeat/Mirror)을 설정합니다.",
+          "편집기 입력 줄의 채널 칩을 눌러 **이미지 불러오기…**를 고르면 그 채널에 바로 연결됩니다. 이미지 파일을 칩에 끌어다 놓아도 됩니다. 편집기 아무 곳에나 놓으면 첫 빈 채널에 연결됩니다.",
+          "불러온 이미지 목록과 Filter(Linear/Nearest)·Wrap(Clamp/Repeat/Mirror) 설정은 **프로젝트 메뉴**(Ctrl+O)의 이미지에 있습니다.",
           "이미지는 브라우저(IndexedDB)에 보관되어 새로고침 후에도 복원됩니다. 다른 컴퓨터로 옮길 때는 **전체 프로젝트 저장(Pack)**을 사용하세요.",
         ],
       },
@@ -348,6 +349,37 @@ layout(location = 1) out vec4 outData;`,
         code: `vec4 tex   = texture(iChannel0, gl_FragCoord.xy / uResolution);           // 화면에 맞춰 늘림
 vec4 texel = texelFetch(iChannel0, ivec2(gl_FragCoord.xy), 0);              // 픽셀 정확히`,
         title: "텍스처 읽기 두 가지",
+        insert: "cursor",
+      },
+      { heading: "키보드" },
+      {
+        p: "채널 칩의 **입력 › 키보드**를 고르면 그 채널로 쉐이더토이와 같은 키 상태 텍스처(256×3)가 들어옵니다. x는 JavaScript 키 코드(A=65, ←=37, Space=32), y는 어떤 상태인지입니다.",
+      },
+      {
+        table: {
+          head: ["y", "값이 1인 때", "쓰임"],
+          rows: [
+            ["0", "지금 누르고 있음", "이동처럼 누르는 동안 계속"],
+            ["1", "이번 프레임에 눌림(한 프레임만)", "점프·발사처럼 한 번"],
+            ["2", "누를 때마다 켜짐/꺼짐", "모드 전환"],
+          ],
+        },
+      },
+      {
+        list: [
+          "**뷰포트를 클릭해 포커스를 주면** 키가 셰이더로 갑니다. 화면 위쪽에 '키보드 입력 중'이 표시됩니다.",
+          "이 동안에는 E·X·H·F·Space 같은 한 글자 단축키와 카메라 키가 셰이더에 양보합니다. **Esc**로 빠져나오면 단축키가 돌아옵니다. Ctrl 조합(Ctrl+O 등)은 그대로 동작합니다.",
+          "키를 쌓아 쓰는 상태(위치·점수)는 버퍼에 저장하세요. 예제 갤러리의 **Keyboard Control**이 버퍼에 점의 위치를 저장하는 예입니다.",
+          "키보드 연결이 들어간 프로젝트는 이 기능이 없는 예전 버전에서 열리지 않을 수 있습니다.",
+        ],
+      },
+      {
+        code: `uniform sampler2D iChannel1;   // 키보드 연결
+const int KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40, KEY_SPACE = 32;
+bool keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x > 0.5; }
+bool keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x > 0.5; }
+bool keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x > 0.5; }`,
+        title: "키 읽기",
         insert: "cursor",
       },
     ],

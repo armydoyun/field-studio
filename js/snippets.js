@@ -1998,6 +1998,15 @@ vec4 history = uFrame == 0 ? vec4(0.0) : texture(iChannel0, uv);
 fragColor = mix(history, newColor, 0.1);   // newColor를 천천히 누적`,
       },
       {
+        id: "keyboard",
+        title: "키보드 읽기",
+        desc: "채널에 키보드를 연결하고 kb로 넘긴다. k = 키 코드(A=65, ←=37, Space=32). 누름 · 이번 프레임에 눌림 · 토글",
+        code: `const int KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40, KEY_SPACE = 32;
+bool keyDown(sampler2D kb, int k)    { return texelFetch(kb, ivec2(k, 0), 0).x > 0.5; }
+bool keyPressed(sampler2D kb, int k) { return texelFetch(kb, ivec2(k, 1), 0).x > 0.5; }
+bool keyToggled(sampler2D kb, int k) { return texelFetch(kb, ivec2(k, 2), 0).x > 0.5; }`,
+      },
+      {
         id: "texelNeighbors",
         title: "이웃 픽셀 읽기",
         desc: "상하좌우 텍셀을 정확히 읽기 (시뮬레이션·엣지 검출)",

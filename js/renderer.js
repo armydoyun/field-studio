@@ -3,6 +3,7 @@
 import * as PassManager from "./pass-manager.js";
 import * as TextureInput from "./texture-input.js";
 import * as Diagnostics from "./gpu-diagnostics.js";
+import * as Keyboard from "./keyboard-input.js";
 
 // 사용자 Uniform 타입 표. n: 성분 수, kind: f(float) i(int) u(uint) b(bool) m(행렬, column-major), fn: 배열 업로드 함수.
 // 새 타입은 이 표에 추가하면 검증·GLSL 자동 선언·업로드·UI가 함께 따라간다.
@@ -144,7 +145,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     }
   };
   const textureInput = TextureInput.createTextureInput(gl);
-  const passManager = PassManager.createPassManager(gl, source => compileFragment(source), textureInput);
+  // 키보드 입력 텍스처(쉐이더토이 호환 256×3). 키를 넘길지는 input.js가 정하고 setKey로 알려 준다.
+  const keyboard = Keyboard.create(gl);
+  const passManager = PassManager.createPassManager(gl, source => compileFragment(source), textureInput, keyboard);
   // 다음 프레임 예약을 취소한다. lastTime을 지워 재시작 첫 delta를 0으로 만든다.
   const cancelFrame = () => {
     if (frame) cancelAnimationFrame(frame);
@@ -321,6 +324,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       if (passManager.ensureTargets(gl.drawingBufferWidth, gl.drawingBufferHeight)) frameCount = 0;
       lastDelta = delta;
+      keyboard.upload();
       gl.bindVertexArray(vao);
       passManager.drawPasses(gl.drawingBufferWidth, gl.drawingBufferHeight, uploadGlobals, gpuTimer);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -339,6 +343,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       }
       gpuTimer.endFrame();
       clickPending = false;
+      keyboard.endFrame();
       const cpu = clock() - cpuStart;
       cpuMs = cpuMs ? cpuMs * 0.9 + cpu * 0.1 : cpu;
       if (delta > 0) frameMs = frameMs ? frameMs * 0.9 + delta * 100 : delta * 1000;
@@ -544,6 +549,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       gpuTimer.restore();
       textureInput.restore();
+      keyboard.restore();
       setFragment(fragmentSource);
       passManager.restore();
       reportMismatches();
@@ -576,6 +582,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!lost) {
       passManager.dispose();
       textureInput.dispose();
+      keyboard.dispose();
       if (program) gl.deleteProgram(program);
       if (vao) gl.deleteVertexArray(vao);
     }
@@ -855,6 +862,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     scheduleFrame();
     return result;
   };
+  // 키보드 입력: keyCode는 JavaScript 키 코드(1~255). 바뀌었으면 true.
+  const setKey = (keyCode, down) => !disposed && keyboard.setKey(keyCode, !!down);
+  const releaseKeys = () => keyboard.releaseAll();
+  const usesKeyboard = () => !disposed && passManager.usesKeyboard();
+  const readKey = (keyCode, row = 0) => keyboard.read(keyCode, row);
   const readPassPixel = (name, x, y, attachment = 0) => {
     if (disposed || lost) throw new Error("현재 픽셀을 읽을 수 없습니다.");
     return passManager.readPixel(name, x, y, attachment);
@@ -991,6 +1003,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     setPreviewPass,
     setPreviewOptions,
     readPassPixel,
+    setKey,
+    releaseKeys,
+    usesKeyboard,
+    readKey,
     captureBufferThumbnails,
     addTexture,
     removeTexture,

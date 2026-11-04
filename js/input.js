@@ -117,6 +117,37 @@ const mount = (canvas, renderer, home = [0, 0, 5]) => {
     }
     if (movementKeys.has(event.code) && readCamera()) event.preventDefault();
   };
+  // ---- 키보드 입력 채널 ----
+  // 뷰포트(stage·캔버스)에 포커스가 있고, 실행 중인 구성에 키보드 채널이 있을 때만 키를 셰이더에 넘긴다.
+  // 이때는 앱의 한 글자 단축키(E·X·H·G·F·R·Space·/)와 카메라 키가 셰이더에 양보한다: window의 capture 단계에서 먼저 받아 전파를 멈춘다.
+  // Ctrl·Cmd·Alt 조합(Ctrl+O 등)과 Tab은 앱에 남기고, Esc는 뷰포트에서 빠져나와 단축키를 되돌린다.
+  const hint = document.getElementById("keyboardHint");
+  const shaderKeys = () => !disposed && isStageActive() && !!renderer.usesKeyboard?.();
+  const syncHint = () => {
+    if (hint) hint.hidden = !shaderKeys();
+  };
+  const releaseShaderKeys = () => renderer.releaseKeys?.();
+  const onShaderKeyDown = event => {
+    if (event.isComposing || !shaderKeys()) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      releaseShaderKeys();
+      stage.blur?.();
+      syncHint();
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey || event.key === "Tab") return;
+    event.preventDefault();
+    event.stopPropagation();
+    renderer.setKey(event.keyCode, true);
+    syncHint();
+  };
+  const onShaderKeyUp = event => {
+    // 뗀 키는 포커스와 관계없이 항상 뗀다(눌린 채 남지 않게).
+    renderer.setKey?.(event.keyCode, false);
+    if (shaderKeys() && !event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation();
+  };
   const onKeyUp = event => {
     if (!keys.delete(event.code)) return;
     for (const callback of keyListeners) callback({ code: event.code, down: false, event });
@@ -171,12 +202,17 @@ const mount = (canvas, renderer, home = [0, 0, 5]) => {
   };
   const onVisibilityChange = () => {
     if (document.hidden) {
+      releaseShaderKeys();
       stopKeyboard();
       stopDrag();
     }
   };
   const onFocusOut = event => {
-    if (event.relatedTarget !== stage && event.relatedTarget !== canvas) stopKeyboard();
+    if (event.relatedTarget !== stage && event.relatedTarget !== canvas) {
+      stopKeyboard();
+      releaseShaderKeys();
+    }
+    queueMicrotask(syncHint);
   };
   listen(canvas, "pointerdown", onPointerDown);
   listen(canvas, "pointermove", onPointerMove);
@@ -184,9 +220,14 @@ const mount = (canvas, renderer, home = [0, 0, 5]) => {
   listen(canvas, "pointercancel", onPointerEnd);
   listen(canvas, "lostpointercapture", onPointerEnd);
   listen(canvas, "wheel", onWheel, { passive: false });
+  listen(window, "keydown", onShaderKeyDown, { capture: true });
+  listen(window, "keyup", onShaderKeyUp, { capture: true });
+  listen(stage, "focusin", syncHint);
   listen(document, "keydown", onKeyDown);
   listen(document, "keyup", onKeyUp);
   listen(window, "blur", () => {
+    releaseShaderKeys();
+    syncHint();
     stopKeyboard();
     stopDrag();
   });
@@ -203,6 +244,6 @@ const mount = (canvas, renderer, home = [0, 0, 5]) => {
     canvas.classList.remove("is-dragging");
     canvas.style.touchAction = "";
   };
-  return { isDown, onKey, onDrag, getCamera, setCamera, resetCamera, dispose };
+  return { isDown, onKey, onDrag, getCamera, setCamera, resetCamera, syncKeyboardHint: syncHint, dispose };
 };
 export { mount };

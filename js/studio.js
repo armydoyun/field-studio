@@ -380,20 +380,26 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const inputInfo = (ref, assets) =>
     !ref
       ? { source: "연결 안 함", frame: "입력 없음", help: "사용할 이미지나 버퍼를 선택하세요." }
-      : ref.texture
+      : ref.keyboard
         ? {
-            source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
-            frame: "이미지",
-            help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
+            source: "키보드",
+            frame: "입력",
+            help: "키 상태 텍스처(256×3). x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글. 뷰포트를 클릭하면 키가 셰이더로 갑니다.",
           }
-        : {
-            source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
-            frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
-            help:
-              ref.frame === "current"
-                ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
-                : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
-          };
+        : ref.texture
+          ? {
+              source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
+              frame: "이미지",
+              help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
+            }
+          : {
+              source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
+              frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
+              help:
+                ref.frame === "current"
+                  ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
+                  : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
+            };
   // 입력 채널 칩과 고르기 팝오버(channel-picker.js). 바뀐 연결은 여기서 초안에 넣고, 자동이면 바로 적용한다.
   const channelPicker = ChannelPicker.create({
     $,
