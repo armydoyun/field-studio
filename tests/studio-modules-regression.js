@@ -1,5 +1,5 @@
 // node tests/studio-modules-regression.js — studio.js에서 나눈 순수 모듈의 동작 검사(소스 문자열이 아니라 결과를 본다).
-//   project-model · code-insert · storage · studio-examples
+//   project-model · code-insert · storage · studio-examples · studio-pack · studio-layout
 'use strict';
 const path=require('node:path'),assert=require('node:assert/strict'),{pathToFileURL}=require('node:url');
 const root=path.resolve(__dirname,'..'),load=name=>import(pathToFileURL(path.join(root,'js',name+'.js')).href);
@@ -63,5 +63,48 @@ const pass=(name,channels={})=>({name,fragment:SRC,format:'rgba8',scale:1,channe
   check(E.pipelineProject()!==pipeline&&E.pipelineProject().passes!==pipeline.passes,'예제 프로젝트는 부를 때마다 새 객체(공유 상태 없음)');
   check(feedback.passes[1].channels[1].frame==='previous'&&M.validCurrent(feedback,'B','A'),'피드백 예제: B는 자기 자신을 previous로, A를 current로 읽는다');
   check(E.blank.startsWith('#version 300 es'),'새 버퍼의 시작 코드');
+
+  // ---- studio-pack ----
+  const P=await load('studio-pack');
+  const withImages={...M.copy(project),passes:[pass('A',{0:{texture:'img2'},1:{texture:'img1'}})],imageChannels:{0:{texture:'img1'}}};
+  check(M.same(P.textureIds(withImages),['img2','img1']),'textureIds: 연결된 이미지 ID, 중복 없이 나온 순서대로');
+  const png='data:image/png;base64,'+Buffer.from([137,80,78,71]).toString('base64');
+  const textures=[{id:'img1',name:'a.png',type:'image/png',data:png},{id:'img2',name:'b.png',type:'image/png',data:png,sampling:{filter:'nearest'}}];
+  const text=P.encode({project:withImages,selected:'A',textures});
+  let parsed=P.parse(text);
+  check(parsed.data.version===2&&!('settings' in parsed.data)&&M.same(parsed.project,withImages)&&parsed.data.selected==='A','encode/parse: 설정 없으면 version 2, 프로젝트 그대로');
+  check(JSON.parse(P.encode({project:withImages,selected:'Image',textures:[],settings:{user:[]}})).version===3,'encode: 설정이 있으면 version 3');
+  for(const [label,bad] of [['버전',{version:9,project:withImages,textures:[]}],['textures 배열 아님',{version:2,project:withImages,textures:{}}],
+    ['이미지 37개',{version:2,project:withImages,textures:Array(37).fill(textures[0])}],['프로젝트',{version:2,project:{image:'x'},textures:[]}]])
+    assert.throws(()=>P.parse(JSON.stringify(bad)),undefined,label);
+  check(true,'parse: 잘못된 Pack 4가지를 거부');
+  const {ids,decoded}=P.decodeTextures(textures);
+  check(ids.size===2&&decoded[0].file instanceof File&&decoded[0].file.size===4&&decoded[0].file.type==='image/png'&&decoded[1].sampling.filter==='nearest','decodeTextures: base64를 File로 푼다');
+  for(const [label,bad] of [['ID 중복',[textures[0],textures[0]]],['ID 모양',[{...textures[0],id:'1x'}]],['형식',[{...textures[0],type:'image/gif',data:png.replace('png','gif')}]],
+    ['data 머리',[{...textures[0],data:png.replace('image/png','image/jpeg')}]],['base64 글자',[{...textures[0],data:'data:image/png;base64,@@@@'}]],['이름 길이',[{...textures[0],name:'n'.repeat(129)}]]])
+    assert.throws(()=>P.decodeTextures(bad),undefined,label);
+  check(true,'decodeTextures: 잘못된 이미지 항목 6가지를 거부');
+  P.checkReferences(withImages,ids);
+  assert.throws(()=>P.checkReferences(withImages,new Set(['img1'])),/img2/);check(true,'checkReferences: Pack에 없는 이미지를 읽으면 그 ID로 오류');
+  const trial=P.withoutTextures(withImages);
+  check(!P.textureIds(trial).length&&P.textureIds(withImages).length===2,'withoutTextures: 이미지 연결만 뺀 복사본(원본은 그대로)');
+  const remapped=P.remapTextures(M.copy(withImages),new Map([['img1','t9'],['img2','t8']]));
+  check(M.same(P.textureIds(remapped),['t8','t9']),'remapTextures: 새로 등록한 ID로 바꾼다');
+  const meta=id=>({id,name:id,sampling:{}}),big={size:20*1024*1024};
+  check(P.collectTextures(withImages,[meta('img1'),meta('img2')],()=>({size:1})).map(x=>x.id).join()==='img2,img1','collectTextures: 연결된 이미지와 원본 파일');
+  assert.throws(()=>P.collectTextures(withImages,[meta('img1')],()=>({size:1})),/img2/);
+  assert.throws(()=>P.collectTextures(withImages,[meta('img1'),meta('img2')],()=>big),/32MB/);
+  check(true,'collectTextures: 원본이 없거나 합계 32MB를 넘으면 오류');
+
+  // ---- studio-layout (창 크기에 따른 기본값) ----
+  const L=await load('studio-layout'),hadWindow='window' in globalThis,oldWindow=globalThis.window;
+  try{
+    const size=(w,h,narrow=false)=>{globalThis.window={innerWidth:w,innerHeight:h,matchMedia:()=>({matches:narrow})};};
+    size(1440,900);check(L.fitLayout()==='right','fitLayout: 넓은 창은 옆 배치');
+    size(1000,500);check(L.fitLayout()==='right','fitLayout: 가로로 길고 낮은 창(4분할)도 옆 배치');
+    size(1000,900);check(L.fitLayout()==='bottom','fitLayout: 그 밖에는 아래 배치');
+    size(1440,900,false);check(L.responsiveHeight()===55,'responsiveHeight: 보통 창은 55%');
+    size(500,600,true);check(L.responsiveHeight()===75,'responsiveHeight: 좁거나 낮은 창은 75%');
+  }finally{if(hadWindow)globalThis.window=oldWindow;else delete globalThis.window;}
   console.log(`studio modules: ${passed} checks passed`);
 })().catch(error=>{console.error(error);process.exit(1);});

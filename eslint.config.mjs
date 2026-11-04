@@ -51,8 +51,8 @@ const bugs = {
 
 export default [
   {
-    // 외부 번들(js/codemirror.js), 빌드 결과(deploy/), 의존성은 검사하지 않는다.
-    ignores: ["deploy/**", "js/codemirror.js", "node_modules/**", "tools/codemirror/node_modules/**", "**/*.min.js"],
+    // 외부 번들(js/codemirror.js), 빌드 결과(deploy/), 의존성, 로컬 도구 설정(.claude/)은 검사하지 않는다.
+    ignores: ["deploy/**", "js/codemirror.js", "node_modules/**", "tools/codemirror/node_modules/**", "**/*.min.js", ".claude/**"],
   },
   {
     linterOptions: {reportUnusedDisableDirectives: "warn"},
@@ -79,6 +79,12 @@ export default [
       globals: {...globals.node},
     },
     rules: {...softened, ...bugs},
+  },
+
+  // 테스트 실행기는 page.evaluate(() => …) 안에서 브라우저 전역(window·document·localStorage)을 쓴다.
+  {
+    files: ["tests/run.mjs"],
+    languageOptions: {globals: {...globals.node, ...globals.browser}},
   },
 
   // 테스트: require를 쓰는 node 테스트와, 페이지에서 eval로 도는 개발자 콘솔용 테스트가 섞여 있다.

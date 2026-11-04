@@ -1,6 +1,7 @@
 // 사용자 편집 상태만 소유한다. GPU 자원과 연결 규칙은 Renderer/PassManager가 검증한다.
 // 외부 코드 에디터나 네트워크 요청은 사용하지 않는다. file:// 배포는 deploy/ 번들을 사용한다.
 // 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
+//   · 화면 배치·리사이저·작업공간 저장(studio-layout) · Pack 파일 형식(studio-pack)
 import * as Editor from "./cm-editor.js";
 import * as Annotations from "./annotations.js";
 import * as Model from "./project-model.js";
@@ -8,10 +9,11 @@ import * as Examples from "./studio-examples.js";
 import * as Dialog from "./studio-dialog.js";
 import * as Insert from "./code-insert.js";
 import * as Store from "./storage.js";
+import * as Layout from "./studio-layout.js";
+import * as Pack from "./studio-pack.js";
 
-  // localStorage 키. 작업 상태(project·draft)와 화면 배치(height·layout·workspace)를 따로 둔다.
-  const STORAGE_KEY = "webgl.shader-studio.project.v1", DRAFT_KEY = "webgl.shader-studio.draft.v2", HEIGHT_KEY = "webgl.shader-studio.height.v2",
-    LAYOUT_KEY = "webgl.shader-studio.layout.v1", WORKSPACE_KEY = "webgl.shader-studio.workspace.v1", JSON_LIMIT=16*1024*1024, PACK_LIMIT=64*1024*1024;
+  // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
+  const STORAGE_KEY = "webgl.shader-studio.project.v1", DRAFT_KEY = "webgl.shader-studio.draft.v2", JSON_LIMIT=Pack.LIMITS.json, PACK_LIMIT=Pack.LIMITS.pack;
   const {copy, same, validateProject} = Model;
   // options.lookup(name): 내장 함수 설명 {sig, desc} 또는 null — 편집기 시그니처 힌트에 쓴다(main.js가 레퍼런스에서 만들어 넘긴다).
   const mount = (renderer, Shader, settings = null, options = {}) => {
@@ -26,7 +28,7 @@ import * as Store from "./storage.js";
       resume:wasLive => { if(wasLive&&dirty&&!disposed&&$("studioLive").checked)timer=setTimeout(apply,900); }});
     const ask = dialogs.ask;
     const proceed = (decision,action) => decision instanceof Promise?decision.then(ok=>ok&&action()):decision&&action();
-    const defaultHeight=window.matchMedia("(max-width:600px), (max-height:650px)").matches?75:55;let expanded = false, resumeAfterMaximize = false, dockHeight = defaultHeight, navigatingHistory = false; const undoStack = [], redoStack = [], views = new Map();
+    let expanded = false, resumeAfterMaximize = false, navigatingHistory = false; const undoStack = [], redoStack = [], views = new Map();
     const syncHistory = () => { $("studioUndo").disabled = !undoStack.length; $("studioRedo").disabled = !redoStack.length; };
     const cursorState = () => {const area=$("studioCode");return {caret:[area.selectionStart,area.selectionEnd,area.selectionDirection],scroll:[area.scrollTop,area.scrollLeft]};};
     const historyState = () => ({project:copy(project),users:renderer.getUserUniforms(),selected,...cursorState()});
@@ -51,10 +53,6 @@ import * as Store from "./storage.js";
     const editor = Editor.mount($("studioCode"),ask,captureCursor,()=>renderer.getUserUniforms().map(item=>item.name),{lookup:options.lookup,builtins:options.builtins,library,
       userUniforms:()=>renderer.getUserUniforms().map(item=>({name:item.name,type:item.type})),onScrub:scrubApply,notify:text=>setStatus(text,"is-dirty")});
     for(const type of ["beforeinput","select","click","keyup","scroll"])on($("studioCode"),type,captureCursor);
-    // 사용자가 직접 정한 높이·배치만 저장한다. 정하기 전에는 창 크기(반·4분할 창 포함)에 맞는 기본값을 따른다.
-    let heightChosen = false, layoutChosen = false;
-    { const storedHeight = Number(Store.read(HEIGHT_KEY)); heightChosen = storedHeight > 0; dockHeight = Math.max(25,Math.min(85,storedHeight||defaultHeight)); }
-    $("studioDock").style.setProperty("--studio-height",`${dockHeight}%`);
     const find = name => name === "Image" ? null : project.passes.find(p => p.name === name);
     const clearChange = () => {changeText="";$("studioChangeNotice").hidden=true;};
     const showChange = text => {changeText=text;$("studioChangeText").textContent=text+(dirty?" · 미적용 변경":"");$("studioChangeNotice").hidden=false;};
@@ -304,7 +302,7 @@ import * as Store from "./storage.js";
       renderEditor();recordEdit(false,true);Object.assign(checkpoint,{selected,...cursorState()});preview();saveLocal();revealCode();
     };
     // 옆 배치의 도구 서랍은 코드를 덮으므로, 서랍에서 예제·파일로 프로젝트를 바꾸면 서랍을 닫아 새 코드를 보여 준다.
-    const revealCode = () => {if(splitRight())closeToolsDrawer();};
+    const revealCode = () => {if(workspace.splitRight())workspace.closeToolsDrawer();};
     const replaceProject = (next,users=[]) => {
       try {rememberEditor();checkpoint=historyState();renderer.applyPortable(next,users);adoptProject(next);
         // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
@@ -322,7 +320,7 @@ import * as Store from "./storage.js";
     }); const open = () => {
       openState = true; $("studioDock").hidden = false; $("studioResize").hidden = expanded;
       $("studioToggle").setAttribute("aria-label","셰이더 편집기 닫기");$("studioToggle").setAttribute("aria-expanded","true");
-      if(window.matchMedia("(max-width:820px)").matches) {document.body.classList.add("panel-hidden");document.dispatchEvent(new Event("shader-panel-changed"));}$("studioCode").focus({preventScroll:true});saveWorkspace();
+      if(window.matchMedia("(max-width:820px)").matches) {document.body.classList.add("panel-hidden");document.dispatchEvent(new Event("shader-panel-changed"));}$("studioCode").focus({preventScroll:true});workspace.saveWorkspace();
     }; // 재생 버튼은 아이콘(정지 중이면 ▶)과 접근 가능한 이름으로 상태를 알린다. 집중 모드에서는 복귀 후 재생 여부를 고른다.
     // 집중 모드는 미리보기가 가려지므로 재생을 붙잡아 둔다(held). 미리보기를 별도 창으로 뺐으면(popout.js) 계속 보이므로 붙잡지 않는다.
     const previewPopped = () => document.body.classList.contains("preview-popped"), previewHeld = () => expanded && !previewPopped();
@@ -337,34 +335,7 @@ import * as Store from "./storage.js";
       $("studioResize").hidden=expanded;$("studioMaximize").setAttribute("aria-pressed",String(expanded));
       syncPauseButton();
     }; const close = () => {if(expanded)maximize();openState=false;$("studioDock").hidden=true;
-      $("studioResize").hidden=true;$("stage").classList.remove("studio-maximized"); $("studioToggle").setAttribute("aria-label","셰이더 편집기 열기");$("studioToggle").setAttribute("aria-expanded","false");$("studioToggle").focus();saveWorkspace();};
-    const responsiveHeight = () => window.matchMedia("(max-width:600px), (max-height:650px)").matches?75:55;
-    const setDockHeight = (value, persist = true) => {dockHeight=Math.max(25,Math.min(85,value));$("studioDock").style.setProperty("--studio-height",`${dockHeight}%`);
-      if(layout==="bottom")$("studioResize").setAttribute("aria-valuenow",String(Math.round(dockHeight)));
-      if(persist){heightChosen=true;Store.write(HEIGHT_KEY,String(dockHeight));} };
-    // 두 번 클릭 복원: 저장한 높이를 지우고 다시 창 크기 기본값을 따른다.
-    const resetDockHeight = () => {heightChosen=false;Store.remove(HEIGHT_KEY);setDockHeight(responsiveHeight(),false);};
-    // 편집기 배치: right(캔버스 옆 분할) 또는 bottom(캔버스 아래). 넓은 화면은 right가 기본이다.
-    // 넓은 화면, 또는 4분할 창처럼 가로로 길고 낮은 창은 아래 배치가 미리보기와 코드를 모두 납작하게 만드므로 옆 배치가 기본이다.
-    const fitLayout = () => {const w=window.innerWidth||0,h=window.innerHeight||0;return w>=1200||(w>=900&&h>0&&w>=h*1.6)?"right":"bottom";};
-    let layout=fitLayout(),dockWidth=46;
-    {const saved=Store.readJSON(LAYOUT_KEY,{})||{};if(["right","bottom"].includes(saved.layout)){layout=saved.layout;layoutChosen=true;}if(Number.isFinite(saved.width))dockWidth=Math.max(30,Math.min(75,saved.width));}
-    const saveLayout=()=>{layoutChosen=true;Store.writeJSON(LAYOUT_KEY,{layout,width:dockWidth});};
-    const setDockWidth = (value, persist = true) => {dockWidth=Math.max(30,Math.min(75,value));$("stage").style.setProperty("--studio-width",`${dockWidth}%`);
-      if(layout==="right")$("studioResize").setAttribute("aria-valuenow",String(Math.round(dockWidth)));if(persist)saveLayout();};
-    const applyLayout = () => {
-      const right=layout==="right";$("stage").classList.toggle("studio-layout-right",right);
-      const handle=$("studioResize");handle.setAttribute("aria-orientation",right?"vertical":"horizontal");
-      handle.setAttribute("aria-valuemin",right?"30":"25");handle.setAttribute("aria-valuemax",right?"75":"85");
-      handle.setAttribute("aria-valuenow",String(Math.round(right?dockWidth:dockHeight)));
-      handle.title=right?"드래그 또는 ←→로 너비 조절 · 두 번 클릭해 기본 너비 복원":"드래그 또는 ↑↓로 높이 조절 · Home/End · 두 번 클릭해 기본 높이 복원";
-      $("studioLayout").setAttribute("aria-pressed",String(right));$("studioLayout").title=right?"편집기를 캔버스 아래로 배치":"편집기를 캔버스 오른쪽에 나란히 배치";
-      $("studioLayout").textContent=right?"편집기를 아래에 배치":"편집기를 오른쪽에 배치";
-      editor.update();
-    };
-    const toggleLayout = () => {layout=layout==="right"?"bottom":"right";saveLayout();applyLayout();};
-    // 좁은 화면(≤820px)에서는 CSS가 아래 배치로 되돌리므로 리사이저도 세로 방향으로 동작한다.
-    const splitRight = () => layout==="right" && !window.matchMedia("(max-width:820px)").matches;
+      $("studioResize").hidden=true;$("stage").classList.remove("studio-maximized"); $("studioToggle").setAttribute("aria-label","셰이더 편집기 열기");$("studioToggle").setAttribute("aria-expanded","false");$("studioToggle").focus();workspace.saveWorkspace();};
     const toggle = () => openState ? close() : open(); const inspectPixel = event => {
       if(!$("studioInspect").checked) return; const output=$("studioPixelReadout");
       if(selected==="Image") {output.textContent="먼저 Buffer A/B 패스를 선택하세요. Image는 기본 Canvas 출력입니다.";return;}
@@ -385,27 +356,15 @@ import * as Store from "./storage.js";
       try {rememberEditor();download("shader-studio-project.json",JSON.stringify({version:1,project},null,2),"application/json",JSON_LIMIT);
         setStatus("소스 JSON 내보냄 · 파라미터·이미지 원본은 포함되지 않습니다.");}catch(error){showError(error);}
     };
-    // Pack은 연결된 이미지의 원본과 샘플링 설정까지 포함한다. 기존 JSON은 경량 형식으로 유지한다.
+    // Pack은 연결된 이미지의 원본과 샘플링 설정까지 포함한다. 기존 JSON은 경량 형식으로 유지한다. 파일 형식 규칙은 studio-pack.js.
     const runFile = async (button,message,action) => {if(button.disabled)return;const label=button.textContent;button.disabled=true;button.textContent=message;button.setAttribute("aria-busy","true");
       try {await action();}catch(error){showError(error);}finally{button.disabled=false;button.textContent=label;button.removeAttribute("aria-busy");}};
-    const readData = file => new Promise((resolve,reject)=>{
-      const reader=new FileReader();reader.onload=()=>resolve(reader.result);
-      reader.onerror=()=>reject(reader.error || new Error("이미지를 읽을 수 없습니다."));reader.readAsDataURL(file);
-    });
-    const getChannels = Model.channelGroups;
     const exportPack = async () => {
-      rememberEditor();const scene=copy(project), tab=selected, state=settings?.snapshot(), ids=new Set();
-      for(const channels of getChannels(scene))for(const ref of Object.values(channels))if(ref.texture)ids.add(ref.texture);
-      const assets=renderer.getTextures(), textures=[];let bytes=0;
-      const files=[...ids].map(id=>{
-        const meta=assets.find(item=>item.id===id),file=renderer.getTextureFile(id);
-        if(!meta || !file)throw new Error(`원본 이미지가 없습니다: ${id}`);
-        bytes+=file.size;if(bytes>32*1024*1024)throw new Error("연결된 이미지 합계는 최대 32MB입니다.");
-        return {id,meta,file};
-      });
-      for(const {id,meta,file} of files)textures.push({id,name:meta.name,type:file.type,data:await readData(file),sampling:meta.sampling});
+      rememberEditor();const scene=copy(project), tab=selected, state=settings?.snapshot(), textures=[];
+      const files=Pack.collectTextures(scene,renderer.getTextures(),id=>renderer.getTextureFile(id));
+      for(const {id,meta,file} of files)textures.push({id,name:meta.name,type:file.type,data:await Pack.readData(file),sampling:meta.sampling});
       if(disposed)return;
-      download("shader-studio-pack.json",JSON.stringify({version:state?3:2,project:scene,selected:tab,textures,...(state?{settings:state}:{})}),"application/json",PACK_LIMIT);
+      download("shader-studio-pack.json",Pack.encode({project:scene,selected:tab,textures,settings:state}),"application/json",PACK_LIMIT);
       setStatus(`Pack 내보냄 · 코드·파라미터·설정·이미지 ${textures.length}개 포함`);
     };
     let loadSerial=0;
@@ -417,30 +376,13 @@ import * as Store from "./storage.js";
     const importPack = async file => {
       const check=beginLoad(true);
       if(file.size>PACK_LIMIT)throw new Error("Pack 파일은 최대 64MiB입니다.");
-      const text=await file.text();check();const data=JSON.parse(text),next=validateProject(data.project);
-      if(![2,3].includes(data.version) || !Array.isArray(data.textures) || data.textures.length>36)throw new Error("지원하지 않는 Pack 형식입니다.");
+      const text=await file.text();check();const {data,project:next}=Pack.parse(text);
       const state=data.version===3 ? settings?.validatePack(data.settings) : null;
       if(data.version===3 && !state)throw new Error("설정 복원 API를 사용할 수 없습니다.");
-      const ids=new Set(),decoded=[];let total=0;
-      for(const asset of data.textures) {
-        if(!asset || typeof asset.id!=="string" || !/^[A-Za-z][\w-]{0,31}$/.test(asset.id) || ids.has(asset.id)
-          || typeof asset.name!=="string" || asset.name.length>128 || !["image/png","image/jpeg","image/webp"].includes(asset.type)
-          || typeof asset.data!=="string" || !asset.data.startsWith(`data:${asset.type};base64,`))throw new Error("Pack 이미지 정보가 올바르지 않습니다.");
-        ids.add(asset.id);const body=asset.data.slice(asset.data.indexOf(",")+1);
-        if(body.length>16*1024*1024+8 || !/^[A-Za-z0-9+/]*={0,2}$/.test(body))throw new Error("Pack 이미지 데이터가 올바르지 않습니다.");
-        const binary=atob(body);total+=binary.length;
-        if(binary.length>12*1024*1024 || total>32*1024*1024)throw new Error("Pack 이미지 크기 제한을 초과했습니다.");
-        const bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-        const source=new File([bytes],asset.name,{type:asset.type});
-        decoded.push({id:asset.id,file:source,sampling:asset.sampling});
-      }
-      for(const channels of getChannels(next))for(const ref of Object.values(channels))
-        if(ref.texture && !ids.has(ref.texture))throw new Error(`Pack에 연결된 이미지가 없습니다: ${ref.texture}`);
-      if(state) { // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
-        const trial=copy(next);for(const channels of getChannels(trial))for(const key of Object.keys(channels))
-          if(channels[key].texture)delete channels[key];
-        renderer.validatePortable(trial,state.user);
-      } else {renderer.validateFragment(next.image);for(const pass of next.passes)renderer.validateFragment(pass.fragment,true);}
+      const {ids,decoded}=Pack.decodeTextures(data.textures);Pack.checkReferences(next,ids);
+      // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
+      if(state) renderer.validatePortable(Pack.withoutTextures(next),state.user);
+      else {renderer.validateFragment(next.image);for(const pass of next.passes)renderer.validateFragment(pass.fragment,true);}
       if(!await confirmReplace())return false;check();
       const added=[],map=new Map(),draftBefore=copy(project),wasDirty=dirty;let unsaved=0,applied=false,previous=snapshot(),before=settings?.snapshot(),beforeTab=selected;
       try {
@@ -448,8 +390,7 @@ import * as Store from "./storage.js";
           const result=await renderer.addTexture(asset.file,asset.sampling || {});added.push(result.id);check();map.set(asset.id,result.id);
           if(!result.saved)unsaved++;
         }
-        for(const channels of getChannels(next))for(const ref of Object.values(channels))
-          if(ref.texture)ref.texture=map.get(ref.texture);
+        Pack.remapTextures(next,map);
         if(state) {
           checkpoint=historyState();renderer.applyPortable(next,state.user);applied=true;settings.applyPack(state);
         } else if(!setProject(next))throw new Error("Pack 셰이더를 적용하지 못했습니다.");
@@ -575,17 +516,6 @@ import * as Store from "./storage.js";
       if(expanded) { if(event.detail?.open) { if(resumeAfterMaximize) renderer.start(); } else { resumeAfterMaximize=renderer.getStats().running; if(resumeAfterMaximize) renderer.stop(); } }
       syncPauseButton();
     });
-    on($("studioToolsToggle"),"click",()=>{const hidden=$("studioTools").hidden=!$("studioTools").hidden;$("studioToolsToggle").setAttribute("aria-expanded",String(!hidden));saveWorkspace();});
-    const resizer=$("studioResize");let sizing=false;
-    on(resizer,"pointerdown",e=>{if(e.button!==0)return;sizing=true;resizer.setPointerCapture(e.pointerId);e.preventDefault();});
-    on(resizer,"pointermove",e=>{if(!sizing)return;const rect=$("stage").getBoundingClientRect();
-      if(splitRight()){if(rect.width>0)setDockWidth((rect.right-e.clientX)/rect.width*100);}
-      else if(rect.height>0)setDockHeight((rect.bottom-e.clientY)/rect.height*100);});
-    on(resizer,"pointerup",()=>{sizing=false;});on(resizer,"pointercancel",()=>{sizing=false;});on(resizer,"lostpointercapture",()=>{sizing=false;});on(resizer,"dblclick",()=>splitRight()?setDockWidth(46):resetDockHeight());
-    on(resizer,"keydown",e=>{
-      if(splitRight()){if(["ArrowLeft","ArrowRight","Home","End"].includes(e.key)){e.preventDefault();setDockWidth(e.key==="Home"?30:e.key==="End"?75:dockWidth+(e.key==="ArrowLeft"?3:-3));}return;}
-      if(["ArrowUp","ArrowDown","Home","End"].includes(e.key)) {e.preventDefault();setDockHeight(e.key==="Home"?25:e.key==="End"?85:dockHeight+(e.key==="ArrowUp"?3:-3));}});
-    on($("studioLayout"),"click",toggleLayout);
     // 편집기 메뉴(⋯): 항목을 고르거나, 바깥을 누르거나, Esc를 누르면 닫는다. 글자 크기·들여쓰기 같은 값 조절은 열어 둔다.
     const menu=$("studioCodeTools");
     on(menu,"click",event=>{if(event.target?.closest?.(".studio-menu-panel>button"))menu.open=false;});
@@ -603,9 +533,6 @@ import * as Store from "./storage.js";
     };
     on(menu,"toggle",placeMenu);on(window,"resize",placeMenu);
     on(menu,"keydown",event=>{if(event.key==="Escape"&&menu.open){event.preventDefault();event.stopPropagation();menu.open=false;menu.querySelector?.("summary")?.focus();}});
-    // 분할 배치에서 도구 서랍은 코드 위에 겹치므로, 코드를 누르면 닫아 편집 영역을 돌려준다.
-    const closeToolsDrawer=()=>{if(!$("studioTools").hidden){$("studioTools").hidden=true;$("studioToolsToggle").setAttribute("aria-expanded","false");}};
-    on($("studioCode"),"pointerdown",()=>{if(splitRight())closeToolsDrawer();});
     on(document,"keydown",event=>{
       if(event.repeat||event.ctrlKey||event.metaKey||event.altKey||event.isComposing) return;
       if(event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
@@ -615,20 +542,10 @@ import * as Store from "./storage.js";
       if(document.fullscreenElement){if(openState){afterFullscreen={expanded};close();}}
       else if(afterFullscreen){const state=afterFullscreen;afterFullscreen=null;if(!openState){open();if(state.expanded&&!expanded)maximize();}}
     });let afterFullscreen=null;
-    let workspaceReady=false;const groups=["studioInputs","studioFiles","studioImages","studioDependencies","studioInspector","studioCodeTools"];
-    // editor: 편집기 열림 상태 — 새로 고침해도 편집하던 화면으로 돌아온다(전체화면 중에는 전체화면 전 상태를 남긴다).
-    const saveWorkspace=()=>{if(!workspaceReady)return;Store.writeJSON(WORKSPACE_KEY,{toolsHidden:$("studioTools").hidden,editor:afterFullscreen?true:openState,open:Object.fromEntries(groups.map(id=>[id,$(id).open]))});};
-    setDockHeight(dockHeight,false);setDockWidth(dockWidth,false);applyLayout();
-    // 창 크기를 바꾸면(화면 분할 등) 사용자가 정하지 않은 높이·배치는 새 크기의 기본값으로 다시 맞춘다.
-    on(window,"resize",()=>{
-      if(!heightChosen&&dockHeight!==responsiveHeight())setDockHeight(responsiveHeight(),false);
-      const fit=fitLayout();if(!layoutChosen&&layout!==fit){layout=fit;applyLayout();if(splitRight())closeToolsDrawer();}
-    });$("studioTools").hidden=window.matchMedia("(max-width:600px)").matches||layout==="right";
-    let reopenEditor=false;{const state=Store.readJSON(WORKSPACE_KEY,{});if(typeof state?.toolsHidden==="boolean")$("studioTools").hidden=state.toolsHidden;for(const id of groups)if(typeof state?.open?.[id]==="boolean")$(id).open=state.open[id];reopenEditor=state?.editor===true;}
-    // 옆 배치에서 도구는 코드를 덮는 서랍이므로, 아래 배치에서 저장된 "도구 표시" 상태와 관계없이 닫힌 채로 시작한다.
-    if(splitRight())$("studioTools").hidden=true;
-    for(const id of groups)on($(id),"toggle",saveWorkspace);$("studioToolsToggle").setAttribute("aria-expanded",String(!$("studioTools").hidden));renderEditor();restore();loadDraft(savedDraft);undoStack.length=redoStack.length=0;checkpoint=historyState();syncHistory();
-    workspaceReady=true;if(reopenEditor)open();
+    // 화면 배치·리사이저·도구 서랍·접이식 묶음(studio-layout.js). 편집기 열림 상태는 전체화면 중이면 전체화면 전 상태를 남긴다.
+    const workspace=Layout.create({$,on,editor,editorOpen:()=>afterFullscreen?true:openState});
+    renderEditor();restore();loadDraft(savedDraft);undoStack.length=redoStack.length=0;checkpoint=historyState();syncHistory();
+    workspace.ready();if(workspace.reopenEditor)open();
     const removeAllPasses = () => proceed(confirmReplace(),()=>setProject({image:renderer.getFragmentSource(),passes:[],imageChannels:{}}));
     // 갤러리 등 외부 예제: 미적용 변경 확인 → 코드·버퍼·파라미터 일괄 교체(Undo 가능).
     const loadExample = (next,users=[]) => startProject(next,users);
