@@ -1644,7 +1644,7 @@ const rayTracingImage = `#version 300 es
 precision highp float;
 // Image — iChannel0 = A (current). 누적한 합을 개수로 나눠 평균을 내고 톤 매핑한다.
 // Ray Tracing - Primitives by Reinder Nijhoff, 2019 — The MIT License
-// 원본: https://www.shadertoy.com/view/tl23Rm · 바꾼 점과 출처는 Buffer A 머리말에 있다.
+// 원본: https://www.shadertoy.com/view/tl23Rm · 바꾼 점·출처·읽는 순서는 Buffer A 머리말에 있다.
 // Copyright (c) 2019 Reinder Nijhoff. MIT 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있다.
 //
 // 뷰포트를 누른 채 끌면 카메라가 돈다. 놓고 기다리면 점점 깨끗해진다.
@@ -4446,4 +4446,259 @@ const COMMUNITY = [
     },
   },
 ];
+// 읽는 순서: 처음 보는 사람이 어디부터 읽으면 되는지. at은 셰이더 안에 실제로 있는 코드(편집기에서 Ctrl+F로 찾는다).
+// withReading()이 셰이더 맨 위 주석 끝(첫 uniform 앞)에 번호 목록으로 넣는다. 다중 패스는 주된 패스(Buffer A)에 넣는다.
+const READING = {
+  starnest: [
+    {
+      at: "//mouse rotation",
+      text: "시선 dir을 만들고 커서 위치(a1·a2)로 돌린다. from은 시간에 따라 앞으로 나아가는 카메라 위치.",
+    },
+    {
+      at: "for (int r=0; r<volsteps; r++)",
+      text: "광선을 따라 20번(volsteps) 나아가며 그 자리의 밝기를 더한다 — 표면을 찾지 않는 부피(volumetric) 렌더링.",
+    },
+    {
+      at: "p = abs(vec3(tile)-mod(p,vec3(tile*2.)))",
+      text: "공간을 접어(tiling fold) 같은 덩어리를 끝없이 반복시킨다.",
+    },
+    {
+      at: "p=abs(p)/dot(p,p)-formuparam",
+      text: "핵심: kaliset 반복. 17번 되풀이하며 값이 요동친 양(a)을 모으면 그 자리가 별·성운처럼 밝아진다. formuparam을 0.4~0.6 사이로 바꿔 보자.",
+    },
+    {
+      at: "v+=vec3(s,s*s,s*s*s*s)*a*uBrightness*fade",
+      text: "거리(s)에 따라 색을 입히고 fade로 먼 곳을 어둡게 한다. dm은 가까운 곳을 가리는 '암흑 물질'.",
+    },
+  ],
+  golden: [
+    {
+      at: "vec3 color(vec2 p, vec2 q)",
+      text: "시작점(main이 부른다): 카메라가 경로 offset() 위를 날아간다. doffset(진행 방향)·ddoffset(휘는 정도)로 시선과 기울기를 만든다.",
+    },
+    {
+      at: "vec3 color(vec3 ww, vec3 uu, vec3 vv, vec3 ro, vec2 p)",
+      text: "plane marcher: 일정 간격(planeDist)의 평면을 가까운 것부터 9장 그려 alphaBlend로 겹친다. 불투명해지면(cutOff) 멈춘다.",
+    },
+    {
+      at: "vec4 plane(",
+      text: "평면 하나: 평면 번호 n의 해시로 회전·크기·효과를 고르고, df()의 거리장으로 금빛 고리와 빛 두 개의 반사·그림자를 그린다.",
+    },
+    {
+      at: "vec2 df(vec2 p, float h)",
+      text: "평면 위 2D 거리장: 육각형 틀(hex)·원(circles)과 만화경(smoothKaleidoscope)을 pmin으로 부드럽게 합친다.",
+    },
+    {
+      at: "float apollian(vec4 p, float s)",
+      text: "무늬의 정체: 4D 점을 접고(fract) 구 반전(s/r²)하기를 7번 반복하는 아폴로니안 프랙탈. weird()가 이 점을 시간에 따라 돌린다.",
+    },
+    { at: "vec3 postProcess(", text: "마무리: 감마, 대비(smoothstep 꼴), 채도, 가장자리 어둡게(비네팅)." },
+  ],
+  terrain: [
+    {
+      at: "void main(){",
+      text: "카메라: 화면 좌표에서 광선 rd를 만들고, 커서로 yaw·pitch를 바꾼다. ro.z가 시간에 따라 늘어 앞으로 날아간다.",
+    },
+    {
+      at: "float castRay(",
+      text: "높이장 레이마칭: 광선 높이와 지형 높이의 차(h)만큼 0.4배씩 나아간다. 지형은 SDF가 아니라 높이라서 조금씩만 간다.",
+    },
+    {
+      at: "float shapeM(",
+      text: "지형 모양: noised()가 값과 미분을 같이 주고, 미분이 큰(가파른) 곳일수록 다음 옥타브를 약하게 더한다(1/(1+dot(d,d))) → 침식된 능선. warp()가 좌표를 비튼다.",
+    },
+    {
+      at: "vec3 calcNormal(",
+      text: "법선은 terrainH(11옥타브)로 더 자세히 잰다. 마칭은 7옥타브 terrainM으로 싸게 — 비싼 계산을 필요한 곳에만 쓰는 요령.",
+    },
+    {
+      at: "float shadow(",
+      text: "부드러운 그림자: 해 쪽으로 광선을 보내며 지형에 가장 가까이 스친 정도(h/t)를 그림자 진하기로 쓴다.",
+    },
+    {
+      at: "vec3 sky(",
+      text: "하늘: 높이에 따른 그라데이션 + 해 + 일정 높이 평면에 fbm2로 그린 구름. main 끝에서 거리 제곱 안개(exp(-k·t²))로 섞는다.",
+    },
+  ],
+  raytrace: [
+    {
+      at: "void main() {",
+      text: "Buffer A의 시작: (0,0) 픽셀에 저장한 상태(초점 거리·카메라 각도·너비)를 읽고, 카메라가 바뀌었으면 누적을 처음부터(reset).",
+    },
+    {
+      at: "float seed = float(baseHash(",
+      text: "픽셀마다 난수 씨앗을 만들고, 광선을 픽셀 안에서 흔들어(안티에일리어싱) 렌즈 위 한 점에서 쏜다(피사계 심도).",
+    },
+    {
+      at: "vec3 render( in vec3 ro, in vec3 rd, inout float seed ) {",
+      text: "경로 추적: 최대 12번(PATH_LENGTH) 튕기며 색을 곱해 간다. 재질에 따라 난반사(cosWeighted…), 금속(반사), 유리(굴절+프레넬)로 다음 방향을 고른다.",
+    },
+    { at: "vec3 worldhit(", text: "장면: 도형 16가지의 교차 함수를 모두 불러 opU로 가장 가까운 것을 고른다." },
+    {
+      at: "float iSphere(",
+      text: "Common 부분의 교차 함수들: 광선과 도형의 교점을 식으로 바로 푼다(레이마칭 아님). iSphere(이차방정식) → iBox → iTorus(사차방정식) 순서로 읽으면 쉽다.",
+    },
+    {
+      at: "fragColor = vec4(col, 1) + texelFetch(iChannel0, ivec2(fragCoord), 0);",
+      text: "누적: 직전 프레임까지의 합(previous)에 이번 결과를 더한다. Image 패스가 합을 개수(w)로 나눠 평균을 보여 준다.",
+    },
+  ],
+  ocean: [
+    {
+      at: "void mainImage(",
+      text: "시작점: getRay로 시선을 만들고, 하늘을 보면(ray.y ≥ 0) getAtmosphere·getSun으로 하늘만 그린다.",
+    },
+    {
+      at: "float highPlaneHit = intersectPlane(",
+      text: "수면은 높이 0과 -WATER_DEPTH 사이에만 있다. 두 평면과 광선이 만나는 구간을 먼저 구하고 그 사이만 마칭한다 — 빠른 이유 ①.",
+    },
+    {
+      at: "float raymarchwater(",
+      text: "그 구간을 파도 높이(getwaves)와 비교하며 나아간다. 마칭에는 파도 12개(ITERATIONS_RAYMARCH)만 쓴다.",
+    },
+    {
+      at: "float getwaves(",
+      text: "파도 = 방향·주파수가 다른 sin 파형을 겹친 것(노이즈 없음 — 빠른 이유 ②). wavedx의 exp(sin(x)-1)이 뾰족한 마루를, DRAG_MULT가 파도끼리 끌어당기는 모양을 만든다.",
+    },
+    {
+      at: "vec3 normal(",
+      text: "법선은 파도 36개(ITERATIONS_NORMAL)로 자세히. 마칭은 거칠게, 빛 계산은 자세히 — Raymarched Mountains와 같은 요령.",
+    },
+    {
+      at: "float fresnel =",
+      text: "물빛: 프레넬로 반사(하늘·해)와 물속 산란 색을 섞고, aces_tonemap으로 밝은 부분을 눌러 마무리.",
+    },
+  ],
+  skyline: [
+    {
+      at: "void mainImage(",
+      text: "시작점: 고화질 옵션(NON_REALTIME_HQ_RENDER, 모션 블러·안티에일리어싱)은 꺼져 있어 RayTrace()를 한 번 부른다.",
+    },
+    {
+      at: "vec3 RayTrace(",
+      text: "전체 흐름이 여기 있다: 시간에 따라 도시 위를 나는 카메라 → 레이마칭 루프 → 맞은 재질(건물·도로·차·창문)별 색 → 반사 → 안개. 길어도 이 함수만 따라가면 된다.",
+    },
+    {
+      at: "vec2 DistanceToObject(vec3 p)",
+      text: "장면 거리장: Repeat로 도시 블록을 격자로 무한 반복하고, 블록마다 CityBlock(건물)과 도로 위 Car를 둔다. vec2로 거리와 재질 번호를 같이 돌려준다.",
+    },
+    {
+      at: "vec2 CityBlock(vec3 p, vec2 pint)",
+      text: "블록 하나: 블록 좌표의 해시로 건물 높이·폭·층을 고르고 sdBox를 겹쳐 쌓는다.",
+    },
+    { at: "void CalcWindows(", text: "창문: 표면 좌표를 격자로 나눠 창문 모양을 만들고, 해시로 불 켜진 창을 고른다." },
+    { at: "vec3 GetEnvMapSkyline(", text: "하늘과 반사에 쓰는 환경: 하늘 그라데이션, 해, 지평선의 먼 도시 실루엣." },
+  ],
+  clouds: [
+    { at: "vec2 hash( vec2 p ) {", text: "격자 점마다 무작위 기울기(그래디언트)를 준다." },
+    { at: "float noise( in vec2 p ) {", text: "2D 그래디언트 노이즈(삼각 격자 = 심플렉스 노이즈 꼴)." },
+    { at: "float fbm(vec2 n) {", text: "fbm: 옥타브마다 행렬 m으로 돌리고 키워 더한다." },
+    {
+      at: "//ridged noise shape",
+      text: "mainImage는 같은 노이즈를 네 번 다르게 쌓는다: 능선(abs) 모양 r, 부드러운 모양 f, 색 c, 능선 색. 모두 시간(time)만큼 흘러간다.",
+    },
+    {
+      at: "f = cloudcover + cloudalpha*f*r;",
+      text: "r·f로 구름 두께를 정하고(cloudcover·cloudalpha), 하늘 그라데이션 위에 구름 색을 섞는다. 맨 위 const 값들을 바꿔 보자.",
+    },
+  ],
+  selfreflect: [
+    { at: "void mainImage(", text: "시작점: 화면 좌표로 effect()를 부른다." },
+    {
+      at: "vec3 effect(",
+      text: "카메라와 마무리: 시선 rd를 만들어 render3()에 넘기고, ACES 톤 매핑과 감마(sqrt)로 끝낸다.",
+    },
+    {
+      at: "vec3 render3(",
+      text: "바깥 표면: 다면체에 레이마칭(rayMarch3) → 밖으로 반사(render0 = 배경)와 안으로 굴절(refract)을 프레넬(fre1)로 섞는다. 가까이 스친 정도(g_gd)로 테두리 빛도 더한다.",
+    },
+    {
+      at: "vec3 render2(",
+      text: "안쪽: 굴절해 들어간 광선이 안쪽 면(df2)에서 반사되기를 여러 번 되풀이한다 — '안쪽 거울' 효과의 핵심.",
+    },
+    {
+      at: "vec3 shape(vec3 pos) {",
+      text: "다면체 모양: poly_fold로 공간을 대칭으로 접어 면 하나만 계산하고(poly_plane·poly_edge), 나머지 면은 대칭으로 얻는다.",
+    },
+  ],
+  stardome: [
+    {
+      at: "void mainImage(",
+      text: "시작점: 카메라는 원점에 서서 천천히 돈다(la). 광선마다 color()로 하늘색을 구한다.",
+    },
+    {
+      at: "vec3 color(",
+      text: "하늘을 층으로 더한다: 별(stars) + 은하수(galaxy) + 달(moon) + 대기(sky) + 격자(grid). 지평선 아래는 검게.",
+    },
+    {
+      at: "vec3 toSpherical(vec3 p) {",
+      text: "시선 방향을 구면 좌표(위도·경도)로 바꾼다. 하늘의 모든 무늬가 이 좌표 위에 그려진다.",
+    },
+    {
+      at: "vec3 stars(",
+      text: "별: 구면 좌표를 칸으로 나눠 칸마다 해시로 별 위치·밝기를 정하고, blackbody(온도→색)로 색을 입힌다. 여러 크기의 칸을 겹친다.",
+    },
+    { at: "vec3 galaxy(", text: "은하수: fbm 높이(height)로 띠 모양 밀도를 만들어 색을 입힌다." },
+  ],
+  elementalring: [
+    {
+      at: "void mainImage(",
+      text: "시작점: 고화질 옵션은 꺼져 있어 RayTrace()를 한 번 부른다(Skyline과 같은 뼈대 — 같은 작가).",
+    },
+    {
+      at: "vec3 RayTrace(",
+      text: "카메라(커서로 회전) → 레이마칭 루프. 시작 위치를 픽셀마다 조금 흔들어(Hash2d) 줄무늬를 없앤다. 광선이 고리에 가까이 지날수록 빛을 쌓아(glow) 불꽃처럼 보이게 한다.",
+    },
+    {
+      at: "vec2 DistanceToObject(vec3 p)",
+      text: "장면: 꼬인 고리. 각도에 따라 단면을 돌려(꼬임) 원환체를 만들고 smin으로 가닥을 합친다.",
+    },
+  ],
+  hexplasma: [
+    { at: "float hexSdf(", text: "육각형 거리: 세 방향(0°·60°·120°) 내적의 최댓값. 이 하나로 육각 무늬가 나온다." },
+    { at: "float smoothSdf(", text: "가운데는 육각형, 바깥은 원(dot(pos,pos))으로 부드럽게 바꾼다." },
+    {
+      at: "for (int i = 0; i < 4; ++i)",
+      text: "핵심 반복: 좌표를 회전(R)·육각 거리로 늘이고 sin으로 접기를 4번 — 접을수록 무늬가 잘게 갈라진다. y에 크기를 줄여 가며 쌓는다.",
+    },
+    {
+      at: "vec3 col = cmap(uv) / abs(y);",
+      text: "y가 0에 가까운 곳(경계)일수록 1/|y|가 커져 빛나는 선이 되고, tanh로 밝기를 눌러 날아가지 않게 한다.",
+    },
+  ],
+  noxfire: [
+    {
+      at: "for(o*=i; i++<1e2; )",
+      text: "광선을 100번 나아가는 레이마칭 루프 하나가 전부다. 압축된 코드라 변수 이름이 한 글자다: p = 위치, d = 간 거리, s = 터널까지 거리, o = 쌓은 색.",
+    },
+    { at: "p += cos(p.z+t+p.yzx*.5)*.6;", text: "난류: 위치를 cos로 흔들어 터널 벽을 일렁이게 한다." },
+    { at: "s = 4.+sin(t*.7)*4.-length(p.xy);", text: "터널: 반지름이 시간에 따라 숨 쉬는 원통 안쪽까지의 거리." },
+    {
+      at: "for (n = 1.6; n < 32.; n += n )",
+      text: "노이즈 루프: 주파수를 두 배씩 올리며 sin 무늬를 빼 벽을 불꽃처럼 깎는다(fbm과 같은 생각).",
+    },
+    {
+      at: "o += 1. / s;",
+      text: "가까울수록(s가 작을수록) 밝기를 많이 더한다 → 불꽃. 마지막 줄 tanh로 주황색을 입히고 밝기를 누른다.",
+    },
+  ],
+};
+const withReading = (source, steps) => {
+  const lines = source.split("\n"),
+    at = lines.findIndex(line => line.startsWith("uniform "));
+  const guide = [
+    "//",
+    "// 읽는 순서 — 편집기에서 Ctrl+F로 앞부분을 찾아 차례로 읽어 보세요:",
+    ...steps.map((step, i) => `//  ${i + 1}. ${step.at}  →  ${step.text}`),
+  ];
+  lines.splice(at, 0, ...guide);
+  return lines.join("\n");
+};
+for (const item of COMMUNITY) {
+  const steps = READING[item.id];
+  if (!steps) continue;
+  item.reading = steps;
+  if (item.project) item.project.passes[0].fragment = withReading(item.project.passes[0].fragment, steps);
+  else item.image = withReading(item.image, steps);
+}
 export { COMMUNITY };
