@@ -36,6 +36,20 @@ for(const item of items){
     assert(licenses.includes(`## ${item.title} — ${item.credit.license}`),"라이선스 절 없음");
   });
 }
+for(const item of items){
+  test(`${item.title}: 읽는 순서 — 3단계 이상, 가리키는 코드가 셰이더에 실제로 있고, 머리말(첫 uniform 앞)에 번호로 적혀 있다`,()=>{
+    const steps=item.reading;assert(Array.isArray(steps)&&steps.length>=3,"reading 3단계 이상");
+    const source=item.project?item.project.passes[0].fragment:item.image,lines=source.split("\n");
+    const guide=lines.findIndex(line=>line.startsWith("// 읽는 순서 —")),firstUniform=lines.findIndex(line=>line.startsWith("uniform "));
+    assert(guide>0&&guide<firstUniform,"읽는 순서가 머리말에");
+    const code=lines.slice(firstUniform).join("\n");   // 안내 주석 자신이 아니라 실제 코드에서 찾는다
+    steps.forEach((step,i)=>{
+      assert(step.text&&step.text.length>10,`${i+1}단계 설명`);
+      assert(code.includes(step.at),`${i+1}단계가 가리키는 코드가 없다: ${step.at}`);
+      assert.equal(lines[guide+1+i],`//  ${i+1}. ${step.at}  →  ${step.text}`,`${i+1}단계 줄`);
+    });
+  });
+}
 test("MIT 작품은 저작권 줄을 셰이더와 문서에 모두 남긴다",()=>{
   for(const item of items.filter(x=>x.credit.license==="MIT")){
     for(const source of sources(item)){

@@ -887,6 +887,7 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .gallery-thumb[data-thumb="pipeline"] { background:radial-gradient(circle at 30% 50%,#1aa6ff 0 9%,transparent 10%),radial-gradient(circle at 72% 50%,#ff2fa0 0 9%,transparent 10%),linear-gradient(90deg,#0b1a2c 50%,#1c0b22 50%); }
 .gallery-thumb[data-thumb="feedback"] { background:radial-gradient(circle at 70% 40%,#ff2fa0 0 7%,transparent 8%),radial-gradient(circle at 62% 46%,#ff2fa099 0 6%,transparent 7%),radial-gradient(circle at 54% 54%,#ff2fa055 0 5%,transparent 6%),radial-gradient(circle at 46% 60%,#ff2fa02a 0 4%,transparent 5%),#0d0a16; }
 .gallery-thumb[data-thumb="raytrace"] { background:radial-gradient(circle at 34% 58%,#e9b04a 0 9%,transparent 10%),radial-gradient(circle at 58% 54%,#d0e4ff 0 8%,#7fa6d855 9%,transparent 11%),radial-gradient(circle at 76% 60%,#c2414a 0 7%,transparent 8%),linear-gradient(180deg,#bcd2f2 0 52%,#3d3d40 52% 100%); }
+.gallery-thumb[data-thumb="bloom"] { background:radial-gradient(circle at 30% 45%,#bff3ff 0 3%,#3cc8ff99 6%,#3cc8ff22 16%,transparent 26%),radial-gradient(circle at 66% 38%,#fff1cf 0 3%,#ffb44a99 6%,#ff8a2a22 16%,transparent 26%),radial-gradient(circle at 52% 72%,#ffd6ec 0 2%,#ff4fa088 5%,#ff4fa01a 14%,transparent 22%),#07080d; }
 .gallery-meta { display:grid;gap:4px;padding:12px 14px 14px; }
 .gallery-meta strong { color:var(--text);font-size:14px;font-weight:700; }
 .gallery-tag { color:var(--accent-strong);font:600 10px/1.4 var(--mono);letter-spacing:.4px; }

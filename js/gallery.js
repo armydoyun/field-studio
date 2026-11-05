@@ -441,6 +441,108 @@ void main() {
     float lod = uBlur * smoothstep(0.05, 0.45, abs(uv.y - uFocus));
     fragColor = textureLod(iChannel0, uv, lod);
 }`;
+// 블룸(Bloom) 후처리: 밝은 빛이 주변으로 번져 보이는 효과. 장면 → 밝은 부분 추출 → 흐리게 → 합성 → 톤 매핑.
+// 버퍼를 이어 쓰는 후처리의 기본 모양이라 단계마다 패스를 나눴다. 각 패스를 미리보기로 골라 단계별 결과를 볼 수 있다.
+const bloomScene = `#version 300 es
+precision highp float;
+// Buffer A · 장면 · RGBA16F(HDR). 블룸의 재료: 밝기가 1을 넘는 빛.
+// 화면(8비트)은 1보다 밝은 값을 그냥 하얗게 자르지만, 16비트 실수 버퍼는 "얼마나 밝은지"를 그대로 기억한다.
+// RGBA8 버퍼였다면 3짜리 네온과 0.9짜리 흰 사각형이 똑같이 1로 잘려, 무엇이 번져야 하는지 알 수 없다.
+uniform vec2 uResolution;
+uniform float uTime;
+out vec4 fragColor;
+vec3 hue(float t) { return 0.5 + 0.5 * cos(6.2831853 * (t + vec3(0.0, 0.33, 0.67))); }
+void main() {
+    // 짧은 변 기준 좌표: 화면이 가로로 길든 세로로 길든 가운데 -1~1 정사각형 안의 것이 다 보인다
+    float side = min(uResolution.x, uResolution.y);
+    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / side;
+    float px = 2.0 / side;                                // 픽셀 하나의 크기(테두리를 부드럽게)
+    vec3 col = vec3(0.015, 0.02, 0.035) * (1.3 - 0.4 * length(p));   // 어두운 배경(1보다 한참 작다 → 번지지 않는다)
+    // 네온 고리: 밝기 4
+    float ring = abs(length(p - vec2(-0.5, 0.4)) - 0.28) - 0.012;
+    col += vec3(0.15, 0.75, 1.0) * 4.0 * (1.0 - smoothstep(0.0, px, ring));
+    // 네온 막대: 밝기 2 — 기준값(uThreshold)을 올리면 이 막대부터 번지지 않는다
+    vec2 q = abs(p - vec2(0.0, -0.62)) - vec2(0.55, 0.012);
+    col += vec3(1.0, 0.3, 0.6) * 2.0 * (1.0 - smoothstep(0.0, px, max(q.x, q.y)));
+    // 흰 사각형: 밝기 0.9 — 화면에서는 거의 하얗지만 1보다 어두워 번지지 않는다(비교용)
+    vec2 b = abs(p - vec2(0.55, 0.45)) - vec2(0.14);
+    col = mix(col, vec3(0.9), 1.0 - smoothstep(0.0, px, max(b.x, b.y)));
+    // 떠다니는 빛 구슬 3개: 밝기 10
+    for (int i = 0; i < 3; i++) {
+        float f = float(i);
+        vec2 c = vec2(0.0, -0.05) + vec2(0.6, 0.32) * vec2(cos(uTime * 0.6 + f * 2.1), sin(uTime * 0.8 + f * 1.7));
+        col += hue(f * 0.31 + 0.1) * 10.0 * (1.0 - smoothstep(0.035, 0.035 + px, length(p - c)));
+    }
+    fragColor = vec4(col, 1.0);
+}`;
+const bloomBright = `#version 300 es
+precision highp float;
+// Buffer B · 밝은 부분 추출 · RGBA16F · 해상도 0.5 · Mip 켜짐. iChannel0 = A (current)
+// 기준값보다 밝은 만큼만 남긴다. 그대로 자르면(max(c - 기준, 0)) 경계가 뚝 끊기므로 knee 구간에서 부드럽게 시작한다.
+// 절반 해상도로 줄여도 어차피 흐리게 만들 것이라 티가 안 나고, 계산은 1/4로 준다.
+// Mip을 켜 두면 매 프레임 1/2, 1/4, 1/8 … 크기 사본(밉맵)이 저절로 생긴다 → Image가 이것을 흐린 사본으로 쓴다.
+uniform vec2 uResolution;
+uniform sampler2D iChannel0;
+uniform float uThreshold; // 이 밝기부터 번진다 · @range 0 4 @step 0.01 @default 1
+uniform float uKnee;      // 경계를 부드럽게 하는 폭 · @range 0 1 @step 0.01 @default 0.5
+out vec4 fragColor;
+void main() {
+    vec3 c = texture(iChannel0, gl_FragCoord.xy / uResolution).rgb;
+    float bright = max(c.r, max(c.g, c.b));
+    // soft knee: 기준값 - knee부터 서서히 커지다가 기준값 위에서는 (밝기 - 기준값)이 된다
+    float knee = max(uKnee, 1e-4), soft = clamp(bright - uThreshold + knee, 0.0, 2.0 * knee);
+    soft = soft * soft / (4.0 * knee);
+    float amount = max(soft, bright - uThreshold) / max(bright, 1e-4);
+    fragColor = vec4(c * amount, 1.0);
+}`;
+const bloomImage = `#version 300 es
+precision highp float;
+// Image · 합성. iChannel0 = A (current) 원래 장면, iChannel1 = B (current) 밝은 부분(밉맵 있음)
+// 1) 흐리게: B의 밉 레벨 0~6을 겹친다. 레벨이 하나 오를 때마다 크기가 반이라, 같은 픽셀이 두 배 넓게 번진다.
+//    레벨마다 가운데와 둘레 8곳을 1:2:1 무게로 읽어(3×3 텐트 필터) 밉맵의 네모난 계단을 숨긴다.
+//    (대각선 4곳만 읽으면 작은 빛 둘레가 X자로 번진다.) 가우시안 블러 패스를 여러 번 도는 것보다 훨씬 싸다.
+// 2) 합성: 장면 + 블룸 × 세기. 3) 노출을 곱하고 톤 매핑으로 1보다 밝은 값을 화면 범위(0~1)로 눌러 담는다.
+uniform vec2 uResolution;
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+uniform float uIntensity; // 블룸 세기 · @range 0 3 @step 0.01 @default 0.8
+uniform float uRadius;    // 겹칠 밉 레벨 수(클수록 넓게 번짐) · @range 1 7 @step 0.1 @default 6
+uniform float uExposure;  // 노출 · @range 0 4 @step 0.01 @default 1
+uniform int uToneMap;     // 0 = 자르기, 1 = Reinhard, 2 = ACES · @min 0 @max 2 @default 2
+uniform bool uCompare;    // 왼쪽 절반은 블룸 없이 보여 준다 · @default false
+out vec4 fragColor;
+vec3 blurLevel(vec2 uv, int lod) {
+    vec2 texel = 1.0 / vec2(textureSize(iChannel1, lod));
+    float l = float(lod);
+    vec3 sum = vec3(0.0);
+    for (int y = -1; y <= 1; y++)
+        for (int x = -1; x <= 1; x++) {
+            float w = (x == 0 ? 2.0 : 1.0) * (y == 0 ? 2.0 : 1.0);   // 1 2 1 / 2 4 2 / 1 2 1
+            sum += w * textureLod(iChannel1, uv + texel * vec2(x, y), l).rgb;
+        }
+    return sum / 16.0;
+}
+vec3 toneMap(vec3 c) {
+    if (uToneMap == 1) return c / (1.0 + c);                                        // Reinhard: 단순, 밝은 색이 바랜다
+    if (uToneMap == 2) return clamp(c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);   // ACES(근사): 영화 같은 대비
+    return clamp(c, 0.0, 1.0);                                                      // 자르기: 1보다 밝으면 하얗게 날아간다
+}
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+    vec3 scene = texture(iChannel0, uv).rgb, bloom = vec3(0.0);
+    float total = 0.0;
+    for (int lod = 0; lod < 7; lod++) {
+        float w = clamp(uRadius - float(lod), 0.0, 1.0);   // 소수 부분만큼 마지막 레벨을 부드럽게 더한다
+        bloom += w * blurLevel(uv, lod);
+        total += w;
+    }
+    bloom /= max(total, 1.0);
+    bool plain = uCompare && uv.x < 0.5;
+    vec3 hdr = (scene + (plain ? vec3(0.0) : bloom * uIntensity)) * uExposure;
+    vec3 col = pow(toneMap(hdr), vec3(1.0 / 2.2));                                 // 감마: 선형 값 → 화면 값
+    if (uCompare) col = mix(col, vec3(1.0), 1.0 - smoothstep(0.0, 1.5 / uResolution.x, abs(uv.x - 0.5)));
+    fragColor = vec4(col, 1.0);
+}`;
 const reactionSource = `#version 300 es
 precision highp float;
 // Buffer A · 512×512 고정 · RGBA16F · Wrap Repeat · iChannel0 = A previous (자기 자신의 지난 프레임)
@@ -575,6 +677,28 @@ const LESSONS = [
       image: mipImage,
       passes: [{ name: "A", fragment: mipSource, format: "rgba8", scale: 1, mipmap: true, channels: {} }],
       imageChannels: { 0: { buffer: "A", frame: "current" } },
+    },
+  },
+  {
+    id: "bloom",
+    title: "Bloom",
+    tag: "Post-process · HDR · Mip",
+    description: "장면 → 밝은 부분 추출 → 밉맵으로 흐리게 → 합성 → 톤 매핑. 단계마다 패스를 나눈 후처리의 기본.",
+    thumb: "bloom",
+    project: {
+      image: bloomImage,
+      passes: [
+        { name: "A", fragment: bloomScene, format: "rgba16f", scale: 1, channels: {} },
+        {
+          name: "B",
+          fragment: bloomBright,
+          format: "rgba16f",
+          scale: 0.5,
+          mipmap: true,
+          channels: { 0: { buffer: "A", frame: "current" } },
+        },
+      ],
+      imageChannels: { 0: { buffer: "A", frame: "current" }, 1: { buffer: "B", frame: "current" } },
     },
   },
   {
