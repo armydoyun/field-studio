@@ -629,6 +629,8 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-top .studio-run-tools .studio-primary { min-width:0;min-height:32px;margin-left:2px;padding:0 12px;gap:6px;white-space:nowrap; }
 .studio-top .studio-primary span { color:color-mix(in srgb,var(--accent-ink) 55%,transparent);font:500 10px/1 var(--mono); }
 .studio-dock { container:dock / inline-size; }
+/* 편집기 창의 빈 곳을 누르면 초점이 창 자체로 온다(뷰포트로 새지 않게 tabindex=-1). 그때 테두리는 그리지 않는다. */
+.studio-dock:focus { outline:none; }
 .studio-tabs .studio-pass-tabs button { padding:5px 10px; }
 /* 편집기 폭이 좁으면(분할 배치·작은 창) 실행 버튼의 단축키 표시와 구분선을 줄여 탭 자리를 확보한다 */
 @container dock (max-width:720px) { .studio-top .studio-primary span,.studio-tool-sep { display:none; }.studio-top .studio-live { padding-inline:6px 4px; } }

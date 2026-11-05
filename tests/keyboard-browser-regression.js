@@ -77,6 +77,19 @@
     await frames(1);
     test(r.readKey(37) === 0, "포커스를 잃으면 눌린 키를 모두 뗌");
     key("keyup", "ArrowLeft", 37);
+
+    // 뷰포트 안의 UI(툴바·편집기)에서 초점을 못 받는 곳을 눌러 초점이 #stage로 떨어져도 키보드 입력 모드가 되지 않는다
+    test($("studioDock").tabIndex === -1, "편집기 창은 tabindex=-1 (빈 곳을 눌러도 초점이 창에 머묾)");
+    $("stageToolbar").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+    $("stage").focus(); // 브라우저가 초점을 가장 가까운 조상(#stage)으로 넘기는 상황
+    await frames(1);
+    test(document.activeElement !== $("stage") && $("keyboardHint").hidden, "툴바 UI를 누른 뒤 떨어진 초점은 뷰포트 선택이 아님");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    $("screen").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerId: 1, pointerType: "mouse" }));
+    $("screen").dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, pointerType: "mouse" }));
+    await frames(1);
+    test(document.activeElement === $("stage") && !$("keyboardHint").hidden, "캔버스를 누르면 그대로 키보드 입력 모드");
+    key("keydown", "Escape", 27);
   } finally {
     if (!studio.setProject(before)) console.warn("테스트 이전 프로젝트 복원 실패");
     if (!wasRunning && r.getStats().running) studio.togglePlayback();
