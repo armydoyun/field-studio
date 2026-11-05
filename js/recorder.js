@@ -101,8 +101,10 @@ const create = ({
       onError("이 브라우저는 캔버스 녹화(MediaRecorder)를 지원하지 않습니다.");
       return false;
     }
+    // 매 프레임 읽어 녹화하는 mirror는 CPU 비트맵을 선호한다. Chromium 130 + SwiftShader의
+    // 가속 2D 경로에서는 정지 화면을 다시 그려도 실제 캡처가 첫 프레임에서 멈출 수 있다.
     const mirror = createCanvas(),
-      context = mirror.getContext?.("2d");
+      context = mirror.getContext?.("2d", { willReadFrequently: true });
     if (!context || typeof mirror.captureStream !== "function") {
       onError("이 브라우저는 캔버스 녹화를 지원하지 않습니다.");
       return false;
