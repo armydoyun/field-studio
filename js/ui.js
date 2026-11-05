@@ -766,6 +766,7 @@ const mount = (renderer, input, settings) => {
     attempt(() => {
       renderer.setPreviewPass(null);
       updateStats();
+      document.dispatchEvent(new Event("shader-preview-changed"));
     })
   );
   listen($("screen"), "pointerdown", () => stage.classList.add("has-interacted"));
@@ -870,7 +871,9 @@ const mount = (renderer, input, settings) => {
     $("stats").title =
       `${s.fps.toFixed(1)} FPS · ${s.width}×${s.height} · Frame ${s.frame} · GPU ${gpuText} · CPU ${(s.cpuMs ?? 0).toFixed(2)}ms`;
     $("viewportMode").textContent = s.previewPass ? `BUFFER ${s.previewPass}` : "IMAGE";
-    $("studioPreviewTarget").textContent = `미리보기 · ${s.previewPass ? `Buffer ${s.previewPass}` : "Image"}`;
+    const previewName = s.previewPass ? `Buffer ${s.previewPass}` : "Image";
+    $("studioPreviewTarget").textContent = previewName;
+    $("studioPreviewTarget").setAttribute("aria-label", `미리보기: ${previewName}`);
     syncFpsPresets(s.fpsLimit);
   };
   listen(document, "shader-settings-applied", () => {

@@ -55,8 +55,36 @@ await test('Paused focus mode does not resume after user changes the intended pl
  await n('previewPause').click();assert.equal(f.studio.getPlaybackState(),false);await n('studioMaximize').click();assert.equal(f.renderer.getStats().running,false);
 });
 await test('Final Image button exits Buffer preview without changing the editing pass',async(f,n)=>{
- f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});await select(f,'A');assert.equal(f.renderer.getStats().previewPass,'A');await n('previewImage').click();assert.equal(f.renderer.getStats().previewPass,null);assert.equal(n('studioCodeTitle').textContent,'Buffer A.frag');assert.equal(n('previewImage').disabled,true);assert.equal(n('studioPreviewTarget').textContent,'미리보기 · Image');
+ f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});await select(f,'A');assert.equal(f.renderer.getStats().previewPass,'A');await n('previewImage').click();assert.equal(f.renderer.getStats().previewPass,null);assert.equal(n('studioCodeTitle').textContent,'Buffer A.frag');assert.equal(n('previewImage').disabled,true);assert.equal(n('studioPreviewTarget').textContent,'Image');
 });
+await test('Editing a buffer while viewing the final Image keeps the Image preview after apply',async(f,n)=>{
+ f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});await select(f,'A');assert.equal(f.renderer.getStats().previewPass,'A','탭을 바꾸면 그 패스를 따라간다');
+ await n('previewImage').click();assert.equal(f.renderer.getStats().previewPass,null);
+ await edit(f,src+'\n// buffer edit');await n('studioRun').click();
+ assert.equal(f.renderer.getStats().previewPass,null,'적용해도 미리보기가 다시 Buffer A로 바뀌지 않는다');assert.equal(n('studioCodeTitle').textContent,'Buffer A.frag');
+});
+await test('The preview label toggles between the final Image and the pass being edited',async(f,n)=>{
+ f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});
+ assert.equal(n('studioPreviewTarget').disabled,true,'Image를 고치며 Image를 보고 있으면 오갈 곳이 없다');
+ await select(f,'A');assert.equal(n('studioPreviewTarget').textContent,'Buffer A');assert.equal(n('studioPreviewTarget').disabled,false);
+ await n('studioPreviewTarget').click();assert.equal(f.renderer.getStats().previewPass,null);assert.equal(n('studioPreviewTarget').textContent,'Image');
+ await n('studioPreviewTarget').click();assert.equal(f.renderer.getStats().previewPass,'A');assert.equal(n('studioPreviewTarget').textContent,'Buffer A');
+});
+await test('Pinning the preview keeps it when switching tabs and is remembered',async(f,n)=>{
+ f.studio.setProject({image:src,passes:[pass(),{...pass(),name:'B'}],imageChannels:{}});await select(f,'A');
+ await n('studioPreviewTarget').click();assert.equal(f.renderer.getStats().previewPass,null);
+ await n('studioPreviewPin').click();assert.equal(n('studioPreviewPin').attrs['aria-pressed'],'true');assert.equal(f.storage.get('field.previewPinned.v1'),'1');
+ await select(f,'B');assert.equal(f.renderer.getStats().previewPass,null,'고정하면 탭을 바꿔도 Image 그대로');
+ await n('studioPreviewTarget').click();assert.equal(f.renderer.getStats().previewPass,'B','버튼으로는 지금 편집 중인 B로 바꿀 수 있다');
+ await select(f,'Image');assert.equal(f.renderer.getStats().previewPass,'B','고정 중에는 Image 탭으로 가도 B 그대로');
+ await n('studioPreviewPin').click();assert.equal(n('studioPreviewPin').attrs['aria-pressed'],'false');assert.equal(f.storage.get('field.previewPinned.v1'),'0');
+ await select(f,'A');assert.equal(f.renderer.getStats().previewPass,'A','고정을 풀면 다시 탭을 따라간다');
+});
+await test('A pinned preview survives reloads but a new project still starts from its selected tab',async(f,n)=>{
+ f.studio.setProject({image:src,passes:[pass()],imageChannels:{}});await select(f,'A');assert.equal(f.renderer.getStats().previewPass,null,'저장된 고정 상태로 시작해 탭을 따라가지 않는다');
+ await n('studioPreviewTarget').click();assert.equal(f.renderer.getStats().previewPass,'A');
+ f.studio.setProject({image:src,passes:[],imageChannels:{}});assert.equal(f.renderer.getStats().previewPass,null,'보던 버퍼가 없는 새 프로젝트는 Image로');
+},false,{'field.previewPinned.v1':'1'});
 await test('Project menu opens from the viewport without the editor and closes with Escape',async(f,n)=>{
  assert.equal(n('studioDock').hidden,true);assert.equal(n('projectMenu').hidden,true);
  await n('projectMenuToggle').click();assert.equal(n('projectMenu').hidden,false);assert.equal(n('projectMenuToggle').attrs['aria-expanded'],'true');
