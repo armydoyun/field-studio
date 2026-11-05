@@ -66,7 +66,7 @@ const initialize = async () => {
       snippets: { items: libraryItems, plan: Snippets.plan },
     });
     profiler = Profiler.mount(renderer);
-    // 갤러리가 예제 성능을 재는 몇 초 동안 메인 미리보기를 멈춘다(같은 GPU를 나눠 쓰면 측정이 크게 부푼다).
+    // 갤러리가 예제 성능을 재는 동안 메인 미리보기를 멈춘다(같은 GPU를 나눠 쓰면 측정이 크게 부푼다).
     gallery = Gallery.mount({
       studio,
       Shader,
@@ -77,6 +77,11 @@ const initialize = async () => {
           return true;
         },
         resume: () => renderer.start(),
+        // 성능 배지를 환산할 크기: 미리보기가 지금 실제로 그리는 크기(해상도 배율 반영)
+        size: () => {
+          const { width, height } = renderer.getStats();
+          return { width, height };
+        },
       },
     });
     guide = Guide.mount({ studio, gallery });

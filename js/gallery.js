@@ -3,6 +3,7 @@
 import * as Annotations from "./annotations.js";
 import * as Community from "./community-examples.js";
 import * as Perf from "./gallery-perf.js";
+import * as Lazy from "./lazy-render.js";
 import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
 const { COMMUNITY } = Community;
@@ -601,7 +602,8 @@ const LESSONS = [
     thumb: "feedback",
   },
 ];
-// preview: { pause() → 멈췄으면 true, resume() } — 성능을 재는 동안 메인 미리보기를 멈춘다(없으면 그대로 잰다).
+// preview: { pause() → 멈췄으면 true, resume(), size() → { width, height } } — 성능을 재는 동안 메인 미리보기를 멈추고,
+// 배지는 미리보기가 지금 그리는 크기로 환산한다(없으면 그대로 재고 1920×1080으로 환산).
 const mount = ({ studio, Shader, preview = null }) => {
   const $ = id => document.getElementById(id),
     controller = new AbortController(),
@@ -610,7 +612,6 @@ const mount = ({ studio, Shader, preview = null }) => {
     grid = $("galleryGrid"),
     community = $("galleryCommunity"),
     lessons = $("galleryLessons");
-  let thumbsDrawn = false;
   const element = (tag, className = "", text = "") => {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -639,10 +640,10 @@ const mount = ({ studio, Shader, preview = null }) => {
       credit.title = `${item.credit.work} — ${item.credit.url}`;
       meta.append(credit);
     }
-    // 성능 배지: 갤러리를 처음 열 때 이 컴퓨터에서 재서 채운다(drawThumbs).
-    const badge = element("span", "gallery-perf", "측정 중");
+    // 성능 배지: 카드가 화면에 보이면 이 컴퓨터에서 재서 채운다(startThumbs).
+    const badge = element("span", "gallery-perf", "대기");
     badge.dataset.level = "pending";
-    badge.title = "이 컴퓨터에서 성능을 재는 중입니다.";
+    badge.title = "카드가 화면에 보이면 이 컴퓨터에서 성능을 잽니다.";
     button.append(art, badge, meta);
     button.addEventListener("click", () => onPick(item));
     return button;
@@ -664,10 +665,13 @@ const mount = ({ studio, Shader, preview = null }) => {
   grid.replaceChildren(...ART.map(item => card(item, pick)));
   community.replaceChildren(...COMMUNITY.map(item => card(item, pick)));
   lessons.replaceChildren(...LESSONS.map(item => card(item, pick)));
-  // 썸네일 전용 임시 컨텍스트: 각 예제를 t=2.5초로 한 프레임 그린 뒤 카드 캔버스로 복사한다.
-  // 이어서 같은 컨텍스트로 예제마다 성능을 재 배지를 채운다(gallery-perf.js). 한 번에 하나씩, 프레임 사이에 쉬어 가며 잰다.
-  // 갤러리를 닫으면 멈췄다가 다시 열면 이어서 재고, 다 재면 컨텍스트를 해제한다.
-  let perf = null;
+  // 썸네일과 성능 배지는 카드가 화면에 보일 때 하나씩 채운다(lazy-render.js).
+  // 갤러리를 열 때 모든 예제를 한꺼번에 컴파일·그리면 브라우저가 크게 멈춘다. 카드 하나마다:
+  //  1) 필요한 셰이더를 비동기로 컴파일(끝날 때까지 메인 스레드를 막지 않는다)
+  //  2) 썸네일을 t=2.5초로 한 프레임 그려 카드 캔버스로 복사
+  //  3) 다음 프레임에 성능을 잰다(gallery-perf.js). 재는 동안만 메인 미리보기를 멈춘다.
+  // 갤러리를 닫으면 멈췄다가 다시 열면 이어서 한다. 모든 카드를 다 채우면 임시 컨텍스트를 해제한다.
+  let lazy = null;
   const perfResults = new Map();
   const perfBadges = id => dialog.querySelectorAll(`.gallery-card[data-id="${id}"] .gallery-perf`);
   const setBadge = (id, state) => {
@@ -676,6 +680,22 @@ const mount = ({ studio, Shader, preview = null }) => {
       badge.textContent = state.label;
       badge.title = state.title;
     }
+  };
+  // 지금 미리보기가 실제로 그리는 크기(해상도 배율 반영). 모르면 1920×1080.
+  const screenSize = () => {
+    const size = preview?.size?.();
+    return size && size.width > 0 && size.height > 0 ? size : Perf.REFERENCE;
+  };
+  // 잰 값(픽셀당 시간)을 지금 미리보기 크기로 환산해 배지를 다시 쓴다. 갤러리를 열 때마다 부른다(창 크기가 바뀌었을 수 있다).
+  const showPerf = id => {
+    const result = perfResults.get(id);
+    if (!result) return;
+    const size = screenSize(),
+      ms = Perf.estimateFrameMs(result.samples(size), result.baseline),
+      state = Perf.describe(ms, size);
+    if (result.software) state.title += " · GPU 없이 소프트웨어로 그리는 환경이라 실제 GPU보다 훨씬 느리게 나옵니다";
+    Object.assign(result, { ms, size, ...state });
+    setBadge(id, state);
   };
   // 성능을 잴 프로젝트: 예제 카드가 Studio에 넘기는 것과 같은 패스 구성. Studio 소유 예제는 그 소스를 직접 쓴다.
   const perfProject = item => {
@@ -689,7 +709,14 @@ const mount = ({ studio, Shader, preview = null }) => {
     const project = item.project || { image: item.image, passes: [] };
     return { project, uniforms: params(sourcesOf(item)) };
   };
-  const startThumbs = () => {
+  // 썸네일로 그릴 소스: 단일 패스 예제와 Ray Marching. 버퍼가 필요한 예제는 CSS 그림(data-thumb)을 쓴다.
+  const thumbSource = item =>
+    item.image
+      ? { fragment: item.image, uniforms: params([item.image]) }
+      : item.action === "exampleRaymarch"
+        ? { fragment: Shader.raymarch, uniforms: perfProject(item).uniforms }
+        : null;
+  const startLazy = () => {
     const surface = document.createElement("canvas");
     surface.width = 320;
     surface.height = 200;
@@ -703,39 +730,24 @@ const mount = ({ studio, Shader, preview = null }) => {
         });
       return null;
     }
-    const compile = (type, source) => {
-      const s = gl.createShader(type);
-      gl.shaderSource(s, source);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        console.warn("썸네일 컴파일 실패", gl.getShaderInfoLog(s));
-        gl.deleteShader(s);
-        return null;
-      }
-      return s;
-    };
-    const vs = compile(gl.VERTEX_SHADER, Shader.vertex),
-      vao = gl.createVertexArray(),
-      programs = new Map();
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, Shader.vertex);
+    gl.compileShader(vs);
+    const vao = gl.createVertexArray(),
+      programs = new Map(), // fragment → Promise<program | null>
+      abort = new AbortController();
     gl.bindVertexArray(vao);
-    // 같은 소스는 한 번만 컴파일한다(썸네일과 성능 측정이 같이 쓴다). 실패하면 null.
+    // 같은 소스는 한 번만 컴파일한다(썸네일과 성능 측정이 같이 쓴다).
     const program = fragment => {
-      if (programs.has(fragment)) return programs.get(fragment);
-      let linked = null;
-      const fs = vs && compile(gl.FRAGMENT_SHADER, fragment);
-      if (fs) {
-        linked = gl.createProgram();
-        gl.attachShader(linked, vs);
-        gl.attachShader(linked, fs);
-        gl.linkProgram(linked);
-        gl.deleteShader(fs);
-        if (!gl.getProgramParameter(linked, gl.LINK_STATUS)) {
-          gl.deleteProgram(linked);
-          linked = null;
-        }
-      }
-      programs.set(fragment, linked);
-      return linked;
+      if (!programs.has(fragment))
+        programs.set(
+          fragment,
+          Lazy.compileProgram(gl, vs, fragment, { signal: abort.signal }).then(({ program, log }) => {
+            if (!program && log) console.warn("썸네일 컴파일 실패", log);
+            return program;
+          })
+        );
+      return programs.get(fragment);
     };
     // 렌더러가 넣는 기본 Uniform과 예제 파라미터. uMouse·uResolution은 선언한 타입에 맞춰 넣는다(vec2/vec4, vec2/vec3).
     const setup = (linked, users, { width, height }) => {
@@ -766,26 +778,15 @@ const mount = ({ studio, Shader, preview = null }) => {
         else if (type === "vec4") gl.uniform4fv(loc, value);
       }
     };
-    const render = (fragment, users) => {
-      const linked = program(fragment);
-      if (!linked) return false;
+    const drawThumb = (linked, users, id) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, 320, 200);
       setup(linked, users, { width: 320, height: 200 });
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      return true;
-    };
-    const copy = id => {
       for (const target of dialog.querySelectorAll(`canvas[data-thumb="${id}"]`))
         target.getContext("2d")?.drawImage(surface, 0, 0);
     };
-    for (const item of [...ART, ...COMMUNITY])
-      if (item.image && render(item.image, params([item.image]))) copy(item.id);
-    // 단일 패스 레슨은 어노테이션 기본값으로 썸네일을 그린다(파라미터를 소스에서 읽음).
-    for (const item of LESSONS) if (item.image) render(item.image, params([item.image])) && copy(item.thumb || item.id);
-    const ray = Shader.rayUniforms.map(([name, type, value]) => ({ name, type, value }));
-    if (render(Shader.raymarch, ray)) copy("raymarch");
-    // ---- 성능 측정 ----
+    // ---- 성능 측정 준비 ----
     const debug = gl.getExtension("WEBGL_debug_renderer_info"),
       renderer = debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
       software = Perf.isSoftware(renderer),
@@ -796,127 +797,114 @@ const mount = ({ studio, Shader, preview = null }) => {
       );
     // 빈 셰이더 시간 = 고정 비용(호출·동기화). 가장 작게 나온 값을 기준으로 삼는다.
     // 예제를 재기 직전마다 다시 재 보고, 기준보다 한참 길면 GPU가 다른 일(멈추기 직전 메인 프레임, 다른 탭)로 바쁜 것이니
-    // 잠시 뒤 다시 잰다. 이렇게 해야 앞쪽 예제만 몇 배로 부풀지 않는다.
-    const probe = () => (empty ? meter.time(size => setup(empty, [], size)) : 0);
-    let baseline = Infinity;
-    const busy = () => {
-      const ms = probe();
-      baseline = Math.min(baseline, ms);
-      return ms > baseline * 3 + 0.3;
-    };
-    const queue = [...ART, ...COMMUNITY, ...LESSONS];
-    let retries = 0,
-      warmup = 4; // 처음 몇 번은 기준값만 잰다(멈추기 직전 메인 프레임·썸네일 그리기가 끝나기를 기다리며)
-    const measure = item => {
-      const { project, uniforms } = perfProject(item),
-        passes = [
-          ...project.passes.map(pass => ({ source: pass.fragment, pass })),
-          { source: project.image, pass: {} },
-        ],
-        samples = [];
-      for (const { source, pass } of passes) {
-        const linked = program(source);
-        if (!linked) return null;
-        samples.push({
-          ms: meter.time(size => setup(linked, uniforms, size)),
-          measured: meter.pixels,
-          pixels: Perf.passPixels(pass),
-        });
-      }
-      return Perf.estimateFrameMs(samples, Number.isFinite(baseline) ? baseline : 0);
-    };
-    const finish = () => {
-      meter.dispose();
-      for (const linked of programs.values()) if (linked) gl.deleteProgram(linked);
-      if (vs) gl.deleteShader(vs);
-      gl.deleteVertexArray(vao);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
-    };
-    let timer = 0,
-      done = false,
+    // 잠시 뒤 다시 잰다. 미리보기를 새로 멈춘 직후에는 기준값부터 몇 번 잰다(그 전 프레임이 끝나기를 기다리며).
+    let baseline = Infinity,
       paused = false;
-    // 재는 동안만 메인 미리보기를 멈춘다. 갤러리를 닫거나 다 재면 원래대로 돌린다.
-    const pausePreview = () => {
-      if (!paused) paused = !!preview?.pause();
+    const probe = async () => {
+      const linked = await empty;
+      const ms = linked ? await meter.time(size => setup(linked, [], size)) : 0;
+      baseline = Math.min(baseline, ms);
+      return ms;
+    };
+    const pausePreview = async () => {
+      if (paused) return;
+      paused = !!preview?.pause();
+      for (let i = 0; i < 4; i++) {
+        await Lazy.wait(100);
+        await probe();
+      }
     };
     const resumePreview = () => {
       if (paused) preview?.resume();
       paused = false;
     };
-    const step = () => {
-      timer = 0;
-      if (done || !dialog.open) return resumePreview();
-      const item = queue.shift();
-      if (!item) {
-        done = true;
-        resumePreview();
-        finish();
-        return;
+    const measure = async item => {
+      const { project, uniforms } = perfProject(item),
+        passes = [
+          ...project.passes.map(pass => ({ source: pass.fragment, pass })),
+          { source: project.image, pass: {} },
+        ],
+        linked = await Promise.all(passes.map(({ source }) => program(source)));
+      if (linked.some(entry => !entry)) return null;
+      await pausePreview();
+      for (let retry = 0; retry < 5; retry++) {
+        if ((await probe()) <= baseline * 3 + 0.3) break;
+        await Lazy.wait(150);
       }
-      pausePreview();
-      if (warmup > 0) {
-        warmup--;
-        busy();
-        queue.unshift(item);
-        timer = setTimeout(step, 100);
-        return;
-      }
-      if (!perfResults.has(item.id) && retries < 5 && busy()) {
-        retries++;
-        queue.unshift(item);
-        timer = setTimeout(step, 150);
-        return;
-      }
-      retries = 0;
-      if (!perfResults.has(item.id)) {
-        let ms = null;
-        try {
-          ms = measure(item);
-        } catch (error) {
-          console.warn("성능 측정 실패", item.id, error);
-        }
-        if (ms === null || !Number.isFinite(ms))
-          setBadge(item.id, { level: "unknown", label: "측정 실패", title: "이 예제는 성능을 재지 못했습니다." });
-        else {
-          const state = { ms, software, ...Perf.describe(ms) };
-          if (software) state.title += " · GPU 없이 소프트웨어로 그리는 환경이라 실제 GPU보다 훨씬 느리게 나옵니다";
-          perfResults.set(item.id, state);
-          setBadge(item.id, state);
-        }
-      }
-      timer = setTimeout(step, 30);
+      // 픽셀당 시간만 보관한다. 배지는 그때그때 지금 미리보기 크기로 환산한다(showPerf).
+      const timed = [];
+      for (const [i, { pass }] of passes.entries())
+        timed.push({ ms: await meter.time(size => setup(linked[i], uniforms, size)), pass });
+      return {
+        samples: screen =>
+          timed.map(({ ms, pass }) => ({ ms, measured: meter.pixels, pixels: Perf.passPixels(pass, screen) })),
+        baseline: Number.isFinite(baseline) ? baseline : 0,
+        software,
+      };
     };
+    const job = item => async () => {
+      if (abort.signal.aborted) return;
+      const thumb = thumbSource(item);
+      if (thumb) {
+        const linked = await program(thumb.fragment);
+        if (linked && !abort.signal.aborted) drawThumb(linked, thumb.uniforms, item.thumb || item.id);
+        await Lazy.nextFrame();
+      }
+      if (abort.signal.aborted || perfResults.has(item.id)) return;
+      let result = null;
+      try {
+        result = await measure(item);
+      } catch (error) {
+        console.warn("성능 측정 실패", item.id, error);
+      }
+      if (!result) {
+        setBadge(item.id, { level: "unknown", label: "측정 실패", title: "이 예제는 성능을 재지 못했습니다." });
+        return;
+      }
+      perfResults.set(item.id, result);
+      showPerf(item.id);
+    };
+    const finish = () => {
+      resumePreview();
+      if (abort.signal.aborted) return;
+      abort.abort();
+      queue.dispose();
+      meter.dispose();
+      Promise.all(programs.values()).then(list => {
+        for (const linked of list) if (linked) gl.deleteProgram(linked);
+        gl.deleteShader(vs);
+        gl.deleteVertexArray(vao);
+        gl.getExtension("WEBGL_lose_context")?.loseContext();
+      });
+    };
+    // 보이는 카드를 다 처리하면 미리보기를 다시 켠다. 남은 카드가 없으면 컨텍스트를 해제한다.
+    const queue = Lazy.createVisibleQueue({
+      margin: "160px",
+      onIdle: remaining => (remaining ? resumePreview() : finish()),
+    });
+    for (const item of [...ART, ...COMMUNITY, ...LESSONS])
+      for (const cardNode of dialog.querySelectorAll(`.gallery-card[data-id="${item.id}"]`))
+        queue.add(cardNode, job(item));
     return {
       resume: () => {
-        if (!done && !timer) timer = setTimeout(step, 120);
+        if (!abort.signal.aborted) queue.resume();
       },
       pause: () => {
-        clearTimeout(timer);
-        timer = 0;
+        queue.pause();
         resumePreview();
       },
-      stop: () => {
-        clearTimeout(timer);
-        timer = 0;
-        resumePreview();
-        if (!done) {
-          done = true;
-          finish();
-        }
-      },
+      stop: finish,
     };
   };
-  const drawThumbs = () => {
-    if (!thumbsDrawn) {
-      thumbsDrawn = true;
-      perf = startThumbs();
-    }
-    perf?.resume();
+  const startThumbs = () => {
+    lazy ??= startLazy();
+    lazy?.resume();
+    for (const id of perfResults.keys()) showPerf(id);
   };
   const open = (welcome = false) => {
     dialog.dataset.welcome = String(welcome);
     if (!dialog.open) dialog.showModal();
-    requestAnimationFrame(drawThumbs);
+    requestAnimationFrame(startThumbs);
     $("galleryClose").focus();
   };
   const close = () => {
@@ -930,7 +918,7 @@ const mount = ({ studio, Shader, preview = null }) => {
     "close",
     () => {
       finishOnboarding();
-      perf?.pause();
+      lazy?.pause();
     },
     { signal }
   );
@@ -965,10 +953,16 @@ const mount = ({ studio, Shader, preview = null }) => {
     open,
     close,
     loadLesson,
-    // 잰 성능(예제 id → { ms, level, label, title, software }). 테스트와 진단용.
-    getPerformance: () => Object.fromEntries(perfResults),
+    // 잰 성능(예제 id → { ms, size, level, label, title, software }). 테스트와 진단용.
+    getPerformance: () =>
+      Object.fromEntries(
+        [...perfResults].map(([id, { ms, size, level, label, title, software }]) => [
+          id,
+          { ms, size, level, label, title, software },
+        ])
+      ),
     dispose: () => {
-      perf?.stop();
+      lazy?.stop();
       controller.abort();
     },
   };

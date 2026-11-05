@@ -5,6 +5,8 @@
 //   {map:"..."}이 있으면 3D 조각: float pvMap(vec3 p) 본문이 되고, 그림은 기본 3D 렌더(pvRender)로 그린다.
 //   {self:true}는 패스 전체를 바꾸는 템플릿: 조각 소스 자체를 그대로 그린다.
 // 조각 코드가 쓰는 앱 Uniform(uTime·uResolution·iChannel0…)은 머리에 선언되며, iChannel0·1에는 시험용 그림이 연결된다.
+import * as Lazy from "./lazy-render.js";
+
 const WIDTH = 320,
   HEIGHT = 160,
   TIME = 2.0;
@@ -372,9 +374,8 @@ const create = ({ plan }) => {
     vs = null,
     ready = false,
     unavailable = false;
-  const done = new Map(),
-    queue = [];
-  let scheduled = false;
+  const done = new Map(), // 조각 id → 그린 결과 캔버스(실패하면 null)
+    pending = new Map(); // 조각 id → 그리는 중인 Promise
   const init = () => {
     if (ready || unavailable) return ready;
     surface = document.createElement("canvas");
@@ -421,7 +422,29 @@ const create = ({ plan }) => {
     ready = true;
     return true;
   };
-  // 조각 하나를 그려 결과 캔버스(WIDTH×HEIGHT)를 돌려준다. 컴파일 실패나 WebGL2가 없으면 null.
+  // 링크된 프로그램으로 한 장 그려 결과 캔버스(WIDTH×HEIGHT)를 만든다.
+  const paint = program => {
+    gl.bindVertexArray(vao);
+    gl.viewport(0, 0, WIDTH, HEIGHT);
+    gl.useProgram(program);
+    const at = name => gl.getUniformLocation(program, name);
+    gl.uniform2f(at("uResolution"), WIDTH, HEIGHT);
+    gl.uniform1f(at("uTime"), TIME);
+    gl.uniform1f(at("uDeltaTime"), 1 / 60);
+    gl.uniform1i(at("uFrame"), 120);
+    gl.uniform4f(at("uMouse"), -1, -1, 0, 0);
+    gl.uniform1i(at("iChannel0"), 0);
+    gl.uniform1i(at("iChannel1"), 1);
+    gl.uniform3fv(at("iChannelResolution"), [256, 128, 1, 256, 128, 1, 0, 0, 0, 0, 0, 0]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const result = document.createElement("canvas");
+    result.width = WIDTH;
+    result.height = HEIGHT;
+    result.getContext("2d")?.drawImage(surface, 0, 0);
+    return result;
+  };
+  // 조각 하나를 그려 결과 캔버스를 돌려준다. 컴파일 실패나 WebGL2가 없으면 null. 컴파일을 기다리며 멈추는 동기식이다
+  // (테스트·내보내기용). 화면의 조각 카드는 draw()가 비동기로 그린다.
   const render = item => {
     if (done.has(item.id)) return done.get(item.id);
     const fragment = source(item, plan);
@@ -438,63 +461,64 @@ const create = ({ plan }) => {
     gl.linkProgram(program);
     gl.deleteShader(fs);
     let result = null;
-    if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      gl.useProgram(program);
-      const at = name => gl.getUniformLocation(program, name);
-      gl.uniform2f(at("uResolution"), WIDTH, HEIGHT);
-      gl.uniform1f(at("uTime"), TIME);
-      gl.uniform1f(at("uDeltaTime"), 1 / 60);
-      gl.uniform1i(at("uFrame"), 120);
-      gl.uniform4f(at("uMouse"), -1, -1, 0, 0);
-      gl.uniform1i(at("iChannel0"), 0);
-      gl.uniform1i(at("iChannel1"), 1);
-      gl.uniform3fv(at("iChannelResolution"), [256, 128, 1, 256, 128, 1, 0, 0, 0, 0, 0, 0]);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      result = document.createElement("canvas");
-      result.width = WIDTH;
-      result.height = HEIGHT;
-      result.getContext("2d")?.drawImage(surface, 0, 0);
-    } else
-      console.warn(`코드 조각 미리보기 실패: ${item.id}`, gl.getProgramInfoLog(program) || gl.getShaderInfoLog(fs));
+    if (gl.getProgramParameter(program, gl.LINK_STATUS)) result = paint(program);
+    else console.warn(`코드 조각 미리보기 실패: ${item.id}`, gl.getProgramInfoLog(program) || gl.getShaderInfoLog(fs));
     gl.deleteProgram(program);
     done.set(item.id, result);
     return result;
   };
-  // 카드가 화면에 붙은 뒤 프레임마다 약 8ms 안에서 그린다(목록을 여는 순간 멈칫하지 않고, 느린 기기에서도 꾸준히 채워지도록).
-  const clock = () => (typeof performance === "object" ? performance.now() : Date.now());
-  const pump = () => {
-    scheduled = false;
-    const start = clock();
-    while (queue.length && clock() - start < 8) {
-      const { item, canvas } = queue.shift();
-      if (!canvas.isConnected) continue; // 범주를 바꿔 사라진 카드는 건너뛴다
-      const image = render(item);
-      if (image) {
-        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-        canvas.closest(".snippet-preview")?.classList.add("is-ready");
-      } else canvas.closest(".snippet-preview")?.remove();
+  // 비동기판: 컴파일은 브라우저가 뒤에서 하고(KHR_parallel_shader_compile), 끝나면 그린다. 같은 조각은 한 번만 그린다.
+  const renderAsync = item => {
+    if (done.has(item.id)) return Promise.resolve(done.get(item.id));
+    if (pending.has(item.id)) return pending.get(item.id);
+    const fragment = source(item, plan);
+    if (!fragment || !init()) {
+      done.set(item.id, null);
+      return Promise.resolve(null);
     }
-    if (queue.length && !scheduled) {
-      scheduled = true;
-      requestAnimationFrame(pump);
-    }
+    const promise = Lazy.compileProgram(gl, vs, fragment).then(({ program, log }) => {
+      let result = null;
+      if (program && gl) {
+        result = paint(program);
+        gl.deleteProgram(program);
+      } else if (!program) console.warn(`코드 조각 미리보기 실패: ${item.id}`, log);
+      pending.delete(item.id);
+      done.set(item.id, result);
+      return result;
+    });
+    pending.set(item.id, promise);
+    return promise;
   };
+  const apply = (canvas, image) => {
+    if (image) {
+      canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.closest(".snippet-preview")?.classList.add("is-ready");
+    } else canvas.closest(".snippet-preview")?.remove();
+  };
+  // 카드가 화면에 보일 때만, 한 프레임에 하나씩 그린다(lazy-render.js). 범주를 바꾸거나 검색해 목록을 다시 그려도
+  // 이미 그린 조각은 바로 붙이고, 사라진 카드는 대기열에서 빠진다.
+  let lazy = Lazy.createVisibleQueue({ margin: "240px" });
   const draw = (item, canvas) => {
     if (!PREVIEWS[item.id] || unavailable) return false;
-    queue.push({ item, canvas });
-    if (!scheduled) {
-      scheduled = true;
-      requestAnimationFrame(pump);
+    if (done.has(item.id)) {
+      apply(canvas, done.get(item.id));
+      return true;
     }
+    lazy.add(canvas, async () => {
+      const image = await renderAsync(item);
+      if (canvas.isConnected) apply(canvas, image);
+    });
     return true;
   };
   const dispose = () => {
-    queue.length = 0;
+    lazy.dispose();
+    lazy = Lazy.createVisibleQueue({ margin: "240px" });
+    pending.clear();
     done.clear();
     gl?.getExtension("WEBGL_lose_context")?.loseContext();
     gl = null;
     ready = false;
   };
-  return { draw, render, has: id => !!PREVIEWS[id] && !unavailable, dispose };
+  return { draw, render, renderAsync, has: id => !!PREVIEWS[id] && !unavailable, dispose };
 };
 export { create, source, PREVIEWS, WIDTH, HEIGHT };
