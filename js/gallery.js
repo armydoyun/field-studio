@@ -669,7 +669,7 @@ const mount = ({ studio, Shader, preview = null }) => {
   // 갤러리를 열 때 모든 예제를 한꺼번에 컴파일·그리면 브라우저가 크게 멈춘다. 카드 하나마다:
   //  1) 필요한 셰이더를 비동기로 컴파일(끝날 때까지 메인 스레드를 막지 않는다)
   //  2) 썸네일을 t=2.5초로 한 프레임 그려 카드 캔버스로 복사
-  //  3) 다음 프레임에 성능을 잰다(gallery-perf.js). 재는 동안만 메인 미리보기를 멈춘다.
+  //  3) 다음 프레임에 성능을 잰다(gallery-perf.js). 카드 하나를 재는 동안만 메인 미리보기를 멈춘다.
   // 갤러리를 닫으면 멈췄다가 다시 열면 이어서 한다. 모든 카드를 다 채우면 임시 컨텍스트를 해제한다.
   let lazy = null;
   const perfResults = new Map();
@@ -806,12 +806,15 @@ const mount = ({ studio, Shader, preview = null }) => {
       baseline = Math.min(baseline, ms);
       return ms;
     };
+    // 미리보기는 카드 하나를 재는 동안만 멈춘다(느린 컴퓨터에서 보이는 카드를 다 재느라 오래 멈춰 있지 않게).
+    // 멈춘 직후에는 그 전에 보낸 메인 프레임이 아직 GPU에서 돌 수 있으니, 빈 셰이더가 기준값 근처로 돌아올 때까지
+    // 짧게 기다린다(최대 6번). 처음에는 기준값이 없으므로 적어도 두 번 잰다.
     const pausePreview = async () => {
-      if (paused) return;
-      paused = !!preview?.pause();
-      for (let i = 0; i < 4; i++) {
-        await Lazy.wait(100);
-        await probe();
+      if (!paused) paused = !!preview?.pause();
+      for (let i = 0; i < 6 && dialog.open; i++) {
+        await Lazy.wait(i ? 60 : paused ? 100 : 0);
+        const ms = await probe();
+        if (i >= 1 && ms <= baseline * 3 + 0.3) break;
       }
     };
     const resumePreview = () => {
@@ -826,23 +829,31 @@ const mount = ({ studio, Shader, preview = null }) => {
         ],
         linked = await Promise.all(passes.map(({ source }) => program(source)));
       if (linked.some(entry => !entry)) return null;
-      await pausePreview();
-      for (let retry = 0; retry < 5; retry++) {
-        if ((await probe()) <= baseline * 3 + 0.3) break;
-        await Lazy.wait(150);
-      }
       // 픽셀당 시간만 보관한다. 배지는 그때그때 지금 미리보기 크기로 환산한다(showPerf).
       const timed = [];
-      for (const [i, { pass }] of passes.entries())
-        timed.push({ ms: await meter.time(size => setup(linked[i], uniforms, size)), pass });
+      if (!dialog.open) return interrupted;
+      await pausePreview();
+      try {
+        for (const [i, { pass }] of passes.entries()) {
+          if (!dialog.open) return interrupted; // 재는 도중에 닫으면 그만두고 미리보기를 바로 돌려준다
+          timed.push({ ms: await meter.time(size => setup(linked[i], uniforms, size)), pass });
+        }
+      } finally {
+        resumePreview();
+      }
       return {
         samples: screen =>
           timed.map(({ ms, pass }) => ({ ms, measured: meter.pixels, pixels: Perf.passPixels(pass, screen) })),
-        baseline: Number.isFinite(baseline) ? baseline : 0,
+        // 고정 비용은 지금까지 잰 가장 작은 값을 쓴다(처음에는 바쁜 GPU 때문에 크게 잡힐 수 있어, 뒤에 잰 값이 더 정확하다).
+        get baseline() {
+          return Number.isFinite(baseline) ? baseline : 0;
+        },
         software,
       };
     };
-    const job = item => async () => {
+    // 갤러리가 닫혀 있으면 재지 않는다(닫은 뒤에 미리보기를 멈추지 않게). 그 카드는 대기열에 되돌려 다시 열 때 잰다.
+    const interrupted = Symbol("interrupted");
+    const job = (item, node) => async () => {
       if (abort.signal.aborted) return;
       const thumb = thumbSource(item);
       if (thumb) {
@@ -857,12 +868,17 @@ const mount = ({ studio, Shader, preview = null }) => {
       } catch (error) {
         console.warn("성능 측정 실패", item.id, error);
       }
+      if (result === interrupted) {
+        queue.add(node, job(item, node));
+        return;
+      }
       if (!result) {
         setBadge(item.id, { level: "unknown", label: "측정 실패", title: "이 예제는 성능을 재지 못했습니다." });
         return;
       }
       perfResults.set(item.id, result);
-      showPerf(item.id);
+      // 기준값이 더 작아졌을 수 있으니 이미 잰 카드도 다시 환산한다.
+      for (const id of perfResults.keys()) showPerf(id);
     };
     const finish = () => {
       resumePreview();
@@ -877,14 +893,16 @@ const mount = ({ studio, Shader, preview = null }) => {
         gl.getExtension("WEBGL_lose_context")?.loseContext();
       });
     };
-    // 보이는 카드를 다 처리하면 미리보기를 다시 켠다. 남은 카드가 없으면 컨텍스트를 해제한다.
+    // 모든 카드를 다 채우면 컨텍스트를 해제한다.
     const queue = Lazy.createVisibleQueue({
       margin: "160px",
-      onIdle: remaining => (remaining ? resumePreview() : finish()),
+      onIdle: remaining => {
+        if (!remaining) finish();
+      },
     });
     for (const item of [...ART, ...COMMUNITY, ...LESSONS])
       for (const cardNode of dialog.querySelectorAll(`.gallery-card[data-id="${item.id}"]`))
-        queue.add(cardNode, job(item));
+        queue.add(cardNode, job(item, cardNode));
     return {
       resume: () => {
         if (!abort.signal.aborted) queue.resume();
