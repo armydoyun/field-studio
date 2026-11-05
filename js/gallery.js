@@ -6,6 +6,7 @@ import * as Perf from "./gallery-perf.js";
 import * as Lazy from "./lazy-render.js";
 import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
+import * as Technique from "./technique-examples.js";
 const { COMMUNITY } = Community;
 // 예제의 파라미터(범위·기본값·색상)는 셰이더 소스의 @어노테이션 한곳에만 적는다.
 // 코드를 복사해 다른 곳에 붙여도 슬라이더가 그대로 따라오게 하기 위해서다.
@@ -701,6 +702,8 @@ const LESSONS = [
       imageChannels: { 0: { buffer: "A", frame: "current" }, 1: { buffer: "B", frame: "current" } },
     },
   },
+  // 주제가 큰 예제(PBR · 볼류메트릭 구름 · 2D 유체)는 technique-examples.js에 있다.
+  ...Technique.LESSONS,
   {
     id: "raymarch",
     title: "Ray Marching SDF",
@@ -1003,6 +1006,8 @@ const mount = ({ studio, Shader, preview = null }) => {
       perfResults.set(item.id, result);
       // 기준값이 더 작아졌을 수 있으니 이미 잰 카드도 다시 환산한다.
       for (const id of perfResults.keys()) showPerf(id);
+      // 다음 카드를 재기 전에 미리보기를 잠깐 돌린다(무거운 카드가 이어져도 미리보기가 계속 멈춰 있지 않게).
+      await Lazy.wait(250);
     };
     const finish = () => {
       resumePreview();

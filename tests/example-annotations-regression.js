@@ -18,7 +18,7 @@ const COLOR_NAME=/col|color|tint|sky|fog|ink|lead|glow|hot|cool|back|high|low|su
 const declarations=(text,where)=>text.split(/\n|\\n/).map(line=>line.replace(/^\s*["`]?/,"")).filter(line=>/^uniform\s/.test(line))
   .map(line=>({where,line:line.replace(/["`].*$/,""),name:(line.match(/^uniform\s+(?:(?:lowp|mediump|highp)\s+)?\w+\s+(\w+)/)||[])[1],type:(line.match(/^uniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)/)||[])[1]}))
   .filter(d=>d.name&&!BUILTIN.has(d.name)&&!/^sampler/.test(d.type)&&!/^iChannel/.test(d.name));
-const FILES=["gallery.js","community-examples.js","course.js","studio-examples.js"];
+const FILES=["gallery.js","community-examples.js","technique-examples.js","course.js","studio-examples.js"];
 const found=[...FILES.flatMap(file=>declarations(fs.readFileSync(path.join(root,"js",file),"utf8"),file)),...declarations(Shader.raymarch,"shader.js raymarch")];
 let passed=0;const test=(name,fn)=>{fn();passed++;console.log("PASS",name);};
 test(`예제 사용자 Uniform을 찾았다 (${found.length}개)`,()=>{
@@ -46,7 +46,7 @@ test("@color가 붙은 값은 0~1 안이다",()=>{
     assert(item.value.every(v=>v>=0&&v<=1),`${d.where}: ${d.name} = ${item.value}`);}
 });
 test("갤러리 예제는 JS에 따로 값 목록(users)을 두지 않는다",()=>{
-  for(const file of ["gallery.js","community-examples.js"])assert(!/^\s*users:/m.test(fs.readFileSync(path.join(root,"js",file),"utf8")),file);
+  for(const file of ["gallery.js","community-examples.js","technique-examples.js"])assert(!/^\s*users:/m.test(fs.readFileSync(path.join(root,"js",file),"utf8")),file);
 });
 test("Ray Marching 예제의 어노테이션은 rayUniforms와 같다",()=>{
   const specs=Annotations.collect([Shader.raymarch]);
