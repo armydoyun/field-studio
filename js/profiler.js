@@ -291,6 +291,7 @@ const mount = renderer => {
           const active = current.previewPass === shot.name && current.previewAttachment === shot.attachment;
           try {
             renderer.setPreviewPass(active ? null : shot.name, active ? 0 : shot.attachment);
+            document.dispatchEvent(new Event("shader-preview-changed")); // 편집기 머리줄의 미리보기 버튼도 맞춘다
           } catch (error) {
             $("profilePixel").textContent = error.message;
           }

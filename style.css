@@ -41,6 +41,8 @@ svg { display:block;flex-shrink:0; }
 .icon-up { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 19V5m-6 6 6-6 6 6'/%3E%3C/svg%3E"); }
 .icon-down { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14m-6-6 6 6 6-6'/%3E%3C/svg%3E"); }
 .icon-chevron { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E"); }
+.icon-pin { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 17v5M9 3h6l-1 6 4 4v2H6v-2l4-4-1-6z'/%3E%3C/svg%3E"); }
+.icon-eye { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
 .icon-plus { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5v14'/%3E%3C/svg%3E"); }
 .icon-pause { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 5v14M16 5v14' stroke-width='3'/%3E%3C/svg%3E"); }
 .icon-image { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='2'/%3E%3Cpath d='m4 16 5-5 5 5 3-3 3 3'/%3E%3Ccircle cx='15.5' cy='8.5' r='1'/%3E%3C/svg%3E"); }
@@ -682,7 +684,15 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 /* ③ 코드 머리줄: 파일 이름·상태 왼쪽, 탐색 아이콘·메뉴 오른쪽 */
 .studio-code-label { gap:8px;min-height:38px;padding:3px 6px 3px 12px; }
 .studio-code-label #studioCodeTitle { flex:0 1 auto;color:var(--text); }
-.studio-code-label .studio-preview-target { flex:0 1 auto;min-width:0;overflow:hidden;color:var(--faint);font-weight:500;text-overflow:ellipsis;white-space:nowrap; }
+.studio-code-label .studio-preview-target { display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;min-width:0;min-height:0;margin:0;padding:1px 4px;overflow:hidden;text-align:left;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--faint);font-weight:500;text-overflow:ellipsis;white-space:nowrap;cursor:pointer; }
+/* 미리보기 버튼(눈 아이콘 + Image / Buffer A): 누르면 Image ↔ 편집 중인 패스를 오간다. 고정 버튼은 켜면 탭을 바꿔도 미리보기를 그대로 둔다. */
+.studio-code-label .studio-preview-target::before { flex-basis:12px;width:12px;height:12px; }
+.studio-code-label .studio-preview-target:hover:not(:disabled) { background:var(--surface-hover);color:var(--text-soft); }
+.studio-code-label .studio-preview-target:disabled { cursor:default; }
+.studio-code-label .studio-preview-pin { flex:0 0 auto;width:20px;min-width:20px;height:20px;min-height:20px;margin:0;padding:0;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--faint); }
+.studio-code-label .studio-preview-pin::before { flex-basis:12px;width:12px;height:12px; }
+.studio-code-label .studio-preview-pin:hover { background:var(--surface-hover);color:var(--text-soft); }
+.studio-code-label .studio-preview-pin[aria-pressed="true"] { background:var(--accent-soft);color:var(--accent-strong); }
 .studio-code-label .studio-editor-tools { flex:0 0 auto;flex-wrap:nowrap;gap:2px;margin-left:auto;padding:0;border:0;background:none; }
 .studio-code-label .studio-editor-tools>.glyph-icon,.studio-menu>summary { flex:0 0 30px;width:30px;min-height:30px;height:30px;padding:0;border-radius:var(--radius-sm); }
 /* 현재 위치 표시(breadcrumb): 커서가 들어 있는 함수 이름 · 누르면 @ 함수·변수 팔레트 */
@@ -726,7 +736,7 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 /* 아주 낮은 창(작은 노트북의 4분할 등): 보조 줄(파일 이름·파일/샘플 도구·커서 위치)을 숨기고 도구 줄을 줄여 코드가 몇 줄이라도 보이게 한다.
    실행 상태는 하단 메시지 줄에 계속 표시된다. */
 @media (max-height:450px) {
- .studio-preview-target,.studio-storage { display:none; }
+ .studio-preview-target,.studio-preview-pin,.studio-storage { display:none; }
  .studio-top { min-height:0;padding-block:2px; }.studio-code-label { min-height:0;padding-block:1px; }.studio-pass-settings>summary { min-height:26px;padding-block:2px; }
 }
 .studio-error,.studio-diagnostics { border-top-color:color-mix(in srgb,var(--danger) 35%,transparent);background:color-mix(in srgb,var(--danger) 5%,var(--panel));color:var(--text-soft); }
@@ -862,7 +872,7 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 @media (max-width:820px) { #studioLayout { display:none; } }
 /* 휴대폰: 보조 행을 숨기고 도구 줄은 가로 스크롤 한 줄로 접어 코드 영역 높이를 확보한다. */
 @media (max-width:600px) {
- .studio-preview-target,.studio-storage,#studioComplete,#studioMaximize { display:none; }
+ .studio-preview-target,.studio-preview-pin,.studio-storage,#studioComplete,#studioMaximize { display:none; }
  .studio-top { padding:4px 6px; }
  .studio-window-tools { flex:1 1 100%;justify-content:flex-end;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none; }
  .studio-window-tools>* { flex-shrink:0;white-space:nowrap; }

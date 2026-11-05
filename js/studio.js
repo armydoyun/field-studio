@@ -268,9 +268,54 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (error) setStorage("error", "소스 · 브라우저 보관 실패", error.message);
     else setStorage("saved", "소스 · 브라우저 보관됨");
   };
-  const preview = () => {
+  // 미리보기(뷰포트에 보이는 패스).
+  //  · 탭을 바꾸면 그 패스를 따라간다(처음 쓰는 사람이 "내가 고치는 버퍼"를 바로 보게). 단, 고정(previewPinned)을 켜면 그대로 둔다.
+  //  · 코드를 적용할 때(자동 적용 포함)는 미리보기를 바꾸지 않는다 — Buffer A를 고치면서 최종 Image를 보고 있을 수 있다.
+  //    지금 보던 버퍼가 사라졌을 때만 Image로 돌아간다.
+  //  · 편집기 머리줄의 미리보기 버튼(눈 아이콘 + Image / Buffer A)은 Image ↔ 편집 중인 패스를 오간다.
+  const PIN_KEY = "field.previewPinned.v1";
+  let previewPinned = Store.read(PIN_KEY) === "1";
+  const passExists = name => renderer.getPasses().some(p => p.name === name);
+  const preview = (force = false) => {
+    if (previewPinned && !force) return keepPreview();
     const name = selected === "Image" ? null : selected;
-    if (renderer.getPasses().some(p => p.name === name) || !name) renderer.setPreviewPass(name);
+    if (!name || passExists(name)) renderer.setPreviewPass(name);
+    syncPreviewControls();
+  };
+  const keepPreview = () => {
+    const current = renderer.getStats().previewPass;
+    if (current && !passExists(current)) renderer.setPreviewPass(null);
+    syncPreviewControls();
+  };
+  const togglePreview = () => {
+    const current = renderer.getStats().previewPass;
+    if (current) renderer.setPreviewPass(null);
+    else if (selected !== "Image" && passExists(selected)) renderer.setPreviewPass(selected);
+    syncPreviewControls();
+    document.dispatchEvent(new Event("shader-preview-changed"));
+  };
+  const setPreviewPinned = pinned => {
+    previewPinned = !!pinned;
+    Store.write(PIN_KEY, previewPinned ? "1" : "0");
+    syncPreviewControls();
+  };
+  // 버튼 상태: 보이는 것이 Image이고 편집 중인 것도 Image면 오갈 곳이 없다.
+  const syncPreviewControls = () => {
+    const target = $("studioPreviewTarget"),
+      pin = $("studioPreviewPin");
+    if (!target || !pin) return;
+    const current = renderer.getStats().previewPass,
+      other = current ? "Image" : selected !== "Image" && passExists(selected) ? `Buffer ${selected}` : null;
+    target.textContent = current ? `Buffer ${current}` : "Image";
+    target.setAttribute("aria-label", `미리보기: ${target.textContent}`);
+    target.disabled = !other;
+    target.title = other
+      ? `미리보기: 지금 ${target.textContent} · 누르면 ${other}(으)로`
+      : "미리보기: Image (편집 중인 패스도 Image)";
+    pin.setAttribute("aria-pressed", String(previewPinned));
+    pin.title = previewPinned
+      ? "미리보기 고정 중: 탭을 바꿔도 미리보기가 그대로입니다 (누르면 해제)"
+      : "미리보기 고정: 켜면 탭을 바꿔도 미리보기를 바꾸지 않습니다";
   };
   // 구조 변경은 전체 Pass 교체. 소스·채널만 바뀌면 해당 패스만 갱신하여 이전 Texture를 보존한다.
   const apply = (users = null) => {
@@ -287,7 +332,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           ? renderer.applyPortable(project, users)
           : renderer.applyProject(project);
       syncHistory();
-      preview();
+      keepPreview(); // 적용할 때는 미리보기를 바꾸지 않는다(위 preview 설명)
       dirty = false;
       clearError();
       clearDraft();
@@ -911,7 +956,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderEditor();
     recordEdit(false, true);
     Object.assign(checkpoint, { selected, ...cursorState() });
-    preview();
+    preview(true); // 새 프로젝트: 고정과 상관없이 고른 탭을 보여 준다
     saveLocal();
     revealCode();
   };
@@ -1207,7 +1252,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       } else {
         selected = data.selected === "Image" || find(data.selected) ? data.selected : "Image";
         renderEditor();
-        preview();
+        preview(true); // 새 프로젝트: 고정과 상관없이 고른 탭을 보여 준다
         if (detached) setStatus(`${detached}개 이미지 연결이 해제됐습니다. 파일을 다시 불러오세요.`, "is-dirty");
       }
     } catch (error) {
@@ -1699,11 +1744,18 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       at = tabs.findIndex(tab => tab.classList.contains("is-active"));
     tabs[(at + step + tabs.length) % tabs.length]?.click();
   };
+  on($("studioPreviewTarget"), "click", togglePreview);
+  on($("studioPreviewPin"), "click", () => setPreviewPinned(!previewPinned));
+  // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
+  on(document, "shader-preview-changed", syncPreviewControls);
+  syncPreviewControls();
   editor.registerCommands?.([
     press("셰이더 실행 (적용)", "studioRun", "Ctrl+S"),
     press("되돌리기", "studioUndo", "Ctrl+Z"),
     press("다시 실행", "studioRedo", "Ctrl+Y"),
     { label: "자동 적용 켜기/끄기", run: () => $("studioLive").click() },
+    { label: "미리보기: Image ↔ 편집 중인 패스", run: togglePreview },
+    { label: "미리보기 고정 켜기/끄기", run: () => setPreviewPinned(!previewPinned) },
     press("버퍼 패스 추가", "studioAdd"),
     { label: "다음 패스로", key: "Alt+PageDown", run: () => stepPass(1) },
     { label: "이전 패스로", key: "Alt+PageUp", run: () => stepPass(-1) },
