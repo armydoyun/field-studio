@@ -9,12 +9,42 @@
   const why = () => `toast="${$("uiToast").hidden ? "" : $("toastMessage").textContent}" recording=${stage.classList.contains("is-recording")}`;
   // 내려받기를 기다린다. CI(소프트웨어 렌더링 · 여러 테스트 동시 실행)에서는 녹화를 끝내고 파일이 나오기까지 몇 초 걸릴 수 있다.
   const waitDownload = async count => { for (let i = 0; i < 300 && downloads.length < count; i++) await wait(50); return downloads[count - 1]; };
+  // 바이트 수는 화질·해상도·코덱에 따라 달라진다. 실제로 두 프레임 이상 디코딩되고 시간이 진행되는지 검사한다.
+  const readVideo = async (file, width, height) => {
+    test(!!file && /^shader-\d{8}-\d{6}\.(webm|mp4)$/.test(file.name) && file.blob?.size > 0 && /^video\//.test(file.blob.type), `영상 파일 내려받기: ${file?.name} ${file?.blob?.size}B ${file?.blob?.type} ${why()}`);
+    const video = document.createElement("video"), url = URL.createObjectURL(file.blob);
+    video.muted = true;
+    let timer, callback;
+    try {
+      const frame = await new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`영상 디코딩 시간 초과(두 프레임 필요): readyState=${video.readyState} time=${video.currentTime} decoded=${video.webkitDecodedFrameCount} size=${file.blob.size}`)), 15000);
+        video.onerror = () => reject(new Error(`영상 디코딩 실패: ${video.error?.message}`));
+        const next = (_, metadata) => {
+          // 부하가 크면 표시 프레임은 건너뛸 수 있다. 디코딩한 프레임 수로 검사한다.
+          if (video.getVideoPlaybackQuality().totalVideoFrames >= 2 && metadata.mediaTime > 0) resolve(metadata);
+          else callback = video.requestVideoFrameCallback(next);
+        };
+        callback = video.requestVideoFrameCallback(next);
+        video.src = url;
+        video.play().catch(reject);
+      });
+      test(video.videoWidth === width && video.videoHeight === height, `디코딩된 영상 크기 ${video.videoWidth}×${video.videoHeight} = 렌더 크기 ${width}×${height}`);
+      test(frame.mediaTime > 0, `영상 프레임 진행: ${video.getVideoPlaybackQuality().totalVideoFrames}장 · ${frame.mediaTime.toFixed(3)}초`);
+      const image = document.createElement("canvas"); image.width = image.height = 1;
+      const context = image.getContext("2d"); context.drawImage(video, 0, 0, 1, 1);
+      return context.getImageData(0, 0, 1, 1).data;
+    } finally {
+      clearTimeout(timer); video.cancelVideoFrameCallback(callback); video.pause();
+      video.onerror = null; video.removeAttribute("src"); video.load(); URL.revokeObjectURL(url);
+    }
+  };
   const key = k => document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
   // 내려받기를 가로챈다: a[download].click()이 만든 파일 이름과 Blob을 기록한다.
   const downloads = [], blobs = new Map(), originalUrl = URL.createObjectURL, originalClick = HTMLAnchorElement.prototype.click;
   URL.createObjectURL = blob => { const url = originalUrl.call(URL, blob); blobs.set(url, blob); return url; };
   HTMLAnchorElement.prototype.click = function () { if (this.download) downloads.push({ name: this.download, blob: blobs.get(this.href) }); else originalClick.call(this); };
   const hudBefore = stage.classList.contains("hud-hidden");
+  let probeRecorder;
   try {
     const direct = [...$("stageToolbar").children].filter(n => n.tagName === "BUTTON" && visible(n)).map(n => n.id);
     test(JSON.stringify(direct) === JSON.stringify(["previewPause", "studioToggle", "captureToggle", "fullscreenToggle", "moreToggle"]), `툴바에는 자주 쓰는 버튼 5개만: ${direct}`);
@@ -59,7 +89,7 @@
     $("captureToggle").click();
     $("recordStop").click();
     const file = await waitDownload(1);
-    test(!!file && /^shader-\d{8}-\d{6}\.(webm|mp4)$/.test(file.name) && file.blob?.size > 1000 && /^video\//.test(file.blob.type), `영상 파일 내려받기: ${file?.name} ${file?.blob?.size}B ${file?.blob?.type} ${why()}`);
+    await readVideo(file, $("screen").width, $("screen").height);
     test(!visible($("recordStop")) && !stage.classList.contains("is-recording") && $("recordButtonLabel").textContent === "녹화 시작", "중지 후 표시 원래대로");
     // 스크린샷도 캡처 메뉴에서
     $("captureToggle").click(); $("screenshotButton").click();
@@ -69,11 +99,32 @@
     const wasPlaying = window.shaderStudio.getPlaybackState();
     if (wasPlaying) $("previewPause").click();
     await wait(200);
-    $("captureToggle").click(); $("recordButton").click(); await wait(1200); $("recordStop").click();
+    $("captureToggle").click(); $("recordButton").click();
+    // 준비에 걸린 시간을 녹화 시간에 포함하지 않는다. 실제 시작 뒤 1초 이상 담고 중지한다.
+    for (let i = 0; i < 400 && ($("recordTime").textContent === "준비" || $("recordTime").textContent === "0:00"); i++) await wait(50);
+    test(/^\d+:\d{2}$/.test($("recordTime").textContent) && $("recordTime").textContent !== "0:00", `일시정지 중에도 실제 녹화 시간이 흐름: ${$("recordTime").textContent} ${why()}`);
+    $("recordStop").click();
     const still = await waitDownload(3);
     if (wasPlaying) $("previewPause").click();
-    test(!!still && /^video\//.test(still.blob?.type) && still.blob.size > 500, `일시정지 중 녹화도 영상 파일: ${still?.name} ${still?.blob?.size}B ${why()}`);
+    await readVideo(still, $("screen").width, $("screen").height);
+
+    // 첫 프레임이 늦는 상황을 강제로 만든다. 빈 초기 캔버스 대신 실제 첫 프레임의 크기·색이 녹화되어야 한다.
+    const Recorder = await import("./js/recorder.js"), source = document.createElement("canvas");
+    let draw, state, saved, error;
+    probeRecorder = Recorder.create({canvas: source, onFrame: fn => { draw = fn; return () => { draw = null; }; }, redraw() {},
+      onChange: value => { state = value; }, onSave: (blob, name) => { saved = {blob, name}; }, onError: value => { error = value; }});
+    probeRecorder.start(); await wait(300);
+    test(state.recording && !state.ready && state.elapsed === 0, "첫 렌더 프레임이 오기 전에는 준비 중");
+    source.width = 96; source.height = 64;
+    const context = source.getContext("2d"); context.fillStyle = "#ff0000"; context.fillRect(0, 0, 96, 64); draw(source);
+    for (let i = 0; i < 300 && !state.ready && !error; i++) await wait(50);
+    test(state.ready && !error, `실제 첫 프레임으로 인코더 시작: ${error || "OK"}`);
+    await wait(1000); probeRecorder.stop();
+    for (let i = 0; i < 300 && !saved && !error; i++) await wait(50);
+    const pixel = await readVideo(saved, 96, 64);
+    test(pixel[0] > 200 && pixel[1] < 50 && pixel[2] < 50, `늦게 온 빨간 프레임이 녹화됨: ${[...pixel]}`);
   } finally {
+    probeRecorder?.dispose();
     URL.createObjectURL = originalUrl;
     HTMLAnchorElement.prototype.click = originalClick;
     if (stage.classList.contains("hud-hidden") !== hudBefore) $("hudToggle").click();
