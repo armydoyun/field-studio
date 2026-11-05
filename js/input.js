@@ -120,6 +120,23 @@ const mount = (canvas, renderer) => {
       stopDrag();
     }
   };
+  // 뷰포트 선택(키를 셰이더로 넘김)은 캔버스를 누르거나 키보드(Tab)로 #stage에 왔을 때만이다.
+  // #stage는 tabindex=0이라, 그 안의 UI(툴바·알림 등)에서 초점을 못 받는 곳(빈 공간·비활성 버튼·Safari의 버튼)을 누르면
+  // 브라우저가 초점을 가장 가까운 조상인 #stage로 넘긴다. 그 초점은 뷰포트 선택으로 치지 않고 놓아 준다.
+  // (편집기 창은 tabindex=-1이라 그 안을 누르면 초점이 편집기 창에 머문다.)
+  let uiPointer = false;
+  const onStagePointerDown = event => {
+    uiPointer = event.target !== canvas && event.target !== stage;
+    if (uiPointer) setTimeout(() => (uiPointer = false), 0); // 이 누름의 초점 이동이 끝나면 잊는다.
+  };
+  const onStageFocusIn = event => {
+    if (uiPointer && event.target === stage) {
+      uiPointer = false;
+      stage.blur();
+      return;
+    }
+    syncHint();
+  };
   const onFocusOut = event => {
     if (event.relatedTarget !== stage && event.relatedTarget !== canvas) {
       stopKeyboard();
@@ -134,7 +151,8 @@ const mount = (canvas, renderer) => {
   listen(canvas, "lostpointercapture", onPointerEnd);
   listen(window, "keydown", onShaderKeyDown, { capture: true });
   listen(window, "keyup", onShaderKeyUp, { capture: true });
-  listen(stage, "focusin", syncHint);
+  listen(stage, "pointerdown", onStagePointerDown, { capture: true });
+  listen(stage, "focusin", onStageFocusIn);
   listen(document, "keydown", onKeyDown);
   listen(document, "keyup", onKeyUp);
   listen(window, "blur", () => {

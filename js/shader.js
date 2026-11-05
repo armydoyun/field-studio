@@ -158,7 +158,7 @@ void main() {
     fragColor = vec4(color, 1.0);
 }
 `;
-// Ray Marching 예제의 카메라 상태 버퍼(Buffer A, 2×1). iChannel0 = A · previous, iChannel1 = 키보드.
+// Ray Marching 예제의 카메라 상태 버퍼(Buffer A, 2×1, rgba32f). iChannel0 = A · previous, iChannel1 = 키보드.
 // 픽셀 0: (방위각, 높이각, 거리) · 픽셀 1: 직전 마우스 위치와 누름 여부(드래그 계산용).
 const raymarchCamera = `#version 300 es
 precision highp float;
@@ -200,7 +200,7 @@ void main() {
         camera.y -= delta.y * 3.0;
     }
 
-    camera.x = mod(camera.x, 6.2831853);   // 반정밀도(rgba16f)에서도 값이 커지지 않게 감는다
+    camera.x = mod(camera.x, 6.2831853);   // 방위각이 끝없이 커지지 않게 한 바퀴로 감는다
     camera.y = clamp(camera.y, -1.4, 1.4);
     camera.z = clamp(camera.z, 1.5, 30.0);
     fragColor = pixel == 0 ? camera : vec4(mouse, down ? 1.0 : 0.0, 0.0);
@@ -241,7 +241,9 @@ export default {
     {
       name: "A",
       fragment: raymarchCamera,
-      format: "rgba16f",
+      // rgba32f여야 한다. rgba16f(반정밀도)는 저장한 마우스 위치가 반올림돼 다음 프레임의 uMouse와 어긋나고,
+      // 그 차이가 '이동량'으로 매 프레임 쌓여 마우스를 누르고만 있어도 카메라가 돌아간다.
+      format: "rgba32f",
       scale: 1,
       size: [2, 1],
       filter: "nearest",

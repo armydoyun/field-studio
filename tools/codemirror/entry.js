@@ -80,6 +80,15 @@ export {
   gotoLine,
   selectNextOccurrence,
   selectSelectionMatches,
+  SearchQuery,
+  getSearchQuery,
+  setSearchQuery,
+  searchPanelOpen,
+  findNext,
+  findPrevious,
+  selectMatches,
+  replaceNext,
+  replaceAll,
 } from "@codemirror/search";
 export {
   autocompletion,

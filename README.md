@@ -59,6 +59,7 @@ js/
   project-store.js    # 프로젝트 보관함 저장소 (IndexedDB)
   code-insert.js      # 코드 삽입 위치 계산 (순수 함수)
   cm-editor.js        # GLSL 코드 편집기: CodeMirror 화면 + studio용 #studioCode 창구 · 팔레트 · 툴바 · 선택 영역 레이어
+  cm-search-panel.js  # 두 줄 찾기 · 바꾸기 창 (찾기 → 바꿀 내용 Tab 순서)
   cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류
   glsl-language.js    # GLSL 언어 정보(키워드·타입·앱 Uniform·심볼 표·자동 완성 후보)
   glsl-highlight.js   # GLSL 강조 (편집기·가이드 공용)

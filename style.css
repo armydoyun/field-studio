@@ -629,6 +629,8 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-top .studio-run-tools .studio-primary { min-width:0;min-height:32px;margin-left:2px;padding:0 12px;gap:6px;white-space:nowrap; }
 .studio-top .studio-primary span { color:color-mix(in srgb,var(--accent-ink) 55%,transparent);font:500 10px/1 var(--mono); }
 .studio-dock { container:dock / inline-size; }
+/* 편집기 창의 빈 곳을 누르면 초점이 창 자체로 온다(뷰포트로 새지 않게 tabindex=-1). 그때 테두리는 그리지 않는다. */
+.studio-dock:focus { outline:none; }
 .studio-tabs .studio-pass-tabs button { padding:5px 10px; }
 /* 편집기 폭이 좁으면(분할 배치·작은 창) 실행 버튼의 단축키 표시와 구분선을 줄여 탭 자리를 확보한다 */
 @container dock (max-width:720px) { .studio-top .studio-primary span,.studio-tool-sep { display:none; }.studio-top .studio-live { padding-inline:6px 4px; } }
@@ -714,15 +716,26 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-cm-host>.cm-editor { flex:1;min-width:0;height:100%; }
 .studio-cm-host .cm-editor.cm-focused { outline:none; }
 .studio-cm-host .cm-selectionLayer:not(.studio-selection-layer) { display:none; }
-.studio-cm-host .cm-panel.cm-search { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 36px 8px 10px;font:12px var(--sans); }
-.studio-cm-host .cm-panel.cm-search br { flex-basis:100%;height:0;content:""; }
-.studio-cm-host .cm-panel.cm-search .cm-textfield { flex:1 1 180px;min-width:120px;min-height:28px;margin:0;padding:3px 8px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);color:var(--text);font:12px/1.4 var(--mono); }
-.studio-cm-host .cm-panel.cm-search .cm-textfield:focus { border-color:var(--accent);outline:none; }
-.studio-cm-host .cm-panel.cm-search button[name=close] { position:absolute;top:8px;right:8px;width:24px;min-height:24px;padding:0;border:0;background:transparent;line-height:1; }
-.studio-cm-host .cm-panel.cm-search input[type="checkbox"] { width:auto; }
-.studio-cm-host .cm-panel.cm-search .cm-button { min-height:28px;margin:0;padding:3px 10px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface);background-image:none;color:var(--text-soft);font:500 11px var(--sans); }
-.studio-cm-host .cm-panel.cm-search .cm-button:hover { background:var(--surface-hover);color:var(--text); }
-.studio-cm-host .cm-panel.cm-search label { display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:11px; }
+/* 찾기 · 바꾸기 창(cm-search-panel.js): 1줄 찾기 + 도구, 2줄 바꿀 내용 + 바꾸기. DOM 순서(찾기 → 바꿀 내용 → 도구)가 Tab 순서다. */
+.studio-cm-host .cm-panel.studio-find { display:grid;grid-template-columns:minmax(100px,1fr) auto 24px;grid-template-areas:"find find-tools close" "replace replace-tools .";align-items:center;gap:6px;padding:7px 6px 7px 10px;font:12px var(--sans); }
+.studio-find>[name=search] { grid-area:find; }
+.studio-find>[name=replace] { grid-area:replace; }
+.studio-find-tools { grid-area:find-tools;display:flex;align-items:center;gap:2px; }
+.studio-find-replace-tools { grid-area:replace-tools;display:flex;align-items:center;gap:4px; }
+.studio-cm-host .studio-find .studio-find-field { width:100%;min-width:0;min-height:28px;margin:0;padding:3px 8px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);color:var(--text);font:12px/1.4 var(--mono); }
+.studio-cm-host .studio-find .studio-find-field:focus { border-color:var(--accent);outline:none; }
+.studio-cm-host .studio-find .studio-find-field.is-invalid { border-color:var(--danger); }
+.studio-cm-host .studio-find .studio-find-button { display:inline-flex;align-items:center;justify-content:center;gap:0;min-width:28px;min-height:28px;margin:0;padding:3px 9px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-soft);font:500 11px var(--sans);white-space:nowrap; }
+.studio-cm-host .studio-find .studio-find-button:hover { background:var(--surface-hover);color:var(--text); }
+.studio-cm-host .studio-find .studio-find-button.glyph-icon { width:28px;padding:0; }
+.studio-cm-host .studio-find .studio-find-button.glyph-icon::before { flex-basis:14px;width:14px;height:14px; }
+.studio-cm-host .studio-find .studio-find-toggle { padding:3px 5px;border-color:transparent;background:transparent;color:var(--muted);font:600 11px var(--mono); }
+.studio-cm-host .studio-find .studio-find-toggle[aria-pressed="true"] { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
+.studio-cm-host .studio-find .studio-find-close { grid-area:close;width:24px;min-width:24px;min-height:24px;border:0;background:transparent;color:var(--muted); }
+.studio-find-count { min-width:44px;padding:0 2px;color:var(--muted);font:11px var(--mono);text-align:center;white-space:nowrap; }
+.studio-find.has-no-match .studio-find-count { color:var(--danger); }
+/* 좁은 편집기: 도구가 입력 칸 아래로 내려간다(Tab 순서는 그대로). */
+@container dock (max-width:400px) { .studio-cm-host .cm-panel.studio-find { grid-template-columns:minmax(0,1fr) 24px;grid-template-areas:"find close" "find-tools ." "replace ." "replace-tools ."; } }
 .studio-cm-host .cm-tooltip-autocomplete ul li { font-family:var(--mono); }
 .studio-cm-host .cm-completionDetail { color:var(--muted);font-style:normal;margin-left:10px; }
 .cm-glsl-info { max-width:420px;padding:6px 10px;font:12px/1.5 var(--sans); }
@@ -793,9 +806,6 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .studio-prompt-dialog[data-danger="true"] .studio-dialog-mark { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z'/%3E%3Cpath d='M12 9.5v4M12 17h.01'/%3E%3C/svg%3E"); }
 /* 글자와 함께 쓰는 재생 아이콘은 글자 높이에 맞춰 조금 작게 */
 .icon-play.glyph-icon::before { flex-basis:12px;width:12px;height:12px; }
-.studio-cm-host .cm-panel.cm-search button[name=close] { font-size:0;color:var(--muted); }
-.studio-cm-host .cm-panel.cm-search button[name=close]::before { content:"";width:14px;height:14px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='m6 6 12 12M18 6 6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='m6 6 12 12M18 6 6 18'/%3E%3C/svg%3E") center/contain no-repeat; }
-.studio-cm-host .cm-panel.cm-search button[name=close]:hover { color:var(--text); }
 /* 완료한 수업 표시: 글자 ✓ 대신 체크 아이콘 */
 .guide-lesson-mark.is-done::before { content:"";flex:0 0 14px;width:14px;height:14px;background:currentColor;-webkit-mask:var(--icon-check) center/contain no-repeat;mask:var(--icon-check) center/contain no-repeat; }
 .studio-dialog-head p { color:var(--muted); }
