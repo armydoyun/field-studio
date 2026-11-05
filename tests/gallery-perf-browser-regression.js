@@ -62,8 +62,10 @@
     // 계산 자체는 gallery-perf-regression.js가 가짜 GL로 검사한다. 여기서는 기록만 남긴다.
     const ms = id => Number(/약 ([\d.]+)ms/.exec(badge(id).title)[1]);
     test(done.every(node => ms(node.closest(".gallery-card").dataset.id) > 0), "잰 값은 모두 0보다 크다");
-    await until(() => renderer.getStats().running, 10_000);
-    test(renderer.getStats().running, "재지 않을 때는 미리보기가 돈다");
+    // 보이는 카드가 남아 있으면 계속 잴 수 있다(카드 사이에는 미리보기가 잠깐 돈다). 닫으면 바로 돈다.
+    $("galleryClose").click();
+    await wait(300);
+    test(renderer.getStats().running, "다 보고 닫으면 미리보기가 돈다");
     console.log(`잰 카드 ${done.length}개: ${done.map(node => `${node.closest(".gallery-card").dataset.id}=${ms(node.closest(".gallery-card").dataset.id)}ms`).join(" ")}`);
   } finally {
     if (dialog.open) $("galleryClose").click();
