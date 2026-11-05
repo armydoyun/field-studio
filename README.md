@@ -77,6 +77,7 @@ js/
   popout.js           # 미리보기 분리 창
   # 학습 · 도움말 (내용은 데이터 모듈에)
   gallery.js          # 예제 갤러리 · 첫 실행 안내
+  community-examples.js # 갤러리 "커뮤니티 셰이더" — 다른 사람의 공개 작품(MIT·CC0) 이식본과 출처
   guide.js            # 앱 내장 가이드 · UI 둘러보기 · 문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리
   course.js           # 입문 과정 수업 내용
   glsl-reference.js   # GLSL 내장 함수·변수 레퍼런스
@@ -89,6 +90,7 @@ tools/codemirror/     # js/codemirror.js 생성 도구 (이 파일을 다시 만
 tools/update_sha_manifest.py # 실행 소스 SHA-256 목록 갱신 (npm run sha / sha:check)
 tests/run.mjs         # npm test: 모든 테스트 실행기
 docs/history/         # 기능별 작업 기록 (예전 루트의 README_*.md)
+docs/THIRD_PARTY_LICENSES.md # 커뮤니티 셰이더의 원작자·라이선스 전문 · 새 예제를 넣는 기준
 deploy/index.html     # 한 파일짜리 오프라인 배포본 — npm run build가 만든다, git에는 없음
 ```
 

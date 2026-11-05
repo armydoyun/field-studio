@@ -55,7 +55,7 @@ with sync_playwright() as p:
         examplePipeline:() => record({studioOwned:"pipeline"}), exampleFeedback:() => record({studioOwned:"feedback"})};
       window.picked = picked; M.gallery.mount({studio, Shader:shader});
     }''')
-    cards=page.evaluate('() => [...document.querySelectorAll("#galleryGrid .gallery-card, #galleryLessons .gallery-card")].map(c => c.dataset.id)')
+    cards=page.evaluate('() => [...document.querySelectorAll("#galleryGrid .gallery-card, #galleryCommunity .gallery-card, #galleryLessons .gallery-card")].map(c => c.dataset.id)')
     for id in cards: page.evaluate('async id => { await document.querySelector(`.gallery-card[data-id="${id}"]`).click(); }',id)
     projects=page.evaluate('() => picked')
     check(len(projects)==len(cards) and len(cards)>=12,f'every gallery card hands a project to Studio ({len(cards)} cards)')
