@@ -9,6 +9,7 @@
 // MediaRecorder는 start() 뒤 인코더를 준비하고 나서야 실제로 녹화를 시작한다(start 이벤트). 느린 컴퓨터에서는 1초 넘게 걸리고,
 // 그 전에 넣은 프레임은 버려진다. 그래서 경과 시간은 start 이벤트부터 세고, 그때 지금 화면을 첫 프레임으로 넣는다.
 // 그 전에 중지를 누르면 시작된 뒤 MIN_RECORD_MS만큼 담고 멈춘다(빈 파일이 되지 않게).
+// 첫 렌더 프레임이 오기 전에 누른 중지는 담을 것이 없으므로 파일 없이 바로 취소한다.
 // 녹화 크기는 캔버스의 실제 렌더 해상도(렌더링 › 해상도 배율·최대 픽셀 수)를 따른다.
 const MIME_TYPES = [
   "video/webm;codecs=vp9",
@@ -191,7 +192,13 @@ const create = ({
   };
   const stop = () => {
     if (!isRecording() || stopRequested) return false;
-    // 아직 준비 중이면 시작된 뒤 잠깐 담고 멈춘다(start 이벤트에서). 버리는 경우(dispose)는 바로 멈춘다.
+    // 첫 렌더 프레임이 아직 오지 않았으면 담을 것도 인코더도 없다. 바로 취소한다.
+    // (기다리면 프레임이 끝내 오지 않을 때 — 예: 컨텍스트 손실 — '준비'에서 빠져나올 수 없다)
+    if (pending) {
+      cleanup();
+      return true;
+    }
+    // 인코더가 준비 중이면 시작된 뒤 잠깐 담고 멈춘다(start 이벤트에서). 버리는 경우(dispose)는 바로 멈춘다.
     if (!ready) {
       stopRequested = true;
       return true;
