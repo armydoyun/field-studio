@@ -886,10 +886,13 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .gallery-thumb { display:block;width:100%;height:auto;aspect-ratio:16/10;background:var(--sunken); }
 .gallery-thumb[data-thumb="pipeline"] { background:radial-gradient(circle at 30% 50%,#1aa6ff 0 9%,transparent 10%),radial-gradient(circle at 72% 50%,#ff2fa0 0 9%,transparent 10%),linear-gradient(90deg,#0b1a2c 50%,#1c0b22 50%); }
 .gallery-thumb[data-thumb="feedback"] { background:radial-gradient(circle at 70% 40%,#ff2fa0 0 7%,transparent 8%),radial-gradient(circle at 62% 46%,#ff2fa099 0 6%,transparent 7%),radial-gradient(circle at 54% 54%,#ff2fa055 0 5%,transparent 6%),radial-gradient(circle at 46% 60%,#ff2fa02a 0 4%,transparent 5%),#0d0a16; }
+.gallery-thumb[data-thumb="raytrace"] { background:radial-gradient(circle at 34% 58%,#e9b04a 0 9%,transparent 10%),radial-gradient(circle at 58% 54%,#d0e4ff 0 8%,#7fa6d855 9%,transparent 11%),radial-gradient(circle at 76% 60%,#c2414a 0 7%,transparent 8%),linear-gradient(180deg,#bcd2f2 0 52%,#3d3d40 52% 100%); }
 .gallery-meta { display:grid;gap:4px;padding:12px 14px 14px; }
 .gallery-meta strong { color:var(--text);font-size:14px;font-weight:700; }
 .gallery-tag { color:var(--accent-strong);font:600 10px/1.4 var(--mono);letter-spacing:.4px; }
 .gallery-desc { color:var(--muted);font-size:12px;font-weight:400;line-height:1.55; }
+.gallery-credit { color:var(--text-soft);font:500 10.5px/1.4 var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.gallery-note { margin:-4px 0 12px;color:var(--muted);font-size:12px;line-height:1.55; }
 .gallery-foot { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 28px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12px; }
 @media (max-width:700px) { .gallery-steps { grid-template-columns:minmax(0,1fr); }.gallery-head,.gallery-body,.gallery-foot { padding-inline:16px; } }
 /* 휴대폰: 카드 두 열로 한 화면에 더 많은 예제를 보이고, 하단 버튼은 줄바꿈 없이 같은 폭으로 배치한다. */

@@ -1,7 +1,9 @@
 // 예제 갤러리와 첫 실행 안내. 썸네일은 별도의 작은 WebGL2 컨텍스트에서 한 번만 그리고 즉시 해제한다.
 // 예제 적용은 Studio API(loadExample/example*)만 사용하므로 Undo·미적용 변경 확인이 그대로 동작한다.
 import * as Annotations from "./annotations.js";
+import * as Community from "./community-examples.js";
 import * as Store from "./storage.js";
+const { COMMUNITY } = Community;
 const ONBOARD_KEY = "field.onboarded.v1";
 const head = params => `#version 300 es
 precision highp float;
@@ -602,6 +604,7 @@ const mount = ({ studio, Shader }) => {
     signal = controller.signal;
   const dialog = $("gallery"),
     grid = $("galleryGrid"),
+    community = $("galleryCommunity"),
     lessons = $("galleryLessons");
   let thumbsDrawn = false;
   const element = (tag, className = "", text = "") => {
@@ -625,6 +628,12 @@ const mount = ({ studio, Shader }) => {
       element("strong", "", item.title),
       element("span", "gallery-desc", item.description)
     );
+    // 다른 사람의 작품: 원작자와 라이선스를 카드에 보인다(자세한 출처는 셰이더 맨 위 주석).
+    if (item.credit) {
+      const credit = element("span", "gallery-credit", `${item.credit.author} · ${item.credit.license}`);
+      credit.title = `${item.credit.work} — ${item.credit.url}`;
+      meta.append(credit);
+    }
     button.append(art, meta);
     button.addEventListener("click", () => onPick(item));
     return button;
@@ -640,10 +649,11 @@ const mount = ({ studio, Shader }) => {
   };
   // 가이드의 "예제 열기" 버튼용: id로 예제를 바로 연다.
   const loadLesson = id => {
-    const item = [...ART, ...LESSONS].find(entry => entry.id === id);
+    const item = [...ART, ...COMMUNITY, ...LESSONS].find(entry => entry.id === id);
     return item ? pick(item) : false;
   };
   grid.replaceChildren(...ART.map(item => card(item, pick)));
+  community.replaceChildren(...COMMUNITY.map(item => card(item, pick)));
   lessons.replaceChildren(...LESSONS.map(item => card(item, pick)));
   // 썸네일 전용 임시 컨텍스트: 각 예제를 t=2.5초로 한 프레임 그린 뒤 카드 캔버스로 복사하고 컨텍스트를 해제한다.
   const drawThumbs = () => {
@@ -704,7 +714,7 @@ const mount = ({ studio, Shader }) => {
       for (const target of dialog.querySelectorAll(`canvas[data-thumb="${id}"]`))
         target.getContext("2d")?.drawImage(surface, 0, 0);
     };
-    for (const item of ART) if (render(item.image, item.users)) copy(item.id);
+    for (const item of [...ART, ...COMMUNITY]) if (item.image && render(item.image, item.users)) copy(item.id);
     // 단일 패스 레슨은 어노테이션 기본값으로 썸네일을 그린다(파라미터를 소스에서 읽음).
     for (const item of LESSONS)
       if (item.image) render(item.image, Annotations.collect([item.image])) && copy(item.thumb || item.id);
