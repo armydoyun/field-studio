@@ -1,9 +1,12 @@
 // 코드 편집기의 찾기 · 바꾸기 창(CodeMirror search의 createPanel).
 // 기본 창은 입력 칸·체크박스·버튼이 한 줄로 흘러 구조가 복잡하고, Tab이 찾기 → 다음 → 이전 → 모두 선택 … 순으로 돌았다.
 // 이 창은 두 줄로 나눈다:
-//   1줄  [찾기 ............] [Aa][단어][.*]  3/12  [↑][↓][모두 선택]  [×]
-//   2줄  [바꿀 내용 ........] [바꾸기][모두 바꾸기]
-// DOM 순서는 찾기 → 바꿀 내용 → 찾기 도구 → 바꾸기 도구 → 닫기라서, 찾기 칸에서 Tab을 누르면 바로 바꿀 내용으로 간다.
+//   1줄  [▸] [찾기 ............] [Aa][단어][.*]  3/12  [↑][↓][모두 선택]  [×]
+//   2줄      [바꿀 내용 ........] [바꾸기][모두 바꾸기]
+// 모드가 둘이다(VS Code와 같다): Ctrl+F = 찾기만(1줄), Ctrl+H = 찾아 바꾸기(2줄). 맨 앞 [▸] 버튼으로도 바꾸기 줄을 여닫는다.
+// 찾기 모드에서는 바꾸기 줄을 숨기고 바꾸기 단축키도 받지 않는다(보이지 않는 칸의 내용으로 문서가 바뀌지 않게).
+// 모드는 창의 data-mode("find" | "replace")에 두고, 편집기(cm-editor.js의 showFind)는 "studio-find-mode" 이벤트로 바꾼다.
+// DOM 순서는 찾기 → 바꿀 내용 → 찾기 도구 → 바꾸기 도구 → 닫기 → [▸]라서, 바꾸기 모드에서 찾기 칸 다음 Tab은 바로 바꿀 내용으로 간다.
 // 자리는 CSS grid(style.css의 .studio-find)가 잡는다.
 const MATCH_LIMIT = 1000; // 일치 개수는 이만큼까지만 센다(긴 문서·짧은 정규식에서 입력이 느려지지 않게).
 
@@ -46,7 +49,8 @@ const createSearchPanel = CM => view => {
     selectAll = button("select", "모두 선택", "일치 항목 모두 선택 (Alt+Enter)"),
     replaceOne = button("replace", "바꾸기", "바꾸기 (찾기 결과 하나 · 바꿀 내용 칸에서 Enter)"),
     replaceEvery = button("replaceAll", "모두 바꾸기", "모두 바꾸기 (Ctrl+Alt+Enter)"),
-    close = button("close", "", "닫기 (Esc)", "glyph-icon icon-close studio-find-close");
+    close = button("close", "", "닫기 (Esc)", "glyph-icon icon-close studio-find-close"),
+    modeToggle = button("mode", "", "바꾸기 줄 열기 (Ctrl+H)", "glyph-icon icon-chevron studio-find-mode");
   search.setAttribute("main-field", "true"); // openSearchPanel이 이 칸에 초점을 준다.
 
   const findTools = element("div", { class: "studio-find-tools", role: "group", "aria-label": "찾기 도구" });
@@ -57,8 +61,28 @@ const createSearchPanel = CM => view => {
     "aria-label": "바꾸기 도구",
   });
   replaceTools.append(replaceOne, replaceEvery);
-  const dom = element("div", { class: "cm-search studio-find", role: "search", "aria-label": "찾기 · 바꾸기" });
-  dom.append(search, replace, findTools, replaceTools, close);
+  const dom = element("div", { class: "cm-search studio-find", role: "search", "aria-label": "찾기" });
+  dom.append(search, replace, findTools, replaceTools, close, modeToggle);
+  // 모드 바꾸기. focus: 바꾼 뒤 그 모드의 입력 칸(찾기 / 바꿀 내용)에 초점을 주고 내용을 선택한다.
+  const setMode = (mode, focus = false) => {
+    const replacing = mode === "replace";
+    dom.dataset.mode = replacing ? "replace" : "find";
+    dom.setAttribute("aria-label", replacing ? "찾기 · 바꾸기" : "찾기");
+    modeToggle.setAttribute("aria-expanded", String(replacing));
+    const label = replacing ? "바꾸기 줄 닫기 (Ctrl+F)" : "바꾸기 줄 열기 (Ctrl+H)";
+    modeToggle.title = label;
+    modeToggle.setAttribute("aria-label", label);
+    // 숨긴 줄에 초점이 남지 않게 한다.
+    if (!replacing && replaceTools.contains(document.activeElement)) focus = true;
+    if (!replacing && document.activeElement === replace) focus = true;
+    if (focus) {
+      const target = replacing ? replace : search;
+      target.focus();
+      target.select();
+    }
+  };
+  setMode("find");
+  dom.addEventListener("studio-find-mode", event => setMode(event.detail, true));
 
   let query = CM.getSearchQuery(view.state);
   const toggles = [
@@ -128,28 +152,26 @@ const createSearchPanel = CM => view => {
   replaceOne.addEventListener("click", () => run(CM.replaceNext));
   replaceEvery.addEventListener("click", () => run(CM.replaceAll));
   close.addEventListener("click", () => CM.closeSearchPanel(view));
+  modeToggle.addEventListener("click", () => setMode(dom.dataset.mode === "replace" ? "find" : "replace", true));
   dom.addEventListener("keydown", event => {
     if (event.isComposing) return;
     const key = event.key,
-      mod = event.ctrlKey || event.metaKey;
+      mod = event.ctrlKey || event.metaKey,
+      replacing = dom.dataset.mode === "replace";
     const handled = (() => {
       if (key === "Escape") return CM.closeSearchPanel(view), true;
-      if (key === "Enter" && mod && event.altKey) return run(CM.replaceAll), true;
+      if (key === "Enter" && mod && event.altKey) return replacing && run(CM.replaceAll), true; // 찾기 모드에서는 바꾸지 않는다
       if (key === "Enter" && event.altKey) return run(CM.selectMatches), true;
-      if (key === "Enter" && event.target === replace) return run(CM.replaceNext), true;
+      if (key === "Enter" && event.target === replace) return replacing && run(CM.replaceNext), true;
       if (key === "Enter" && event.target === search) return run(event.shiftKey ? CM.findPrevious : CM.findNext), true;
       if (key === "F3") return run(event.shiftKey ? CM.findPrevious : CM.findNext), true;
       if (event.altKey && !mod) {
         const target = { c: caseToggle, w: wordToggle, r: regexpToggle }[event.code?.replace(/^Key/, "").toLowerCase()];
         if (target) return flip(target), true;
       }
-      // 창 안에서 Ctrl+F · Ctrl+H는 해당 칸으로 초점만 옮긴다(브라우저 찾기 창이 뜨지 않게).
-      if (mod && !event.altKey && !event.shiftKey && (key === "f" || key === "h")) {
-        const target = key === "f" ? search : replace;
-        target.focus();
-        target.select();
-        return true;
-      }
+      // 창 안에서 Ctrl+F는 찾기만, Ctrl+H는 찾아 바꾸기로 모드를 바꾸고 그 칸에 초점을 준다(브라우저 찾기 창이 뜨지 않게).
+      if (mod && !event.altKey && !event.shiftKey && (key === "f" || key === "h"))
+        return setMode(key === "h" ? "replace" : "find", true), true;
       return false;
     })();
     if (handled) {

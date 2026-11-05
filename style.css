@@ -40,6 +40,7 @@ svg { display:block;flex-shrink:0; }
 .icon-close { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 6 12 12M18 6 6 18'/%3E%3C/svg%3E"); }
 .icon-up { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 19V5m-6 6 6-6 6 6'/%3E%3C/svg%3E"); }
 .icon-down { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14m-6-6 6 6 6-6'/%3E%3C/svg%3E"); }
+.icon-chevron { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E"); }
 .icon-plus { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5v14'/%3E%3C/svg%3E"); }
 .icon-pause { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 5v14M16 5v14' stroke-width='3'/%3E%3C/svg%3E"); }
 .icon-image { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='2'/%3E%3Cpath d='m4 16 5-5 5 5 3-3 3 3'/%3E%3Ccircle cx='15.5' cy='8.5' r='1'/%3E%3C/svg%3E"); }
@@ -739,7 +740,14 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-cm-host .cm-editor.cm-focused { outline:none; }
 .studio-cm-host .cm-selectionLayer:not(.studio-selection-layer) { display:none; }
 /* 찾기 · 바꾸기 창(cm-search-panel.js): 1줄 찾기 + 도구, 2줄 바꿀 내용 + 바꾸기. DOM 순서(찾기 → 바꿀 내용 → 도구)가 Tab 순서다. */
-.studio-cm-host .cm-panel.studio-find { display:grid;grid-template-columns:minmax(100px,1fr) auto 24px;grid-template-areas:"find find-tools close" "replace replace-tools .";align-items:center;gap:6px;padding:7px 6px 7px 10px;font:12px var(--sans); }
+.studio-cm-host .cm-panel.studio-find { display:grid;grid-template-columns:22px minmax(100px,1fr) auto 24px;grid-template-areas:"mode find find-tools close" ". replace replace-tools .";align-items:center;gap:6px;padding:7px 6px 7px 6px;font:12px var(--sans); }
+/* 찾기 모드(Ctrl+F): 바꾸기 줄을 숨긴다. 편집기가 480px 이하이면 찾기 도구는 찾기 칸 아래 줄로 내린다(아래 @container). */
+.studio-cm-host .cm-panel.studio-find[data-mode="find"] { grid-template-areas:"mode find find-tools close"; }
+.studio-find[data-mode="find"]>[name=replace],.studio-find[data-mode="find"]>.studio-find-replace-tools { display:none; }
+.studio-cm-host .studio-find .studio-find-button.studio-find-mode { grid-area:mode;width:22px;min-width:22px;min-height:24px;padding:0;border:0;background:transparent;color:var(--muted); }
+.studio-cm-host .studio-find .studio-find-mode::before { transition:transform .12s; }
+.studio-cm-host .studio-find[data-mode="replace"] .studio-find-mode::before { transform:rotate(90deg); }
+@media (prefers-reduced-motion:reduce) { .studio-cm-host .studio-find .studio-find-mode::before { transition:none; } }
 .studio-find>[name=search] { grid-area:find; }
 .studio-find>[name=replace] { grid-area:replace; }
 .studio-find-tools { grid-area:find-tools;display:flex;align-items:center;gap:2px; }
@@ -757,7 +765,7 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-find-count { min-width:44px;padding:0 2px;color:var(--muted);font:11px var(--mono);text-align:center;white-space:nowrap; }
 .studio-find.has-no-match .studio-find-count { color:var(--danger); }
 /* 좁은 편집기: 도구가 입력 칸 아래로 내려간다(Tab 순서는 그대로). */
-@container dock (max-width:400px) { .studio-cm-host .cm-panel.studio-find { grid-template-columns:minmax(0,1fr) 24px;grid-template-areas:"find close" "find-tools ." "replace ." "replace-tools ."; } }
+@container dock (max-width:480px) { .studio-cm-host .cm-panel.studio-find { grid-template-columns:22px minmax(0,1fr) 24px;grid-template-areas:"mode find close" ". find-tools ." ". replace ." ". replace-tools ."; } .studio-cm-host .cm-panel.studio-find[data-mode="find"] { grid-template-areas:"mode find close" ". find-tools ."; } }
 .studio-cm-host .cm-tooltip-autocomplete ul li { font-family:var(--mono); }
 .studio-cm-host .cm-completionDetail { color:var(--muted);font-style:normal;margin-left:10px; }
 .cm-glsl-info { max-width:420px;padding:6px 10px;font:12px/1.5 var(--sans); }

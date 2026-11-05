@@ -686,6 +686,8 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       run(() => openPalette("@"))
     ),
     { key: "Mod-g", run: run(() => openPalette(":")) },
+    // 찾기만(Ctrl+F) · 찾아 바꾸기(Ctrl+H). CodeMirror 기본 Mod-f보다 먼저 받아 창의 모드를 정한다.
+    { key: "Mod-f", run: run(() => showFind(false)) },
     { key: "Mod-h", run: run(() => showFind(true)) },
     // 자동 완성
     { key: "Mod-Space", run: CM.startCompletion },
@@ -929,9 +931,16 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     });
     return line;
   };
+  // replace = false → 찾기만, true → 찾아 바꾸기. 창(cm-search-panel.js)에 모드를 알려 그 칸에 초점을 준다.
+  // openSearchPanel이 찾기 칸에 초점을 준 다음에 바꿔야 하므로 한 박자 늦춘다.
   const showFind = (replace = false) => {
     CM.openSearchPanel(view);
-    if (replace) setTimeout(() => view.dom.querySelector(".cm-search input[name=replace]")?.focus(), 0);
+    const mode = replace ? "replace" : "find";
+    setTimeout(
+      () =>
+        view.dom.querySelector(".studio-find")?.dispatchEvent(new CustomEvent("studio-find-mode", { detail: mode })),
+      0
+    );
   };
   const setDiagnostics = list => {
     const doc = view.state.doc,
