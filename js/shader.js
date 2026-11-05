@@ -226,15 +226,29 @@ const rayUniforms = [
   ["uRMNormalEpsilon", "float", 0.001, { min: 0.00001, max: 0.01, step: 0.00001 }],
   ["uRMHeatmap", "bool", false],
 ];
+// 예제 소스의 선언 줄에 rayUniforms와 같은 어노테이션(@range·@step·@default)을 붙인다.
+// 코드를 복사해 다른 프로젝트에 붙여도 슬라이더 범위와 기본값이 따라간다. 값은 rayUniforms 한곳에서만 고친다.
+const annotate = (source, uniforms) =>
+  uniforms.reduce((code, [name, type, value, options = {}]) => {
+    const tags = [];
+    if (options.min !== undefined) tags.push(`@range ${options.min} ${options.max}`, `@step ${options.step}`);
+    tags.push(`@default ${value}`);
+    const line = `uniform ${type} ${name};`;
+    if (!code.includes(line)) throw new Error(`Ray Marching 예제에 ${line}이 없습니다.`);
+    return code.replace(line, `${line} // ${tags.join(" ")}`);
+  }, source);
 export default {
   vertex,
   fragment,
-  raymarch: raymarch
-    .replace(/uMaxSteps/g, "uRMMaxSteps")
-    .replace(/uMaxDistance/g, "uRMMaxDistance")
-    .replace(/uSurfaceEpsilon/g, "uRMSurfaceEpsilon")
-    .replace(/uNormalEpsilon/g, "uRMNormalEpsilon")
-    .replace(/uDebugRaySteps/g, "uRMHeatmap"),
+  raymarch: annotate(
+    raymarch
+      .replace(/uMaxSteps/g, "uRMMaxSteps")
+      .replace(/uMaxDistance/g, "uRMMaxDistance")
+      .replace(/uSurfaceEpsilon/g, "uRMSurfaceEpsilon")
+      .replace(/uNormalEpsilon/g, "uRMNormalEpsilon")
+      .replace(/uDebugRaySteps/g, "uRMHeatmap"),
+    rayUniforms
+  ),
   rayUniforms,
   // Ray Marching 예제 프로젝트: Buffer A가 카메라 상태를 저장하고 Image가 그 값을 읽는다.
   raymarchPasses: [

@@ -4,6 +4,16 @@ import * as Annotations from "./annotations.js";
 import * as Community from "./community-examples.js";
 import * as Store from "./storage.js";
 const { COMMUNITY } = Community;
+// 예제의 파라미터(범위·기본값·색상)는 셰이더 소스의 @어노테이션 한곳에만 적는다.
+// 코드를 복사해 다른 곳에 붙여도 슬라이더가 그대로 따라오게 하기 위해서다.
+const params = sources =>
+  Annotations.collect(sources)
+    .filter(item => !item.error)
+    .map(({ name, type, value, options }) => ({ name, type, value, options }));
+const sourcesOf = item => {
+  const project = item.project || { image: item.image, passes: [] };
+  return [project.image, ...project.passes.map(pass => pass.fragment)];
+};
 const ONBOARD_KEY = "field.onboarded.v1";
 const head = params => `#version 300 es
 precision highp float;
@@ -28,7 +38,9 @@ const HASH3 = `// 정수 해시(pcg3d) 한 번으로 서로 독립인 0~1 값 3�
 ${PCG}
 vec3 hash3(vec2 p) { return vec3(pcg3d(uvec3(floatBitsToUint(p), 0u)) >> 8u) * (1.0 / 16777216.0); }`;
 const aurora =
-  head("uniform float uSpeed;\nuniform float uWarp;\nuniform vec3 uTint;\n") +
+  head(
+    "uniform float uSpeed; // @range 0 3 @step 0.01 @default 0.6\nuniform float uWarp; // @range 0 10 @step 0.1 @default 4\nuniform vec3 uTint; // @color @default 0.2 0.75 0.9\n"
+  ) +
   `
 // Domain warping: fbm으로 좌표를 두 번 비틀어 오로라 같은 흐름을 만든다.
 ${HASH}
@@ -54,7 +66,9 @@ void main() {
     fragColor = vec4(pow(col, vec3(0.9)), 1.0);
 }`;
 const kaleido =
-  head("uniform float uSegments;\nuniform float uZoom;\n") +
+  head(
+    "uniform float uSegments; // @range 1 24 @step 1 @default 8\nuniform float uZoom; // @range 0.2 4 @step 0.01 @default 1.2\n"
+  ) +
   `
 // 극좌표를 uSegments 조각으로 접어 만든 만화경. 마우스를 움직이면 중심이 따라간다.
 vec3 palette(float t) { return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67))); }
@@ -75,7 +89,9 @@ void main() {
     fragColor = vec4(col * smoothstep(1.4, 0.2, r), 1.0);
 }`;
 const lava =
-  head("uniform float uSoftness;\nuniform vec3 uHot;\nuniform vec3 uCool;\n") +
+  head(
+    "uniform float uSoftness; // @range 0.01 0.6 @step 0.01 @default 0.18\nuniform vec3 uHot; // @color @default 1 0.35 0.1\nuniform vec3 uCool; // @color @default 0.5 0.1 0.6\n"
+  ) +
   `
 // 2D 메타볼: 원 거리장을 smooth-min으로 합쳐 서로 녹아 붙는 덩어리를 만든다.
 float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
@@ -95,7 +111,9 @@ void main() {
     fragColor = vec4(col, 1.0);
 }`;
 const horizon =
-  head("uniform float uGridSpeed;\nuniform vec3 uGlow;\n") +
+  head(
+    "uniform float uGridSpeed; // @range 0 6 @step 0.01 @default 1.5\nuniform vec3 uGlow; // @color @default 0.2 0.9 1\n"
+  ) +
   `
 // 원근 격자와 줄무늬 태양: 화면 아래 절반을 바닥 평면으로 투영한다.
 void main() {
@@ -119,7 +137,9 @@ void main() {
     fragColor = vec4(col, 1.0);
 }`;
 const truchet =
-  head("uniform float uScale;\nuniform vec3 uInk;\n") +
+  head(
+    "uniform float uScale; // @range 2 20 @step 0.1 @default 6\nuniform vec3 uInk; // @color @default 0.15 0.2 0.55\n"
+  ) +
   `
 // Truchet 타일: 셀마다 무작위로 회전한 사분원 두 개가 끊김 없는 미로를 만든다.
 ${HASH}
@@ -137,7 +157,9 @@ void main() {
     fragColor = vec4(col * (1.0 - 0.25 * length((gl_FragCoord.xy / uResolution) - 0.5)), 1.0);
 }`;
 const voronoi =
-  head("uniform float uScale;\nuniform float uEdge;\nuniform vec3 uLead;\n") +
+  head(
+    "uniform float uScale; // @range 1 16 @step 0.1 @default 5\nuniform float uEdge; // @range 0.01 0.3 @step 0.005 @default 0.08\nuniform vec3 uLead; // @color @default 0.04 0.03 0.05\n"
+  ) +
   `
 // 보로노이(셀) 무늬: 칸마다 해시로 점 하나를 두고, 픽셀에서 가장 가까운 점과 두 번째로 가까운 점을 찾는다.
 // 점은 이웃 칸에도 있으므로 3×3 칸만 보면 된다. 두 거리의 차(d2 - d1)가 작을수록 경계에 가깝다.
@@ -164,7 +186,9 @@ void main() {
     fragColor = vec4(pow(col, vec3(0.95)), 1.0);
 }`;
 const starfield =
-  head("uniform float uSpeed;\nuniform vec3 uTint;\n") +
+  head(
+    "uniform float uSpeed; // @range 0 3 @step 0.01 @default 0.4\nuniform vec3 uTint; // @color @default 0.55 0.75 1\n"
+  ) +
   `
 // 시차(parallax) 별밭: 별이 든 격자를 4겹 겹쳐 서로 다른 속도로 흘린다. 앞 겹일수록 별이 크고 빠르다.
 // 시간이 갈수록 좌표가 끝없이 커지지만 정수 해시라 몇 시간을 흘려도 별 배치에 무늬가 생기지 않는다.
@@ -191,7 +215,6 @@ void main() {
     }
     fragColor = vec4(1.0 - exp(-1.6 * col), 1.0);      // 밝은 별이 하얗게 날아가지 않게 톤 매핑
 }`;
-const p = (name, type, value, options = {}) => ({ name, type, value, options });
 const ART = [
   {
     id: "aurora",
@@ -199,11 +222,6 @@ const ART = [
     tag: "Noise · Domain warp",
     description: "fbm으로 좌표를 두 번 비트는 도메인 워핑. 흐르는 오로라.",
     image: aurora,
-    users: [
-      p("uSpeed", "float", 0.6, { min: 0, max: 3, step: 0.01 }),
-      p("uWarp", "float", 4, { min: 0, max: 10, step: 0.1 }),
-      p("uTint", "vec3", [0.2, 0.75, 0.9]),
-    ],
   },
   {
     id: "kaleido",
@@ -211,10 +229,6 @@ const ART = [
     tag: "Polar · Pattern",
     description: "극좌표 접기로 만든 만화경. 마우스로 중심을 옮겨 보세요.",
     image: kaleido,
-    users: [
-      p("uSegments", "float", 8, { min: 1, max: 24, step: 1 }),
-      p("uZoom", "float", 1.2, { min: 0.2, max: 4, step: 0.01 }),
-    ],
   },
   {
     id: "lava",
@@ -222,11 +236,6 @@ const ART = [
     tag: "SDF · 2D",
     description: "smooth-min으로 녹아 붙는 메타볼. 커서도 덩어리가 됩니다.",
     image: lava,
-    users: [
-      p("uSoftness", "float", 0.18, { min: 0.01, max: 0.6, step: 0.01 }),
-      p("uHot", "vec3", [1, 0.35, 0.1]),
-      p("uCool", "vec3", [0.5, 0.1, 0.6]),
-    ],
   },
   {
     id: "horizon",
@@ -234,7 +243,6 @@ const ART = [
     tag: "Projection · Grid",
     description: "화면 하단을 바닥 평면으로 투영한 원근 격자와 줄무늬 태양.",
     image: horizon,
-    users: [p("uGridSpeed", "float", 1.5, { min: 0, max: 6, step: 0.01 }), p("uGlow", "vec3", [0.2, 0.9, 1])],
   },
   {
     id: "truchet",
@@ -242,7 +250,6 @@ const ART = [
     tag: "Tiling · Hash",
     description: "셀마다 무작위로 뒤집힌 사분원이 끝없는 미로를 엮습니다.",
     image: truchet,
-    users: [p("uScale", "float", 6, { min: 2, max: 20, step: 0.1 }), p("uInk", "vec3", [0.15, 0.2, 0.55])],
   },
   {
     id: "voronoi",
@@ -250,11 +257,6 @@ const ART = [
     tag: "Cellular · Hash",
     description: "칸마다 해시로 둔 점이 흔들리는 셀 무늬 스테인드글라스.",
     image: voronoi,
-    users: [
-      p("uScale", "float", 5, { min: 1, max: 16, step: 0.1 }),
-      p("uEdge", "float", 0.08, { min: 0.01, max: 0.3, step: 0.005 }),
-      p("uLead", "vec3", [0.04, 0.03, 0.05]),
-    ],
   },
   {
     id: "starfield",
@@ -262,7 +264,6 @@ const ART = [
     tag: "Layers · Hash",
     description: "속도가 다른 별 격자 4겹이 끝없이 흐르는 시차 별밭.",
     image: starfield,
-    users: [p("uSpeed", "float", 0.4, { min: 0, max: 3, step: 0.01 }), p("uTint", "vec3", [0.55, 0.75, 1])],
   },
 ];
 // ---- 기법 배우기: 기능 하나씩을 보여주는 작은 프로젝트. 주석이 곧 설명서다. ----
@@ -643,7 +644,7 @@ const mount = ({ studio, Shader }) => {
     if (dialog.open) dialog.close();
     finishOnboarding();
     const project = item.project || { image: item.image, passes: [], imageChannels: {} };
-    const ok = await (item.action ? studio[item.action]() : studio.loadExample(project, item.users || []));
+    const ok = await (item.action ? studio[item.action]() : studio.loadExample(project, params(sourcesOf(item))));
     if (ok) studio.open();
     return ok;
   };
@@ -714,10 +715,10 @@ const mount = ({ studio, Shader }) => {
       for (const target of dialog.querySelectorAll(`canvas[data-thumb="${id}"]`))
         target.getContext("2d")?.drawImage(surface, 0, 0);
     };
-    for (const item of [...ART, ...COMMUNITY]) if (item.image && render(item.image, item.users)) copy(item.id);
+    for (const item of [...ART, ...COMMUNITY])
+      if (item.image && render(item.image, params([item.image]))) copy(item.id);
     // 단일 패스 레슨은 어노테이션 기본값으로 썸네일을 그린다(파라미터를 소스에서 읽음).
-    for (const item of LESSONS)
-      if (item.image) render(item.image, Annotations.collect([item.image])) && copy(item.thumb || item.id);
+    for (const item of LESSONS) if (item.image) render(item.image, params([item.image])) && copy(item.thumb || item.id);
     const ray = Shader.rayUniforms.map(([name, type, value]) => ({ name, type, value }));
     if (render(Shader.raymarch, ray)) copy("raymarch");
     if (vs) gl.deleteShader(vs);

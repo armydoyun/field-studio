@@ -2,9 +2,8 @@
 // 넣는 기준: 원작자가 작품에 MIT·CC0처럼 재배포를 허락하는 라이선스를 직접 밝힌 것만.
 // (Shadertoy 기본 라이선스는 CC BY-NC-SA 3.0이고, 원작자가 "재배포 금지"를 붙인 작품도 있다 — 예: Inigo Quilez의 작품 장면들.)
 // 셰이더 맨 위의 원작자·라이선스 주석은 지우지 않는다. 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있다.
-// credit: { author, work(원래 제목), url, license, licenseUrl } — 갤러리 카드와 가이드에 그대로 보인다.
-const p = (name, type, value, options = {}) => ({ name, type, value, options });
-const color = { color: true };
+// credit: { author, work(원래 제목), url, license, licenseUrl } — 갤러리 카드에 보인다.
+// 파라미터(범위·기본값·색상)는 셰이더의 @어노테이션에만 적는다. 갤러리가 소스에서 읽어 등록한다.
 
 const starNest = `#version 300 es
 precision highp float;
@@ -22,10 +21,10 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-uniform float uSpeed;
-uniform float uBrightness;
-uniform float uDarkMatter;
-uniform float uSaturation;
+uniform float uSpeed;      // 원본 speed · @range 0 0.05 @step 0.0005 @default 0.01
+uniform float uBrightness; // 원본 brightness · @range 0.0002 0.004 @step 0.0001 @default 0.0015
+uniform float uDarkMatter; // 원본 darkmatter · @range 0 1 @step 0.01 @default 0.3
+uniform float uSaturation; // 원본 saturation · @range 0 1 @step 0.01 @default 0.85
 out vec4 fragColor;
 
 #define iterations 17
@@ -99,7 +98,7 @@ precision highp float;
 // 평면마다 4D 아폴로니안 프랙탈(apollian)을 단면으로 잘라 금빛 고리 무늬를 만든다.
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uSpeed;
+uniform float uSpeed; // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
 out vec4 fragColor;
 
 #define PI              3.141592654
@@ -498,14 +497,14 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-uniform float uHeight;      // 산 높이(원본 H)
-uniform float uSnow;        // 눈이 쌓이기 시작하는 높이(0~1)
-uniform float uExposure;    // 노출(원본 uExp)
-uniform float uSeed;        // 지형 고르기
-uniform vec3 uSunCol;
-uniform vec3 uSky1;         // 지평선 쪽 하늘
-uniform vec3 uSky2;         // 천정 쪽 하늘
-uniform vec3 uFogC;
+uniform float uHeight;   // 산 높이(원본 H) · @range 4 30 @step 0.1 @default 16
+uniform float uSnow;     // 눈이 쌓이기 시작하는 높이 · @range 0 1 @step 0.01 @default 0.55
+uniform float uExposure; // 노출(원본 uExp) · @range 0.2 2 @step 0.01 @default 1
+uniform float uSeed;     // 지형 고르기 · @range 0 100 @step 1 @default 0
+uniform vec3 uSunCol;    // 햇빛 · @color @default 1 0.92 0.7
+uniform vec3 uSky1;      // 지평선 쪽 하늘 · @color @default 0.34 0.56 0.9
+uniform vec3 uSky2;      // 천정 쪽 하늘 · @color @default 0.06 0.18 0.46
+uniform vec3 uFogC;      // 안개 · @color @default 0.55 0.66 0.82
 out vec4 fragColor;
 #define H uHeight
 #define uExp uExposure
@@ -1680,12 +1679,6 @@ const COMMUNITY = [
       license: "MIT",
       licenseUrl: MIT,
     },
-    users: [
-      p("uSpeed", "float", 0.01, { min: 0, max: 0.05, step: 0.0005 }),
-      p("uBrightness", "float", 0.0015, { min: 0.0002, max: 0.004, step: 0.0001 }),
-      p("uDarkMatter", "float", 0.3, { min: 0, max: 1, step: 0.01 }),
-      p("uSaturation", "float", 0.85, { min: 0, max: 1, step: 0.01 }),
-    ],
   },
   {
     id: "golden",
@@ -1700,7 +1693,6 @@ const COMMUNITY = [
       license: "CC0",
       licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
     },
-    users: [p("uSpeed", "float", 1, { min: 0, max: 3, step: 0.01 })],
   },
   {
     id: "terrain",
@@ -1715,16 +1707,6 @@ const COMMUNITY = [
       license: "MIT",
       licenseUrl: MIT,
     },
-    users: [
-      p("uHeight", "float", 16, { min: 4, max: 30, step: 0.1 }),
-      p("uSnow", "float", 0.55, { min: 0, max: 1, step: 0.01 }),
-      p("uExposure", "float", 1, { min: 0.2, max: 2, step: 0.01 }),
-      p("uSeed", "float", 0, { min: 0, max: 100, step: 1 }),
-      p("uSunCol", "vec3", [1, 0.92, 0.7], color),
-      p("uSky1", "vec3", [0.34, 0.56, 0.9], color),
-      p("uSky2", "vec3", [0.06, 0.18, 0.46], color),
-      p("uFogC", "vec3", [0.55, 0.66, 0.82], color),
-    ],
   },
   {
     id: "raytrace",
