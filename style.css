@@ -551,7 +551,29 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 #stageToolbar { gap:2px;padding:3px;border-radius:var(--radius); }
 .tool-button { border-radius:var(--radius-sm);color:var(--text-soft); }
 .tool-button:hover { border-color:transparent;background:var(--surface-hover);color:var(--text); }
-.tool-button[aria-expanded="true"],#hudToggle[aria-pressed="false"],#previewPopout[aria-pressed="true"] { background:var(--accent-soft);color:var(--accent-strong); }
+.tool-button[aria-expanded="true"] { background:var(--accent-soft);color:var(--accent-strong); }
+/* 툴바 드롭다운(캡처 ▾ · ⋯ 더보기, stage-menu.js). 미리보기 영역에 잘리지 않게 창 기준(fixed)으로 띄운다. */
+.stage-menu { position:fixed;z-index:40;display:grid;gap:1px;width:max-content;min-width:200px;max-width:calc(100vw - 16px);overflow-y:auto;padding:5px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);box-shadow:var(--shadow);pointer-events:auto; }
+.stage-menu[hidden] { display:none; }
+.stage-menu-item { display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%;min-height:32px;padding:5px 8px;border-color:transparent;background:transparent;color:var(--text-soft);font-size:12px;font-weight:500;text-align:left;white-space:nowrap; }
+.stage-menu-item:hover,.stage-menu-item:focus-visible { background:var(--surface-hover);color:var(--text); }
+.stage-menu-item:disabled { opacity:.45; }
+.stage-menu-item svg { flex:0 0 16px;width:16px;height:16px; }
+.stage-menu-item>span:not(.record-dot) { flex:1;min-width:0; }
+.stage-menu-item kbd { margin-left:auto;font-size:10px; }
+/* 켜고 끄는 항목(패널·HUD·분리 창)은 켜져 있을 때 오른쪽에 체크를 그린다 */
+.stage-menu-item::after { content:"";flex:0 0 14px;width:14px;height:14px;background:currentColor;-webkit-mask:var(--icon-check) center/contain no-repeat;mask:var(--icon-check) center/contain no-repeat;opacity:0; } /* 모든 항목이 체크 칸을 비워 둬서 단축키 칸이 한 줄로 맞는다 */
+.stage-menu-item[aria-pressed="true"]::after { opacity:1;color:var(--accent-strong); }
+.stage-menu-sep { width:100%;height:1px;margin:4px 0;border:0;background:var(--line); }
+/* 녹화: 빨간 점 · 녹화 중에는 툴바에 경과 시간 버튼이 나온다 */
+.record-dot { flex:0 0 10px;width:10px;height:10px;margin:0 3px;border-radius:50%;background:var(--danger); }
+.record-stop { display:inline-flex;align-items:center;gap:6px;min-height:32px;height:32px;padding:0 10px 0 8px;border-color:color-mix(in srgb,var(--danger) 45%,transparent);border-radius:var(--radius-sm);background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--text);font:600 11px var(--mono); }
+.record-stop[hidden] { display:none; }
+.record-stop:hover { background:color-mix(in srgb,var(--danger) 24%,transparent); }
+.record-stop .record-dot { margin:0;animation:record-blink 1.2s steps(2,start) infinite; }
+@keyframes record-blink { to { visibility:hidden; } }
+@media (prefers-reduced-motion:reduce) { .record-stop .record-dot { animation:none; } }
+.record-stop.is-preparing .record-dot { animation:none;opacity:.45; } /* 인코더 준비 중: 깜빡이지 않는 흐린 점 + '준비' */
 /* 미리보기 분리: 메인 뷰포트에는 안내만 남기고, 분리 창은 캔버스 하나로 꽉 채운다. */
 .preview-popout-notice { position:absolute;inset:0;z-index:1;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:var(--stage-bg);color:var(--muted);text-align:center; }
 .preview-popout-notice p { display:grid;gap:4px;max-width:340px;margin:0;font-size:12px;line-height:1.6; }

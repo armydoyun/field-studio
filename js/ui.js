@@ -1,4 +1,6 @@
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
+import * as StageMenu from "./stage-menu.js";
+import * as Recorder from "./recorder.js";
 const mount = (renderer, input, settings) => {
   const $ = id => document.getElementById(id);
   const controller = new AbortController(),
@@ -642,7 +644,7 @@ const mount = (renderer, input, settings) => {
     syncPanel();
     if (!document.body.classList.contains("panel-hidden"))
       $("panelTabs").querySelector(`[data-tab="${activeTab}"]`)?.focus();
-    else $("panelToggle").focus();
+    else focusToolbar("panelToggle");
   };
   const toggleHud = () => {
     const hidden = stage.classList.toggle("hud-hidden");
@@ -687,19 +689,66 @@ const mount = (renderer, input, settings) => {
   listen($("panelToggle"), "click", togglePanel);
   listen($("hudToggle"), "click", toggleHud);
   listen($("fullscreenToggle"), "click", toggleFullscreen);
+  // ---- 뷰포트 툴바 메뉴: 캡처 ▾ · ⋯ 더보기 (stage-menu.js) ----
+  const captureMenu = StageMenu.create({ toggle: $("captureToggle"), menu: $("captureMenu"), signal }),
+    moreMenu = StageMenu.create({ toggle: $("moreToggle"), menu: $("moreMenu"), signal });
+  // 메뉴 안으로 옮긴 버튼(패널·가이드)은 닫힌 메뉴 속에 있어 초점을 받을 수 없다. 그럴 때는 메뉴 버튼으로 돌려준다.
+  const focusToolbar = id => {
+    const node = $(id);
+    if (node?.offsetParent) node.focus();
+    else (node?.closest("#moreMenu") ? moreMenu : captureMenu).toggle.focus();
+  };
+  const download = (blob, name) => {
+    const url = URL.createObjectURL(blob),
+      a = element("a");
+    a.href = url;
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  };
+  // ---- 녹화 (recorder.js) ----
+  // 녹화 중에는 툴바에 빨간 점과 경과 시간이 나오고, 그 버튼이나 캡처 메뉴의 "녹화 중지"로 끝낸다. 끝나면 파일을 내려받는다.
+  const recordFormat = Recorder.pickMimeType().startsWith("video/mp4") ? "MP4" : "WebM";
+  setText("recordFormat", recordFormat);
+  const recorder = Recorder.create({
+    canvas: $("screen"),
+    onFrame: renderer.onFrame,
+    redraw: renderer.redraw,
+    onChange: ({ recording, ready, elapsed }) => {
+      $("recordStop").hidden = !recording;
+      // 인코더가 준비되는 동안(느린 컴퓨터에서 1초 남짓)은 '준비'로 보인다. 그동안 누른 중지는 시작된 뒤 잠깐 담고 멈춘다.
+      setText("recordTime", ready ? Recorder.formatElapsed(elapsed) : "준비");
+      $("recordStop").classList.toggle("is-preparing", recording && !ready);
+      $("recordStop").title = ready
+        ? `녹화 중지 · ${Recorder.formatElapsed(elapsed)}`
+        : "녹화 준비 중 · 누르면 시작 직후 멈춤";
+      stage.classList.toggle("is-recording", recording);
+      setText("recordButtonLabel", recording ? "녹화 중지" : "녹화 시작");
+      $("recordButton").setAttribute("aria-label", recording ? "녹화 중지" : "녹화 시작");
+      $("captureToggle").classList.toggle("is-recording", recording);
+    },
+    onSave: (blob, name) => {
+      download(blob, name);
+      showError("");
+    },
+    onError: message => showError(message),
+  });
+  if (!Recorder.supported($("screen"))) {
+    $("recordButton").disabled = true;
+    $("recordButton").title = "이 브라우저는 캔버스 녹화를 지원하지 않습니다";
+  }
+  listen($("recordButton"), "click", () => recorder.toggle());
+  listen($("recordStop"), "click", () => {
+    recorder.stop();
+    $("captureToggle").focus();
+  });
   listen($("screenshotButton"), "click", async () => {
     const button = $("screenshotButton");
     button.disabled = true;
     try {
-      const blob = await renderer.captureScreenshot(),
-        url = URL.createObjectURL(blob),
-        a = element("a");
-      a.href = url;
-      a.download = `shader-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      download(await renderer.captureScreenshot(), `shader-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
       showError("");
     } catch (error) {
       showError(`PNG 저장 실패: ${error.message}`);
@@ -849,6 +898,7 @@ const mount = (renderer, input, settings) => {
   return {
     dispose: () => {
       clearInterval(timer);
+      recorder.dispose(); // 창을 닫는 중에는 녹화 파일을 내려받지 않고 버린다.
       controller.abort();
     },
   };
