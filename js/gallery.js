@@ -2,6 +2,8 @@
 // 예제 적용은 Studio API(loadExample/example*)만 사용하므로 Undo·미적용 변경 확인이 그대로 동작한다.
 import * as Annotations from "./annotations.js";
 import * as Community from "./community-examples.js";
+import * as Perf from "./gallery-perf.js";
+import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
 const { COMMUNITY } = Community;
 // 예제의 파라미터(범위·기본값·색상)는 셰이더 소스의 @어노테이션 한곳에만 적는다.
@@ -599,7 +601,8 @@ const LESSONS = [
     thumb: "feedback",
   },
 ];
-const mount = ({ studio, Shader }) => {
+// preview: { pause() → 멈췄으면 true, resume() } — 성능을 재는 동안 메인 미리보기를 멈춘다(없으면 그대로 잰다).
+const mount = ({ studio, Shader, preview = null }) => {
   const $ = id => document.getElementById(id),
     controller = new AbortController(),
     signal = controller.signal;
@@ -631,11 +634,16 @@ const mount = ({ studio, Shader }) => {
     );
     // 다른 사람의 작품: 원작자와 라이선스를 카드에 보인다(자세한 출처는 셰이더 맨 위 주석).
     if (item.credit) {
-      const credit = element("span", "gallery-credit", `${item.credit.author} · ${item.credit.license}`);
+      const license = item.credit.license === "Permission" ? "자유 사용 허락" : item.credit.license;
+      const credit = element("span", "gallery-credit", `${item.credit.author} · ${license}`);
       credit.title = `${item.credit.work} — ${item.credit.url}`;
       meta.append(credit);
     }
-    button.append(art, meta);
+    // 성능 배지: 갤러리를 처음 열 때 이 컴퓨터에서 재서 채운다(drawThumbs).
+    const badge = element("span", "gallery-perf", "측정 중");
+    badge.dataset.level = "pending";
+    badge.title = "이 컴퓨터에서 성능을 재는 중입니다.";
+    button.append(art, badge, meta);
     button.addEventListener("click", () => onPick(item));
     return button;
   };
@@ -656,15 +664,45 @@ const mount = ({ studio, Shader }) => {
   grid.replaceChildren(...ART.map(item => card(item, pick)));
   community.replaceChildren(...COMMUNITY.map(item => card(item, pick)));
   lessons.replaceChildren(...LESSONS.map(item => card(item, pick)));
-  // 썸네일 전용 임시 컨텍스트: 각 예제를 t=2.5초로 한 프레임 그린 뒤 카드 캔버스로 복사하고 컨텍스트를 해제한다.
-  const drawThumbs = () => {
-    if (thumbsDrawn) return;
-    thumbsDrawn = true;
+  // 썸네일 전용 임시 컨텍스트: 각 예제를 t=2.5초로 한 프레임 그린 뒤 카드 캔버스로 복사한다.
+  // 이어서 같은 컨텍스트로 예제마다 성능을 재 배지를 채운다(gallery-perf.js). 한 번에 하나씩, 프레임 사이에 쉬어 가며 잰다.
+  // 갤러리를 닫으면 멈췄다가 다시 열면 이어서 재고, 다 재면 컨텍스트를 해제한다.
+  let perf = null;
+  const perfResults = new Map();
+  const perfBadges = id => dialog.querySelectorAll(`.gallery-card[data-id="${id}"] .gallery-perf`);
+  const setBadge = (id, state) => {
+    for (const badge of perfBadges(id)) {
+      badge.dataset.level = state.level;
+      badge.textContent = state.label;
+      badge.title = state.title;
+    }
+  };
+  // 성능을 잴 프로젝트: 예제 카드가 Studio에 넘기는 것과 같은 패스 구성. Studio 소유 예제는 그 소스를 직접 쓴다.
+  const perfProject = item => {
+    if (item.action === "exampleRaymarch")
+      return {
+        project: { image: Shader.raymarch, passes: Shader.raymarchPasses },
+        uniforms: Shader.rayUniforms.map(([name, type, value]) => ({ name, type, value })),
+      };
+    if (item.action === "examplePipeline") return { project: Examples.pipelineProject(), uniforms: [] };
+    if (item.action === "exampleFeedback") return { project: Examples.feedbackProject(), uniforms: [] };
+    const project = item.project || { image: item.image, passes: [] };
+    return { project, uniforms: params(sourcesOf(item)) };
+  };
+  const startThumbs = () => {
     const surface = document.createElement("canvas");
     surface.width = 320;
     surface.height = 200;
     const gl = surface.getContext("webgl2", { preserveDrawingBuffer: true, antialias: false });
-    if (!gl) return;
+    if (!gl) {
+      for (const item of [...ART, ...COMMUNITY, ...LESSONS])
+        setBadge(item.id, {
+          level: "unknown",
+          label: "측정 불가",
+          title: "WebGL2를 쓸 수 없어 성능을 재지 못했습니다.",
+        });
+      return null;
+    }
     const compile = (type, source) => {
       const s = gl.createShader(type);
       gl.shaderSource(s, source);
@@ -677,26 +715,46 @@ const mount = ({ studio, Shader }) => {
       return s;
     };
     const vs = compile(gl.VERTEX_SHADER, Shader.vertex),
-      vao = gl.createVertexArray();
+      vao = gl.createVertexArray(),
+      programs = new Map();
     gl.bindVertexArray(vao);
-    gl.viewport(0, 0, 320, 200);
-    const render = (fragment, users) => {
-      const fs = compile(gl.FRAGMENT_SHADER, fragment);
-      if (!vs || !fs) return false;
-      const program = gl.createProgram();
-      gl.attachShader(program, vs);
-      gl.attachShader(program, fs);
-      gl.linkProgram(program);
-      gl.deleteShader(fs);
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        gl.deleteProgram(program);
-        return false;
+    // 같은 소스는 한 번만 컴파일한다(썸네일과 성능 측정이 같이 쓴다). 실패하면 null.
+    const program = fragment => {
+      if (programs.has(fragment)) return programs.get(fragment);
+      let linked = null;
+      const fs = vs && compile(gl.FRAGMENT_SHADER, fragment);
+      if (fs) {
+        linked = gl.createProgram();
+        gl.attachShader(linked, vs);
+        gl.attachShader(linked, fs);
+        gl.linkProgram(linked);
+        gl.deleteShader(fs);
+        if (!gl.getProgramParameter(linked, gl.LINK_STATUS)) {
+          gl.deleteProgram(linked);
+          linked = null;
+        }
       }
-      gl.useProgram(program);
-      const at = name => gl.getUniformLocation(program, name);
-      gl.uniform2f(at("uResolution"), 320, 200);
+      programs.set(fragment, linked);
+      return linked;
+    };
+    // 렌더러가 넣는 기본 Uniform과 예제 파라미터. uMouse·uResolution은 선언한 타입에 맞춰 넣는다(vec2/vec4, vec2/vec3).
+    const setup = (linked, users, { width, height }) => {
+      gl.useProgram(linked);
+      const types = new Map();
+      for (let i = 0, n = gl.getProgramParameter(linked, gl.ACTIVE_UNIFORMS); i < n; i++) {
+        const info = gl.getActiveUniform(linked, i);
+        types.set(info.name.replace(/\[0\]$/, ""), info.type);
+      }
+      const at = name => gl.getUniformLocation(linked, name);
+      if (types.get("uResolution") === gl.FLOAT_VEC3) gl.uniform3f(at("uResolution"), width, height, 1);
+      else gl.uniform2f(at("uResolution"), width, height);
       gl.uniform1f(at("uTime"), 2.5);
-      gl.uniform2f(at("uMouse"), -1, -1);
+      gl.uniform1f(at("uDeltaTime"), 1 / 60);
+      gl.uniform1i(at("uFrame"), 150);
+      if (types.get("uMouse") === gl.FLOAT_VEC4) gl.uniform4f(at("uMouse"), -1, -1, 0, 0);
+      else gl.uniform2f(at("uMouse"), -1, -1);
+      for (let unit = 0; unit < 4; unit++) gl.uniform1i(at(`iChannel${unit}`), unit);
+      if (types.has("iChannelResolution")) gl.uniform3fv(at("iChannelResolution"), new Float32Array(12).fill(1));
       for (const { name, type, value } of users) {
         const loc = at(name);
         if (!loc) continue;
@@ -707,8 +765,14 @@ const mount = ({ studio, Shader }) => {
         else if (type === "vec3") gl.uniform3fv(loc, value);
         else if (type === "vec4") gl.uniform4fv(loc, value);
       }
+    };
+    const render = (fragment, users) => {
+      const linked = program(fragment);
+      if (!linked) return false;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, 320, 200);
+      setup(linked, users, { width: 320, height: 200 });
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.deleteProgram(program);
       return true;
     };
     const copy = id => {
@@ -721,9 +785,133 @@ const mount = ({ studio, Shader }) => {
     for (const item of LESSONS) if (item.image) render(item.image, params([item.image])) && copy(item.thumb || item.id);
     const ray = Shader.rayUniforms.map(([name, type, value]) => ({ name, type, value }));
     if (render(Shader.raymarch, ray)) copy("raymarch");
-    if (vs) gl.deleteShader(vs);
-    gl.deleteVertexArray(vao);
-    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    // ---- 성능 측정 ----
+    const debug = gl.getExtension("WEBGL_debug_renderer_info"),
+      renderer = debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      software = Perf.isSoftware(renderer),
+      // GPU 없이 그리는 환경(소프트웨어 렌더링)에서는 작게 잰다. 무거운 예제 하나에 수 초씩 멈추지 않게.
+      meter = Perf.createMeter(gl, software ? { width: 160, height: 90 } : { width: 640, height: 360 }),
+      empty = program(
+        "#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main() { fragColor = vec4(0.0); }"
+      );
+    // 빈 셰이더 시간 = 고정 비용(호출·동기화). 가장 작게 나온 값을 기준으로 삼는다.
+    // 예제를 재기 직전마다 다시 재 보고, 기준보다 한참 길면 GPU가 다른 일(멈추기 직전 메인 프레임, 다른 탭)로 바쁜 것이니
+    // 잠시 뒤 다시 잰다. 이렇게 해야 앞쪽 예제만 몇 배로 부풀지 않는다.
+    const probe = () => (empty ? meter.time(size => setup(empty, [], size)) : 0);
+    let baseline = Infinity;
+    const busy = () => {
+      const ms = probe();
+      baseline = Math.min(baseline, ms);
+      return ms > baseline * 3 + 0.3;
+    };
+    const queue = [...ART, ...COMMUNITY, ...LESSONS];
+    let retries = 0,
+      warmup = 4; // 처음 몇 번은 기준값만 잰다(멈추기 직전 메인 프레임·썸네일 그리기가 끝나기를 기다리며)
+    const measure = item => {
+      const { project, uniforms } = perfProject(item),
+        passes = [
+          ...project.passes.map(pass => ({ source: pass.fragment, pass })),
+          { source: project.image, pass: {} },
+        ],
+        samples = [];
+      for (const { source, pass } of passes) {
+        const linked = program(source);
+        if (!linked) return null;
+        samples.push({
+          ms: meter.time(size => setup(linked, uniforms, size)),
+          measured: meter.pixels,
+          pixels: Perf.passPixels(pass),
+        });
+      }
+      return Perf.estimateFrameMs(samples, Number.isFinite(baseline) ? baseline : 0);
+    };
+    const finish = () => {
+      meter.dispose();
+      for (const linked of programs.values()) if (linked) gl.deleteProgram(linked);
+      if (vs) gl.deleteShader(vs);
+      gl.deleteVertexArray(vao);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    };
+    let timer = 0,
+      done = false,
+      paused = false;
+    // 재는 동안만 메인 미리보기를 멈춘다. 갤러리를 닫거나 다 재면 원래대로 돌린다.
+    const pausePreview = () => {
+      if (!paused) paused = !!preview?.pause();
+    };
+    const resumePreview = () => {
+      if (paused) preview?.resume();
+      paused = false;
+    };
+    const step = () => {
+      timer = 0;
+      if (done || !dialog.open) return resumePreview();
+      const item = queue.shift();
+      if (!item) {
+        done = true;
+        resumePreview();
+        finish();
+        return;
+      }
+      pausePreview();
+      if (warmup > 0) {
+        warmup--;
+        busy();
+        queue.unshift(item);
+        timer = setTimeout(step, 100);
+        return;
+      }
+      if (!perfResults.has(item.id) && retries < 5 && busy()) {
+        retries++;
+        queue.unshift(item);
+        timer = setTimeout(step, 150);
+        return;
+      }
+      retries = 0;
+      if (!perfResults.has(item.id)) {
+        let ms = null;
+        try {
+          ms = measure(item);
+        } catch (error) {
+          console.warn("성능 측정 실패", item.id, error);
+        }
+        if (ms === null || !Number.isFinite(ms))
+          setBadge(item.id, { level: "unknown", label: "측정 실패", title: "이 예제는 성능을 재지 못했습니다." });
+        else {
+          const state = { ms, software, ...Perf.describe(ms) };
+          if (software) state.title += " · GPU 없이 소프트웨어로 그리는 환경이라 실제 GPU보다 훨씬 느리게 나옵니다";
+          perfResults.set(item.id, state);
+          setBadge(item.id, state);
+        }
+      }
+      timer = setTimeout(step, 30);
+    };
+    return {
+      resume: () => {
+        if (!done && !timer) timer = setTimeout(step, 120);
+      },
+      pause: () => {
+        clearTimeout(timer);
+        timer = 0;
+        resumePreview();
+      },
+      stop: () => {
+        clearTimeout(timer);
+        timer = 0;
+        resumePreview();
+        if (!done) {
+          done = true;
+          finish();
+        }
+      },
+    };
+  };
+  const drawThumbs = () => {
+    if (!thumbsDrawn) {
+      thumbsDrawn = true;
+      perf = startThumbs();
+    }
+    perf?.resume();
   };
   const open = (welcome = false) => {
     dialog.dataset.welcome = String(welcome);
@@ -738,7 +926,14 @@ const mount = ({ studio, Shader }) => {
   $("galleryToggle").addEventListener("click", () => open(false), { signal });
   $("galleryClose").addEventListener("click", close, { signal });
   $("galleryBlank").addEventListener("click", close, { signal });
-  dialog.addEventListener("close", finishOnboarding, { signal });
+  dialog.addEventListener(
+    "close",
+    () => {
+      finishOnboarding();
+      perf?.pause();
+    },
+    { signal }
+  );
   dialog.addEventListener(
     "click",
     event => {
@@ -766,6 +961,16 @@ const mount = ({ studio, Shader }) => {
     /* 읽기가 막힌 브라우저: 안내를 띄우지 않는다. */
   }
   if (first) setTimeout(() => open(true), 400);
-  return { open, close, loadLesson, dispose: () => controller.abort() };
+  return {
+    open,
+    close,
+    loadLesson,
+    // 잰 성능(예제 id → { ms, level, label, title, software }). 테스트와 진단용.
+    getPerformance: () => Object.fromEntries(perfResults),
+    dispose: () => {
+      perf?.stop();
+      controller.abort();
+    },
+  };
 };
 export { mount };

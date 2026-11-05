@@ -881,7 +881,7 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .gallery-steps li { display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--muted);font-size:12px;line-height:1.6; }
 .gallery-steps b { color:var(--text); }
 .gallery-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:14px; }
-.gallery-card { display:flex;flex-direction:column;align-items:stretch;gap:0;min-height:0;padding:0;overflow:hidden;border-color:var(--line);border-radius:var(--radius);background:var(--surface);text-align:left;transition:border-color .15s; }
+.gallery-card { position:relative;display:flex;flex-direction:column;align-items:stretch;gap:0;min-height:0;padding:0;overflow:hidden;border-color:var(--line);border-radius:var(--radius);background:var(--surface);text-align:left;transition:border-color .15s; }
 .gallery-card:hover { border-color:var(--line-hover);background:var(--surface); }
 .gallery-thumb { display:block;width:100%;height:auto;aspect-ratio:16/10;background:var(--sunken); }
 .gallery-thumb[data-thumb="pipeline"] { background:radial-gradient(circle at 30% 50%,#1aa6ff 0 9%,transparent 10%),radial-gradient(circle at 72% 50%,#ff2fa0 0 9%,transparent 10%),linear-gradient(90deg,#0b1a2c 50%,#1c0b22 50%); }
@@ -891,6 +891,17 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .gallery-meta strong { color:var(--text);font-size:14px;font-weight:700; }
 .gallery-tag { color:var(--accent-strong);font:600 10px/1.4 var(--mono);letter-spacing:.4px; }
 .gallery-desc { color:var(--muted);font-size:12px;font-weight:400;line-height:1.55; }
+/* 성능 배지: 썸네일 위에 얹으므로 테마와 관계없이 어두운 반투명 바탕. 점 색이 단계를 나타낸다(글자로도 적는다).
+   재는 동안 화면이 다시 그려지지 않도록 애니메이션·backdrop-filter는 쓰지 않는다(측정이 부푼다). */
+.gallery-perf { position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 7px;border-radius:999px;background:#0c0d10c7;color:#f1f2f4;font:600 10px/1.4 var(--mono);letter-spacing:.2px;pointer-events:auto; }
+.gallery-perf::before { content:"";width:7px;height:7px;border-radius:50%;background:#8e9097; }
+.gallery-perf[data-level="pending"] { color:#c5c6ca; }
+.gallery-perf[data-level="light"]::before { background:#4cc38a; }
+.gallery-perf[data-level="medium"]::before { background:#e2c452; }
+.gallery-perf[data-level="heavy"]::before { background:#f3964c; }
+.gallery-perf[data-level="extreme"]::before { background:#f2707c; }
+.gallery-perf-legend { display:flex;flex-wrap:wrap;gap:4px 14px;margin:14px 0 0;color:var(--muted);font-size:11.5px;line-height:1.5; }
+.gallery-perf-legend .gallery-perf { position:static;pointer-events:none; }
 .gallery-credit { color:var(--text-soft);font:500 10.5px/1.4 var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .gallery-note { margin:-4px 0 12px;color:var(--muted);font-size:12px;line-height:1.55; }
 .gallery-foot { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 28px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12px; }
