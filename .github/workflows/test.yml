@@ -96,6 +96,15 @@ jobs:
       - name: Run ${{ matrix.suite }} tests
         run: node tests/run.mjs ${{ matrix.suite }} --strict
 
+      - name: Preserve failed browser recordings
+        if: failure() && matrix.suite == 'browser'
+        uses: actions/upload-artifact@v6
+        with:
+          name: field-studio-browser-failure-${{ github.sha }}
+          path: test-results/browser/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # lint와 세 묶음이 모두 통과하면 한 파일짜리 배포본을 만들어 실행 페이지의 Artifacts에 올린다.
   # 이름에 커밋 SHA를 붙여 어느 소스에서 만든 파일인지 알 수 있게 한다.
   build:

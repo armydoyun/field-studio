@@ -7,8 +7,8 @@ const clock=()=>{
   let now=0,next=0;const tasks=new Map();
   const schedule=(fn,ms,interval=0)=>{const id=++next;tasks.set(id,{fn,at:now+ms,interval});return id;};
   const advance=ms=>{const end=now+ms;for(;;){const entry=[...tasks].sort((a,b)=>a[1].at-b[1].at)[0];if(!entry||entry[1].at>end)break;
-    const [id,task]=entry;now=task.at;if(task.interval)task.at+=task.interval;else tasks.delete(id);task.fn();}now=end;};
-  return {advance,get pending(){return tasks.size;},performance:{now:()=>now},
+    const [id,task]=entry;now=Math.max(now,task.at);if(task.interval)task.at+=task.interval;else tasks.delete(id);task.fn();}now=end;};
+  return {advance,stall:ms=>{now+=ms;},get pending(){return tasks.size;},performance:{now:()=>now},
     setTimeout:(fn,ms)=>schedule(fn,ms),clearTimeout:id=>tasks.delete(id),setInterval:(fn,ms)=>schedule(fn,ms,ms),clearInterval:id=>tasks.delete(id)};
 };
 const time=clock();let Recorder;
@@ -126,6 +126,13 @@ test("경과 시간은 실제 시작 뒤 1초가 넘어가는 시점마다 갱�
   time.advance(1150);
   assert.equal(Recorder.formatElapsed(changes.at(-1).elapsed),"0:01",`표시 ${changes.at(-1).elapsed}ms`);
   r.dispose();
+});
+test("이벤트 루프가 10초 멈추면 경과 시간도 실제 지난 시간으로 건너뛴다",()=>{
+  const {FakeRecorder}=fake(["video/webm"]),changes=[];
+  const r=create({canvas:canvas(),createCanvas:mirrorFactory().create,Recorder:FakeRecorder,onSave(){},onChange:x=>changes.push(x)});
+  r.start();assert.equal(Recorder.formatElapsed(changes.at(-1).elapsed),"0:00");
+  time.stall(10000);time.advance(0);
+  assert.equal(Recorder.formatElapsed(changes.at(-1).elapsed),"0:10");assert.equal(changes.at(-1).ready,true);r.dispose();
 });
 test("준비 중에 폐기(dispose)하면 바로 멈추고 버린다",()=>{
   const {FakeRecorder,made}=fake(["video/webm"],{manualStart:true}),saved=[];

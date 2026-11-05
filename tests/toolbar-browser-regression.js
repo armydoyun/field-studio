@@ -4,6 +4,20 @@
   const $ = id => document.getElementById(id), stage = $("stage");
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const elapsedSeconds = value => /^\d+:[0-5]\d(?::[0-5]\d)?$/.test(value)
+    ? value.split(":").reduce((total, part) => total * 60 + Number(part), 0) : null;
+  // 실패 시 runner가 영상 원본과 캡처 요청 수를 보존한다. 타이머 실행과 실제 인코딩을 구분하기 위한 정보다.
+  const captures = [], originalCapture = HTMLCanvasElement.prototype.captureStream;
+  HTMLCanvasElement.prototype.captureStream = function (...args) {
+    const stream = originalCapture.apply(this, args), track = stream.getVideoTracks()[0], request = track.requestFrame;
+    const capture = { width: this.width, height: this.height, requests: 0, firstRequest: null, lastRequest: null };
+    captures.push(capture);
+    if (typeof request === "function") track.requestFrame = function (...values) {
+      capture.requests++; capture.firstRequest ??= performance.now(); capture.lastRequest = performance.now();
+      return request.apply(this, values);
+    };
+    return stream;
+  };
   const visible = node => !!node && !node.hidden && node.getClientRects().length > 0; // offsetParent는 fixed 요소에서 늘 null이라 쓰지 않는다
   // 실패했을 때 이유가 보이게: 앱의 오류 알림(toast)과 녹화 상태
   const why = () => `toast="${$("uiToast").hidden ? "" : $("toastMessage").textContent}" recording=${stage.classList.contains("is-recording")}`;
@@ -12,6 +26,8 @@
   // 바이트 수는 화질·해상도·코덱에 따라 달라진다. 실제로 두 프레임 이상 디코딩되고 시간이 진행되는지 검사한다.
   const readVideo = async (file, width, height) => {
     test(!!file && /^shader-\d{8}-\d{6}\.(webm|mp4)$/.test(file.name) && file.blob?.size > 0 && /^video\//.test(file.blob.type), `영상 파일 내려받기: ${file?.name} ${file?.blob?.size}B ${file?.blob?.type} ${why()}`);
+    const artifact = { name: file.name, blob: file.blob, capture: {...captures.at(-1)}, expected: {width, height} };
+    (window.__recordingTestArtifacts ??= []).push(artifact);
     const video = document.createElement("video"), url = URL.createObjectURL(file.blob);
     video.muted = true;
     let timer, callback;
@@ -33,6 +49,11 @@
       const image = document.createElement("canvas"); image.width = image.height = 1;
       const context = image.getContext("2d"); context.drawImage(video, 0, 0, 1, 1);
       return context.getImageData(0, 0, 1, 1).data;
+    } catch (error) {
+      artifact.decoder = {readyState: video.readyState, currentTime: video.currentTime, paused: video.paused, ended: video.ended,
+        decoded: video.webkitDecodedFrameCount, totalFrames: video.getVideoPlaybackQuality().totalVideoFrames};
+      console.warn(`녹화 진단: ${JSON.stringify({capture: artifact.capture, decoder: artifact.decoder})}`);
+      throw error;
     } finally {
       clearTimeout(timer); video.cancelVideoFrameCallback(callback); video.pause();
       video.onerror = null; video.removeAttribute("src"); video.load(); URL.revokeObjectURL(url);
@@ -78,11 +99,12 @@
     test(visible($("recordStop")) && stage.classList.contains("is-recording"), `녹화 버튼을 누르면 툴바에 녹화 표시: ${$("recordTime").textContent}`);
     // 인코더가 준비되는 동안은 '준비'. 느린 CI에서는 몇 초 걸릴 수 있으니 실제로 시작될 때까지 기다린다.
     for (let i = 0; i < 300 && $("recordTime").textContent === "준비"; i++) await wait(50);
-    test(/^0:0\d$/.test($("recordTime").textContent), `녹화 시작 → 경과 시간 표시: ${$("recordTime").textContent} ${why()}`);
+    test(elapsedSeconds($("recordTime").textContent) !== null, `녹화 시작 → 경과 시간 표시: ${$("recordTime").textContent} ${why()}`);
     // 시간이 흐르는지: 고정된 시간만큼 기다리지 않고, 바뀔 때까지 기다린다(CI에서는 타이머가 밀릴 수 있다).
-    const shown = $("recordTime").textContent;
+    const shown = $("recordTime").textContent, shownSeconds = elapsedSeconds(shown);
     for (let i = 0; i < 200 && $("recordTime").textContent === shown; i++) await wait(50);
-    test(/^0:0[1-9]$/.test($("recordTime").textContent), `경과 시간이 흐름: ${shown} → ${$("recordTime").textContent}`);
+    // CI의 긴 작업 뒤에는 0:00 → 0:10처럼 건너뛸 수 있다. 특정 한 자리 초 대신 실제 증가를 검사한다.
+    test(elapsedSeconds($("recordTime").textContent) > shownSeconds, `경과 시간이 흐름: ${shown} → ${$("recordTime").textContent}`);
     test(!visible($("captureMenu")), "녹화를 시작하면 메뉴가 닫힘");
     $("captureToggle").click(); await wait(0);
     test($("recordButtonLabel").textContent === "녹화 중지", "녹화 중에는 메뉴 항목이 '녹화 중지'");
@@ -101,8 +123,8 @@
     await wait(200);
     $("captureToggle").click(); $("recordButton").click();
     // 준비에 걸린 시간을 녹화 시간에 포함하지 않는다. 실제 시작 뒤 1초 이상 담고 중지한다.
-    for (let i = 0; i < 400 && ($("recordTime").textContent === "준비" || $("recordTime").textContent === "0:00"); i++) await wait(50);
-    test(/^\d+:\d{2}$/.test($("recordTime").textContent) && $("recordTime").textContent !== "0:00", `일시정지 중에도 실제 녹화 시간이 흐름: ${$("recordTime").textContent} ${why()}`);
+    for (let i = 0; i < 400 && !(elapsedSeconds($("recordTime").textContent) > 0); i++) await wait(50);
+    test(elapsedSeconds($("recordTime").textContent) > 0, `일시정지 중에도 실제 녹화 시간이 흐름: ${$("recordTime").textContent} ${why()}`);
     $("recordStop").click();
     const still = await waitDownload(3);
     if (wasPlaying) $("previewPause").click();
@@ -125,6 +147,7 @@
     test(pixel[0] > 200 && pixel[1] < 50 && pixel[2] < 50, `늦게 온 빨간 프레임이 녹화됨: ${[...pixel]}`);
   } finally {
     probeRecorder?.dispose();
+    HTMLCanvasElement.prototype.captureStream = originalCapture;
     URL.createObjectURL = originalUrl;
     HTMLAnchorElement.prototype.click = originalClick;
     if (stage.classList.contains("hud-hidden") !== hudBefore) $("hudToggle").click();

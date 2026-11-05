@@ -163,6 +163,22 @@ const runBrowser = async () => {
         }
         record("browser", name, "PASS", Date.now() - started);
       } catch(error) {
+        // 녹화 검사 실패는 영상 파일 자체를 남겨 외부 디코더로도 확인할 수 있게 한다.
+        try {
+          const recordings = await withTimeout(page.evaluate(async () => Promise.all((window.__recordingTestArtifacts || []).map(async ({blob, ...metadata}) => {
+            const bytes = new Uint8Array(await blob.arrayBuffer()); let binary = "";
+            for(let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+            return {...metadata, type:blob.type, size:blob.size, base64:btoa(binary)};
+          }))), 5000, "녹화 진단 저장");
+          if(recordings.length) {
+            const directory = path.join(ROOT, "test-results", "browser", `${path.basename(name, ".js")}-${Date.now()}`);
+            fs.mkdirSync(directory, {recursive:true});
+            recordings.forEach(({base64, type}, i) => fs.writeFileSync(path.join(directory, `recording-${i}.${type.startsWith("video/mp4") ? "mp4" : "webm"}`), Buffer.from(base64, "base64")));
+            fs.writeFileSync(path.join(directory, "diagnostics.json"), JSON.stringify({test:name, browser:browser.version(), error:error.message,
+              recordings:recordings.map(({base64: _base64, ...metadata}) => metadata)}, null, 2));
+            logs.push(`녹화 진단 파일: ${path.relative(ROOT, directory)}`);
+          }
+        } catch(diagnosticError) { logs.push(`녹화 진단 저장 실패: ${diagnosticError.message}`); }
         record("browser", name, "FAIL", Date.now() - started, `${logs.join("\n")}\n${error.message}`);
       } finally {
         await context.close();
