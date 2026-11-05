@@ -4,7 +4,7 @@ require('./esm-vm-bridge.cjs'); // Test-only ESM mock adapter.
 const fs=require("fs"),path=require("path"),vm=require("vm"),assert=require("assert");
 let Recorder;
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,"../js/recorder.js"),"utf8"),{
-  define:(deps,factory)=>Recorder=factory(),performance:{now:()=>Date.now()},setInterval,clearInterval,setTimeout,Blob,Math,String,Date,document:{createElement:()=>({})}
+  define:(deps,factory)=>Recorder=factory(),performance:{now:()=>Date.now()},setInterval,clearInterval,setTimeout,clearTimeout,Blob,Math,String,Date,document:{createElement:()=>({})}
 },{filename:"recorder.js"});
 // 가짜 MediaRecorder: start()로 녹화, stop()하면 받아 둔 조각을 dataavailable로 넘기고 stop을 알린다.
 // manualStart: true면 start 이벤트를 테스트가 직접 보낸다(실제처럼 인코더 준비가 늦는 경우). 기본은 start() 안에서 바로 보낸다.
@@ -105,6 +105,15 @@ test("인코더 준비가 늦으면: 시간은 시작 이벤트부터, 준비 �
   assert.equal(changes.at(-1).ready,true);assert.equal(m.made[0].track.frames,before+1,"시작 순간 지금 화면을 첫 프레임으로");
   await new Promise(resolve=>setTimeout(resolve,450));
   assert.equal(made[0].state,"inactive","시작 뒤 잠깐 담고 멈춤");assert.equal(saved.length,1);
+});
+test("경과 시간은 실제 시작 뒤 1초가 넘어가는 시점마다 갱신된다",async()=>{
+  const {FakeRecorder,made}=fake(["video/webm"],{manualStart:true}),changes=[];
+  const r=Recorder.create({canvas:canvas(),createCanvas:mirrorFactory().create,Recorder:FakeRecorder,onSave(){},onChange:x=>changes.push(x)});
+  r.start();await new Promise(resolve=>setTimeout(resolve,700));made[0].emit("start");// 늦게 시작해도 시작 순간 기준
+  assert.equal(Recorder.formatElapsed(changes.at(-1).elapsed),"0:00");
+  await new Promise(resolve=>setTimeout(resolve,1150));
+  assert.equal(Recorder.formatElapsed(changes.at(-1).elapsed),"0:01",`표시 ${changes.at(-1).elapsed}ms`);
+  r.dispose();
 });
 test("준비 중에 폐기(dispose)하면 바로 멈추고 버린다",()=>{
   const {FakeRecorder,made}=fake(["video/webm"],{manualStart:true}),saved=[];

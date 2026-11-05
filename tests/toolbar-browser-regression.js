@@ -49,8 +49,10 @@
     // 인코더가 준비되는 동안은 '준비'. 느린 CI에서는 몇 초 걸릴 수 있으니 실제로 시작될 때까지 기다린다.
     for (let i = 0; i < 300 && $("recordTime").textContent === "준비"; i++) await wait(50);
     test(/^0:0\d$/.test($("recordTime").textContent), `녹화 시작 → 경과 시간 표시: ${$("recordTime").textContent} ${why()}`);
-    await wait(1300);
-    test(/^0:0[1-9]$/.test($("recordTime").textContent), `경과 시간이 흐름: ${$("recordTime").textContent}`);
+    // 시간이 흐르는지: 고정된 시간만큼 기다리지 않고, 바뀔 때까지 기다린다(CI에서는 타이머가 밀릴 수 있다).
+    const shown = $("recordTime").textContent;
+    for (let i = 0; i < 200 && $("recordTime").textContent === shown; i++) await wait(50);
+    test(/^0:0[1-9]$/.test($("recordTime").textContent), `경과 시간이 흐름: ${shown} → ${$("recordTime").textContent}`);
     test(!visible($("captureMenu")), "녹화를 시작하면 메뉴가 닫힘");
     $("captureToggle").click(); await wait(0);
     test($("recordButtonLabel").textContent === "녹화 중지", "녹화 중에는 메뉴 항목이 '녹화 중지'");

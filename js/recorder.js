@@ -68,8 +68,15 @@ const create = ({
   const now = () => performance.now();
   const notify = () =>
     onChange({ recording: !!recorder, ready: !!recorder && ready, elapsed: recorder && ready ? now() - startedAt : 0 });
+  // 경과 시간 표시: 녹화가 실제로 시작된 순간부터 1초가 넘어가는 시점마다 갱신한다(0:00 → 0:01 → …가 제때 바뀌게).
+  const tick = () => {
+    notify();
+    if (!recorder || !ready) return;
+    const elapsed = now() - startedAt;
+    timer = setTimeout(tick, 1000 - (elapsed % 1000) + 5);
+  };
   const cleanup = () => {
-    clearInterval(timer);
+    clearTimeout(timer);
     clearInterval(keepalive);
     timer = keepalive = 0;
     unsubscribe?.();
@@ -136,12 +143,12 @@ const create = ({
       startedAt = now();
       context.drawImage(mirror, 0, 0);
       push();
-      notify();
+      clearTimeout(timer);
+      tick();
       if (stopRequested) setTimeout(() => active.state === "recording" && active.stop(), MIN_RECORD_MS);
     });
     active.start(1000); // 1초마다 조각을 받아 둔다(긴 녹화에서도 메모리를 한 번에 크게 쓰지 않게).
     startedAt = now();
-    timer = setInterval(notify, 500);
     unsubscribe = onFrame(source => {
       // 렌더 해상도가 바뀌면 녹화 크기도 따라간다(인코더가 크기 변화를 처리한다).
       if (mirror.width !== source.width || mirror.height !== source.height) {
