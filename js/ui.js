@@ -714,10 +714,16 @@ const mount = (renderer, input, settings) => {
   setText("recordFormat", recordFormat);
   const recorder = Recorder.create({
     canvas: $("screen"),
-    onChange: ({ recording, elapsed }) => {
+    onFrame: renderer.onFrame,
+    redraw: renderer.redraw,
+    onChange: ({ recording, ready, elapsed }) => {
       $("recordStop").hidden = !recording;
-      setText("recordTime", Recorder.formatElapsed(elapsed));
-      $("recordStop").title = `녹화 중지 · ${Recorder.formatElapsed(elapsed)}`;
+      // 인코더가 준비되는 동안(느린 컴퓨터에서 1초 남짓)은 '준비'로 보인다. 그동안 누른 중지는 시작된 뒤 잠깐 담고 멈춘다.
+      setText("recordTime", ready ? Recorder.formatElapsed(elapsed) : "준비");
+      $("recordStop").classList.toggle("is-preparing", recording && !ready);
+      $("recordStop").title = ready
+        ? `녹화 중지 · ${Recorder.formatElapsed(elapsed)}`
+        : "녹화 준비 중 · 누르면 시작 직후 멈춤";
       stage.classList.toggle("is-recording", recording);
       setText("recordButtonLabel", recording ? "녹화 중지" : "녹화 시작");
       $("recordButton").setAttribute("aria-label", recording ? "녹화 중지" : "녹화 시작");

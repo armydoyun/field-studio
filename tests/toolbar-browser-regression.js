@@ -5,6 +5,10 @@
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   const visible = node => !!node && !node.hidden && node.getClientRects().length > 0; // offsetParent는 fixed 요소에서 늘 null이라 쓰지 않는다
+  // 실패했을 때 이유가 보이게: 앱의 오류 알림(toast)과 녹화 상태
+  const why = () => `toast="${$("uiToast").hidden ? "" : $("toastMessage").textContent}" recording=${stage.classList.contains("is-recording")}`;
+  // 내려받기를 기다린다. CI(소프트웨어 렌더링 · 여러 테스트 동시 실행)에서는 녹화를 끝내고 파일이 나오기까지 몇 초 걸릴 수 있다.
+  const waitDownload = async count => { for (let i = 0; i < 300 && downloads.length < count; i++) await wait(50); return downloads[count - 1]; };
   const key = k => document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
   // 내려받기를 가로챈다: a[download].click()이 만든 파일 이름과 Blob을 기록한다.
   const downloads = [], blobs = new Map(), originalUrl = URL.createObjectURL, originalClick = HTMLAnchorElement.prototype.click;
@@ -40,21 +44,33 @@
 
     // 녹화: 시작 → 툴바에 경과 시간 → 중지하면 영상 파일을 내려받는다
     test(!$("recordButton").disabled, "녹화 지원(Chromium)");
-    $("recordButton").click(); await wait(1600);
-    test(visible($("recordStop")) && /^0:0[1-9]$/.test($("recordTime").textContent) && stage.classList.contains("is-recording"), `녹화 중 표시 ${$("recordTime").textContent}`);
+    $("recordButton").click(); await wait(0);
+    test(visible($("recordStop")) && stage.classList.contains("is-recording"), `녹화 버튼을 누르면 툴바에 녹화 표시: ${$("recordTime").textContent}`);
+    // 인코더가 준비되는 동안은 '준비'. 느린 CI에서는 몇 초 걸릴 수 있으니 실제로 시작될 때까지 기다린다.
+    for (let i = 0; i < 300 && $("recordTime").textContent === "준비"; i++) await wait(50);
+    test(/^0:0\d$/.test($("recordTime").textContent), `녹화 시작 → 경과 시간 표시: ${$("recordTime").textContent} ${why()}`);
+    await wait(1300);
+    test(/^0:0[1-9]$/.test($("recordTime").textContent), `경과 시간이 흐름: ${$("recordTime").textContent}`);
     test(!visible($("captureMenu")), "녹화를 시작하면 메뉴가 닫힘");
     $("captureToggle").click(); await wait(0);
     test($("recordButtonLabel").textContent === "녹화 중지", "녹화 중에는 메뉴 항목이 '녹화 중지'");
     $("captureToggle").click();
     $("recordStop").click();
-    for (let i = 0; i < 40 && !downloads.length; i++) await wait(50);
-    const file = downloads.at(-1);
-    test(!!file && /^shader-\d{8}-\d{6}\.(webm|mp4)$/.test(file.name) && file.blob?.size > 1000 && /^video\//.test(file.blob.type), `영상 파일 내려받기: ${file?.name} ${file?.blob?.size}B ${file?.blob?.type}`);
+    const file = await waitDownload(1);
+    test(!!file && /^shader-\d{8}-\d{6}\.(webm|mp4)$/.test(file.name) && file.blob?.size > 1000 && /^video\//.test(file.blob.type), `영상 파일 내려받기: ${file?.name} ${file?.blob?.size}B ${file?.blob?.type} ${why()}`);
     test(!visible($("recordStop")) && !stage.classList.contains("is-recording") && $("recordButtonLabel").textContent === "녹화 시작", "중지 후 표시 원래대로");
     // 스크린샷도 캡처 메뉴에서
     $("captureToggle").click(); $("screenshotButton").click();
-    for (let i = 0; i < 40 && downloads.length < 2; i++) await wait(50);
-    test(/\.png$/.test(downloads.at(-1)?.name || "") && !visible($("captureMenu")), "캡처 메뉴의 스크린샷 저장");
+    test(/\.png$/.test((await waitDownload(2))?.name || "") && !visible($("captureMenu")), `캡처 메뉴의 스크린샷 저장 ${why()}`);
+
+    // 일시정지 중에도 녹화된다: 화면이 새로 그려지지 않아도 멈춘 화면이 영상으로 남는다.
+    const wasPlaying = window.shaderStudio.getPlaybackState();
+    if (wasPlaying) $("previewPause").click();
+    await wait(200);
+    $("captureToggle").click(); $("recordButton").click(); await wait(1200); $("recordStop").click();
+    const still = await waitDownload(3);
+    if (wasPlaying) $("previewPause").click();
+    test(!!still && /^video\//.test(still.blob?.type) && still.blob.size > 500, `일시정지 중 녹화도 영상 파일: ${still?.name} ${still?.blob?.size}B ${why()}`);
   } finally {
     URL.createObjectURL = originalUrl;
     HTMLAnchorElement.prototype.click = originalClick;

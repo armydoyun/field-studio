@@ -573,6 +573,7 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .record-stop .record-dot { margin:0;animation:record-blink 1.2s steps(2,start) infinite; }
 @keyframes record-blink { to { visibility:hidden; } }
 @media (prefers-reduced-motion:reduce) { .record-stop .record-dot { animation:none; } }
+.record-stop.is-preparing .record-dot { animation:none;opacity:.45; } /* 인코더 준비 중: 깜빡이지 않는 흐린 점 + '준비' */
 /* 미리보기 분리: 메인 뷰포트에는 안내만 남기고, 분리 창은 캔버스 하나로 꽉 채운다. */
 .preview-popout-notice { position:absolute;inset:0;z-index:1;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:var(--stage-bg);color:var(--muted);text-align:center; }
 .preview-popout-notice p { display:grid;gap:4px;max-width:340px;margin:0;font-size:12px;line-height:1.6; }

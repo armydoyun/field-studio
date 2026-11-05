@@ -75,6 +75,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     disposed = false;
   let captureQueue = [],
     capturePaused = false;
+  const frameListeners = new Set();
   // 0은 FPS/픽셀 수 제한 없음. 시간 제한은 rAF를 유지하며 실제 드로우만 생략한다.
   let fpsLimit = 0,
     maxPixels = 0,
@@ -356,6 +357,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       stop();
       return;
     }
+    // 녹화(recorder.js) 등: 그린 직후라 드로잉 버퍼가 아직 남아 있을 때 캔버스를 복사하게 한다.
+    for (const listener of frameListeners)
+      try {
+        listener(canvas);
+      } catch (error) {
+        console.warn(error);
+      }
     if (captureQueue.length) {
       const pending = captureQueue.splice(0);
       try {
@@ -470,6 +478,21 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       nextFrameAt = 0;
       scheduleFrame();
     });
+  // 프레임을 그린 직후마다 listener(canvas)를 부른다. 해제 함수를 돌려준다.
+  const onFrame = listener => {
+    frameListeners.add(listener);
+    return () => frameListeners.delete(listener);
+  };
+  // 일시정지 중이어도 지금 화면을 한 번 그린다(스크린샷과 같은 방식). 재생 중이면 다음 프레임을 기다리면 된다.
+  const redraw = () => {
+    if (disposed || lost || document.hidden || !program) return false;
+    if (!running) {
+      capturePaused = true;
+      running = true;
+    }
+    scheduleFrame();
+    return true;
+  };
   const resetSimulation = () => {
     if (disposed || lost) throw new Error("시뮬레이션을 초기화할 수 없습니다.");
     passManager.resetTargets();
@@ -570,6 +593,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stop();
     disposed = true;
     captureQueue.splice(0).forEach(({ reject }) => reject(new Error("Renderer가 종료되었습니다.")));
+    frameListeners.clear();
     canvas.removeEventListener("pointermove", onPointerMove);
     canvas.removeEventListener("pointerleave", onPointerLeave);
     canvas.removeEventListener("pointerdown", onPointerDown);
@@ -972,6 +996,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stop,
     resetSimulation,
     captureScreenshot,
+    onFrame,
+    redraw,
     validateFragment,
     validatePassConfiguration,
     setFragment,
