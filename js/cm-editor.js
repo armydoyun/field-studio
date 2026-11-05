@@ -7,6 +7,7 @@ import * as Highlight from "./glsl-highlight.js";
 import * as Language from "./glsl-language.js";
 import * as Features from "./cm-glsl-features.js";
 import * as Store from "./storage.js";
+import * as SearchPanel from "./cm-search-panel.js";
 // 선택 영역을 줄 높이에 맞춰 그린다.
 // drawSelection은 줄 일부만 선택된 첫·마지막 줄을 글자 상자 높이(coordsAtPos)로 칠하고, 가운데 줄은 그 사이를 꽉 채운다.
 // 이 편집기는 줄 간격이 1.65라서 첫·마지막 줄의 띠만 얇고 위치도 어긋나 보였다.
@@ -783,7 +784,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
         CM.autocompletion({ override: [completionSource], icons: true, activateOnTyping: true }),
         hover,
         CM.lintGutter(),
-        CM.search({ top: true }),
+        CM.search({ top: true, createPanel: SearchPanel.createSearchPanel(CM) }), // 두 줄 찾기·바꾸기 창(cm-search-panel.js)
         forwardKeys,
         beforeUserEdit,
         ...features.extensions,
