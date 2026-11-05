@@ -152,13 +152,25 @@ test("첫 렌더 프레임이 늦으면 인코더·경과 시간도 기다린다
 test("첫 프레임을 기다리는 동안 중지·폐기해도 타이머와 구독이 남지 않는다",()=>{
   const {FakeRecorder,made}=fake(["video/webm"]),m=mirrorFactory(),f=frames(),saved=[];
   const r=create({canvas:canvas(),onFrame:f.onFrame,redraw:()=>{},createCanvas:m.create,Recorder:FakeRecorder,onSave:b=>saved.push(b)});
-  r.start();assert.equal(r.stop(),true);f.draw(canvas());time.advance(299);assert.equal(saved.length,0);time.advance(1);assert.equal(saved.length,1);
+  // 첫 프레임 전의 중지는 바로 취소한다: 상태가 즉시 풀리고, 뒤늦게 온 프레임으로 인코더를 만들지 않는다.
+  r.start();assert.equal(r.stop(),true);assert.equal(r.isRecording(),false,"중지 즉시 녹화 상태 해제");assert.equal(f.count,0);
+  f.draw(canvas());time.advance(1000);assert.equal(made.length,0);assert.equal(saved.length,0);
   r.start();assert.equal(r.stop(),true);r.dispose();f.draw(canvas());time.advance(1000);
-  assert.equal(made.length,1);assert.equal(saved.length,1);assert.equal(f.count,0);assert.equal(r.isRecording(),false);
+  assert.equal(made.length,0);assert.equal(saved.length,0);assert.equal(f.count,0);assert.equal(r.isRecording(),false);
+  // 취소한 뒤 다시 시작하면 정상 녹화된다.
+  assert.equal(r.start(),true);f.draw(canvas());assert.equal(made.length,1);assert.equal(r.stop(),true);assert.equal(saved.length,1);
   // start 이벤트를 기다리는 동안 stop 요청 뒤 dispose해도 지연 중지 작업을 취소한다.
   const delayed=fake(["video/webm"],{manualStart:true});const pending=create({canvas:canvas(),createCanvas:mirrorFactory().create,Recorder:delayed.FakeRecorder,onSave:b=>saved.push(b)});
   pending.start();pending.stop();pending.dispose();assert.equal(pending.isRecording(),false);assert.equal(saved.length,1);
   assert.equal(time.pending,0,"모든 녹화 타이머 정리");
+});
+test("첫 프레임이 끝내 오지 않아도(컨텍스트 손실 등) 중지로 '준비'에서 빠져나온다",()=>{
+  const {FakeRecorder,made}=fake(["video/webm"]),f=frames(),changes=[],errors=[];
+  const r=create({canvas:canvas(),onFrame:f.onFrame,redraw:()=>true,createCanvas:mirrorFactory().create,Recorder:FakeRecorder,onSave(){},onChange:x=>changes.push(x),onError:m=>errors.push(m)});
+  assert.equal(r.start(),true);time.advance(10000);assert.deepEqual([changes.at(-1).recording,changes.at(-1).ready],[true,false],"프레임이 없어 준비 중");
+  assert.equal(r.toggle(),true);assert.equal(r.isRecording(),false);assert.equal(changes.at(-1).recording,false,"툴바 표시도 원래대로");
+  assert.equal(f.count,0);assert.equal(made.length,0);assert.equal(errors.length,0);assert.equal(time.pending,0);
+  assert.equal(r.toggle(),true,"다시 누르면 새로 시작");r.dispose();
 });
 test("렌더러가 첫 프레임을 그릴 수 없으면 준비 상태와 구독을 정리한다",()=>{
   const {FakeRecorder,made}=fake(["video/webm"]),f=frames(),errors=[];
