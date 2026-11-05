@@ -77,7 +77,8 @@ js/
   popout.js           # 미리보기 분리 창
   # 학습 · 도움말 (내용은 데이터 모듈에)
   gallery.js          # 예제 갤러리 · 첫 실행 안내
-  community-examples.js # 갤러리 "커뮤니티 셰이더" — 다른 사람의 공개 작품(MIT·CC0) 이식본과 출처
+  community-examples.js # 갤러리 "커뮤니티 셰이더" — 다른 사람의 공개 작품(MIT·CC0 등) 이식본과 출처
+  gallery-perf.js     # 갤러리 성능 배지 — 예제마다 1080p 한 프레임 시간을 이 컴퓨터에서 재 단계로 표시
   guide.js            # 앱 내장 가이드 · UI 둘러보기 · 문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리
   course.js           # 입문 과정 수업 내용
   glsl-reference.js   # GLSL 내장 함수·변수 레퍼런스

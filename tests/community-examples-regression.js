@@ -8,12 +8,12 @@ const root=path.join(__dirname,"..");
 let Community;
 vm.runInNewContext(fs.readFileSync(path.join(root,"js/community-examples.js"),"utf8"),{define:(deps,factory)=>Community=factory()},{filename:"community-examples.js"});
 const licenses=fs.readFileSync(path.join(root,"docs/THIRD_PARTY_LICENSES.md"),"utf8");
-const ALLOWED=new Set(["MIT","CC0"]); // 재배포를 허락하는 라이선스만 넣는다(문서의 기준과 같다)
+const ALLOWED=new Set(["MIT","CC0","Permission"]); // 재배포를 허락하는 라이선스나 같은 뜻의 원작자 공개 허락(Permission)만 넣는다(문서의 기준과 같다)
 let passed=0;const test=(name,fn)=>{fn();passed++;console.log("PASS",name);};
 const items=Community.COMMUNITY;
 const sources=item=>[item.image||item.project.image,...(item.project?.passes||[]).map(p=>p.fragment)];
 test("커뮤니티 예제가 있고 id가 겹치지 않는다",()=>{
-  assert(items.length>=4);assert.equal(new Set(items.map(x=>x.id)).size,items.length);
+  assert(items.length>=12);assert.equal(new Set(items.map(x=>x.id)).size,items.length);
 });
 for(const item of items){
   test(`${item.title}: 카드에 원작자·원제목·출처·라이선스`,()=>{
@@ -39,7 +39,7 @@ for(const item of items){
 test("MIT 작품은 저작권 줄을 셰이더와 문서에 모두 남긴다",()=>{
   for(const item of items.filter(x=>x.credit.license==="MIT")){
     for(const source of sources(item)){
-      const line=source.match(/^\/\/ Copyright \(c\) \d{4} [^.]+\./m);assert(line,`${item.title}: 셰이더에 Copyright 줄 없음`);
+      const line=source.match(/^\/\/ Copyright \(c\) \d{4}(?:-\d{4})? [^.]+\./m);assert(line,`${item.title}: 셰이더에 Copyright 줄 없음`);
       assert(licenses.includes(line[0].slice(3,-1)),`${item.title}: 문서에 같은 Copyright 줄 없음 (${line[0]})`);
     }
   }

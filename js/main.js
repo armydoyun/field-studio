@@ -66,7 +66,19 @@ const initialize = async () => {
       snippets: { items: libraryItems, plan: Snippets.plan },
     });
     profiler = Profiler.mount(renderer);
-    gallery = Gallery.mount({ studio, Shader });
+    // 갤러리가 예제 성능을 재는 몇 초 동안 메인 미리보기를 멈춘다(같은 GPU를 나눠 쓰면 측정이 크게 부푼다).
+    gallery = Gallery.mount({
+      studio,
+      Shader,
+      preview: {
+        pause: () => {
+          if (!renderer.getStats().running) return false;
+          renderer.stop();
+          return true;
+        },
+        resume: () => renderer.start(),
+      },
+    });
     guide = Guide.mount({ studio, gallery });
     renderer.start();
     status.textContent = "";

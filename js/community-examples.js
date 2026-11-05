@@ -1,5 +1,5 @@
 // 다른 사람이 공개한 셰이더를 FIELD Studio로 옮긴 갤러리 예제. 갤러리의 "커뮤니티 셰이더" 칸에 나온다.
-// 넣는 기준: 원작자가 작품에 MIT·CC0처럼 재배포를 허락하는 라이선스를 직접 밝힌 것만.
+// 넣는 기준: 원작자가 작품에 MIT·CC0처럼 재배포를 허락하는 라이선스(또는 같은 뜻의 공개 허락)를 직접 밝힌 것만.
 // (Shadertoy 기본 라이선스는 CC BY-NC-SA 3.0이고, 원작자가 "재배포 금지"를 붙인 작품도 있다 — 예: Inigo Quilez의 작품 장면들.)
 // 셰이더 맨 위의 원작자·라이선스 주석은 지우지 않는다. 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있다.
 // credit: { author, work(원래 제목), url, license, licenseUrl } — 갤러리 카드에 보인다.
@@ -1664,6 +1664,2604 @@ void main() {
     fragColor = vec4(col,1.0);
 }`;
 
+const ocean = `#version 300 es
+precision highp float;
+// Very fast procedural ocean by afl_ext — License: MIT
+// 원본: https://www.shadertoy.com/view/MdXyzX (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// Copyright (c) 2017-2024 afl_ext. MIT 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있다.
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution·iMouse)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//  · iMouse 대신 커서 위치를 쓴다: 커서를 올리면 시점이 바뀌고, 뷰포트 밖이면 원본의 기본 시점
+//
+// 원리: 파도 높이를 exp(sin(x)-1) 파형 여러 개의 합으로 만들고(노이즈가 없어 빠르다), 그 높이장 사이를 광선으로 좁혀 들어가 수면을 찾는다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+#define iMouse vec4(max(uMouse.xy, vec2(0.0)), uMouse.zw)
+
+// Title:  Very fast procedural ocean
+// Author: afl_ext
+// URL:    https://www.shadertoy.com/view/MdXyzX
+// Date:   09-Mar-2017
+// Desc:   It's fast because it doesn't use noise but rather sin waves
+
+// afl_ext 2017-2024
+// MIT License
+
+// Use your mouse to move the camera around! Press the Left Mouse Button on the image to look around!
+
+#define DRAG_MULT 0.38 // changes how much waves pull on the water
+#define WATER_DEPTH 1.0 // how deep is the water
+#define CAMERA_HEIGHT 1.5 // how high the camera should be
+#define ITERATIONS_RAYMARCH 12 // waves iterations of raymarching
+#define ITERATIONS_NORMAL 36 // waves iterations when calculating normals
+
+#define NormalizedMouse (iMouse.xy / iResolution.xy) // normalize mouse coords
+
+// Calculates wave value and its derivative, 
+// for the wave direction, position in space, wave frequency and time
+vec2 wavedx(vec2 position, vec2 direction, float frequency, float timeshift) {
+  float x = dot(direction, position) * frequency + timeshift;
+  float wave = exp(sin(x) - 1.0);
+  float dx = wave * cos(x);
+  return vec2(wave, -dx);
+}
+
+// Calculates waves by summing octaves of various waves with various parameters
+float getwaves(vec2 position, int iterations) {
+  float wavePhaseShift = length(position) * 0.1; // this is to avoid every octave having exactly the same phase everywhere
+  float iter = 0.0; // this will help generating well distributed wave directions
+  float frequency = 1.0; // frequency of the wave, this will change every iteration
+  float timeMultiplier = 2.0; // time multiplier for the wave, this will change every iteration
+  float weight = 1.0;// weight in final sum for the wave, this will change every iteration
+  float sumOfValues = 0.0; // will store final sum of values
+  float sumOfWeights = 0.0; // will store final sum of weights
+  for(int i=0; i < iterations; i++) {
+    // generate some wave direction that looks kind of random
+    vec2 p = vec2(sin(iter), cos(iter));
+    
+    // calculate wave data
+    vec2 res = wavedx(position, p, frequency, iTime * timeMultiplier + wavePhaseShift);
+
+    // shift position around according to wave drag and derivative of the wave
+    position += p * res.y * weight * DRAG_MULT;
+
+    // add the results to sums
+    sumOfValues += res.x * weight;
+    sumOfWeights += weight;
+
+    // modify next octave ;
+    weight = mix(weight, 0.0, 0.2);
+    frequency *= 1.18;
+    timeMultiplier *= 1.07;
+
+    // add some kind of random value to make next wave look random too
+    iter += 1232.399963;
+  }
+  // calculate and return
+  return sumOfValues / sumOfWeights;
+}
+
+// Raymarches the ray from top water layer boundary to low water layer boundary
+float raymarchwater(vec3 camera, vec3 start, vec3 end, float depth) {
+  vec3 pos = start;
+  vec3 dir = normalize(end - start);
+  for(int i=0; i < 64; i++) {
+    // the height is from 0 to -depth
+    float height = getwaves(pos.xz, ITERATIONS_RAYMARCH) * depth - depth;
+    // if the waves height almost nearly matches the ray height, assume its a hit and return the hit distance
+    if(height + 0.01 > pos.y) {
+      return distance(pos, camera);
+    }
+    // iterate forwards according to the height mismatch
+    pos += dir * (pos.y - height);
+  }
+  // if hit was not registered, just assume hit the top layer, 
+  // this makes the raymarching faster and looks better at higher distances
+  return distance(start, camera);
+}
+
+// Calculate normal at point by calculating the height at the pos and 2 additional points very close to pos
+vec3 normal(vec2 pos, float e, float depth) {
+  vec2 ex = vec2(e, 0);
+  float H = getwaves(pos.xy, ITERATIONS_NORMAL) * depth;
+  vec3 a = vec3(pos.x, H, pos.y);
+  return normalize(
+    cross(
+      a - vec3(pos.x - e, getwaves(pos.xy - ex.xy, ITERATIONS_NORMAL) * depth, pos.y), 
+      a - vec3(pos.x, getwaves(pos.xy + ex.yx, ITERATIONS_NORMAL) * depth, pos.y + e)
+    )
+  );
+}
+
+// Helper function generating a rotation matrix around the axis by the angle
+mat3 createRotationMatrixAxisAngle(vec3 axis, float angle) {
+  float s = sin(angle);
+  float c = cos(angle);
+  float oc = 1.0 - c;
+  return mat3(
+    oc * axis.x * axis.x + c, oc * axis.x * axis.y - axis.z * s, oc * axis.z * axis.x + axis.y * s, 
+    oc * axis.x * axis.y + axis.z * s, oc * axis.y * axis.y + c, oc * axis.y * axis.z - axis.x * s, 
+    oc * axis.z * axis.x - axis.y * s, oc * axis.y * axis.z + axis.x * s, oc * axis.z * axis.z + c
+  );
+}
+
+// Helper function that generates camera ray based on UV and mouse
+vec3 getRay(vec2 fragCoord) {
+  vec2 uv = ((fragCoord.xy / iResolution.xy) * 2.0 - 1.0) * vec2(iResolution.x / iResolution.y, 1.0);
+  // for fisheye, uncomment following line and comment the next one
+  //vec3 proj = normalize(vec3(uv.x, uv.y, 1.0) + vec3(uv.x, uv.y, -1.0) * pow(length(uv), 2.0) * 0.05);  
+  vec3 proj = normalize(vec3(uv.x, uv.y, 1.5));
+  if(iResolution.x < 600.0) {
+    return proj;
+  }
+  return createRotationMatrixAxisAngle(vec3(0.0, -1.0, 0.0), 3.0 * ((NormalizedMouse.x + 0.5) * 2.0 - 1.0)) 
+    * createRotationMatrixAxisAngle(vec3(1.0, 0.0, 0.0), 0.5 + 1.5 * (((NormalizedMouse.y == 0.0 ? 0.27 : NormalizedMouse.y) * 1.0) * 2.0 - 1.0))
+    * proj;
+}
+
+// Ray-Plane intersection checker
+float intersectPlane(vec3 origin, vec3 direction, vec3 point, vec3 normal) { 
+  return clamp(dot(point - origin, normal) / dot(direction, normal), -1.0, 9991999.0); 
+}
+
+// Some very barebones but fast atmosphere approximation
+vec3 extra_cheap_atmosphere(vec3 raydir, vec3 sundir) {
+  //sundir.y = max(sundir.y, -0.07);
+  float special_trick = 1.0 / (raydir.y * 1.0 + 0.1);
+  float special_trick2 = 1.0 / (sundir.y * 11.0 + 1.0);
+  float raysundt = pow(abs(dot(sundir, raydir)), 2.0);
+  float sundt = pow(max(0.0, dot(sundir, raydir)), 8.0);
+  float mymie = sundt * special_trick * 0.2;
+  vec3 suncolor = mix(vec3(1.0), max(vec3(0.0), vec3(1.0) - vec3(5.5, 13.0, 22.4) / 22.4), special_trick2);
+  vec3 bluesky= vec3(5.5, 13.0, 22.4) / 22.4 * suncolor;
+  vec3 bluesky2 = max(vec3(0.0), bluesky - vec3(5.5, 13.0, 22.4) * 0.002 * (special_trick + -6.0 * sundir.y * sundir.y));
+  bluesky2 *= special_trick * (0.24 + raysundt * 0.24);
+  return bluesky2 * (1.0 + 1.0 * pow(1.0 - raydir.y, 3.0));
+} 
+
+// Calculate where the sun should be, it will be moving around the sky
+vec3 getSunDirection() {
+  return normalize(vec3(-0.0773502691896258 , 0.5 + sin(iTime * 0.2 + 2.6) * 0.45 , 0.5773502691896258));
+}
+
+// Get atmosphere color for given direction
+vec3 getAtmosphere(vec3 dir) {
+   return extra_cheap_atmosphere(dir, getSunDirection()) * 0.5;
+}
+
+// Get sun color for given direction
+float getSun(vec3 dir) { 
+  return pow(max(0.0, dot(dir, getSunDirection())), 720.0) * 210.0;
+}
+
+// Great tonemapping function from my other shader: https://www.shadertoy.com/view/XsGfWV
+vec3 aces_tonemap(vec3 color) {  
+  mat3 m1 = mat3(
+    0.59719, 0.07600, 0.02840,
+    0.35458, 0.90834, 0.13383,
+    0.04823, 0.01566, 0.83777
+  );
+  mat3 m2 = mat3(
+    1.60475, -0.10208, -0.00327,
+    -0.53108,  1.10813, -0.07276,
+    -0.07367, -0.00605,  1.07602
+  );
+  vec3 v = m1 * color;  
+  vec3 a = v * (v + 0.0245786) - 0.000090537;
+  vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
+  return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / 2.2));  
+}
+
+// Main
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  // get the ray
+  vec3 ray = getRay(fragCoord);
+  if(ray.y >= 0.0) {
+    // if ray.y is positive, render the sky
+    vec3 C = getAtmosphere(ray) + getSun(ray);
+    fragColor = vec4(aces_tonemap(C * 2.0),1.0);   
+    return;
+  }
+
+  // now ray.y must be negative, water must be hit
+  // define water planes
+  vec3 waterPlaneHigh = vec3(0.0, 0.0, 0.0);
+  vec3 waterPlaneLow = vec3(0.0, -WATER_DEPTH, 0.0);
+
+  // define ray origin, moving around
+  vec3 origin = vec3(iTime * 0.2, CAMERA_HEIGHT, 1);
+
+  // calculate intersections and reconstruct positions
+  float highPlaneHit = intersectPlane(origin, ray, waterPlaneHigh, vec3(0.0, 1.0, 0.0));
+  float lowPlaneHit = intersectPlane(origin, ray, waterPlaneLow, vec3(0.0, 1.0, 0.0));
+  vec3 highHitPos = origin + ray * highPlaneHit;
+  vec3 lowHitPos = origin + ray * lowPlaneHit;
+
+  // raymatch water and reconstruct the hit pos
+  float dist = raymarchwater(origin, highHitPos, lowHitPos, WATER_DEPTH);
+  vec3 waterHitPos = origin + ray * dist;
+
+  // calculate normal at the hit position
+  vec3 N = normal(waterHitPos.xz, 0.01, WATER_DEPTH);
+
+  // smooth the normal with distance to avoid disturbing high frequency noise
+  N = mix(N, vec3(0.0, 1.0, 0.0), 0.8 * min(1.0, sqrt(dist*0.01) * 1.1));
+
+  // calculate fresnel coefficient
+  float fresnel = (0.04 + (1.0-0.04)*(pow(1.0 - max(0.0, dot(-N, ray)), 5.0)));
+
+  // reflect the ray and make sure it bounces up
+  vec3 R = normalize(reflect(ray, N));
+  R.y = abs(R.y);
+  
+  // calculate the reflection and approximate subsurface scattering
+  vec3 reflection = getAtmosphere(R) + getSun(R);
+  vec3 scattering = vec3(0.0293, 0.0698, 0.1717) * 0.1 * (0.2 + (waterHitPos.y + WATER_DEPTH) / WATER_DEPTH);
+
+  // return the combined result
+  vec3 C = fresnel * reflection + scattering;
+  fragColor = vec4(aces_tonemap(C * 2.0), 1.0);
+}
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+const skyline = `#version 300 es
+precision highp float;
+// Skyline by Otavio Good — License: CC0
+// 원본: https://www.shadertoy.com/view/XtsSWs (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// CC0(퍼블릭 도메인 헌정)이라 고지 의무는 없지만 출처를 남긴다.
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution·iMouse)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//  · iMouse 대신 커서 위치를 쓴다: 커서를 올리면 시점이 바뀌고, 뷰포트 밖이면 원본의 기본 시점
+//  · sin 기반 실수 해시를 정수 해시(pcg3d)로 바꿨다 → 무늬·배치가 원본과 다르다
+//  · 반사에 더하던 Shadertoy 텍스처(iChannel0) 두 줄을 뺐다 — 창문·도로 반사가 원본보다 조금 밋밋하다
+//
+// 원리: 도시 블록을 격자로 반복하고 블록마다 해시로 건물 높이·창문·색을 고른다. 거리장으로 건물과 차를 그리고, 창문 반사와 안개를 더한다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+#define iMouse vec4(max(uMouse.xy, vec2(0.0)), uMouse.zw)
+
+// Title:  Skyline
+// Author: otaviogood
+// URL:    https://www.shadertoy.com/view/XtsSWs
+// Date:   23-Sep-2015
+// Desc:   I have always wanted to make a procedural city. The architecture was limited by what I could do in real-time, but I tried to give it enough complexity that it would look realistic.
+
+/*--------------------------------------------------------------------------------------
+License CC0 - http://creativecommons.org/publicdomain/zero/1.0/
+To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
+----------------------------------------------------------------------------------------
+^ This means do ANYTHING YOU WANT with this code. Because we are programmers, not lawyers.
+-Otavio Good
+*/
+
+// ---------------- Config ----------------
+// This is an option that lets you render high quality frames for screenshots. It enables
+// stochastic antialiasing and motion blur automatically for any shader.
+//#define NON_REALTIME_HQ_RENDER
+const float frameToRenderHQ = 50.0; // Time in seconds of frame to render
+const float antialiasingSamples = 16.0; // 16x antialiasing - too much might make the shader compiler angry.
+
+//#define MANUAL_CAMERA
+
+
+// --------------------------------------------------------
+// These variables are for the non-realtime block renderer.
+float localTime = 0.0;
+float seed = 1.0;
+
+// Animation variables
+float fade = 1.0;
+vec3 sunDir;
+vec3 sunCol;
+float exposure = 1.0;
+vec3 skyCol, horizonCol;
+
+// other
+float marchCount = 0.0;
+
+// ---- noise functions ----
+float v31(vec3 a)
+{
+    return a.x + a.y * 37.0 + a.z * 521.0;
+}
+float v21(vec2 a)
+{
+    return a.x + a.y * 37.0;
+}
+// FIELD: 원본의 sin·cos 기반 실수 해시를 정수 해시(pcg3d)로 바꿨다. 함수 이름과 쓰임은 그대로다.
+uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}
+float pcgFloat(uint v) { return float(v >> 8u) * (1.0 / 16777216.0); }
+float Hash11(float a) { return pcgFloat(pcg3d(uvec3(floatBitsToUint(a), 0u, 0u)).x); }
+float Hash21(vec2 uv) { return pcgFloat(pcg3d(uvec3(floatBitsToUint(uv), 0u)).x); }
+vec2 Hash22(vec2 uv) { uvec3 h = pcg3d(uvec3(floatBitsToUint(uv), 1u)); return vec2(pcgFloat(h.x), pcgFloat(h.y)); }
+vec2 Hash12(float f) { uvec3 h = pcg3d(uvec3(floatBitsToUint(f), 1u, 0u)); return vec2(pcgFloat(h.x), pcgFloat(h.y)); }
+float Hash1d(float u) { return Hash11(u); }
+float Hash2d(vec2 uv) { return Hash21(uv); }
+float Hash3d(vec3 uv) { return pcgFloat(pcg3d(floatBitsToUint(uv)).x); }
+float mixP(float f0, float f1, float a)
+{
+    return mix(f0, f1, a*a*(3.0-2.0*a));
+}
+const vec2 zeroOne = vec2(0.0, 1.0);
+float noise2d(vec2 uv)
+{
+    vec2 fr = fract(uv.xy);
+    vec2 fl = floor(uv.xy);
+    float h00 = Hash2d(fl);
+    float h10 = Hash2d(fl + zeroOne.yx);
+    float h01 = Hash2d(fl + zeroOne);
+    float h11 = Hash2d(fl + zeroOne.yy);
+    return mixP(mixP(h00, h10, fr.x), mixP(h01, h11, fr.x), fr.y);
+}
+float noise(vec3 uv)
+{
+    vec3 fr = fract(uv.xyz);
+    vec3 fl = floor(uv.xyz);
+    float h000 = Hash3d(fl);
+    float h100 = Hash3d(fl + zeroOne.yxx);
+    float h010 = Hash3d(fl + zeroOne.xyx);
+    float h110 = Hash3d(fl + zeroOne.yyx);
+    float h001 = Hash3d(fl + zeroOne.xxy);
+    float h101 = Hash3d(fl + zeroOne.yxy);
+    float h011 = Hash3d(fl + zeroOne.xyy);
+    float h111 = Hash3d(fl + zeroOne.yyy);
+    return mixP(
+        mixP(mixP(h000, h100, fr.x),
+             mixP(h010, h110, fr.x), fr.y),
+        mixP(mixP(h001, h101, fr.x),
+             mixP(h011, h111, fr.x), fr.y)
+        , fr.z);
+}
+
+const float PI=3.14159265;
+
+vec3 saturate(vec3 a) { return clamp(a, 0.0, 1.0); }
+vec2 saturate(vec2 a) { return clamp(a, 0.0, 1.0); }
+float saturate(float a) { return clamp(a, 0.0, 1.0); }
+
+// This function basically is a procedural environment map that makes the sun
+vec3 GetSunColorSmall(vec3 rayDir, vec3 sunDir)
+{
+	vec3 localRay = normalize(rayDir);
+	float dist = 1.0 - (dot(localRay, sunDir) * 0.5 + 0.5);
+	float sunIntensity = 0.05 / dist;
+    sunIntensity += exp(-dist*150.0)*7000.0;
+	sunIntensity = min(sunIntensity, 40000.0);
+	return sunCol * sunIntensity*0.025;
+}
+
+vec3 GetEnvMap(vec3 rayDir, vec3 sunDir)
+{
+    // fade the sky color, multiply sunset dimming
+    vec3 finalColor = mix(horizonCol, skyCol, pow(saturate(rayDir.y), 0.47))*0.95;
+    // make clouds - just a horizontal plane with noise
+    float n = noise2d(rayDir.xz/rayDir.y*1.0);
+    n += noise2d(rayDir.xz/rayDir.y*2.0)*0.5;
+    n += noise2d(rayDir.xz/rayDir.y*4.0)*0.25;
+    n += noise2d(rayDir.xz/rayDir.y*8.0)*0.125;
+    n = pow(abs(n), 3.0);
+    n = mix(n * 0.2, n, saturate(abs(rayDir.y * 8.0)));  // fade clouds in distance
+    finalColor = mix(finalColor, (vec3(1.0)+sunCol*10.0)*0.75*saturate((rayDir.y+0.2)*5.0), saturate(n*0.125));
+
+    // add the sun
+    finalColor += GetSunColorSmall(rayDir, sunDir);
+    return finalColor;
+}
+
+vec3 GetEnvMapSkyline(vec3 rayDir, vec3 sunDir, float height)
+{
+    vec3 finalColor = GetEnvMap(rayDir, sunDir);
+
+    // Make a skyscraper skyline reflection.
+    float radial = atan(rayDir.z, rayDir.x)*4.0;
+    float skyline = floor((sin(5.3456*radial) + sin(1.234*radial)+ sin(2.177*radial))*0.6);
+    radial *= 4.0;
+    skyline += floor((sin(5.0*radial) + sin(1.234*radial)+ sin(2.177*radial))*0.6)*0.1;
+    float mask = saturate((rayDir.y*8.0 - skyline-2.5+height)*24.0);
+    float vert = sign(sin(radial*32.0))*0.5+0.5;
+    float hor = sign(sin(rayDir.y*256.0))*0.5+0.5;
+    mask = saturate(mask + (1.0-hor*vert)*0.05);
+    finalColor = mix(finalColor * vec3(0.1,0.07,0.05), finalColor, mask);
+
+	return finalColor;
+}
+
+// min function that supports materials in the y component
+vec2 matmin(vec2 a, vec2 b)
+{
+    if (a.x < b.x) return a;
+    else return b;
+}
+
+// ---- shapes defined by distance fields ----
+// See this site for a reference to more distance functions...
+// https://iquilezles.org/articles/distfunctions
+
+// signed box distance field
+float sdBox(vec3 p, vec3 radius)
+{
+  vec3 dist = abs(p) - radius;
+  return min(max(dist.x, max(dist.y, dist.z)), 0.0) + length(max(dist, 0.0));
+}
+
+// capped cylinder distance field
+float cylCap(vec3 p, float r, float lenRad)
+{
+    float a = length(p.xy) - r;
+    a = max(a, abs(p.z) - lenRad);
+    return a;
+}
+
+// k should be negative. -4.0 works nicely.
+// smooth blending function
+float smin(float a, float b, float k)
+{
+	return log2(exp2(k*a)+exp2(k*b))/k;
+}
+
+float Repeat(float a, float len)
+{
+    return mod(a, len) - 0.5 * len;
+}
+
+// Distance function that defines the car.
+// Basically it's 2 boxes smooth-blended together and a mirrored cylinder for the wheels.
+vec2 Car(vec3 baseCenter, float unique)
+{
+    // bottom box
+    float car = sdBox(baseCenter + vec3(0.0, -0.008, 0.001), vec3(0.01, 0.00225, 0.0275));
+    // top box smooth blended
+    car = smin(car, sdBox(baseCenter + vec3(0.0, -0.016, 0.008), vec3(0.005, 0.0005, 0.01)), -160.0);
+    // mirror the z axis to duplicate the cylinders for wheels
+    vec3 wMirror = baseCenter + vec3(0.0, -0.005, 0.0);
+    wMirror.z = abs(wMirror.z)-0.02;
+    float wheels = cylCap((wMirror).zyx, 0.004, 0.0135);
+    // Set materials
+    vec2 distAndMat = vec2(wheels, 3.0);	// car wheels
+    // Car material is some big number that's unique to each car
+    // so I can have each car be a different color
+    distAndMat = matmin(distAndMat, vec2(car, 100000.0 + unique));	// car
+    return distAndMat;
+}
+
+// How much space between voxel borders and geometry for voxel ray march optimization
+float voxelPad = 0.2;
+// p should be in [0..1] range on xz plane
+// pint is an integer pair saying which city block you are on
+vec2 CityBlock(vec3 p, vec2 pint)
+{
+    // Get random numbers for this block by hashing the city block variable
+    vec4 rand;
+    rand.xy = Hash22(pint);
+    rand.zw = Hash22(rand.xy);
+    vec2 rand2 = Hash22(rand.zw);
+
+    // Radius of the building
+    float baseRad = 0.2 + (rand.x) * 0.1;
+    baseRad = floor(baseRad * 20.0+0.5)/20.0;	// try to snap this for window texture
+
+    // make position relative to the middle of the block
+    vec3 baseCenter = p - vec3(0.5, 0.0, 0.5);
+    float height = rand.w*rand.z + 0.1; // height of first building block
+    // Make the city skyline higher in the middle of the city.
+    float downtown = saturate(4.0 / length(pint.xy));
+    height *= downtown;
+    height *= 1.5+(baseRad-0.15)*20.0;
+    height += 0.1;	// minimum building height
+    //height += sin(iTime + pint.x);	// animate the building heights if you're feeling silly
+    height = floor(height*20.0)*0.05;	// height is in floor units - each floor is 0.05 high.
+	float d = sdBox(baseCenter, vec3(baseRad, height, baseRad)); // large building piece
+
+    // road
+    d = min(d, p.y);
+
+    //if (length(pint.xy) > 8.0) return vec2(d, mat);	// Hack to LOD in the distance
+
+    // height of second building section
+    float height2 = max(0.0, rand.y * 2.0 - 1.0) * downtown;
+    height2 = floor(height2*20.0)*0.05;	// floor units
+    rand2 = floor(rand2*20.0)*0.05;	// floor units
+    // size pieces of building
+	d = min(d, sdBox(baseCenter - vec3(0.0, height, 0.0), vec3(baseRad, height2 - rand2.y, baseRad*0.4)));
+	d = min(d, sdBox(baseCenter - vec3(0.0, height, 0.0), vec3(baseRad*0.4, height2 - rand2.x, baseRad)));
+    // second building section
+    if (rand2.y > 0.25)
+    {
+		d = min(d, sdBox(baseCenter - vec3(0.0, height, 0.0), vec3(baseRad*0.8, height2, baseRad*0.8)));
+        // subtract off piece from top so it looks like there's a wall around the roof.
+        float topWidth = baseRad;
+        if (height2 > 0.0) topWidth = baseRad * 0.8;
+		d = max(d, -sdBox(baseCenter - vec3(0.0, height+height2, 0.0), vec3(topWidth-0.0125, 0.015, topWidth-0.0125)));
+    }
+    else
+    {
+        // Cylinder top section of building
+		if (height2 > 0.0) d = min(d, cylCap((baseCenter - vec3(0.0, height, 0.0)).xzy, baseRad*0.8, height2));
+    }
+    // mini elevator shaft boxes on top of building
+	d = min(d, sdBox(baseCenter - vec3((rand.x-0.5)*baseRad, height+height2, (rand.y-0.5)*baseRad),
+                     vec3(baseRad*0.3*rand.z, 0.1*rand2.y, baseRad*0.3*rand2.x+0.025)));
+    // mirror another box (and scale it) so we get 2 boxes for the price of 1.
+    vec3 boxPos = baseCenter - vec3((rand2.x-0.5)*baseRad, height+height2, (rand2.y-0.5)*baseRad);
+    float big = sign(boxPos.x);
+    boxPos.x = abs(boxPos.x)-0.02 - baseRad*0.3*rand.w;
+	d = min(d, sdBox(boxPos,
+    vec3(baseRad*0.3*rand.w, 0.07*rand.y, baseRad*0.2*rand.x + big*0.025)));
+
+    // Put domes on some building tops for variety
+    if (rand.y < 0.04)
+    {
+        d = min(d, length(baseCenter - vec3(0.0, height, 0.0)) - baseRad*0.8);
+    }
+
+    //d = max(d, p.y);  // flatten the city for debugging cars
+
+    // Need to make a material variable.
+    vec2 distAndMat = vec2(d, 0.0);
+    // sidewalk box with material
+    distAndMat = matmin(distAndMat, vec2(sdBox(baseCenter, vec3(0.35, 0.005, 0.35)), 1.0));
+
+    return distAndMat;
+}
+
+// This is the distance function that defines all the scene's geometry.
+// The input is a position in space.
+// The output is the distance to the nearest surface and a material index.
+vec2 DistanceToObject(vec3 p)
+{
+    //p.y += noise2d((p.xz)*0.0625)*8.0; // Hills
+    vec3 rep = p;
+    rep.xz = fract(p.xz); // [0..1] for representing the position in the city block
+    vec2 distAndMat = CityBlock(rep, floor(p.xz));
+
+    // Set up the cars. This is doing a lot of mirroring and repeating because I
+    // only want to do a single call to the car distance function for all the
+    // cars in the scene. And there's a lot of traffic!
+    vec3 p2 = p;
+    rep.xyz = p2;
+    float carTime = localTime*0.2;  // Speed of car driving
+    float crossStreet = 1.0;  // whether we are north/south or east/west
+    float repeatDist = 0.25;  // Car density bumper to bumper
+    // If we are going north/south instead of east/west (?) make cars that are
+    // stopped in the street so we don't have collisions.
+    if (abs(fract(rep.x)-0.5) < 0.35)
+    {
+        p2.x += 0.05;
+        p2.xz = p2.zx * vec2(-1.0,1.0);  // Rotate 90 degrees
+        rep.xz = p2.xz;
+        crossStreet = 0.0;
+        repeatDist = 0.1;  // Denser traffic on cross streets
+    }
+    
+    rep.z += floor(p2.x);	// shift so less repitition between parallel blocks
+    rep.x = Repeat(p2.x - 0.5, 1.0);	// repeat every block
+    rep.z = rep.z*sign(rep.x);	// mirror but keep cars facing the right way
+    rep.x = (rep.x*sign(rep.x))-0.09;
+    rep.z -= carTime * crossStreet;	// make cars move
+    float uniqueID = floor(rep.z/repeatDist);	// each car gets a unique ID that we can use for colors
+    rep.z = Repeat(rep.z, repeatDist);	// repeat the line of cars every quarter block
+    rep.x += (Hash11(uniqueID)*0.075-0.01);	// nudge cars left and right to take both lanes
+    float frontBack = Hash11(uniqueID*0.987)*0.18-0.09;
+    frontBack *= sin(localTime*2.0 + uniqueID);
+    rep.z += frontBack * crossStreet; // nudge cars forward back for variation
+    vec2 carDist = Car(rep, uniqueID); // car distance function
+
+    // Drop the cars in the scene with materials
+    distAndMat = matmin(distAndMat, carDist);
+
+    return distAndMat;
+}
+
+// This basically makes a procedural texture map for the sides of the buildings.
+// It makes a texture, a normal for normal mapping, and a mask for window reflection.
+void CalcWindows(vec2 block, vec3 pos, inout vec3 texColor, inout float windowRef, inout vec3 normal)
+{
+    vec3 hue = vec3(Hash21(block)*0.8, Hash21(block*7.89)*0.4, Hash21(block*37.89)*0.5);
+    texColor += hue*0.4;
+    texColor *= 0.75;
+    float window = 0.0;
+    window = max(window, mix(0.2, 1.0, floor(fract(pos.y*20.0-0.35)*2.0+0.1)));
+    if (pos.y < 0.05) window = 1.0;
+    float winWidth = Hash21(block*4.321)*2.0;
+    if ((winWidth < 1.3) && (winWidth >= 1.0)) winWidth = 1.3;
+    window = max(window, mix(0.2, 1.0, floor(fract(pos.x * 40.0+0.05)*winWidth)));
+    window = max(window, mix(0.2, 1.0, floor(fract(pos.z * 40.0+0.05)*winWidth)));
+    if (window < 0.5)
+    {
+        windowRef += 1.0;
+    }
+    window *= Hash21(block*1.123);
+    texColor *= window;
+
+    float wave = floor(sin((pos.y*40.0-0.1)*PI)*0.505-0.5)+1.0;
+    normal.y -= max(-1.0, min(1.0, -wave*0.5));
+    float pits = min(1.0, abs(sin((pos.z*80.0)*PI))*4.0)-1.0;
+    normal.z += pits*0.25;
+    pits = min(1.0, abs(sin((pos.x*80.0)*PI))*4.0)-1.0;
+    normal.x += pits*0.25;
+}
+
+// Input is UV coordinate of pixel to render.
+// Output is RGB color.
+vec3 RayTrace(in vec2 fragCoord )
+{
+    marchCount = 0.0;
+	// -------------------------------- animate ---------------------------------------
+    sunCol = vec3(258.0, 248.0, 200.0) / 3555.0;
+	sunDir = normalize(vec3(0.93, 1.0, 1.0));
+    horizonCol = vec3(1.0, 0.95, 0.85)*0.9;
+    skyCol = vec3(0.3,0.5,0.95);
+    exposure = 1.0;
+    fade = 1.0;
+
+	vec3 camPos, camUp, camLookat;
+	// ------------------- Set up the camera rays for ray marching --------------------
+    // Map uv to [-1.0..1.0]
+	vec2 uv = fragCoord.xy/iResolution.xy * 2.0 - 1.0;
+    uv /= 2.0;  // zoom in
+
+#ifdef MANUAL_CAMERA
+    // Camera up vector.
+	camUp=vec3(0,1,0);
+
+	// Camera lookat.
+	camLookat=vec3(0,0.0,0);
+
+    // debugging camera
+    float mx=-iMouse.x/iResolution.x*PI*2.0;// + localTime * 0.05;
+	float my=iMouse.y/iResolution.y*3.14*0.5 + PI/2.0;// + sin(localTime * 0.3)*0.8+0.1;//*PI/2.01;
+	camPos = vec3(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*7.35;//7.35
+#else
+    // Do the camera fly-by animation and different scenes.
+    // Time variables for start and end of each scene
+    const float t0 = 0.0;
+    const float t1 = 8.0;
+    const float t2 = 14.0;
+    const float t3 = 24.0;
+    const float t4 = 38.0;
+    const float t5 = 56.0;
+    const float t6 = 58.0;
+    /*const float t0 = 0.0;
+    const float t1 = 0.0;
+    const float t2 = 0.0;
+    const float t3 = 0.0;
+    const float t4 = 0.0;
+    const float t5 = 16.0;
+    const float t6 = 18.0;*/
+    // Repeat the animation after time t6
+    localTime = fract(localTime / t6) * t6;
+    if (localTime < t1)
+    {
+        float time = localTime - t0;
+        float alpha = time / (t1 - t0);
+        fade = saturate(time);
+        fade *= saturate(t1 - localTime);
+        camPos = vec3(13.0, 3.3, -3.5);
+        camPos.x -= smoothstep(0.0, 1.0, alpha) * 4.8;
+        camUp=vec3(0,1,0);
+        camLookat=vec3(0,1.5,1.5);
+    } else if (localTime < t2)
+    {
+        float time = localTime - t1;
+        float alpha = time / (t2 - t1);
+        fade = saturate(time);
+        fade *= saturate(t2 - localTime);
+        camPos = vec3(26.0, 0.05+smoothstep(0.0, 1.0, alpha)*0.4, 2.0);
+        camPos.z -= alpha * 2.8;
+        camUp=vec3(0,1,0);
+        camLookat=vec3(camPos.x-0.3,-8.15,-40.0);
+        
+        sunDir = normalize(vec3(0.95, 0.6, 1.0));
+        sunCol = vec3(258.0, 248.0, 160.0) / 3555.0;
+        exposure *= 0.7;
+        skyCol *= 1.5;
+    } else if (localTime < t3)
+    {
+        float time = localTime - t2;
+        float alpha = time / (t3 - t2);
+        fade = saturate(time);
+        fade *= saturate(t3 - localTime);
+        camPos = vec3(12.0, 6.3, -0.5);
+        camPos.y -= alpha * 5.5;
+        camPos.x = cos(alpha*1.0) * 5.2;
+        camPos.z = sin(alpha*1.0) * 5.2;
+        camUp=normalize(vec3(0,1,-0.5 + alpha * 0.5));
+        camLookat=vec3(0,1.0,-0.5);
+    } else if (localTime < t4)
+    {
+        float time = localTime - t3;
+        float alpha = time / (t4 - t3);
+        fade = saturate(time);
+        fade *= saturate(t4 - localTime);
+        camPos = vec3(2.15-alpha*0.5, 0.02, -1.0-alpha*0.2);
+        camPos.y += smoothstep(0.0,1.0,alpha*alpha) * 3.4;
+        camUp=normalize(vec3(0,1,0.0));
+        camLookat=vec3(0,0.5+alpha,alpha*5.0);
+    } else if (localTime < t5)
+    {
+        float time = localTime - t4;
+        float alpha = time / (t5 - t4);
+        fade = saturate(time);
+        fade *= saturate(t5 - localTime);
+        camPos = vec3(-2.0, 1.3- alpha*1.2, -10.5-alpha*0.5);
+        camUp=normalize(vec3(0,1,0.0));
+        camLookat=vec3(-2.0,0.3+alpha,-0.0);
+        sunDir = normalize(vec3(0.5-alpha*0.6, 0.3-alpha*0.3, 1.0));
+        sunCol = vec3(258.0, 148.0, 60.0) / 3555.0;
+        localTime *= 16.0;
+        exposure *= 0.4;
+        horizonCol = vec3(1.0, 0.5, 0.35)*2.0;
+        skyCol = vec3(0.75,0.5,0.95);
+
+    } else if (localTime < t6)
+    {
+        fade = 0.0;
+        camPos = vec3(26.0, 100.0, 2.0);
+        camUp=vec3(0,1,0);
+        camLookat=vec3(0.3,0.15,0.0);
+    }
+#endif
+
+	// Camera setup for ray tracing / marching
+	vec3 camVec=normalize(camLookat - camPos);
+	vec3 sideNorm=normalize(cross(camUp, camVec));
+	vec3 upNorm=cross(camVec, sideNorm);
+	vec3 worldFacing=(camPos + camVec);
+	vec3 worldPix = worldFacing + uv.x * sideNorm * (iResolution.x/iResolution.y) + uv.y * upNorm;
+	vec3 rayVec = normalize(worldPix - camPos);
+
+	// ----------------------------- Ray march the scene ------------------------------
+	vec2 distAndMat;  // Distance and material
+	float t = 0.05;// + Hash2d(uv)*0.1;	// random dither-fade things close to the camera
+	const float maxDepth = 45.0; // farthest distance rays will travel
+	vec3 pos = vec3(0.0);
+    const float smallVal = 0.000625;
+	// ray marching time
+    for (int i = 0; i < 250; i++)	// This is the count of the max times the ray actually marches.
+    {
+        marchCount+=1.0;
+        // Step along the ray.
+        pos = (camPos + rayVec * t);
+        // This is _the_ function that defines the "distance field".
+        // It's really what makes the scene geometry. The idea is that the
+        // distance field returns the distance to the closest object, and then
+        // we know we are safe to "march" along the ray by that much distance
+        // without hitting anything. We repeat this until we get really close
+        // and then break because we have effectively hit the object.
+        distAndMat = DistanceToObject(pos);
+
+        // 2d voxel walk through the city blocks.
+        // The distance function is not continuous at city block boundaries,
+        // so we have to pause our ray march at each voxel boundary.
+        float walk = distAndMat.x;
+        float dx = -fract(pos.x);
+        if (rayVec.x > 0.0) dx = fract(-pos.x);
+        float dz = -fract(pos.z);
+        if (rayVec.z > 0.0) dz = fract(-pos.z);
+        float nearestVoxel = min(fract(dx/rayVec.x), fract(dz/rayVec.z))+voxelPad;
+        nearestVoxel = max(voxelPad, nearestVoxel);// hack that assumes streets and sidewalks are this wide.
+        //nearestVoxel = max(nearestVoxel, t * 0.02); // hack to stop voxel walking in the distance.
+        walk = min(walk, nearestVoxel);
+
+        // move down the ray a safe amount
+        t += walk;
+        // If we are very close to the object, let's call it a hit and exit this loop.
+        if ((t > maxDepth) || (abs(distAndMat.x) < smallVal)) break;
+    }
+
+    // Ray trace a ground plane to infinity
+    float alpha = -camPos.y / rayVec.y;
+    if ((t > maxDepth) && (rayVec.y < -0.0))
+    {
+        pos.xz = camPos.xz + rayVec.xz * alpha;
+        pos.y = -0.0;
+        t = alpha;
+        distAndMat.y = 0.0;
+        distAndMat.x = 0.0;
+    }
+	// --------------------------------------------------------------------------------
+	// Now that we have done our ray marching, let's put some color on this geometry.
+	vec3 finalColor = vec3(0.0);
+
+	// If a ray actually hit the object, let's light it.
+    if ((t <= maxDepth) || (t == alpha))
+	{
+        float dist = distAndMat.x;
+        // calculate the normal from the distance field. The distance field is a volume, so if you
+        // sample the current point and neighboring points, you can use the difference to get
+        // the normal.
+        vec3 smallVec = vec3(smallVal, 0, 0);
+        vec3 normalU = vec3(dist - DistanceToObject(pos - smallVec.xyy).x,
+                           dist - DistanceToObject(pos - smallVec.yxy).x,
+                           dist - DistanceToObject(pos - smallVec.yyx).x);
+        vec3 normal = normalize(normalU);
+
+        // calculate 2 ambient occlusion values. One for global stuff and one
+        // for local stuff
+        float ambientS = 1.0;
+        ambientS *= saturate(DistanceToObject(pos + normal * 0.0125).x*80.0);
+        ambientS *= saturate(DistanceToObject(pos + normal * 0.025).x*40.0);
+        ambientS *= saturate(DistanceToObject(pos + normal * 0.05).x*20.0);
+        ambientS *= saturate(DistanceToObject(pos + normal * 0.1).x*10.0);
+        ambientS *= saturate(DistanceToObject(pos + normal * 0.2).x*5.0);
+        ambientS *= saturate(DistanceToObject(pos + normal * 0.4).x*2.5);
+        //ambientS *= saturate(DistanceToObject(pos + normal * 0.8).x*1.25);
+        float ambient = ambientS;// * saturate(DistanceToObject(pos + normal * 1.6).x*1.25*0.5);
+        //ambient *= saturate(DistanceToObject(pos + normal * 3.2)*1.25*0.25);
+        //ambient *= saturate(DistanceToObject(pos + normal * 6.4)*1.25*0.125);
+        ambient = max(0.025, pow(ambient, 0.5));	// tone down ambient with a pow and min clamp it.
+        ambient = saturate(ambient);
+
+        // calculate the reflection vector for highlights
+        vec3 ref = reflect(rayVec, normal);
+
+        // Trace a ray toward the sun for sun shadows
+        float sunShadow = 1.0;
+        float iter = 0.01;
+        vec3 nudgePos = pos + normal*0.002;	// don't start tracing too close or inside the object
+		for (int i = 0; i < 40; i++)
+        {
+            vec3 shadowPos = nudgePos + sunDir * iter;
+            float tempDist = DistanceToObject(shadowPos).x;
+	        sunShadow *= saturate(tempDist*150.0);	// Shadow hardness
+            if (tempDist <= 0.0) break;
+
+            float walk = tempDist;
+            float dx = -fract(shadowPos.x);
+            if (sunDir.x > 0.0) dx = fract(-shadowPos.x);
+            float dz = -fract(shadowPos.z);
+            if (sunDir.z > 0.0) dz = fract(-shadowPos.z);
+            float nearestVoxel = min(fract(dx/sunDir.x), fract(dz/sunDir.z))+smallVal;
+            nearestVoxel = max(0.2, nearestVoxel);// hack that assumes streets and sidewalks are this wide.
+            walk = min(walk, nearestVoxel);
+
+            iter += max(0.01, walk);
+            if (iter > 4.5) break;
+        }
+        sunShadow = saturate(sunShadow);
+
+        // make a few frequencies of noise to give it some texture
+        float n =0.0;
+        n += noise(pos*32.0);
+        n += noise(pos*64.0);
+        n += noise(pos*128.0);
+        n += noise(pos*256.0);
+        n += noise(pos*512.0);
+        n = mix(0.7, 0.95, n);
+
+        // ------ Calculate texture color  ------
+        vec2 block = floor(pos.xz);
+        vec3 texColor = vec3(0.95, 1.0, 1.0);
+        texColor *= 0.8;
+        float windowRef = 0.0;
+        // texture map the sides of buildings
+        if ((normal.y < 0.1) && (distAndMat.y == 0.0))
+        {
+            vec3 posdx = dFdx(pos);
+            vec3 posdy = dFdy(pos);
+            vec3 posGrad = posdx * Hash21(uv) + posdy * Hash21(uv*7.6543);
+
+            // Quincunx antialias the building texture and normal map.
+            // I guess procedural textures are hard to mipmap.
+            vec3 colTotal = vec3(0.0);
+            vec3 colTemp = texColor;
+            vec3 nTemp = vec3(0.0);
+            CalcWindows(block, pos, colTemp, windowRef, nTemp);
+            colTotal = colTemp;
+
+            colTemp = texColor;
+            CalcWindows(block, pos + posdx * 0.666, colTemp, windowRef, nTemp);
+            colTotal += colTemp;
+
+            colTemp = texColor;
+            CalcWindows(block, pos + posdx * 0.666 + posdy * 0.666, colTemp, windowRef, nTemp);
+            colTotal += colTemp;
+
+            colTemp = texColor;
+            CalcWindows(block, pos + posdy * 0.666, colTemp, windowRef, nTemp);
+            colTotal += colTemp;
+
+            colTemp = texColor;
+            CalcWindows(block, pos + posdx * 0.333 + posdy * 0.333, colTemp, windowRef, nTemp);
+            colTotal += colTemp;
+
+            texColor = colTotal * 0.2;
+            windowRef *= 0.2;
+
+            normal = normalize(normal + nTemp * 0.2);
+        }
+        else
+        {
+            // Draw the road
+            float xroad = abs(fract(pos.x+0.5)-0.5);
+            float zroad = abs(fract(pos.z+0.5)-0.5);
+            float road = saturate((min(xroad, zroad)-0.143)*480.0);
+            texColor *= 1.0-normal.y*0.95*Hash21(block*9.87)*road; // change rooftop color
+            texColor *= mix(0.1, 1.0, road);
+
+            // double yellow line in middle of road
+            float yellowLine = saturate(1.0-(min(xroad, zroad)-0.002)*480.0);
+            yellowLine *= saturate((min(xroad, zroad)-0.0005)*480.0);
+            yellowLine *= saturate((xroad*xroad+zroad*zroad-0.05)*880.0);
+            texColor = mix(texColor, vec3(1.0, 0.8, 0.3), yellowLine);
+
+            // white dashed lines on road
+            float whiteLine = saturate(1.0-(min(xroad, zroad)-0.06)*480.0);
+            whiteLine *= saturate((min(xroad, zroad)-0.056)*480.0);
+            whiteLine *= saturate((xroad*xroad+zroad*zroad-0.05)*880.0);
+            whiteLine *= saturate(1.0-(fract(zroad*8.0)-0.5)*280.0);  // dotted line
+            whiteLine *= saturate(1.0-(fract(xroad*8.0)-0.5)*280.0);
+            texColor = mix(texColor, vec3(0.5), whiteLine);
+
+            whiteLine = saturate(1.0-(min(xroad, zroad)-0.11)*480.0);
+            whiteLine *= saturate((min(xroad, zroad)-0.106)*480.0);
+            whiteLine *= saturate((xroad*xroad+zroad*zroad-0.06)*880.0);
+            texColor = mix(texColor, vec3(0.5), whiteLine);
+
+            // crosswalk
+            float crossWalk = saturate(1.0-(fract(xroad*40.0)-0.5)*280.0);
+            crossWalk *= saturate((zroad-0.15)*880.0);
+            crossWalk *= saturate((-zroad+0.21)*880.0)*(1.0-road);
+            crossWalk *= n*n;
+            texColor = mix(texColor, vec3(0.25), crossWalk);
+            crossWalk = saturate(1.0-(fract(zroad*40.0)-0.5)*280.0);
+            crossWalk *= saturate((xroad-0.15)*880.0);
+            crossWalk *= saturate((-xroad+0.21)*880.0)*(1.0-road);
+            crossWalk *= n*n;
+            texColor = mix(texColor, vec3(0.25), crossWalk);
+
+            {
+                // sidewalk cracks
+                float sidewalk = 1.0;
+                vec2 blockSize = vec2(100.0);
+                if (pos.y > 0.1) blockSize = vec2(10.0, 50);
+                //sidewalk *= pow(abs(sin(pos.x*blockSize)), 0.025);
+                //sidewalk *= pow(abs(sin(pos.z*blockSize)), 0.025);
+                sidewalk *= saturate(abs(sin(pos.z*blockSize.x)*800.0/blockSize.x));
+                sidewalk *= saturate(abs(sin(pos.x*blockSize.y)*800.0/blockSize.y));
+                sidewalk = saturate(mix(0.7, 1.0, sidewalk));
+                sidewalk = saturate((1.0-road) + sidewalk);
+                texColor *= sidewalk;
+            }
+        }
+        // Car tires are almost black to not call attention to their ugly.
+        if (distAndMat.y == 3.0)
+        {
+            texColor = vec3(0.05);
+        }
+
+        // apply noise
+        texColor *= vec3(1.0)*n*0.05;
+        texColor *= 0.7;
+        texColor = saturate(texColor);
+
+        float windowMask = 0.0;
+        if (distAndMat.y >= 100.0)
+        {
+            // car texture and windows
+            texColor = vec3(Hash11(distAndMat.y)*1.0, Hash11(distAndMat.y*8.765), Hash11(distAndMat.y*17.731))*0.1;
+            texColor = pow(abs(texColor), vec3(0.2));  // bias toward white
+            texColor = max(vec3(0.25), texColor);  // not too saturated color.
+            texColor.z = min(texColor.y, texColor.z);  // no purple cars. just not realistic. :)
+            texColor *= Hash11(distAndMat.y*0.789) * 0.15;
+            windowMask = saturate( max(0.0, abs(pos.y - 0.0175)*3800.0)-10.0);
+            vec2 dirNorm = abs(normalize(normal.xz));
+            float pillars = saturate(1.0-max(dirNorm.x, dirNorm.y));
+            pillars = pow(max(0.0, pillars-0.15), 0.125);
+            windowMask = max(windowMask, pillars);
+            texColor *= windowMask;
+        }
+
+        // ------ Calculate lighting color ------
+        // Start with sun color, standard lighting equation, and shadow
+        vec3 lightColor = vec3(100.0)*sunCol * saturate(dot(sunDir, normal)) * sunShadow;
+        // weighted average the near ambient occlusion with the far for just the right look
+        float ambientAvg = (ambient*3.0 + ambientS) * 0.25;
+        // Add sky color with ambient acclusion
+        lightColor += (skyCol * saturate(normal.y *0.5+0.5))*pow(ambientAvg, 0.35)*2.5;
+        lightColor *= 4.0;
+
+        // finally, apply the light to the texture.
+        finalColor = texColor * lightColor;
+        // Reflections for cars
+        if (distAndMat.y >= 100.0)
+        {
+            float yfade = max(0.01, min(1.0, ref.y*100.0));
+            // low-res way of making lines at the edges of car windows. Not sure I like it.
+            yfade *= (saturate(1.0-abs(dFdx(windowMask)*dFdy(windowMask))*250.995));
+            finalColor += GetEnvMapSkyline(ref, sunDir, pos.y-1.5)*0.3*yfade*max(0.4,sunShadow);
+// jwz: GLSL 4.10, GLES 3.0: "No matching function for call to texture(sampler2D, vec3)"
+//     This must just be an error; dunno why it works on the shadertoy web site.
+//          finalColor += saturate(texture(iChannel0, ref).xyz-0.35)*0.15*max(0.2,sunShadow);
+            // FIELD: 원본은 여기서 Shadertoy 텍스처(iChannel0)를 반사에 더했다. 텍스처 없이 쓰도록 뺐다.
+        }
+        // reflections for building windows
+        if (windowRef != 0.0)
+        {
+            finalColor *= mix(1.0, 0.6, windowRef);
+            float yfade = max(0.01, min(1.0, ref.y*100.0));
+            finalColor += GetEnvMapSkyline(ref, sunDir, pos.y-0.5)*0.6*yfade*max(0.6,sunShadow)*windowRef;//*(windowMask*0.5+0.5);
+// jwz: GLSL 4.10, GLES 3.0: "No matching function for call to texture(sampler2D, vec3)"
+//          finalColor += saturate(texture(iChannel0, ref).xyz-0.35)*0.15*max(0.25,sunShadow)*windowRef;
+            // FIELD: 원본은 여기서 Shadertoy 텍스처(iChannel0)를 창문 반사에 더했다. 텍스처 없이 쓰도록 뺐다.
+        }
+        finalColor *= 0.9;
+        // fog that fades to reddish plus the sun color so that fog is brightest towards sun
+        vec3 rv2 = rayVec;
+        rv2.y *= saturate(sign(rv2.y));
+        vec3 fogColor = GetEnvMap(rv2, sunDir);
+        fogColor = min(vec3(9.0), fogColor);
+        finalColor = mix(fogColor, finalColor, exp(-t*0.02));
+
+        // visualize length of gradient of distance field to check distance field correctness
+        //finalColor = vec3(0.5) * (length(normalU) / smallVec.x);
+        //finalColor = vec3(marchCount)/255.0;
+	}
+    else
+    {
+        // Our ray trace hit nothing, so draw sky.
+        finalColor = GetEnvMap(rayVec, sunDir);
+    }
+
+    // vignette?
+    finalColor *= vec3(1.0) * saturate(1.0 - length(uv/2.5));
+    finalColor *= 1.3*exposure;
+
+	// output the final color without gamma correction - will do gamma later.
+	return vec3(clamp(finalColor, 0.0, 1.0)*saturate(fade+0.2));
+}
+
+#ifdef NON_REALTIME_HQ_RENDER
+// This function breaks the image down into blocks and scans
+// through them, rendering 1 block at a time. It's for non-
+// realtime things that take a long time to render.
+
+// This is the frame rate to render at. Too fast and you will
+// miss some blocks.
+const float blockRate = 20.0;
+void BlockRender(in vec2 fragCoord)
+{
+    // blockSize is how much it will try to render in 1 frame.
+    // adjust this smaller for more complex scenes, bigger for
+    // faster render times.
+    const float blockSize = 64.0;
+    // Make the block repeatedly scan across the image based on time.
+    float frame = floor(iTime * blockRate);
+    vec2 blockRes = floor(iResolution.xy / blockSize) + vec2(1.0);
+    // ugly bug with mod.
+    //float blockX = mod(frame, blockRes.x);
+    float blockX = fract(frame / blockRes.x) * blockRes.x;
+    //float blockY = mod(floor(frame / blockRes.x), blockRes.y);
+    float blockY = fract(floor(frame / blockRes.x) / blockRes.y) * blockRes.y;
+    // Don't draw anything outside the current block.
+    if ((fragCoord.x - blockX * blockSize >= blockSize) ||
+    	(fragCoord.x - (blockX - 1.0) * blockSize < blockSize) ||
+    	(fragCoord.y - blockY * blockSize >= blockSize) ||
+    	(fragCoord.y - (blockY - 1.0) * blockSize < blockSize))
+    {
+        discard;
+    }
+}
+#endif
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+#ifdef NON_REALTIME_HQ_RENDER
+    // Optionally render a non-realtime scene with high quality
+    BlockRender(fragCoord);
+#endif
+
+    // Do a multi-pass render
+    vec3 finalColor = vec3(0.0);
+#ifdef NON_REALTIME_HQ_RENDER
+    for (float i = 0.0; i < antialiasingSamples; i++)
+    {
+        const float motionBlurLengthInSeconds = 1.0 / 60.0;
+        // Set this to the time in seconds of the frame to render.
+	    localTime = frameToRenderHQ;
+        // This line will motion-blur the renders
+        localTime += Hash11(v21(fragCoord + seed)) * motionBlurLengthInSeconds;
+        // Jitter the pixel position so we get antialiasing when we do multiple passes.
+        vec2 jittered = fragCoord.xy + vec2(
+            Hash21(fragCoord + seed),
+            Hash21(fragCoord*7.234567 + seed)
+            );
+        // don't antialias if only 1 sample.
+        if (antialiasingSamples == 1.0) jittered = fragCoord;
+        // Accumulate one pass of raytracing into our pixel value
+	    finalColor += RayTrace(jittered);
+        // Change the random seed for each pass.
+	    seed *= 1.01234567;
+    }
+    // Average all accumulated pixel intensities
+    finalColor /= antialiasingSamples;
+#else
+    // Regular real-time rendering
+    localTime = iTime;
+    finalColor = RayTrace(fragCoord);
+#endif
+
+    fragColor = vec4(sqrt(clamp(finalColor, 0.0, 1.0)),1.0);
+}
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+const clouds2d = `#version 300 es
+precision highp float;
+// 2D Clouds by drift — License: Permission — 원작자의 자유 사용 허락
+// 원본: https://www.shadertoy.com/view/4tdSWr (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// 원작자가 "누구든 어떤 방식으로든 써도 된다. 출처 표시는 해 주면 좋겠다"고 밝혔다(아래 원본 주석).
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//  · sin 기반 실수 해시를 정수 해시(pcg3d)로 바꿨다 → 무늬·배치가 원본과 다르다
+//
+// 원리: 그래디언트 노이즈를 옥타브마다 회전·확대해 더한 fbm으로 구름 모양(밀도)과 색을 따로 만들고, 시간에 따라 흘려 보낸다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+
+// Title:  2D Clouds
+// Author: drift
+// URL:    https://www.shadertoy.com/view/4tdSWr
+// Date:   12-Nov-2016
+// Desc:   Used in 2 different demos:
+// http://www.pouet.net/prod.php?which=66590
+// and
+// http://www.pouet.net/prod.php?which=68483
+
+// 2024-06-25, drift says:
+//
+// "Just posting here to say that I don't check Shadertoy very often and I
+// don't get any notifications of messages here. Anyone and everyone who
+// wishes to use this shader I give my permission to use it in any way that
+// you choose. Credit would be nice but I won't insist on it."
+
+
+const float cloudscale = 1.1;
+const float speed = 0.03;
+const float clouddark = 0.5;
+const float cloudlight = 0.3;
+const float cloudcover = 0.2;
+const float cloudalpha = 8.0;
+const float skytint = 0.5;
+const vec3 skycolour1 = vec3(0.2, 0.4, 0.6);
+const vec3 skycolour2 = vec3(0.4, 0.7, 1.0);
+
+const mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
+
+// FIELD: 원본의 sin 기반 실수 해시를 정수 해시(pcg3d)로 바꿨다(-1~1 그래디언트).
+uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}
+float pcgFloat(uint v) { return float(v >> 8u) * (1.0 / 16777216.0); }
+vec2 hash( vec2 p ) {
+	uvec3 h = pcg3d(uvec3(floatBitsToUint(p), 0u));
+	return -1.0 + 2.0*vec2(pcgFloat(h.x), pcgFloat(h.y));
+}
+
+float noise( in vec2 p ) {
+    const float K1 = 0.366025404; // (sqrt(3)-1)/2;
+    const float K2 = 0.211324865; // (3-sqrt(3))/6;
+	vec2 i = floor(p + (p.x+p.y)*K1);	
+    vec2 a = p - i + (i.x+i.y)*K2;
+    vec2 o = (a.x>a.y) ? vec2(1.0,0.0) : vec2(0.0,1.0); //vec2 of = 0.5 + 0.5*vec2(sign(a.x-a.y), sign(a.y-a.x));
+    vec2 b = a - o + K2;
+	vec2 c = a - 1.0 + 2.0*K2;
+    vec3 h = max(0.5-vec3(dot(a,a), dot(b,b), dot(c,c) ), 0.0 );
+	vec3 n = h*h*h*h*vec3( dot(a,hash(i+0.0)), dot(b,hash(i+o)), dot(c,hash(i+1.0)));
+    return dot(n, vec3(70.0));	
+}
+
+float fbm(vec2 n) {
+	float total = 0.0, amplitude = 0.1;
+	for (int i = 0; i < 7; i++) {
+		total += noise(n) * amplitude;
+		n = m * n;
+		amplitude *= 0.4;
+	}
+	return total;
+}
+
+// -----------------------------------------------
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+    vec2 p = fragCoord.xy / iResolution.xy;
+	vec2 uv = p*vec2(iResolution.x/iResolution.y,1.0);    
+    float time = iTime * speed;
+    float q = fbm(uv * cloudscale * 0.5);
+    
+    //ridged noise shape
+	float r = 0.0;
+	uv *= cloudscale;
+    uv -= q - time;
+    float weight = 0.8;
+    for (int i=0; i<8; i++){
+		r += abs(weight*noise( uv ));
+        uv = m*uv + time;
+		weight *= 0.7;
+    }
+    
+    //noise shape
+	float f = 0.0;
+    uv = p*vec2(iResolution.x/iResolution.y,1.0);
+	uv *= cloudscale;
+    uv -= q - time;
+    weight = 0.7;
+    for (int i=0; i<8; i++){
+		f += weight*noise( uv );
+        uv = m*uv + time;
+		weight *= 0.6;
+    }
+    
+    f *= r + f;
+    
+    //noise colour
+    float c = 0.0;
+    time = iTime * speed * 2.0;
+    uv = p*vec2(iResolution.x/iResolution.y,1.0);
+	uv *= cloudscale*2.0;
+    uv -= q - time;
+    weight = 0.4;
+    for (int i=0; i<7; i++){
+		c += weight*noise( uv );
+        uv = m*uv + time;
+		weight *= 0.6;
+    }
+    
+    //noise ridge colour
+    float c1 = 0.0;
+    time = iTime * speed * 3.0;
+    uv = p*vec2(iResolution.x/iResolution.y,1.0);
+	uv *= cloudscale*3.0;
+    uv -= q - time;
+    weight = 0.4;
+    for (int i=0; i<7; i++){
+		c1 += abs(weight*noise( uv ));
+        uv = m*uv + time;
+		weight *= 0.6;
+    }
+	
+    c += c1;
+    
+    vec3 skycolour = mix(skycolour2, skycolour1, p.y);
+    vec3 cloudcolour = vec3(1.1, 1.1, 0.9) * clamp((clouddark + cloudlight*c), 0.0, 1.0);
+   
+    f = cloudcover + cloudalpha*f*r;
+    
+    vec3 result = mix(skycolour, clamp(skytint * skycolour + cloudcolour, 0.0, 1.0), clamp(f + c, 0.0, 1.0));
+    
+	fragColor = vec4( result, 1.0 );
+}
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+const selfReflect = `#version 300 es
+precision highp float;
+// Let's self reflect by mrange — License: CC0
+// 원본: https://www.shadertoy.com/view/XfyXRV (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// CC0(퍼블릭 도메인 헌정)이라 고지 의무는 없지만 출처를 남긴다.
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//
+// 원리: 다면체 거리장 안쪽으로 굴절해 들어간 광선이 안쪽 면에서 반사되는 과정을 여러 번 되풀이하며 색을 모은다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+
+// Title:  Let's self reflect
+// Author: mrange
+// URL:    https://www.shadertoy.com/view/XfyXRV
+// Date:   11-May-2024
+// Desc:   CC0: Let's self reflect
+// Always enjoyed the videos of Platonic solids with inner mirrors
+// I made some previous attempts but thought I make another attempt it
+
+// CC0: Let's self reflect
+//  Always enjoyed the videos of Platonic solids with inner mirrors
+//  I made some previous attempts but thought I make another attempt it
+
+// Reducing the alias effects on the inner reflections turned out to be a bit tricky. 
+//  Simplest solution is just to run run fullscreen on a 4K screen ;)
+
+// Function to generate the solid found here: https://www.shadertoy.com/view/MsKGzw
+
+// Tinker with these parameters to create different solids
+// -------------------------------------------------------
+const float rotation_speed= 0.25;
+
+const float poly_U        = 1.;   // [0, inf]
+const float poly_V        = 0.5;  // [0, inf]
+const float poly_W        = 1.0;  // [0, inf]
+const int   poly_type     = 3;    // [2, 5]
+const float poly_zoom     = 2.0;
+
+const float inner_sphere  = 1.;
+
+const float refr_index    = 0.9;
+
+#define MAX_BOUNCES2        6
+// -------------------------------------------------------
+
+
+
+#define TIME        iTime
+#define RESOLUTION  iResolution
+#define PI          3.141592654
+#define TAU         (2.0*PI)
+
+// License: WTFPL, author: sam hocevar, found: https://stackoverflow.com/a/17897228/418488
+const vec4 hsv2rgb_K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+vec3 hsv2rgb(vec3 c) {
+  vec3 p = abs(fract(c.xxx + hsv2rgb_K.xyz) * 6.0 - hsv2rgb_K.www);
+  return c.z * mix(hsv2rgb_K.xxx, clamp(p - hsv2rgb_K.xxx, 0.0, 1.0), c.y);
+}
+// License: WTFPL, author: sam hocevar, found: https://stackoverflow.com/a/17897228/418488
+//  Macro version of above to enable compile-time constants
+#define HSV2RGB(c)  (c.z * mix(hsv2rgb_K.xxx, clamp(abs(fract(c.xxx + hsv2rgb_K.xyz) * 6.0 - hsv2rgb_K.www) - hsv2rgb_K.xxx, 0.0, 1.0), c.y))
+
+#define TOLERANCE2          0.0005
+//#define MAX_RAY_LENGTH2   10.0
+#define MAX_RAY_MARCHES2    50
+#define NORM_OFF2           0.005
+#define BACKSTEP2
+
+#define TOLERANCE3          0.0005
+#define MAX_RAY_LENGTH3     10.0
+#define MAX_RAY_MARCHES3    90
+#define NORM_OFF3           0.005
+
+const vec3 rayOrigin    = vec3(0.0, 1., -5.);
+const vec3 sunDir       = normalize(-rayOrigin);
+
+
+const vec3 sunCol       = HSV2RGB(vec3(0.06 , 0.90, 1E-2))*1.;
+const vec3 bottomBoxCol = HSV2RGB(vec3(0.66, 0.80, 0.5))*1.;
+const vec3 topBoxCol    = HSV2RGB(vec3(0.60, 0.90, 1.))*1.;
+const vec3 glowCol0     = HSV2RGB(vec3(0.05 , 0.7, 1E-3))*1.;
+const vec3 glowCol1     = HSV2RGB(vec3(0.95, 0.7, 1E-3))*1.;
+const vec3 beerCol      = -HSV2RGB(vec3(0.15+0.5, 0.7, 2.)); 
+const float rrefr_index = 1./refr_index;
+
+
+// License: Unknown, author: knighty, found: https://www.shadertoy.com/view/MsKGzw
+const float poly_cospin   = cos(PI/float(poly_type));
+const float poly_scospin  = sqrt(0.75-poly_cospin*poly_cospin);
+const vec3  poly_nc       = vec3(-0.5, -poly_cospin, poly_scospin);
+const vec3  poly_pab      = vec3(0., 0., 1.);
+const vec3  poly_pbc_     = vec3(poly_scospin, 0., 0.5);
+const vec3  poly_pca_     = vec3(0., poly_scospin, poly_cospin);
+const vec3  poly_p        = normalize((poly_U*poly_pab+poly_V*poly_pbc_+poly_W*poly_pca_));
+const vec3  poly_pbc      = normalize(poly_pbc_);
+const vec3  poly_pca      = normalize(poly_pca_);
+
+mat3 g_rot;
+vec2 g_gd;
+  
+// License: MIT, author: Inigo Quilez, found: https://iquilezles.org/articles/noacos/
+mat3 rot(vec3 d, vec3 z) {
+  vec3  v = cross( z, d );
+  float c = dot( z, d );
+  float k = 1.0/(1.0+c);
+
+  return mat3( v.x*v.x*k + c,     v.y*v.x*k - v.z,    v.z*v.x*k + v.y,
+               v.x*v.y*k + v.z,   v.y*v.y*k + c,      v.z*v.y*k - v.x,
+               v.x*v.z*k - v.y,   v.y*v.z*k + v.x,    v.z*v.z*k + c    );
+}
+
+// License: Unknown, author: Matt Taylor (https://github.com/64), found: https://64.github.io/tonemapping/
+vec3 aces_approx(vec3 v) {
+  v = max(v, 0.0);
+  v *= 0.6;
+  float a = 2.51;
+  float b = 0.03;
+  float c = 2.43;
+  float d = 0.59;
+  float e = 0.14;
+  return clamp((v*(a*v+b))/(v*(c*v+d)+e), 0.0, 1.0);
+}
+
+float sphere(vec3 p, float r) {
+  return length(p) - r;
+}
+
+// License: MIT, author: Inigo Quilez, found: https://iquilezles.org/articles/distfunctions/
+float box(vec2 p, vec2 b) {
+  vec2 d = abs(p)-b;
+  return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+}
+  
+// License: Unknown, author: knighty, found: https://www.shadertoy.com/view/MsKGzw
+void poly_fold(inout vec3 pos) {
+  vec3 p = pos;
+
+  for(int i = 0; i < poly_type; ++i){
+    p.xy  = abs(p.xy);
+    p    -= 2.*min(0., dot(p,poly_nc)) * poly_nc;
+  }
+  
+  pos = p;
+}
+
+float poly_plane(vec3 pos) {
+  float d0 = dot(pos, poly_pab);
+  float d1 = dot(pos, poly_pbc);
+  float d2 = dot(pos, poly_pca);
+  float d = d0;
+  d = max(d, d1);
+  d = max(d, d2);
+  return d;
+}
+
+float poly_corner(vec3 pos) {
+  float d = length(pos) - .0125;
+  return d;
+}
+
+float dot2(vec3 p) {
+  return dot(p, p);
+}
+
+float poly_edge(vec3 pos) {
+  float dla = dot2(pos-min(0., pos.x)*vec3(1., 0., 0.));
+  float dlb = dot2(pos-min(0., pos.y)*vec3(0., 1., 0.));
+  float dlc = dot2(pos-min(0., dot(pos, poly_nc))*poly_nc);
+  return sqrt(min(min(dla, dlb), dlc))-2E-3;
+}
+
+vec3 shape(vec3 pos) {
+  pos *= g_rot;
+  pos /= poly_zoom;
+  poly_fold(pos);
+  pos -= poly_p;
+
+  return vec3(poly_plane(pos), poly_edge(pos), poly_corner(pos))*poly_zoom;
+}
+
+vec3 render0(vec3 ro, vec3 rd) {
+  vec3 col = vec3(0.0);
+  
+  float srd  = sign(rd.y);
+  float tp   = -(ro.y-6.)/abs(rd.y);
+
+  if (srd < 0.) {
+    col += bottomBoxCol*exp(-0.5*(length((ro + tp*rd).xz)));
+  }
+
+  if (srd > 0.0) {
+    vec3 pos  = ro + tp*rd;
+    vec2 pp = pos.xz;
+    float db = box(pp, vec2(5.0, 9.0))-3.0;
+    
+    col += topBoxCol*rd.y*rd.y*smoothstep(0.25, 0.0, db);
+    col += 0.2*topBoxCol*exp(-0.5*max(db, 0.0));
+    col += 0.05*sqrt(topBoxCol)*max(-db, 0.0);
+  }
+
+
+  col += sunCol/(1.001-dot(sunDir, rd));
+  return col; 
+}
+
+float df2(vec3 p) {
+  vec3 ds = shape(p);
+  float d2 = ds.y-5E-3;
+  float d0 = min(-ds.x, d2);
+  float d1 = sphere(p, inner_sphere);
+  g_gd = min(g_gd, vec2(d2, d1));
+  float d = (min(d0, d1));
+  return d;
+}
+
+float rayMarch2(vec3 ro, vec3 rd, float tinit) {
+  float t = tinit;
+#if defined(BACKSTEP2)
+  vec2 dti = vec2(1e10,0.0);
+#endif
+  int i;
+  for (i = 0; i < MAX_RAY_MARCHES2; ++i) {
+    float d = df2(ro + rd*t);
+#if defined(BACKSTEP2)
+    if (d<dti.x) { dti=vec2(d,t); }
+#endif  
+    // Bouncing in a closed shell, will never miss
+    if (d < TOLERANCE2/* || t > MAX_RAY_LENGTH3 */) {
+      break;
+    }
+    t += d;
+  }
+#if defined(BACKSTEP2)
+  if(i==MAX_RAY_MARCHES2) { t=dti.y; };
+#endif  
+  return t;
+}
+
+vec3 normal2(vec3 pos) {
+  vec2  eps = vec2(NORM_OFF2,0.0);
+  vec3 nor;
+  nor.x = df2(pos+eps.xyy) - df2(pos-eps.xyy);
+  nor.y = df2(pos+eps.yxy) - df2(pos-eps.yxy);
+  nor.z = df2(pos+eps.yyx) - df2(pos-eps.yyx);
+  return normalize(nor);
+}
+
+vec3 render2(vec3 ro, vec3 rd, float db) {
+  vec3 agg = vec3(0.0);
+  float ragg = 1.;
+  float tagg = 0.;
+  
+  for (int bounce = 0; bounce < MAX_BOUNCES2; ++bounce) {
+    if (ragg < 0.1) break;
+    g_gd      = vec2(1E3);
+    float t2  = rayMarch2(ro, rd, min(db+0.05, 0.3));
+    vec2 gd2  = g_gd;
+    tagg      += t2;
+    
+    vec3 p2   = ro+rd*t2;
+    vec3 n2   = normal2(p2);
+    vec3 r2   = reflect(rd, n2);
+    vec3 rr2  = refract(rd, n2, rrefr_index);
+    float fre2= 1.+dot(n2,rd);
+    
+    vec3 beer = ragg*exp(0.2*beerCol*tagg);
+    agg += glowCol1*beer*((1.+tagg*tagg*4E-2)*6./max(gd2.x, 5E-4+tagg*tagg*2E-4/ragg));
+    vec3 ocol = 0.2*beer*render0(p2, rr2);
+    if (gd2.y <= TOLERANCE2) {
+      ragg *= 1.-0.9*fre2;
+    } else {
+      agg     += ocol;
+      ragg    *= 0.8;
+    }
+    
+    ro        = p2;
+    rd        = r2;
+    db        = gd2.x; 
+  }
+
+
+  return agg;
+}
+
+float df3(vec3 p) {
+  vec3 ds = shape(p);
+  g_gd = min(g_gd, ds.yz);
+  const float sw = 0.02;
+  float d1 = min(ds.y, ds.z)-sw;
+  float d0 = ds.x;
+  d0 = min(d0, ds.y);
+  d0 = min(d0, ds.z);
+  return d0;
+}
+
+float rayMarch3(vec3 ro, vec3 rd, float tinit, out int iter) {
+  float t = tinit;
+  int i;
+  for (i = 0; i < MAX_RAY_MARCHES3; ++i) {
+    float d = df3(ro + rd*t);
+    if (d < TOLERANCE3 || t > MAX_RAY_LENGTH3) {
+      break;
+    }
+    t += d;
+  }
+  iter = i;
+  return t;
+}
+
+vec3 normal3(vec3 pos) {
+  vec2  eps = vec2(NORM_OFF3,0.0);
+  vec3 nor;
+  nor.x = df3(pos+eps.xyy) - df3(pos-eps.xyy);
+  nor.y = df3(pos+eps.yxy) - df3(pos-eps.yxy);
+  nor.z = df3(pos+eps.yyx) - df3(pos-eps.yyx);
+  return normalize(nor);
+}
+
+vec3 render3(vec3 ro, vec3 rd) {
+  int iter;
+
+  vec3 skyCol = render0(ro, rd);
+  vec3 col  = skyCol;
+
+  g_gd      = vec2(1E3);
+  float t1  = rayMarch3(ro, rd, 0.1, iter);
+  vec2 gd1  = g_gd;
+  vec3 p1   = ro+t1*rd;
+  vec3 n1   = normal3(p1);
+  vec3 r1   = reflect(rd, n1);
+  vec3 rr1  = refract(rd, n1, refr_index);
+  float fre1= 1.+dot(rd, n1);
+  fre1 *= fre1;
+
+  float ifo = mix(0.5, 1., smoothstep(1.0, 0.9, float(iter)/float(MAX_RAY_MARCHES3)));
+
+  if (t1 < MAX_RAY_LENGTH3) {
+    col = render0(p1, r1)*(0.5+0.5*fre1)*ifo;
+    vec3 icol = render2(p1, rr1, gd1.x); 
+    if (gd1.x > TOLERANCE3 && gd1.y > TOLERANCE3 && rr1 != vec3(0.)) {
+      col += icol*(1.-0.75*fre1)*ifo;
+    }
+  }
+
+  col += (glowCol0+1.*fre1*(glowCol0))/max(gd1.x, 3E-4);
+  return col;
+
+}
+
+  
+vec3 effect(vec2 p, vec2 pp) {
+  const float fov = 2.0;
+  
+  const vec3 up = vec3(0., 1., 0.);
+  const vec3 la   = vec3(0.0);
+
+  const vec3 ww = normalize(normalize(la-rayOrigin));
+  const vec3 uu = normalize(cross(up, ww));
+  const vec3 vv = cross(ww, uu);
+  
+  vec3 rd = normalize(-p.x*uu + p.y*vv + fov*ww);
+
+  vec3 col = vec3(0.0);
+  col = render3(rayOrigin, rd);
+  
+  col -= 2E-2*vec3(2.,3.,1.)*(length(p)+0.25);
+  col = aces_approx(col);
+  col = sqrt(col);
+  return col;
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+  vec2 q = fragCoord/RESOLUTION.xy;
+  vec2 p = -1. + 2. * q;
+  vec2 pp = p;
+  p.x *= RESOLUTION.x/RESOLUTION.y;
+
+  float a = TIME*rotation_speed;
+  vec3 r0 = vec3(1.0, sin(vec2(sqrt(0.5), 1.0)*a));
+  vec3 r1 = vec3(cos(vec2(sqrt(0.5), 1.0)*0.913*a), 1.0);
+  mat3 rot = rot(normalize(r0), normalize(r1));
+  g_rot = rot;
+
+  vec3 col = effect(p, pp);
+  
+  fragColor = vec4(col, 1.0);
+}
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+const starsGalaxy = `#version 300 es
+precision highp float;
+// Stars and galaxy by mrange — License: CC0
+// 원본: https://www.shadertoy.com/view/stBcW1 (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// CC0(퍼블릭 도메인 헌정)이라 고지 의무는 없지만 출처를 남긴다.
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//  · sin 기반 실수 해시를 정수 해시(pcg3d)로 바꿨다 → 무늬·배치가 원본과 다르다
+//
+// 원리: 하늘을 구면 격자로 나눠 칸마다 별을 하나씩 두고, 노이즈로 만든 은하수 띠와 대기 빛을 겹친다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+
+// Title:  Stars and galaxy
+// Author: mrange
+// URL:    https://www.shadertoy.com/view/stBcW1
+// Date:   10-Apr-2022
+// Desc:   License CC0: Stars and galaxy
+// Bit of sunday tinkering lead to stars and a galaxy
+// Didn't turn out as I envisioned but it turned out to something
+// that I liked so sharing it.
+
+// License CC0: Stars and galaxy
+// Bit of sunday tinkering lead to stars and a galaxy
+// Didn't turn out as I envisioned but it turned out to something
+// that I liked so sharing it.
+
+// Controls how many layers of stars
+#define LAYERS            5.0
+
+#define PI                3.141592654
+#define TAU               (2.0*PI)
+#define TIME              mod(iTime, 30.0)
+#define TTIME             (TAU*TIME)
+#define RESOLUTION        iResolution
+#define ROT(a)            mat2(cos(a), sin(a), -sin(a), cos(a))
+
+// License: Unknown, author: nmz (twitter: @stormoid), found: https://www.shadertoy.com/view/NdfyRM
+float sRGB(float t) { return mix(1.055*pow(t, 1./2.4) - 0.055, 12.92*t, step(t, 0.0031308)); }
+// License: Unknown, author: nmz (twitter: @stormoid), found: https://www.shadertoy.com/view/NdfyRM
+vec3 sRGB(in vec3 c) { return vec3 (sRGB(c.x), sRGB(c.y), sRGB(c.z)); }
+
+// License: Unknown, author: Matt Taylor (https://github.com/64), found: https://64.github.io/tonemapping/
+vec3 aces_approx(vec3 v) {
+  v = max(v, 0.0);
+  v *= 0.6f;
+  float a = 2.51f;
+  float b = 0.03f;
+  float c = 2.43f;
+  float d = 0.59f;
+  float e = 0.14f;
+  return clamp((v*(a*v+b))/(v*(c*v+d)+e), 0.0f, 1.0f);
+}
+
+// License: Unknown, author: Unknown, found: don't remember
+float tanh_approx(float x) {
+  //  Found this somewhere on the interwebs
+  //  return tanh(x);
+  float x2 = x*x;
+  return clamp(x*(27.0 + x2)/(27.0+9.0*x2), -1.0, 1.0);
+}
+
+
+// License: WTFPL, author: sam hocevar, found: https://stackoverflow.com/a/17897228/418488
+const vec4 hsv2rgb_K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+vec3 hsv2rgb(vec3 c) {
+  vec3 p = abs(fract(c.xxx + hsv2rgb_K.xyz) * 6.0 - hsv2rgb_K.www);
+  return c.z * mix(hsv2rgb_K.xxx, clamp(p - hsv2rgb_K.xxx, 0.0, 1.0), c.y);
+}
+
+// License: MIT OR CC-BY-NC-4.0, author: mercury, found: https://mercury.sexy/hg_sdf/
+vec2 mod2(inout vec2 p, vec2 size) {
+  vec2 c = floor((p + size*0.5)/size);
+  p = mod(p + size*0.5,size) - size*0.5;
+  return c;
+}
+
+// FIELD: 원본의 이 해시는 원작자도 출처를 모른다고 적어 둔 sin 기반 실수 해시였다("License: Unknown").
+// 정수 해시(pcg3d)로 바꿨다.
+uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}
+float pcgFloat(uint v) { return float(v >> 8u) * (1.0 / 16777216.0); }
+vec2 hash2(vec2 p) {
+  uvec3 h = pcg3d(uvec3(floatBitsToUint(p), 0u));
+  return vec2(pcgFloat(h.x), pcgFloat(h.y));
+}
+
+vec2 shash2(vec2 p) {
+  return -1.0+2.0*hash2(p);
+}
+
+vec3 toSpherical(vec3 p) {
+  float r   = length(p);
+  float t   = acos(p.z/r);
+  float ph  = atan(p.y, p.x);
+  return vec3(r, t, ph);
+}
+
+
+// License: CC BY-NC-SA 3.0, author: Stephane Cuillerdier - Aiekick/2015 (twitter:@aiekick), found: https://www.shadertoy.com/view/Mt3GW2
+vec3 blackbody(float Temp) {
+  vec3 col = vec3(255.);
+  col.x = 56100000. * pow(Temp,(-3. / 2.)) + 148.;
+  col.y = 100.04 * log(Temp) - 623.6;
+  if (Temp > 6500.) col.y = 35200000. * pow(Temp,(-3. / 2.)) + 184.;
+  col.z = 194.18 * log(Temp) - 1448.6;
+  col = clamp(col, 0., 255.)/255.;
+  if (Temp < 1000.) col *= Temp/1000.;
+  return col;
+}
+
+
+// License: MIT, author: Inigo Quilez, found: https://www.shadertoy.com/view/XslGRr
+float noise(vec2 p) {
+  // Found at https://www.shadertoy.com/view/sdlXWX
+  // Which then redirected to IQ shader
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f*f*(3.-2.*f);
+  
+  float n =
+         mix( mix( dot(shash2(i + vec2(0.,0.) ), f - vec2(0.,0.)), 
+                   dot(shash2(i + vec2(1.,0.) ), f - vec2(1.,0.)), u.x),
+              mix( dot(shash2(i + vec2(0.,1.) ), f - vec2(0.,1.)), 
+                   dot(shash2(i + vec2(1.,1.) ), f - vec2(1.,1.)), u.x), u.y);
+
+  return 2.0*n;              
+}
+
+float fbm(vec2 p, float o, float s, int iters) {
+  p *= s;
+  p += o;
+
+  const float aa = 0.5;
+  const mat2 pp = 2.04*ROT(1.0);
+
+  float h = 0.0;
+  float a = 1.0;
+  float d = 0.0;
+  for (int i = 0; i < iters; ++i) {
+    d += a;
+    h += a*noise(p);
+    p += vec2(10.7, 8.3);
+    p *= pp;
+    a *= aa;
+  }
+  h /= d;
+  
+  return h;
+}
+
+float height(vec2 p) {
+  float h = fbm(p, 0.0, 5.0, 5);
+  h *= 0.3;
+  h += 0.0;
+  return (h);
+}
+
+vec3 stars(vec3 ro, vec3 rd, vec2 sp, float hh) {
+  vec3 col = vec3(0.0);
+  
+  const float m = LAYERS;
+  hh = tanh_approx(20.0*hh);
+
+  for (float i = 0.0; i < m; ++i) {
+    vec2 pp = sp+0.5*i;
+    float s = i/(m-1.0);
+    vec2 dim  = vec2(mix(0.05, 0.003, s)*PI);
+    vec2 np = mod2(pp, dim);
+    vec2 h = hash2(np+127.0+i);
+    vec2 o = -1.0+2.0*h;
+    float y = sin(sp.x);
+    pp += o*dim*0.5;
+    pp.y *= y;
+    float l = length(pp);
+  
+    float h1 = fract(h.x*1667.0);
+    float h2 = fract(h.x*1887.0);
+    float h3 = fract(h.x*2997.0);
+
+    vec3 scol = mix(8.0*h2, 0.25*h2*h2, s)*blackbody(mix(3000.0, 22000.0, h1*h1));
+
+    vec3 ccol = col + exp(-(mix(6000.0, 2000.0, hh)/mix(2.0, 0.25, s))*max(l-0.001, 0.0))*scol;
+    col = h3 < y ? ccol : col;
+  }
+  
+  return col;
+}
+
+// License: MIT, author: Inigo Quilez, found: https://iquilezles.org/articles/spherefunctions
+vec2 raySphere(vec3 ro, vec3 rd, vec4 sph) {
+  vec3 oc = ro - sph.xyz;
+  float b = dot( oc, rd );
+  float c = dot( oc, oc ) - sph.w*sph.w;
+  float h = b*b - c;
+  if( h<0.0 ) return vec2(-1.0);
+  h = sqrt( h );
+  return vec2(-b - h, -b + h);
+}
+
+
+vec4 moon(vec3 ro, vec3 rd, vec2 sp, vec3 lp, vec4 md) {
+  vec2 mi = raySphere(ro, rd, md);
+  
+  vec3 p    = ro + mi.x*rd;
+  vec3 n    = normalize(p-md.xyz);
+  vec3 r    = reflect(rd, n);
+  vec3 ld   = normalize(lp - p);
+  float fre = dot(n, rd)+1.0;
+  fre = pow(fre, 15.0);
+  float dif = max(dot(ld, n), 0.0);
+  float spe = pow(max(dot(ld, r), 0.0), 8.0);
+  float i = 0.5*tanh_approx(20.0*fre*spe+0.05*dif);
+  vec3 col = blackbody(1500.0)*i+hsv2rgb(vec3(0.6, mix(0.6, 0.0, i), i));
+
+  float t = tanh_approx(0.25*(mi.y-mi.x));
+ 
+  return vec4(vec3(col), t);
+}
+
+vec3 sky(vec3 ro, vec3 rd, vec2 sp, vec3 lp, out float cf) {
+  float ld = max(dot(normalize(lp-ro), rd),0.0);
+  float y = -0.5+sp.x/PI;
+  y = max(abs(y)-0.02, 0.0)+0.1*smoothstep(0.5, PI, abs(sp.y));
+  vec3 blue = hsv2rgb(vec3(0.6, 0.75, 0.35*exp(-15.0*y)));
+  float ci = pow(ld, 10.0)*2.0*exp(-25.0*y); 
+  vec3 yellow = blackbody(1500.0)*ci;
+  cf = ci;
+  return blue+yellow;
+}
+
+vec3 galaxy(vec3 ro, vec3 rd, vec2 sp, out float sf) {
+  vec2 gp = sp;
+  gp *= ROT(0.67);
+  gp += vec2(-1.0, 0.5);
+  float h1 = height(2.0*sp);
+  float gcc = dot(gp, gp);
+  float gcx = exp(-(abs(3.0*(gp.x))));
+  float gcy = exp(-abs(10.0*(gp.y)));
+  float gh = gcy*gcx;
+  float cf = smoothstep(0.05, -0.2, -h1);
+  vec3 col = vec3(0.0);
+  col += blackbody(mix(300.0, 1500.0, gcx*gcy))*gcy*gcx;
+  col += hsv2rgb(vec3(0.6, 0.5, 0.00125/gcc));
+  col *= mix(mix(0.15, 1.0, gcy*gcx), 1.0, cf);
+  sf = gh*cf;
+  return col;
+}
+
+vec3 grid(vec3 ro, vec3 rd, vec2 sp) {
+  const float m = 1.0;
+
+  const vec2 dim = vec2(1.0/8.0*PI);
+  vec2 pp = sp;
+  vec2 np = mod2(pp, dim);
+
+  vec3 col = vec3(0.0);
+
+  float y = sin(sp.x);
+  float d = min(abs(pp.x), abs(pp.y*y));
+  
+  float aa = 2.0/RESOLUTION.y;
+  
+  col += 2.0*vec3(0.5, 0.5, 1.0)*exp(-2000.0*max(d-0.00025, 0.0));
+  
+  return 0.25*tanh(col);
+}
+
+vec3 color(vec3 ro, vec3 rd, vec3 lp, vec4 md) {
+  vec2 sp = toSpherical(rd.xzy).yz;
+
+  float sf = 0.0;
+  float cf = 0.0;
+  vec3 col = vec3(0.0);
+
+  vec4 mcol = moon(ro, rd, sp, lp, md);
+
+  col += stars(ro, rd, sp, sf)*(1.0-tanh_approx(2.0*cf));
+  col += galaxy(ro, rd, sp, sf);
+  col = mix(col, mcol.xyz, mcol.w);
+  col += sky(ro, rd, sp, lp, cf);
+  col += grid(ro, rd, sp);
+
+  if (rd.y < 0.0)
+  {
+    col = vec3(0.0);
+  }
+
+  return col;
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 q = fragCoord/iResolution.xy;
+  vec2 p = -1.0 + 2.0*q;
+  p.x *= RESOLUTION.x/RESOLUTION.y;
+
+  vec3 ro = vec3(0.0, 0.0, 0.0);
+  vec3 lp = 500.0*vec3(1.0, -0.25, 0.0);
+  vec4 md = 50.0*vec4(vec3(1.0, 1., -0.6), 0.5);
+  vec3 la = vec3(1.0, 0.5, 0.0);
+  vec3 up = vec3(0.0, 1.0, 0.0);
+  la.xz *= ROT(TTIME/60.0-PI/2.0);
+  
+  vec3 ww = normalize(la - ro);
+  vec3 uu = normalize(cross(up, ww));
+  vec3 vv = normalize(cross(ww,uu));
+  vec3 rd = normalize(p.x*uu + p.y*vv + 2.0*ww);
+  vec3 col= color(ro, rd, lp, md);
+  
+  col *= smoothstep(0.0, 4.0, TIME)*smoothstep(30.0, 26.0, TIME);
+  col = aces_approx(col);
+  col = sRGB(col);
+
+  fragColor = vec4(col,1.0);
+}
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+const elementalRing = `#version 300 es
+precision highp float;
+// Elemental Ring by Otavio Good — License: CC0
+// 원본: https://www.shadertoy.com/view/MsVXDt (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// CC0(퍼블릭 도메인 헌정)이라 고지 의무는 없지만 출처를 남긴다.
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution·iMouse)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//  · iMouse 대신 커서 위치를 쓴다: 커서를 올리면 시점이 바뀌고, 뷰포트 밖이면 원본의 기본 시점
+//  · sin 기반 실수 해시를 정수 해시(pcg3d)로 바꿨다 → 무늬·배치가 원본과 다르다
+//
+// 원리: 꼬인 원환체 거리장을 레이마칭하고, 광선이 지나며 가까웠던 정도를 빛(glow)으로 쌓는다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+#define iMouse vec4(max(uMouse.xy, vec2(0.0)), uMouse.zw)
+
+// Title:  Elemental Ring
+// Author: otaviogood
+// URL:    https://www.shadertoy.com/view/MsVXDt
+// Date:   19-Jul-2016
+// Desc:   This shader was inspired by https://www.shadertoy.com/view/MtBSWR. I wanted to do a 3d version.
+
+/*--------------------------------------------------------------------------------------
+License CC0 - http://creativecommons.org/publicdomain/zero/1.0/
+To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
+----------------------------------------------------------------------------------------
+^ This means do ANYTHING YOU WANT with this code. Because we are programmers, not lawyers.
+-Otavio Good
+*/
+
+// ---------------- Config ----------------
+// This is an option that lets you render high quality frames for screenshots. It enables
+// stochastic antialiasing and motion blur automatically for any shader.
+//#define NON_REALTIME_HQ_RENDER
+const float frameToRenderHQ = 11.0; // Time in seconds of frame to render
+const float antialiasingSamples = 16.0; // 16x antialiasing - too much might make the shader compiler angry.
+
+//#define MANUAL_CAMERA
+
+
+// --------------------------------------------------------
+// These variables are for the non-realtime block renderer.
+float localTime = 0.0;
+float seed = 1.0;
+
+// ---- noise functions ----
+float v31(vec3 a)
+{
+    return a.x + a.y * 37.0 + a.z * 521.0;
+}
+float v21(vec2 a)
+{
+    return a.x + a.y * 37.0;
+}
+// FIELD: 원본의 sin·cos 기반 실수 해시를 정수 해시(pcg3d)로 바꿨다. 함수 이름과 쓰임은 그대로다.
+uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
+}
+float pcgFloat(uint v) { return float(v >> 8u) * (1.0 / 16777216.0); }
+float Hash11(float a) { return pcgFloat(pcg3d(uvec3(floatBitsToUint(a), 0u, 0u)).x); }
+float Hash21(vec2 uv) { return pcgFloat(pcg3d(uvec3(floatBitsToUint(uv), 0u)).x); }
+vec2 Hash22(vec2 uv) { uvec3 h = pcg3d(uvec3(floatBitsToUint(uv), 1u)); return vec2(pcgFloat(h.x), pcgFloat(h.y)); }
+vec2 Hash12(float f) { uvec3 h = pcg3d(uvec3(floatBitsToUint(f), 1u, 0u)); return vec2(pcgFloat(h.x), pcgFloat(h.y)); }
+float Hash1d(float u) { return Hash11(u); }
+float Hash2d(vec2 uv) { return Hash21(uv); }
+float Hash3d(vec3 uv) { return pcgFloat(pcg3d(floatBitsToUint(uv)).x); }
+
+const float PI=3.14159265;
+
+vec3 saturate(vec3 a) { return clamp(a, 0.0, 1.0); }
+vec2 saturate(vec2 a) { return clamp(a, 0.0, 1.0); }
+float saturate(float a) { return clamp(a, 0.0, 1.0); }
+
+// polynomial smooth min (k = 0.1);
+float smin( float a, float b, float k )
+{
+    float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
+    return mix( b, a, h ) - k*h*(1.0-h);
+}
+
+vec2 matMin(vec2 a, vec2 b)
+{
+	if (a.x < b.x) return a;
+	else return b;
+}
+
+// ---- shapes defined by distance fields ----
+// See this site for a reference to more distance functions...
+// https://iquilezles.org/articles/distfunctions
+// box distance field
+float sdBox(vec3 p, vec3 radius)
+{
+  vec3 dist = abs(p) - radius;
+  return min(max(dist.x, max(dist.y, dist.z)), 0.0) + length(max(dist, 0.0));
+}
+
+// simple cylinder distance field
+float cyl(vec2 p, float r)
+{
+    return length(p) - r;
+}
+
+const float TAU = 2.0 * PI;
+
+float glow = 0.0;
+// This is the function that makes the geometry.
+// The input is a position in space.
+// The output is the distance to the nearest surface and a material number
+vec2 DistanceToObject(vec3 p)
+{
+    float time = localTime*2.0;
+    float cylRadBig = 1.0;
+    float cylRadSmall = 0.05;
+    float freq = 4.0;
+    float braidRad = 0.15;
+    float angle = atan(p.z, p.x);
+    float cylDist = length(p.xz) - cylRadBig;
+    vec3 cylWarp = vec3(cylDist, p.y, angle);
+    float amp = sin(angle + time) * 0.5 + 0.5;
+
+    float theta = angle*freq;
+    vec2 wave1 = vec2(sin(theta), cos(theta)) * braidRad;
+    wave1 *= amp;
+    //float d = length(cylWarp.xy + wave1) - cylRadSmall;
+    float d = sdBox(vec3(cylWarp.xy + wave1, 0.0), vec3(cylRadSmall));
+    float final = d;
+
+    theta = angle*freq + TAU / 3.0;
+    vec2 wave2 = vec2(sin(theta), cos(theta)) * braidRad;
+    wave2 *= amp;
+    //d = length(cylWarp.xy + wave2) - cylRadSmall;
+    d = sdBox(vec3(cylWarp.xy + wave2, 0.0), vec3(cylRadSmall));
+    final = smin(final, d, 0.1);
+
+    theta = angle*freq - TAU / 3.0;
+    vec2 wave3 = vec2(sin(theta), cos(theta)) * braidRad;
+    wave3 *= amp;
+    //d = length(cylWarp.xy + wave3) - cylRadSmall;
+    d = sdBox(vec3(cylWarp.xy + wave3, 0.0), vec3(cylRadSmall));
+    final = smin(final, d, 0.1);
+
+    vec2 matd = vec2(final, fract((angle+time) / TAU+0.5));
+    float sliver = cyl(cylWarp.xy, 0.03);
+    glow += 1.0 / (sliver * sliver * sliver * sliver + 1.0);
+    //sliver = max(sliver, abs(fract(cylWarp.z*freq-2.0*localTime)-0.5)-0.3);
+    matd = matMin(matd, vec2(sliver, -1.0));
+    return matd;
+}
+
+// Input is UV coordinate of pixel to render.
+// Output is RGB color.
+vec3 RayTrace(in vec2 fragCoord )
+{
+    glow = 0.0;
+	// -------------------------------- animate ---------------------------------------
+	vec3 camPos, camUp, camLookat;
+	// ------------------- Set up the camera rays for ray marching --------------------
+    // Map uv to [-1.0..1.0]
+	vec2 uv = fragCoord.xy/iResolution.xy * 2.0 - 1.0;
+    float zoom = 2.2;
+    uv /= zoom;
+
+    // Camera up vector.
+	camUp=vec3(0,1,0);
+
+	// Camera lookat.
+	camLookat=vec3(0);
+
+    // debugging camera
+    float mx=iMouse.x/iResolution.x*PI*2.0;
+	float my=-iMouse.y/iResolution.y*10.0;
+#ifndef MANUAL_CAMERA
+    camPos = vec3(0.0);
+    camPos.y = sin(localTime*0.125)*3.0;
+    camPos.z = cos(localTime*0.125)*3.0;
+    camUp.y = camPos.z;
+    camUp.z = -camPos.y;
+    camUp = normalize(camUp);
+#else
+	camPos = vec3(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*3.0;
+#endif
+
+	// Camera setup.
+	vec3 camVec=normalize(camLookat - camPos);
+	vec3 sideNorm=normalize(cross(camUp, camVec));
+	vec3 upNorm=cross(camVec, sideNorm);
+	vec3 worldFacing=(camPos + camVec);
+	vec3 worldPix = worldFacing + uv.x * sideNorm * (iResolution.x/iResolution.y) + uv.y * upNorm;
+	vec3 rayVec = normalize(worldPix - camPos);
+
+	// ----------------------------- Ray march the scene ------------------------------
+	vec2 distMat = vec2(1.0, 0.0);
+	float t = 0.0 + Hash2d(uv)*1.6;	// random dither glow by moving march count start position
+	const float maxDepth = 6.0; // farthest distance rays will travel
+	vec3 pos = vec3(0,0,0);
+    const float smallVal = 0.000625;
+    float marchCount = 0.0;
+	// ray marching time
+    for (int i = 0; i < 80; i++)	// This is the count of the max times the ray actually marches.
+    {
+        // Step along the ray.
+        pos = camPos + rayVec * t;
+        // This is _the_ function that defines the "distance field".
+        // It's really what makes the scene geometry. The idea is that the
+        // distance field returns the distance to the closest object, and then
+        // we know we are safe to "march" along the ray by that much distance
+        // without hitting anything. We repeat this until we get really close
+        // and then break because we have effectively hit the object.
+        distMat = DistanceToObject(pos);
+
+        // Move along the ray.
+        // Leave room for error by multiplying in case distance function isn't exact.
+        t += distMat.x * 0.8;
+        // If we are very close to the object, let's call it a hit and exit this loop.
+        if ((t > maxDepth) || (abs(distMat.x) < smallVal)) break;
+
+        // Glow if we're close to the part of the ring with the braid.
+        float cyc = (-sin(distMat.y * TAU))*0.5+0.7;
+        // This function is similar to a gaussian fall-off of glow when you're close
+        // to an object.
+        // http://thetamath.com/app/y=(1)/((x*x+1))
+        marchCount += cyc / (distMat.x * distMat.x + 1.0);
+    }
+
+	// --------------------------------------------------------------------------------
+	// Now that we have done our ray marching, let's put some color on this geometry.
+
+    // Save off ray-march glows so they don't get messed up when we call the distance
+    // function again to get the normal
+	float glowSave = glow;
+    float marchSave = marchCount;
+    marchCount = 0.0;
+    glow = 0.0;
+
+    // default to blueish background color.
+	vec3 finalColor = vec3(0.09, 0.15, 0.35);
+
+	// If a ray actually hit the object, let's light it.
+    if (t <= maxDepth)
+	{
+        // calculate the normal from the distance field. The distance field is a volume, so if you
+        // sample the current point and neighboring points, you can use the difference to get
+        // the normal.
+        vec3 smallVec = vec3(smallVal, 0, 0);
+        vec3 normalU = vec3(distMat.x - DistanceToObject(pos - smallVec.xyy).x,
+                           distMat.x - DistanceToObject(pos - smallVec.yxy).x,
+                           distMat.x - DistanceToObject(pos - smallVec.yyx).x);
+
+        vec3 texColor = vec3(0.0, 0.0, 0.1);
+        if (distMat.y < 0.0) texColor = vec3(0.6, 0.3, 0.1)*110.0;
+
+        finalColor = texColor;
+        // visualize length of gradient of distance field to check distance field correctness
+        //finalColor = vec3(0.5) * (length(normalU) / smallVec.x);
+	}
+    // add the ray marching glows
+    finalColor += vec3(0.3, 0.5, 0.9) * glowSave*0.00625;
+    finalColor += vec3(1.0, 0.5, 0.3) * marchSave*0.05;
+
+    // vignette
+    finalColor *= vec3(1.0) * saturate(1.0 - length(uv/2.5));
+
+	// output the final color without gamma correction - will do gamma later.
+	return vec3(saturate(finalColor));
+}
+
+#ifdef NON_REALTIME_HQ_RENDER
+// This function breaks the image down into blocks and scans
+// through them, rendering 1 block at a time. It's for non-
+// realtime things that take a long time to render.
+
+// This is the frame rate to render at. Too fast and you will
+// miss some blocks.
+const float blockRate = 20.0;
+void BlockRender(in vec2 fragCoord)
+{
+    // blockSize is how much it will try to render in 1 frame.
+    // adjust this smaller for more complex scenes, bigger for
+    // faster render times.
+    const float blockSize = 64.0;
+    // Make the block repeatedly scan across the image based on time.
+    float frame = floor(iTime * blockRate);
+    vec2 blockRes = floor(iResolution.xy / blockSize) + vec2(1.0);
+    // ugly bug with mod.
+    //float blockX = mod(frame, blockRes.x);
+    float blockX = fract(frame / blockRes.x) * blockRes.x;
+    //float blockY = mod(floor(frame / blockRes.x), blockRes.y);
+    float blockY = fract(floor(frame / blockRes.x) / blockRes.y) * blockRes.y;
+    // Don't draw anything outside the current block.
+    if ((fragCoord.x - blockX * blockSize >= blockSize) ||
+    	(fragCoord.x - (blockX - 1.0) * blockSize < blockSize) ||
+    	(fragCoord.y - blockY * blockSize >= blockSize) ||
+    	(fragCoord.y - (blockY - 1.0) * blockSize < blockSize))
+    {
+        discard;
+    }
+}
+#endif
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+#ifdef NON_REALTIME_HQ_RENDER
+    // Optionally render a non-realtime scene with high quality
+    BlockRender(fragCoord);
+#endif
+
+    // Do a multi-pass render
+    vec3 finalColor = vec3(0.0);
+#ifdef NON_REALTIME_HQ_RENDER
+    for (float i = 0.0; i < antialiasingSamples; i++)
+    {
+        const float motionBlurLengthInSeconds = 1.0 / 60.0;
+        // Set this to the time in seconds of the frame to render.
+	    localTime = frameToRenderHQ;
+        // This line will motion-blur the renders
+        localTime += Hash11(v21(fragCoord + seed)) * motionBlurLengthInSeconds;
+        // Jitter the pixel position so we get antialiasing when we do multiple passes.
+        vec2 jittered = fragCoord.xy + vec2(
+            Hash21(fragCoord + seed),
+            Hash21(fragCoord*7.234567 + seed)
+            );
+        // don't antialias if only 1 sample.
+        if (antialiasingSamples == 1.0) jittered = fragCoord;
+        // Accumulate one pass of raytracing into our pixel value
+	    finalColor += RayTrace(jittered);
+        // Change the random seed for each pass.
+	    seed *= 1.01234567;
+    }
+    // Average all accumulated pixel intensities
+    finalColor /= antialiasingSamples;
+#else
+    // Regular real-time rendering
+    localTime = iTime;
+    finalColor = RayTrace(fragCoord);
+#endif
+
+    fragColor = vec4(sqrt(clamp(finalColor, 0.0, 1.0)),1.0);
+}
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+const hexPlasma = `#version 300 es
+precision highp float;
+// Hexagon Plasma by Nemerix — License: MIT
+// 원본: https://www.shadertoy.com/view/3fy3z3 (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// Copyright (c) 2025 Nemerix. MIT 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있다.
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//
+// 원리: 화면을 육각 격자 좌표로 바꾸고, 칸 중심까지의 거리와 시간으로 만든 무늬를 겹쳐 빛나는 선을 만든다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+
+// Title:  Hexagon Plasma
+// Author: Nemerix
+// URL:    https://www.shadertoy.com/view/3fy3z3
+// Date:   26-May-2025
+// Desc:   Heavily inspired by https://www.shadertoy.com/view/WfS3Dd
+// 
+// I put this together after poking at it for a few hours, to make sure I actually learned something from it. :D
+
+// Shader by Nemerix, 2025-05-26.
+// Code made available under the MIT license.
+
+float sqr(float x) { return x*x; }
+
+float hexSdf(in vec2 pos)
+{
+    return max(max(abs(dot(pos, vec2(0,2))), abs(dot(pos, vec2(1.732,1)))), abs(dot(pos, vec2(1.732,-1))));
+}
+
+float smoothSdf(in vec2 pos)
+{
+    return mix(sqr(hexSdf(pos)), dot(pos, pos), smoothstep(0.8, 1.5, dot(pos, pos)));
+}
+
+float sfield(in vec2 s)
+{
+    return s.x * s.y;
+}
+
+vec3 cmap(in vec2 pos)
+{
+    return mix(vec3(0.1,0.6,0.8), vec3(0.5), 0.7 * tanh(dot(pos, pos)));
+}
+
+const mat2 R = mat2(0.6, 0.8, -0.8, 0.6);
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    vec2 uv = (2.0 * fragCoord - iResolution.xy) / iResolution.y;
+    
+    float d = smoothSdf(uv) - 1.0;
+    d = sqrt(abs(d));
+    
+    vec2 samp = uv * d;
+    float y = 0.0;
+    float scale = 1.0;
+    
+    for (int i = 0; i < 4; ++i)
+    {
+        samp = sin(R * samp * hexSdf(samp) + vec2(iTime));
+        y += scale * sfield(samp);
+        scale *= 0.75;
+    }
+    
+    vec3 col = cmap(uv) / abs(y);
+    col = tanh(0.1 * col);
+    fragColor = vec4(col, 1);
+}
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+const noxFire = `#version 300 es
+precision highp float;
+// Nox Fire by Matt Vianueva — License: MIT
+// 원본: https://www.shadertoy.com/view/wfG3Dz (xscreensaver 수록본에서 옮김: https://github.com/Zygo/xscreensaver/tree/master/hacks/glx/glsl)
+// Copyright (c) 2025 Matt Vianueva. MIT 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있다.
+// 원본 Shadertoy 페이지에는 라이선스 표기가 없고, xscreensaver가 원작자 허락을 받아 MIT로 재배포했다(아래 원본 주석).
+//
+// FIELD Studio로 옮기며 바꾼 점:
+//  · Shadertoy 이름(iTime·iResolution)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
+//  · uSpeed(시간 배속) 파라미터를 더했다
+//
+// 원리: 광선을 100번 나아가며 sin 노이즈로 깎은 터널까지의 거리를 재고, 가까울수록 밝기(1/s)를 더해 불꽃처럼 보이게 한다.
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+out vec4 fragColor;
+
+// Shadertoy 이름 → FIELD Uniform
+#define iResolution vec3(uResolution, 1.0)
+#define iTime (uTime * uSpeed)
+
+// Title:  Nox Fire
+// Author: Matt Vianueva <diatribes@gmail.com>
+// URL:    https://www.shadertoy.com/view/wfG3Dz
+// Date:   24-May-2025
+// Desc:   Nox Fire
+
+// Relicensed as MIT License, by permission, 8-Mar-2026.
+
+/*
+
+    -4 from FabriceNeyret2
+    
+    Thanks :D !
+
+*/
+
+void mainImage(out vec4 o, vec2 u) {
+    o = vec4(0,0,0,0);
+    float i=0., d=0., s=0., n=0., t=iTime;
+    vec3 p = iResolution;
+    u = (u-p.xy/2.)/p.y;
+    for(o*=i; i++<1e2; ) {
+        // march, p = ro + rd * d, p.z += t*4;
+        p = vec3(u * d, d + t*4.);
+        // turbulence
+        p += cos(p.z+t+p.yzx*.5)*.6;
+        // modulate tunnel radius
+        s = 4.+sin(t*.7)*4.-length(p.xy);
+        // rotate
+        p.xy *= mat2(cos(t+vec4(0,33,11,0)));
+        // noise loop
+        for (n = 1.6; n < 32.; n += n )
+            // subtract noise from tunnel dist
+            s -= abs(dot(sin( p.z + t + p*n ), vec3(1.12))) / n;
+        // accumulate distance
+        d += s = .01 + abs(s)*.1;
+        // grayscale color
+        o += 1. / s;
+    }
+    // o*o to increase saturation,
+    // divide by d for depth
+    // colorize
+    o = tanh(vec4(5,2,1,1) * o * o / d / 2e6);
+}
+
+
+/* Original
+
+void mainImage(out vec4 o, vec2 u) {
+    float i, d, s, n, f, t=iTime;
+    vec3 p = iResolution;
+    u = (u-p.xy/2.)/p.y;
+    for(o*=i; i++<1e2; ) {
+        // march, p = ro + rd * d, p.z += t*4;
+        p = vec3(u * d, d + t*4.);
+        // turbulence
+        p += cos(p.z+t+p.yzx*.5)*.6;
+        // modulate tunnel radius
+        s = 4.+sin(t*.7)*4.-length(p.xy);
+        // rotate
+        p.xy *= mat2(cos(t+vec4(0,33,11,0)));
+        // noise loop
+        for (n = .1; n < 2.;
+            // subtract noise from tunnel dist
+            s -= abs(dot(sin(p.z+t+p * n * 16.), vec3( .07))) / n,
+            // grow noise
+            n += n);
+        // accumulate distance
+        d += s = .01 + abs(s)*.1;
+        // grayscale color
+        o += 1. / s;
+    }
+    // o*o to increase saturation,
+    // divide by d for depth
+    // colorize
+    o = tanh(vec4(5,2,1,1) * o * o / d / 2e6);
+}
+
+*/
+
+// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+void main() {
+    mainImage(fragColor, gl_FragCoord.xy);
+    fragColor.a = 1.0;
+}`;
+
 const MIT = "https://opensource.org/license/mit";
 const COMMUNITY = [
   {
@@ -1733,6 +4331,118 @@ const COMMUNITY = [
         },
       ],
       imageChannels: { 0: { buffer: "A", frame: "current" } },
+    },
+  },
+  {
+    id: "ocean",
+    title: "Procedural Ocean",
+    tag: "Water · Heightfield",
+    description: "노이즈 대신 sin 파도를 겹쳐 만든 바다. 커서를 올려 둘러보세요.",
+    image: ocean,
+    credit: {
+      author: "afl_ext",
+      work: "Very fast procedural ocean",
+      url: "https://www.shadertoy.com/view/MdXyzX",
+      license: "MIT",
+      licenseUrl: MIT,
+    },
+  },
+  {
+    id: "skyline",
+    title: "Skyline",
+    tag: "City · Procedural",
+    description: "절차적으로 지은 도시 위를 날며 도로의 차들을 내려다봅니다. 무거운 편이에요.",
+    image: skyline,
+    credit: {
+      author: "Otavio Good",
+      work: "Skyline",
+      url: "https://www.shadertoy.com/view/XtsSWs",
+      license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    },
+  },
+  {
+    id: "clouds",
+    title: "2D Clouds",
+    tag: "Noise · fBM",
+    description: "fbm 노이즈를 겹쳐 만든 흘러가는 구름. 짧고 읽기 쉬운 코드예요.",
+    image: clouds2d,
+    credit: {
+      author: "drift",
+      work: "2D Clouds",
+      url: "https://www.shadertoy.com/view/4tdSWr",
+      license: "Permission",
+      licenseUrl: "https://www.shadertoy.com/view/4tdSWr",
+    },
+  },
+  {
+    id: "selfreflect",
+    title: "Let's Self Reflect",
+    tag: "Refraction · SDF",
+    description: "빛이 다면체 보석 안에서 굴절하고 반사하는 길을 여러 번 따라갑니다.",
+    image: selfReflect,
+    credit: {
+      author: "mrange",
+      work: "Let's self reflect",
+      url: "https://www.shadertoy.com/view/XfyXRV",
+      license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    },
+  },
+  {
+    id: "stardome",
+    title: "Stars and Galaxy",
+    tag: "Sky · Stars",
+    description: "별자리 격자와 은하수가 있는 밤하늘.",
+    image: starsGalaxy,
+    credit: {
+      author: "mrange",
+      work: "Stars and galaxy",
+      url: "https://www.shadertoy.com/view/stBcW1",
+      license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    },
+  },
+  {
+    id: "elementalring",
+    title: "Elemental Ring",
+    tag: "SDF · Glow",
+    description: "꼬인 고리 둘레로 빛이 흐르는 레이마칭 장면. 커서로 시점을 바꿔 보세요.",
+    image: elementalRing,
+    credit: {
+      author: "Otavio Good",
+      work: "Elemental Ring",
+      url: "https://www.shadertoy.com/view/MsVXDt",
+      license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    },
+  },
+  {
+    id: "hexplasma",
+    title: "Hexagon Plasma",
+    tag: "2D · Hex grid",
+    description: "육각 격자를 따라 흐르는 플라즈마. 57줄짜리 2D 예제.",
+    image: hexPlasma,
+    credit: {
+      author: "Nemerix",
+      work: "Hexagon Plasma",
+      url: "https://www.shadertoy.com/view/3fy3z3",
+      license: "MIT",
+      licenseUrl: MIT,
+    },
+  },
+  {
+    id: "noxfire",
+    title: "Nox Fire",
+    tag: "Volumetric · Code golf",
+    description: "수십 줄로 그린 볼륨 불꽃 터널. 짧게 압축된 코드를 풀어 읽어 보세요.",
+    image: noxFire,
+    credit: {
+      author: "Matt Vianueva",
+      work: "Nox Fire",
+      url: "https://www.shadertoy.com/view/wfG3Dz",
+      license: "MIT",
+      licenseUrl: MIT,
     },
   },
 ];
