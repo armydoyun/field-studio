@@ -70,7 +70,9 @@ js/
   annotations.js      # GLSL 주석 @range/@color 파서
   input.js            # 뷰포트 포인터·키 입력 → 키보드 채널 전달
   stage-menu.js       # 뷰포트 툴바 드롭다운(캡처 ▾ · ⋯ 더보기)
-  recorder.js         # 뷰포트 녹화(MediaRecorder → WebM/MP4 내려받기)
+  recorder.js         # 뷰포트 녹화(MediaRecorder → WebM/MP4 내려받기) — 실시간
+  video-render.js     # 영상 렌더링(오프라인) — 프레임마다 정한 시간으로 그려 WebCodecs → WebM 먹서 / PNG ZIP (순수 함수 + 실행기)
+  video-dialog.js     # 영상 렌더링 대화상자(캡처 › 영상 렌더링…): 설정 · 진행률 · 취소
   settings.js         # 렌더링 설정 저장
   storage.js          # localStorage 창구 (실패를 삼키지 않음)
   theme.js            # 라이트·다크·시스템 테마
