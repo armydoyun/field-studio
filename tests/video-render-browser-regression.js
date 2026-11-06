@@ -1,0 +1,183 @@
+// 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
+// 영상 렌더링(오프라인): 대화상자로 렌더링해 내려받은 파일을 열어 본다.
+//   · PNG ZIP: 프레임마다 uTime = 시작 + i/fps, uFrame = 시작×fps + i 인지 픽셀로 확인
+//   · WebM: <video>로 열어 크기·길이 확인(이 브라우저가 VP9/VP8 인코딩을 지원할 때)
+//   · 버퍼 패스가 있으면 시작 시간 전 프레임을 먼저 그린다 · 취소 · 렌더링 중 보호 · 끝나면 원래 상태로
+(async () => {
+  const $ = id => document.getElementById(id), r = window.shaderPlayground, studio = window.shaderStudio;
+  const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const until = async (condition, ms) => { for (const end = Date.now() + ms; Date.now() < end; await wait(30)) if (condition()) return true; return condition(); };
+  const area = $("studioCode"), live = $("studioLive"), original = area.value, wasLive = live.checked;
+  const setScene = source => { area.value = source; area.dispatchEvent(new Event("input", { bubbles: true })); return studio.apply(); };
+  const set = (id, value) => { const node = $(id); node.value = String(value); node.dispatchEvent(new Event("change", { bubbles: true })); };
+  // 내려받기를 가로채 Blob을 얻는다(ui.js의 download는 <a download>.click()을 쓴다).
+  const downloads = [];
+  const realClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () {
+    if (this.download) downloads.push({ name: this.download, blob: fetch(this.href).then(res => res.blob()) });
+    else realClick.call(this);
+  };
+  const dialog = $("videoRenderDialog");
+  const openDialog = async () => {
+    $("videoRenderOpen").click();
+    test(dialog.open, "대화상자 열림");
+    await until(() => [...$("videoFormat").options].some(o => /지원 안 됨/.test(o.textContent)) || !$("videoRenderSummary").textContent.includes("지원"), 3000);
+  };
+  const runRender = async () => {
+    const before = downloads.length;
+    $("videoRenderStart").click();
+    await until(() => dialog.dataset.state !== "running" && downloads.length > before, 120000);
+    test(downloads.length === before + 1, `파일 내려받음: ${$("videoRenderStatus").textContent}`);
+    const { name, blob } = downloads.at(-1);
+    return { name, blob: await blob };
+  };
+  // store 방식 ZIP 읽기
+  const unzip = async blob => {
+    const bytes = new Uint8Array(await blob.arrayBuffer()), view = new DataView(bytes.buffer), files = [];
+    for (let at = 0; view.getUint32(at, true) === 0x04034b50; ) {
+      const size = view.getUint32(at + 18, true), nameLength = view.getUint16(at + 26, true);
+      const name = new TextDecoder().decode(bytes.subarray(at + 30, at + 30 + nameLength)), start = at + 30 + nameLength;
+      files.push({ name, data: bytes.subarray(start, start + size) });
+      at = start + size;
+    }
+    return files;
+  };
+  const pixel = async (data, fx = 0.5, fy = 0.5) => {
+    const bitmap = await createImageBitmap(new Blob([data], { type: "image/png" })), canvas = new OffscreenCanvas(bitmap.width, bitmap.height), ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0);
+    return { width: bitmap.width, height: bitmap.height, rgba: [...ctx.getImageData(Math.floor(bitmap.width * fx), Math.floor(bitmap.height * fy), 1, 1).data] };
+  };
+  live.checked = false;
+  live.dispatchEvent(new Event("change"));
+  try {
+    // ---- 렌더링 중 보호(API) ----
+    if (studio.getPlaybackState()) studio.togglePlayback();
+    await wait(50);
+    let threw = null;
+    try { r.beginOffline({ width: 1, height: 64 }); } catch (error) { threw = error; }
+    test(threw instanceof RangeError, "너무 작은 크기 거절");
+    test(r.beginOffline({ width: 64, height: 36 }).width === 64 && r.getStats().offline, "오프라인 모드 진입");
+    try { r.beginOffline({ width: 64, height: 36 }); threw = null; } catch (error) { threw = error; }
+    test(/이미/.test(threw?.message), "두 번 들어갈 수 없음");
+    try { r.setFragment(original); threw = null; } catch (error) { threw = error; }
+    test(/영상 렌더링 중/.test(threw?.message), "렌더링 중에는 셰이더를 바꿀 수 없음");
+    try { r.resetSimulation(); threw = null; } catch (error) { threw = error; }
+    test(/영상 렌더링 중/.test(threw?.message), "렌더링 중에는 시간 초기화 불가");
+    test(await r.captureScreenshot().then(() => false, error => /영상 렌더링 중/.test(error.message)), "렌더링 중에는 스크린샷 불가");
+    r.start();
+    test(!r.getStats().running, "렌더링 중 재생은 끝난 뒤로 미룸");
+    test(r.renderOfflineFrame({ time: 0, delta: 0, frame: 0 }) === $("screen") && r.getStats().width === 64, "지정 크기로 한 프레임");
+    test(r.endOffline() && !r.getStats().offline, "오프라인 모드 종료");
+    await until(() => r.getStats().running, 2000);
+    test(r.getStats().running, "렌더링 중에 누른 재생을 끝난 뒤 이어 감");
+    studio.togglePlayback();
+    await wait(50);
+
+    // ---- PNG 연속 이미지: 프레임마다 정확한 시간 ----
+    test(setScene(`#version 300 es
+precision highp float;
+uniform float uTime;
+uniform float uDeltaTime;
+uniform int uFrame;
+uniform vec2 uResolution;
+out vec4 fragColor;
+void main() {
+  // R = uTime의 소수부, G = uFrame, B = uDeltaTime × 2, 오른쪽 위 1/4은 해상도 확인용 흰색
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  fragColor = uv.x > 0.75 && uv.y > 0.75 ? vec4(1.0) : vec4(fract(uTime), float(uFrame) / 255.0, uDeltaTime * 2.0, 1.0);
+}
+`), "시간 확인용 셰이더 적용");
+    const time0 = r.getStats().time, size0 = [r.getStats().width, r.getStats().height];
+    await openDialog();
+    set("videoStart", 1.25);
+    set("videoDuration", 1);
+    set("videoFps", 4);
+    set("videoSize", "custom");
+    set("videoWidth", 97);
+    set("videoHeight", 33);
+    set("videoFormat", "png");
+    test($("videoQualityField").hidden, "PNG면 품질 칸 숨김");
+    test(/^4프레임 · 97 × 33 · 4fps/.test($("videoRenderSummary").textContent), `요약: ${$("videoRenderSummary").textContent}`);
+    const png = await runRender();
+    test(/-97x33-4fps\.zip$/.test(png.name) && png.blob.type === "application/zip", `PNG ZIP 파일: ${png.name}`);
+    const files = await unzip(png.blob);
+    test(files.map(f => f.name).join() === "frame_00000.png,frame_00001.png,frame_00002.png,frame_00003.png,README.txt", "4장 + README");
+    for (const [i, file] of files.slice(0, 4).entries()) {
+      const { width, height, rgba } = await pixel(file.data, 0.25, 0.25);
+      const t = 1.25 + i / 4, expectR = Math.round((t % 1) * 255), expectG = 5 + i;
+      test(width === 97 && height === 33, `프레임 ${i} 크기 97×33 (홀수도 그대로)`);
+      test(Math.abs(rgba[0] - expectR) <= 1 && rgba[1] === expectG && Math.abs(rgba[2] - 128) <= 1,
+        `프레임 ${i}: uTime ${t} → R ${rgba[0]}(${expectR}) · uFrame ${expectG} → G ${rgba[1]} · uDeltaTime 0.25 → B ${rgba[2]}`);
+      test((await pixel(file.data, 0.9, 0.1)).rgba.slice(0, 3).join() === "255,255,255", `프레임 ${i}: 위쪽이 위(뒤집히지 않음)`);
+    }
+    test(/ffmpeg -framerate 4 -i frame_%05d\.png/.test(new TextDecoder().decode(files[4].data)), "README에 ffmpeg 예");
+    await wait(100);
+    const after = r.getStats();
+    test(after.time === time0 && after.width === size0[0] && after.height === size0[1] && !after.running && !after.offline,
+      "끝나면 시간·크기·일시정지 상태 복원");
+
+    // ---- WebM ----
+    const formats = [...$("videoFormat").options].filter(o => !o.disabled).map(o => o.value);
+    const webm = formats.find(f => f.startsWith("webm"));
+    if (!webm) console.warn("이 브라우저는 WebCodecs VP9/VP8 인코딩을 지원하지 않아 WebM 검사를 건너뜀");
+    else {
+      set("videoFormat", webm);
+      set("videoStart", 0);
+      set("videoDuration", 1);
+      set("videoFps", 10);
+      set("videoWidth", 129); // 홀수는 짝수로 내림
+      set("videoHeight", 72);
+      test(/^10프레임 · 128 × 72/.test($("videoRenderSummary").textContent), "WebM은 짝수 크기");
+      const video = await runRender();
+      test(video.blob.type === "video/webm" && /-128x72-10fps\.webm$/.test(video.name), `WebM 파일: ${video.name}`);
+      const element = document.createElement("video");
+      element.muted = true;
+      element.src = URL.createObjectURL(video.blob);
+      await new Promise((resolve, reject) => { element.onloadedmetadata = resolve; element.onerror = () => reject(new Error(`video error ${element.error?.code}`)); });
+      test(element.videoWidth === 128 && element.videoHeight === 72, `재생 가능 · ${element.videoWidth}×${element.videoHeight}`);
+      test(Math.abs(element.duration - 1) < 0.01, `길이 1초 (${element.duration})`);
+      URL.revokeObjectURL(element.src);
+    }
+
+    // ---- 버퍼 패스: 시작 시간 전 프레임을 먼저 그린다 ----
+    test(await studio.exampleFeedback(), "버퍼 예제 열기");
+    const realFrame = r.renderOfflineFrame, seen = [];
+    r.renderOfflineFrame = frame => { seen.push(frame); return realFrame(frame); };
+    try {
+      set("videoFormat", "png");
+      set("videoStart", 0.5);
+      set("videoDuration", 0.2);
+      set("videoFps", 10);
+      set("videoWidth", 64);
+      set("videoHeight", 36);
+      await runRender();
+    } finally {
+      r.renderOfflineFrame = realFrame;
+    }
+    test(seen.length === 7, `준비 5프레임 + 본 2프레임 (${seen.length})`);
+    test(seen.map(f => f.frame).join() === "0,1,2,3,4,5,6" && Math.abs(seen[5].time - 0.5) < 1e-9 && seen[0].time === 0, "uFrame은 0부터 이어지고 본 영상은 0.5초부터");
+
+    // ---- 취소 ----
+    set("videoDuration", 600);
+    set("videoFps", 60);
+    const before = downloads.length;
+    $("videoRenderStart").click();
+    test(await until(() => $("videoRenderProgress").value > 0, 30000), "렌더링 진행 중");
+    test($("videoRenderFields").disabled && dialog.dataset.state === "running", "렌더링 중 설정 잠금");
+    dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+    test(await until(() => dialog.dataset.state !== "running", 10000), "Esc로 취소");
+    test(dialog.open && /취소/.test($("videoRenderStatus").textContent) && downloads.length === before, "취소하면 파일 없이 대화상자는 열린 채");
+    test(!r.getStats().offline && !$("videoRenderFields").disabled, "취소 뒤 원래 상태");
+    $("videoRenderClose").click();
+    test(!dialog.open, "닫기");
+    console.log("영상 렌더링 회귀 검사 통과");
+  } finally {
+    HTMLAnchorElement.prototype.click = realClick;
+    if (dialog.open) dialog.close();
+    if (r.getStats().offline) r.endOffline();
+    setScene(original);
+    live.checked = wasLive;
+    live.dispatchEvent(new Event("change"));
+  }
+})();

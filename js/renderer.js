@@ -69,6 +69,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // timeScale: 재생 배속(uTime·uTimeDelta에 곱한다). stepDelta: 일시정지 중 한 프레임 진행할 때 쓸 시간(초).
   let timeScale = 1,
     stepDelta = 0;
+  // 오프라인(영상) 렌더링 중이면 { width, height, saved, resume }. 이 동안에는 실시간 루프·입력·구성 변경을 막고,
+  // renderOfflineFrame()이 정한 시간·크기로만 그린다.
+  let offline = null;
+  const assertOnline = () => {
+    if (offline) throw new Error("영상 렌더링 중에는 바꿀 수 없습니다.");
+  };
   // FPS는 약 1초 구간의 화면 갱신 횟수다. 정확한 GPU 셰이더 실행 시간은 아니다.
   let resolutionScale = 1,
     fps = 0,
@@ -166,9 +172,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // CSS 표시 크기와 GPU의 실제 Drawing Buffer 크기를 분리한다.
   const resize = () => {
     const dpr = Math.min(window.devicePixelRatio || 1, 2) * resolutionScale;
-    let width = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    let height = Math.max(1, Math.round(canvas.clientHeight * dpr));
-    if (maxPixels && width * height > maxPixels) {
+    let width = offline ? offline.width : Math.max(1, Math.round(canvas.clientWidth * dpr));
+    let height = offline ? offline.height : Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (!offline && maxPixels && width * height > maxPixels) {
       const factor = Math.sqrt(maxPixels / (width * height));
       width = Math.max(1, Math.floor(width * factor));
       height = Math.max(1, Math.floor(height * factor));
@@ -313,7 +319,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 표시하지 않는 탭/손실된 컨텍스트에서는 GPU 호출을 하지 않는다.
   const render = now => {
     frame = 0;
-    if (!running || lost || disposed || document.hidden || !program) return;
+    if (offline || !running || lost || disposed || document.hidden || !program) return;
     if (fpsLimit > 0 && nextFrameAt && now + 0.5 < nextFrameAt) {
       scheduleFrame();
       return;
@@ -416,10 +422,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     } else scheduleFrame();
   };
   const scheduleFrame = () => {
+    if (offline) return;
     if (running && !lost && !disposed && !document.hidden && program && !frame) frame = requestAnimationFrame(render);
   };
   const replacePrograms = (source, updatePasses = () => {}) => {
     if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
+    assertOnline();
     if (lost) throw new Error("WebGL 컨텍스트 복구 대기 중입니다.");
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
     const next = compileFragment(source);
@@ -479,6 +487,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const captureScreenshot = () =>
     new Promise((resolve, reject) => {
       if (disposed || lost || document.hidden || !program) return reject(new Error("현재 화면을 캡처할 수 없습니다."));
+      if (offline) return reject(new Error("영상 렌더링 중에는 캡처할 수 없습니다."));
       captureQueue.push({ resolve, reject });
       if (!running) {
         capturePaused = true;
@@ -493,6 +502,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const captureScreenshotAt = (width, height) =>
     new Promise((resolve, reject) => {
       if (disposed || lost || !program || !vao) throw new Error("지금은 캡처할 수 없습니다.");
+      assertOnline();
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1)
         throw new RangeError("캡처 크기는 1 이상의 정수여야 합니다.");
       if (passManager.getReflection().length)
@@ -551,7 +561,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   // 일시정지 중이어도 지금 화면을 한 번 그린다(스크린샷과 같은 방식). 재생 중이면 다음 프레임을 기다리면 된다.
   const redraw = () => {
-    if (disposed || lost || document.hidden || !program) return false;
+    if (offline || disposed || lost || document.hidden || !program) return false;
     if (!running) {
       capturePaused = true;
       running = true;
@@ -559,6 +569,77 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     scheduleFrame();
     return true;
   };
+  // ---- 오프라인(영상) 렌더링 ----
+  // beginOffline({ width, height }): 실시간 루프를 멈추고 드로잉 버퍼를 그 크기로 고정한다. 버퍼 패스는 처음부터 다시 시작한다.
+  // renderOfflineFrame({ time, delta, frame }): 그 시간·프레임 번호로 한 프레임을 그리고 캔버스를 돌려준다.
+  //   preserveDrawingBuffer가 false라 그림은 이 호출과 같은 작업(task) 안에서만 읽을 수 있다 — 바로 복사할 것.
+  // endOffline(): 크기·시간을 되돌리고, 렌더링 전(또는 그동안 누른) 재생 상태로 돌아간다. 버퍼 패스는 처음부터 다시 시작한다.
+  const offlineLimit = () => Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), ...gl.getParameter(gl.MAX_VIEWPORT_DIMS));
+  const beginOffline = ({ width, height }) => {
+    if (disposed || lost || !program || !vao) throw new Error("지금은 영상을 렌더링할 수 없습니다.");
+    if (offline) throw new Error("이미 영상을 렌더링하고 있습니다.");
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2)
+      throw new RangeError("영상 크기는 2 이상의 정수여야 합니다.");
+    const limit = offlineLimit();
+    if (width > limit || height > limit)
+      throw new RangeError(`이 GPU에서 렌더링할 수 있는 크기를 넘습니다 (최대 ${limit}px).`);
+    const resume = running && !capturePaused;
+    stop();
+    offline = { width, height, resume, saved: { time, frameCount, lastDelta } };
+    resize();
+    passManager.resetTargets();
+    frameCount = 0;
+    return { width: gl.drawingBufferWidth, height: gl.drawingBufferHeight };
+  };
+  const renderOfflineFrame = ({ time: at, delta, frame: index }) => {
+    if (!offline) throw new Error("beginOffline()을 먼저 호출하세요.");
+    if (lost || disposed) throw new Error("WebGL 컨텍스트를 잃어 영상 렌더링을 멈췄습니다.");
+    if (![at, delta].every(Number.isFinite) || !Number.isInteger(index) || index < 0)
+      throw new RangeError("프레임 시간·번호가 올바르지 않습니다.");
+    resize();
+    const w = gl.drawingBufferWidth,
+      h = gl.drawingBufferHeight;
+    passManager.ensureTargets(w, h);
+    time = at;
+    lastDelta = delta;
+    frameCount = index;
+    keyboard.upload();
+    gl.bindVertexArray(vao);
+    passManager.drawPasses(w, h, uploadGlobals);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(program);
+    uploadGlobals(uniforms, w, h);
+    passManager.bindImage(uniforms);
+    try {
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    } finally {
+      passManager.unbindImage();
+    }
+    clickPending = false;
+    keyboard.endFrame();
+    frameCount = index + 1;
+    return canvas;
+  };
+  const endOffline = () => {
+    if (!offline) return false;
+    const { saved, resume } = offline;
+    offline = null;
+    time = saved.time;
+    lastDelta = saved.lastDelta;
+    lastTime = null;
+    nextFrameAt = 0;
+    if (!disposed && !lost) {
+      resize();
+      passManager.resetTargets();
+    }
+    frameCount = 0;
+    if (disposed) return true;
+    if (resume) start();
+    else redraw();
+    return true;
+  };
+  const isOffline = () => !!offline;
   // 일시정지 중에 한 프레임만 진행한다(시간·프레임 수·피드백 버퍼가 함께 나아간다). 재생 중이면 아무것도 하지 않는다.
   // 진행 시간은 배속과 관계없이 seconds(기본 1/60초)다.
   const stepFrame = (seconds = 1 / 60) => {
@@ -576,6 +657,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const resetSimulation = () => {
     if (disposed || lost) throw new Error("시뮬레이션을 초기화할 수 없습니다.");
+    assertOnline();
     passManager.resetTargets();
     frameCount = 0;
     time = lastDelta = wheel = 0;
@@ -586,6 +668,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 시작은 비동기 프레임 예약이다. 여러 번 호출해도 중복 렌더링 루프를 만들지 않는다.
   const start = () => {
     if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
+    // 영상 렌더링 중에 누른 재생은 끝난 뒤에 이어 간다.
+    if (offline) {
+      offline.resume = true;
+      return;
+    }
     if (lost && !gl.isContextLost?.()) onContextRestored();
     capturePaused = false;
     running = true;
@@ -593,19 +680,22 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   // stop()은 컨텍스트를 폐기하지 않는다. start()를 다시 호출할 수 있다.
   const stop = () => {
+    if (offline) offline.resume = false;
     running = false;
     cancelFrame();
     captureQueue.splice(0).forEach(({ reject }) => reject(new Error("렌더링 중단으로 캡처가 취소되었습니다.")));
     capturePaused = false;
   };
+  // 영상 렌더링 중에는 마우스·휠 값을 고정한다(같은 설정이면 같은 영상이 나오게).
   const onPointerMove = event => {
+    if (offline) return;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     mouse[0] = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     mouse[1] = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
   };
   const onPointerDown = event => {
-    if (event.button !== 0) return;
+    if (offline || event.button !== 0) return;
     onPointerMove(event);
     if (mouse[0] < 0) return;
     click[0] = mouse[0];
@@ -613,12 +703,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     mouseDown = clickPending = true;
   };
   const onPointerUp = () => {
+    if (offline) return;
     mouseDown = false;
   };
   // 셰이더가 uWheel을 쓸 때만 휠을 가로챈다(아니면 페이지 스크롤 등 기본 동작을 그대로 둔다). Ctrl+휠은 브라우저 확대.
   const usesWheel = () => !!program && (uniforms?.wheel != null || passManager.usesBuiltin("wheel"));
   const onWheel = event => {
-    if (event.ctrlKey || !usesWheel()) return;
+    if (offline || event.ctrlKey || !usesWheel()) return;
     event.preventDefault();
     // 한 칸(마우스 휠 한 번)을 1로 맞춘다: 픽셀 단위는 100px, 줄 단위는 3줄을 한 칸으로 본다.
     const unit = event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 1 : 100;
@@ -626,7 +717,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const onPointerLeave = () => {
     // 드래그 중(포인터 캡처)에는 캔버스 밖으로 나가도 위치를 유지한다.
-    if (mouseDown) return;
+    if (offline || mouseDown) return;
     mouse[0] = mouse[1] = -1;
   };
   const onVisibilityChange = () => {
@@ -931,6 +1022,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const applyProject = scene => {
     if (disposed || lost) throw new Error("현재 프로젝트를 적용할 수 없습니다.");
+    assertOnline();
     const imageChanged = scene.image !== fragmentSource;
     let result;
     const update = () => {
@@ -951,12 +1043,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     passManager.validateConfiguration(passes, imageChannels);
   const setPasses = (passes, imageChannels = {}) => {
     if (disposed || lost) throw new Error("현재 Buffer를 구성할 수 없습니다.");
+    assertOnline();
     passManager.setPasses(passes, imageChannels);
     frameCount = 0;
     reportMismatches();
   };
   const setPassFragment = (name, source) => {
     if (disposed || lost) throw new Error("현재 Buffer 소스를 변경할 수 없습니다.");
+    assertOnline();
     passManager.setPassFragment(name, source);
     reportMismatches();
   };
@@ -980,7 +1074,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     return result;
   };
   // 키보드 입력: keyCode는 JavaScript 키 코드(1~255). 바뀌었으면 true.
-  const setKey = (keyCode, down) => !disposed && keyboard.setKey(keyCode, !!down);
+  const setKey = (keyCode, down) => !disposed && !offline && keyboard.setKey(keyCode, !!down);
   const releaseKeys = () => keyboard.releaseAll();
   const usesKeyboard = () => !disposed && passManager.usesKeyboard();
   const readKey = (keyCode, row = 0) => keyboard.read(keyCode, row);
@@ -1031,6 +1125,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     maxPixels,
     debugHeatmap,
     running: running && !lost && !document.hidden,
+    offline: !!offline,
     previewPass: passManager.getPreview(),
     previewAttachment: passManager.getPreviewAttachment(),
     previewOptions: passManager.getPreviewOptions(),
@@ -1093,6 +1188,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     resetSimulation,
     stepFrame,
     setTimeScale,
+    beginOffline,
+    renderOfflineFrame,
+    endOffline,
+    isOffline,
     captureScreenshot,
     captureScreenshotAt,
     onFrame,

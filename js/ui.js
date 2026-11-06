@@ -2,6 +2,7 @@
 import * as StageMenu from "./stage-menu.js";
 import * as Recorder from "./recorder.js";
 import * as Annotations from "./annotations.js";
+import * as VideoDialog from "./video-dialog.js";
 const mount = (renderer, input, settings) => {
   const $ = id => document.getElementById(id);
   const controller = new AbortController(),
@@ -855,6 +856,13 @@ const mount = (renderer, input, settings) => {
     $("recordButton").title = "이 브라우저는 캔버스 녹화를 지원하지 않습니다";
   }
   listen($("recordButton"), "click", () => recorder.toggle());
+  // ---- 영상 렌더링 (video-dialog.js · video-render.js) ----
+  VideoDialog.mount({
+    renderer,
+    download,
+    isBusy: () => (recorder.isRecording() ? "녹화 중에는 영상 렌더링을 할 수 없습니다. 녹화를 먼저 멈추세요." : ""),
+    signal,
+  });
   listen($("recordStop"), "click", () => {
     recorder.stop();
     $("captureToggle").focus();
