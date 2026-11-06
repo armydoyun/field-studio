@@ -88,7 +88,32 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null) => 
     thumbFbo = thumbTexture = null;
     thumbWidth = thumbHeight = 0;
   };
+  // 영상 렌더링(오프라인) 동안 지금 타깃(시뮬레이션 상태 포함)을 옆에 보관하고, 렌더링은 새 타깃에서 한다.
+  // restoreTargets()는 렌더링용 타깃을 지우고 보관한 것을 되돌린다. 컨텍스트를 잃었으면(discard) 보관본을 버린다.
+  let stashed = null;
+  const TARGET_KEYS = ["attachments", "textures", "fbos", "width", "height", "readIndex"];
+  const stashTargets = () => {
+    if (stashed) throw new Error("이미 버퍼 상태를 보관하고 있습니다.");
+    stashed = new Map(passes.map(pass => [pass, Object.fromEntries(TARGET_KEYS.map(key => [key, pass[key]]))]));
+    for (const pass of passes)
+      Object.assign(pass, { attachments: [], textures: [], fbos: [], width: 0, height: 0, readIndex: 0 });
+  };
+  const restoreTargets = ({ discard = false } = {}) => {
+    if (!stashed) return false;
+    const saved = stashed;
+    stashed = null;
+    for (const [pass, target] of saved) {
+      if (discard) continue;
+      if (passes.includes(pass)) {
+        deleteTargets(pass);
+        Object.assign(pass, target);
+      } else deleteTargets(target);
+    }
+    return !discard;
+  };
   const removeGPU = () => {
+    if (stashed) for (const target of stashed.values()) deleteTargets(target);
+    stashed = null;
     for (const pass of passes) deletePass(pass);
     if (previewProgram) gl.deleteProgram(previewProgram);
     previewProgram = null;
@@ -755,6 +780,8 @@ void main(){
   };
   return {
     setPasses,
+    stashTargets,
+    restoreTargets,
     updatePasses,
     validateConfiguration,
     refreshPrograms,

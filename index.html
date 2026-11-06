@@ -387,7 +387,7 @@
                     <label for="videoQuality" id="videoQualityField"><span class="video-label">품질</span><select id="videoQuality"><option value="standard">보통</option><option value="high" selected>높음</option><option value="max">최고</option></select></label>
                 </fieldset>
                 <p id="videoRenderSummary" class="video-render-summary" aria-live="polite"></p>
-                <p class="help video-render-note">셰이더 시간(uTime)은 프레임마다 <code>시작 + 번호 ÷ FPS</code>, uDeltaTime은 <code>1 ÷ FPS</code>입니다. 재생 배속과 상관없고, 렌더링하는 동안 마우스·키 입력은 고정됩니다. 버퍼 패스가 있으면 0초부터 시작 시간까지 먼저 계산하고(저장하지 않음), 끝나면 버퍼는 처음부터 다시 시작합니다.</p>
+                <p class="help video-render-note">셰이더 시간(uTime)은 프레임마다 <code>시작 + 번호 ÷ FPS</code>, uDeltaTime은 <code>1 ÷ FPS</code>입니다. 재생 배속과 상관없고, 렌더링하는 동안 마우스·키 입력은 고정됩니다. 버퍼 패스가 있으면 0초부터 시작 시간까지 먼저 계산하고(저장하지 않음), 화면의 시뮬레이션은 렌더링 전 상태 그대로 이어집니다.</p>
                 <div id="videoRenderProgressBox" class="video-render-progress" hidden>
                     <progress id="videoRenderProgress" max="1" value="0"></progress>
                     <p id="videoRenderStatus" role="status"></p>

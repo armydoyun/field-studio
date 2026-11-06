@@ -570,10 +570,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     return true;
   };
   // ---- 오프라인(영상) 렌더링 ----
-  // beginOffline({ width, height }): 실시간 루프를 멈추고 드로잉 버퍼를 그 크기로 고정한다. 버퍼 패스는 처음부터 다시 시작한다.
+  // beginOffline({ width, height }): 실시간 루프를 멈추고 드로잉 버퍼를 그 크기로 고정한다. 버퍼 패스는 새 타깃에서 처음부터 계산한다(화면의 버퍼는 보관).
   // renderOfflineFrame({ time, delta, frame }): 그 시간·프레임 번호로 한 프레임을 그리고 캔버스를 돌려준다.
   //   preserveDrawingBuffer가 false라 그림은 이 호출과 같은 작업(task) 안에서만 읽을 수 있다 — 바로 복사할 것.
-  // endOffline(): 크기·시간을 되돌리고, 렌더링 전(또는 그동안 누른) 재생 상태로 돌아간다. 버퍼 패스는 처음부터 다시 시작한다.
+  // endOffline(): 크기·시간·프레임 수·버퍼 내용을 렌더링 전으로 되돌리고, 렌더링 전(또는 그동안 누른) 재생 상태로 돌아간다.
   const offlineLimit = () => Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), ...gl.getParameter(gl.MAX_VIEWPORT_DIMS));
   const beginOffline = ({ width, height }) => {
     if (disposed || lost || !program || !vao) throw new Error("지금은 영상을 렌더링할 수 없습니다.");
@@ -587,7 +587,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stop();
     offline = { width, height, resume, saved: { time, frameCount, lastDelta } };
     resize();
-    passManager.resetTargets();
+    passManager.stashTargets();
     frameCount = 0;
     return { width: gl.drawingBufferWidth, height: gl.drawingBufferHeight };
   };
@@ -629,14 +629,34 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     lastDelta = saved.lastDelta;
     lastTime = null;
     nextFrameAt = 0;
-    if (!disposed && !lost) {
-      resize();
-      passManager.resetTargets();
-    }
-    frameCount = 0;
+    // 렌더링 전의 버퍼(시뮬레이션 상태)·프레임 수를 그대로 되돌린다. 컨텍스트를 잃었으면 보관본은 버린다(복구 때 새로 만든다).
+    if (!disposed && !lost) resize(); // 다음 프레임을 기다리지 않고 캔버스를 화면 크기로 되돌린다
+    passManager.restoreTargets({ discard: disposed || lost });
+    frameCount = saved.frameCount;
     if (disposed) return true;
     if (resume) start();
-    else redraw();
+    else present();
+    return true;
+  };
+  // 멈춘 화면을 다시 보이기: 버퍼 패스는 돌리지 않고(시뮬레이션이 한 단계 나아가지 않게) Image(또는 버퍼 미리보기)만 지금 상태로 그린다.
+  const present = () => {
+    if (disposed || lost || document.hidden || !program || !vao) return false;
+    resize();
+    const w = gl.drawingBufferWidth,
+      h = gl.drawingBufferHeight;
+    gl.bindVertexArray(vao);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+    if (!passManager.drawPreview(w, h)) {
+      gl.useProgram(program);
+      uploadGlobals(uniforms, w, h);
+      passManager.bindImage(uniforms);
+      try {
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      } finally {
+        passManager.unbindImage();
+      }
+    }
     return true;
   };
   const isOffline = () => !!offline;

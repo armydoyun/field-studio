@@ -115,7 +115,7 @@ void main() {
     await wait(100);
     const after = r.getStats();
     test(after.time === time0 && after.width === size0[0] && after.height === size0[1] && !after.running && !after.offline,
-      "끝나면 시간·크기·일시정지 상태 복원");
+      `끝나면 시간·크기·일시정지 상태 복원 ${JSON.stringify([after.time, time0, after.width, size0, after.running, after.offline])}`);
 
     // ---- WebM ----
     const formats = [...$("videoFormat").options].filter(o => !o.disabled).map(o => o.value);
@@ -142,6 +142,21 @@ void main() {
 
     // ---- 버퍼 패스: 시작 시간 전 프레임을 먼저 그린다 ----
     test(await studio.exampleFeedback(), "버퍼 예제 열기");
+    // 화면의 시뮬레이션을 조금 돌린 뒤 멈추고, 버퍼 내용·프레임 수·시간을 적어 둔다(렌더링 뒤 그대로여야 한다).
+    if (!studio.getPlaybackState()) studio.togglePlayback();
+    await until(() => r.getStats().frame > 30, 20000);
+    studio.togglePlayback();
+    await wait(100);
+    const width0 = r.getStats().width, height0 = r.getStats().height;
+    const probes = [];
+    for (let y = 0.1; y < 1; y += 0.2) for (let x = 0.1; x < 1; x += 0.2) probes.push([Math.floor(width0 * x), Math.floor(height0 * y)]);
+    const snapshot = () => ({
+      frame: r.getStats().frame,
+      time: r.getStats().time,
+      pixels: ["A", "B"].map(name => probes.map(([x, y]) => r.readPassPixel(name, x, y).join(",")).join(" ")),
+    });
+    const sim0 = snapshot();
+    test(sim0.pixels[1].split(" ").some(p => p !== "0,0,0,0"), "버퍼 B에 시뮬레이션 내용이 있다");
     const realFrame = r.renderOfflineFrame, seen = [];
     r.renderOfflineFrame = frame => { seen.push(frame); return realFrame(frame); };
     try {
@@ -157,6 +172,11 @@ void main() {
     }
     test(seen.length === 7, `준비 5프레임 + 본 2프레임 (${seen.length})`);
     test(seen.map(f => f.frame).join() === "0,1,2,3,4,5,6" && Math.abs(seen[5].time - 0.5) < 1e-9 && seen[0].time === 0, "uFrame은 0부터 이어지고 본 영상은 0.5초부터");
+    await wait(100);
+    const sim1 = snapshot();
+    test(sim1.frame === sim0.frame && sim1.time === sim0.time, `렌더링 뒤 프레임 수·시간 그대로 (${sim0.frame} → ${sim1.frame})`);
+    test(sim1.pixels[0] === sim0.pixels[0] && sim1.pixels[1] === sim0.pixels[1], "렌더링 뒤 버퍼 내용(시뮬레이션 상태) 그대로");
+    test(!r.getStats().running && r.getStats().width === width0, "멈춘 상태·화면 크기 그대로");
 
     // ---- 취소 ----
     set("videoDuration", 600);
