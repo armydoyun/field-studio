@@ -487,6 +487,63 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       nextFrameAt = 0;
       scheduleFrame();
     });
+  // 화면보다 큰 PNG: Image 패스만 width×height 크기의 화면 밖 Texture에 지금 시간 그대로 한 번 더 그려 읽는다.
+  // 시간·프레임 수는 바뀌지 않는다. 버퍼 패스가 있으면 버퍼가 화면 크기라(texelFetch 좌표가 어긋남) 지원하지 않는다.
+  const MAX_CAPTURE_PIXELS = 7680 * 4320;
+  const captureScreenshotAt = (width, height) =>
+    new Promise((resolve, reject) => {
+      if (disposed || lost || !program || !vao) throw new Error("지금은 캡처할 수 없습니다.");
+      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1)
+        throw new RangeError("캡처 크기는 1 이상의 정수여야 합니다.");
+      if (passManager.getReflection().length)
+        throw new Error("버퍼 패스가 있는 프로젝트는 화면 크기로만 저장할 수 있습니다.");
+      const limit = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), ...gl.getParameter(gl.MAX_VIEWPORT_DIMS));
+      if (width > limit || height > limit || width * height > MAX_CAPTURE_PIXELS)
+        throw new RangeError(`이 GPU에서 저장할 수 있는 크기를 넘습니다 (최대 ${limit}px · 33MP).`);
+      const texture = gl.createTexture(),
+        fbo = gl.createFramebuffer();
+      let pixels;
+      try {
+        Diagnostics.clearErrors(gl);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+          throw new Error("캡처용 Framebuffer를 만들지 못했습니다(GPU 메모리 부족일 수 있음).");
+        gl.viewport(0, 0, width, height);
+        gl.bindVertexArray(vao);
+        gl.useProgram(program);
+        uploadGlobals(uniforms, width, height);
+        passManager.bindImage(uniforms);
+        try {
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        } finally {
+          passManager.unbindImage();
+        }
+        pixels = new Uint8Array(width * height * 4);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        const error = gl.getError();
+        if (error !== gl.NO_ERROR) throw new Error(`고해상도 캡처 GL 오류: ${error}`);
+      } finally {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.deleteFramebuffer(fbo);
+        gl.deleteTexture(texture);
+      }
+      const output = document.createElement("canvas");
+      output.width = width;
+      output.height = height;
+      const context = output.getContext("2d");
+      if (!context) throw new Error("2D Canvas를 사용할 수 없습니다.");
+      const image = context.createImageData(width, height),
+        stride = width * 4;
+      for (let y = 0; y < height; y++)
+        image.data.set(pixels.subarray(y * stride, (y + 1) * stride), (height - 1 - y) * stride);
+      context.putImageData(image, 0, 0);
+      output.toBlob(blob => (blob ? resolve(blob) : reject(new Error("PNG 생성 실패"))), "image/png");
+    });
   // 프레임을 그린 직후마다 listener(canvas)를 부른다. 해제 함수를 돌려준다.
   const onFrame = listener => {
     frameListeners.add(listener);
@@ -1037,6 +1094,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stepFrame,
     setTimeScale,
     captureScreenshot,
+    captureScreenshotAt,
     onFrame,
     redraw,
     validateFragment,

@@ -871,6 +871,25 @@ const mount = (renderer, input, settings) => {
       button.disabled = false;
     }
   });
+  // 고해상도 PNG: 2× = 지금 렌더 크기의 두 배, 4K = 긴 변 3840px(비율 유지). Image 패스만 다시 그린다.
+  for (const button of document.querySelectorAll("[data-capture]"))
+    listen(button, "click", async () => {
+      const { width: w, height: h } = renderer.getStats(),
+        mode = button.dataset.capture,
+        factor = mode === "4k" ? 3840 / Math.max(w, h) : 2,
+        width = Math.max(1, Math.round(w * factor)),
+        height = Math.max(1, Math.round(h * factor));
+      button.disabled = true;
+      try {
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        download(await renderer.captureScreenshotAt(width, height), `shader-${stamp}-${width}x${height}.png`);
+        showError("");
+      } catch (error) {
+        showError(`고해상도 PNG 저장 실패: ${error.message}`);
+      } finally {
+        button.disabled = false;
+      }
+    });
   listen($("previewPause"), "click", () =>
     attempt(() => {
       window.shaderStudio?.togglePlayback();
