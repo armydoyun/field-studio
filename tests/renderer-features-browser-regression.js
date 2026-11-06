@@ -32,11 +32,22 @@
     document.querySelector('[data-time-scale="0.5"]').click();
     test(r.getStats().timeScale === 0.5 && $("timeScaleLabel").textContent === "0.5×", "0.5× 선택");
     test(document.querySelector('[data-time-scale="0.5"]').getAttribute("aria-pressed") === "true", "선택한 배속 버튼 표시");
-    await frames(3);
-    const t0 = r.getStats().time, w0 = performance.now();
-    await wait(1000);
-    const rate = (r.getStats().time - t0) / ((performance.now() - w0) / 1000);
-    test(rate > 0.3 && rate < 0.7, `0.5×에서 시간이 절반 속도로 흐름 (${rate.toFixed(2)})`);
+    // 배속 비율은 실제로 그린 프레임 사이에서 잰다. 고정된 1초 창으로 재면, CI처럼 다른 무거운 테스트와 CPU를 나눠 쓰는
+    // 소프트웨어 렌더링에서 그 창 안에 프레임이 하나도 안 그려져 0으로 나올 수 있다.
+    // 프레임마다(그린 직후) 셰이더 시간과 벽시계를 함께 적고, 0.5초 이상·4프레임 이상 쌓이면 비율을 낸다.
+    const samples = [];
+    const off = r.onFrame(() => samples.push([performance.now(), r.getStats().time]));
+    const enough = () => samples.length >= 5 && samples.at(-1)[0] - samples[1][0] >= 500;
+    try {
+      await until(enough, 30000);
+    } finally {
+      off();
+    }
+    test(enough(), `배속 측정에 필요한 프레임이 그려짐 (${samples.length}프레임)`);
+    // 첫 표본은 배속을 바꾼 직후라 버리고, 둘째부터 마지막까지의 비율을 본다.
+    const [w0, t0] = samples[1], [w1, t1] = samples.at(-1);
+    const rate = (t1 - t0) / ((w1 - w0) / 1000);
+    test(rate > 0.35 && rate < 0.65, `0.5×에서 시간이 절반 속도로 흐름 (${rate.toFixed(2)} · ${samples.length - 1}프레임)`);
     await wait(600);
     test(/s ×0\.5$/.test($("statTime").textContent), `HUD에 시간과 배속: ${$("statTime").textContent}`);
     document.querySelector('[data-time-scale="1"]').click();
