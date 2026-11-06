@@ -745,10 +745,17 @@ const mount = ({ studio, Shader, preview = null }) => {
     if (text) node.textContent = text;
     return node;
   };
+  // 검색 대상: 제목·태그·설명·원작자·원작 이름·id. 소문자로 한 번 만들어 카드에 둔다.
+  const searchText = item =>
+    [item.title, item.tag, item.description, item.id, item.credit?.author, item.credit?.work, item.credit?.license]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
   const card = (item, onPick) => {
     const button = element("button", "gallery-card");
     button.type = "button";
     button.dataset.id = item.id;
+    button.dataset.search = searchText(item);
     const art = element("canvas", "gallery-thumb");
     art.width = 320;
     art.height = 200;
@@ -1043,6 +1050,57 @@ const mount = ({ studio, Shader, preview = null }) => {
       stop: finish,
     };
   };
+  // 갤러리 검색: 공백으로 나눈 낱말이 모두 들어 있는 카드만 남긴다. 결과가 없는 묶음은 제목째 숨긴다.
+  const search = $("gallerySearch");
+  const filter = () => {
+    const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0,
+      total = 0;
+    for (const section of dialog.querySelectorAll(".gallery-section")) {
+      let any = false;
+      for (const node of section.querySelectorAll(".gallery-card")) {
+        const match = words.every(word => node.dataset.search.includes(word));
+        node.hidden = !match;
+        any ||= match;
+        shown += match ? 1 : 0;
+        total++;
+      }
+      section.hidden = !any;
+    }
+    dialog.classList.toggle("is-searching", words.length > 0);
+    $("galleryEmpty").hidden = shown > 0;
+    $("galleryCount").textContent = words.length ? `${shown} / ${total}개` : "";
+    // 숨긴 카드는 화면에 보이지 않으므로 지연 렌더링 대기열이 알아서 건너뛴다. 새로 드러난 카드는 다시 확인시킨다.
+    if (dialog.open) lazy?.resume();
+  };
+  search.addEventListener("input", filter, { signal });
+  dialog.addEventListener(
+    "keydown",
+    event => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
+      event.preventDefault();
+      search.focus();
+      search.select();
+    },
+    { signal }
+  );
+  // 검색어가 있을 때 Esc는 갤러리를 닫지 않고 검색어만 지운다.
+  search.addEventListener(
+    "keydown",
+    event => {
+      if (event.key === "Escape" && search.value) {
+        event.preventDefault();
+        event.stopPropagation();
+        search.value = "";
+        filter();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        dialog.querySelector(".gallery-card:not([hidden])")?.click();
+      }
+    },
+    { signal }
+  );
   const startThumbs = () => {
     lazy ??= startLazy();
     lazy?.resume();

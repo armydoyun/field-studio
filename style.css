@@ -130,6 +130,10 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .uniform-type { font:10px/1.5 var(--mono); }
 .remove-uniform { flex:0 0 24px;width:24px;min-height:24px;height:24px;margin-right:-4px;padding:0;border-color:transparent;background:transparent;color:var(--faint); }
 .remove-uniform.glyph-icon::before { flex-basis:14px;width:14px;height:14px; }
+.reset-uniform { flex:0 0 24px;width:24px;min-height:24px;height:24px;margin-left:auto;padding:0;border-color:transparent;background:transparent;color:var(--faint); }
+.reset-uniform.glyph-icon::before { flex-basis:13px;width:13px;height:13px; }
+.reset-uniform:disabled { opacity:.3;cursor:default; }
+.reset-uniform:not(:disabled):hover { color:var(--text); }
 /* 끌어서 값 조절: 이름·성분 글자 */
 .is-scrub { cursor:ew-resize;user-select:none;-webkit-user-select:none;touch-action:none; }
 .is-scrub:hover,.is-scrubbing { color:var(--accent-strong); }
@@ -923,9 +927,16 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .gallery-perf-legend { display:flex;flex-wrap:wrap;gap:4px 14px;margin:14px 0 0;color:var(--muted);font-size:11.5px;line-height:1.5; }
 .gallery-perf-legend .gallery-perf { position:static;pointer-events:none; }
 .gallery-credit { color:var(--text-soft);font:500 10.5px/1.4 var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.gallery-search { position:sticky;top:0;z-index:3;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;margin:-8px -28px 0;padding:12px 28px 10px;background:var(--panel);border-bottom:1px solid transparent; }
+.gallery-search input { padding-left:38px; }
+.gallery-search .search-icon { left:40px; }
+.gallery-count { min-width:0;color:var(--muted);font-size:12px;white-space:nowrap; }
+.gallery.is-searching .gallery-steps,.gallery.is-searching .gallery-perf-legend,.gallery.is-searching .gallery-note { display:none; }
+.gallery-section[hidden],.gallery-card[hidden] { display:none; }
+.gallery-empty { margin:28px 0;color:var(--muted);font-size:13px;text-align:center; }
 .gallery-note { margin:-4px 0 12px;color:var(--muted);font-size:12px;line-height:1.55; }
 .gallery-foot { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 28px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12px; }
-@media (max-width:700px) { .gallery-steps { grid-template-columns:minmax(0,1fr); }.gallery-head,.gallery-body,.gallery-foot { padding-inline:16px; } }
+@media (max-width:700px) { .gallery-steps { grid-template-columns:minmax(0,1fr); }.gallery-head,.gallery-body,.gallery-foot { padding-inline:16px; }.gallery-search { margin-inline:-16px;padding-inline:16px; }.gallery-search .search-icon { left:28px; } }
 /* 휴대폰: 카드 두 열로 한 화면에 더 많은 예제를 보이고, 하단 버튼은 줄바꿈 없이 같은 폭으로 배치한다. */
 @media (max-width:600px) {
  .gallery { width:calc(100vw - 16px);max-height:calc(100dvh - 16px); }

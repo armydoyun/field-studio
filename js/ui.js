@@ -1,6 +1,7 @@
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
 import * as StageMenu from "./stage-menu.js";
 import * as Recorder from "./recorder.js";
+import * as Annotations from "./annotations.js";
 const mount = (renderer, input, settings) => {
   const $ = id => document.getElementById(id);
   const controller = new AbortController(),
@@ -151,11 +152,27 @@ const mount = (renderer, input, settings) => {
     $("uniformNotice").textContent = "";
   };
   let uniformSnapshot = "";
+  // 셰이더 주석(@default·@range…)에서 읽은 파라미터 기본값. 코드에 어노테이션이 없는 파라미터는 되돌릴 값이 없다.
+  const annotatedDefaults = () => {
+    const project = window.shaderStudio?.getProject?.();
+    if (!project) return new Map();
+    const specs = Annotations.collect([project.image, ...(project.passes || []).map(p => p.fragment)]);
+    return new Map(specs.filter(spec => !spec.error).map(spec => [spec.name, spec]));
+  };
+  const sameValue = (a, b) =>
+    Array.isArray(a)
+      ? Array.isArray(b) && a.length === b.length && a.every((v, i) => sameValue(v, b[i]))
+      : typeof a === "number" && typeof b === "number"
+        ? Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b))
+        : a === b;
+  const formatDefault = value =>
+    (Array.isArray(value) ? value : [value]).map(v => (typeof v === "number" ? +v.toFixed(4) : String(v))).join(", ");
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
     const search = $("uniformSearch").value.trim().toLowerCase();
     uniformSnapshot = JSON.stringify(items);
+    const defaults = annotatedDefaults();
     userList.replaceChildren();
     $("uniformCount").textContent = `${items.length} / 64`;
     $("uniformCreate").disabled = items.length >= 64;
@@ -192,11 +209,42 @@ const mount = (renderer, input, settings) => {
           $("undoUniform").focus();
         })
       );
-      top.append(title, remove);
+      const spec = defaults.get(item.name);
+      let reset = null,
+        syncReset = null;
+      if (spec && spec.type === item.type) {
+        // 기본값으로 되돌리기: 버튼 또는 슬라이더 더블클릭. 이미 기본값이면 버튼을 비활성화한다.
+        const fallback = Annotations.clampValue(spec.value, item.options || {});
+        reset = element("button");
+        reset.className = "reset-uniform glyph-icon icon-reset";
+        reset.type = "button";
+        reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
+        reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
+        syncReset = () => {
+          reset.disabled = sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback);
+        };
+        syncReset();
+        const restore = () => {
+          if (sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback)) return;
+          if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
+          renderUniforms();
+          $("uniformNotice").textContent = `${item.name} 기본값으로 되돌림`;
+          [...userList.querySelectorAll(".uniform-row")]
+            .find(r => r.querySelector(".uniform-name")?.textContent === item.name)
+            ?.querySelector(".reset-uniform, input")
+            ?.focus();
+        };
+        reset.addEventListener("click", restore);
+        row.addEventListener("dblclick", event => {
+          if (event.target instanceof HTMLInputElement && event.target.type === "range") restore();
+        });
+      }
+      top.append(title, ...(reset ? [reset] : []), remove);
       const commit = (field, value) => {
         try {
           renderer.setUniform(item.name, value);
           item.value = value;
+          syncReset?.();
           field.removeAttribute("aria-invalid");
           showError("");
           return true;
