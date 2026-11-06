@@ -2,7 +2,7 @@
 //   · 프레임 i의 uTime = 시작 + i / fps, uDeltaTime = 1 / fps. 화면이 느려도 결과 영상은 끊기지 않는다.
 //   · 크기는 화면과 상관없이 지정한 너비×높이(renderer.beginOffline)로 그린다.
 //   · WebM: WebCodecs VideoEncoder(VP9/VP8)로 인코딩하고, 아래의 작은 WebM(Matroska) 먹서로 파일을 만든다(외부 의존성 없음).
-//   · PNG 연속 이미지: 프레임마다 PNG를 만들어 압축 없는(store) ZIP 한 파일로 묶는다. 편집 프로그램·ffmpeg용.
+//   · PNG 연속 이미지: 프레임마다 PNG를 만들어 압축 없는(store) ZIP 한 파일로 묶는다(크면 ZIP64). 편집 프로그램·ffmpeg용.
 //   · 버퍼 패스(피드백 시뮬레이션)가 있으면 시작 시간 전까지의 프레임을 먼저 그려(저장하지 않음) 상태를 쌓는다.
 // 순수 함수(normalizeSettings · createWebmMuxer · createZipWriter · crc32)는 DOM·GPU 없이 node 테스트에서 검사한다.
 
@@ -24,8 +24,6 @@ const LIMITS = Object.freeze({
   minFps: 1,
   maxFps: 120,
   minSize: 16,
-  maxZipFrames: 65535, // ZIP64 없이 담을 수 있는 파일 수
-  maxZipBytes: 0xffffffff - 1024 * 1024,
 });
 const KEYFRAME_SECONDS = 2; // 키프레임 간격 = WebM 클러스터 길이(탐색 단위)
 
@@ -55,8 +53,6 @@ const normalizeSettings = (raw, { limit = 4096 } = {}) => {
     height -= height % 2;
   }
   const frames = Math.max(1, Math.round(duration * fps));
-  if (format === "png" && frames > LIMITS.maxZipFrames)
-    throw new RangeError(`PNG 연속 이미지는 ${LIMITS.maxZipFrames}장까지만 만들 수 있습니다.`);
   const bitrate = Math.round(Math.min(200e6, Math.max(1e6, width * height * fps * QUALITY[quality])));
   return { format, quality, start, duration: frames / fps, fps, width, height, frames, bitrate };
 };
@@ -239,18 +235,24 @@ const crc32 = (bytes, crc = 0) => {
   for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
   return ~c >>> 0;
 };
-const createZipWriter = (date = new Date()) => {
+// ZIP64: 파일이 65535개를 넘거나 위치가 4GB를 넘으면 ZIP64 기록을 더한다(force64면 항상 — 검사용).
+// 파일 하나는 4GB 미만이어야 한다(PNG 한 장은 그보다 훨씬 작다).
+const U16 = 0xffff,
+  U32 = 0xffffffff;
+const createZipWriter = ({ date = new Date(), force64 = false } = {}) => {
   const parts = [],
     entries = [];
   let offset = 0;
   const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
     dosDate = ((Math.max(1980, date.getFullYear()) - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
-  const header = (size, fields) => {
-    const out = new Uint8Array(size),
+  // fields: [바이트 수(2·4·8), 값] — 리틀 엔디언
+  const header = fields => {
+    const out = new Uint8Array(fields.reduce((sum, [bytes]) => sum + bytes, 0)),
       view = new DataView(out.buffer);
     let at = 0;
     for (const [bytes, value] of fields) {
-      if (bytes === 4) view.setUint32(at, value, true);
+      if (bytes === 8) view.setBigUint64(at, BigInt(value), true);
+      else if (bytes === 4) view.setUint32(at, value, true);
       else view.setUint16(at, value, true);
       at += bytes;
     }
@@ -258,13 +260,11 @@ const createZipWriter = (date = new Date()) => {
   };
   // data: Uint8Array. 같은 내용을 Blob으로 넘기면(blob) 복사본 대신 그것을 담는다.
   const add = (name, data, blob = null) => {
-    if (entries.length >= LIMITS.maxZipFrames) throw new RangeError("ZIP에 담을 수 있는 파일 수를 넘었습니다.");
     const nameBytes = new TextEncoder().encode(name),
       crc = crc32(data),
       size = data.byteLength;
-    if (offset + size + 30 + nameBytes.length > LIMITS.maxZipBytes)
-      throw new RangeError("ZIP이 4GB를 넘습니다. 길이·크기를 줄이세요.");
-    const local = header(30, [
+    if (size >= U32) throw new RangeError("ZIP에 넣을 파일 하나가 4GB를 넘습니다.");
+    const local = header([
       [4, 0x04034b50],
       [2, 20],
       [2, 0x0800], // 파일 이름 UTF-8
@@ -284,10 +284,18 @@ const createZipWriter = (date = new Date()) => {
   const finish = () => {
     const start = offset;
     for (const e of entries) {
-      const central = header(46, [
+      const big = force64 || e.offset >= U32,
+        extra = big
+          ? header([
+              [2, 0x0001],
+              [2, 8],
+              [8, e.offset],
+            ])
+          : new Uint8Array(0);
+      const central = header([
         [4, 0x02014b50],
-        [2, 20],
-        [2, 20],
+        [2, big ? 45 : 20],
+        [2, big ? 45 : 20],
         [2, 0x0800],
         [2, 0],
         [2, dosTime],
@@ -296,31 +304,55 @@ const createZipWriter = (date = new Date()) => {
         [4, e.size],
         [4, e.size],
         [2, e.nameBytes.length],
-        [2, 0],
+        [2, extra.length],
         [2, 0],
         [2, 0],
         [2, 0],
         [4, 0],
-        [4, e.offset],
+        [4, big ? U32 : e.offset],
       ]);
-      parts.push(central, e.nameBytes);
-      offset += central.length + e.nameBytes.length;
+      parts.push(central, e.nameBytes, extra);
+      offset += central.length + e.nameBytes.length + extra.length;
     }
+    const count = entries.length,
+      size = offset - start,
+      zip64 = force64 || count >= U16 || start >= U32 || size >= U32 || offset >= U32;
+    if (zip64)
+      parts.push(
+        header([
+          [4, 0x06064b50], // ZIP64 끝 레코드
+          [8, 44],
+          [2, 45],
+          [2, 45],
+          [4, 0],
+          [4, 0],
+          [8, count],
+          [8, count],
+          [8, size],
+          [8, start],
+        ]),
+        header([
+          [4, 0x07064b50], // ZIP64 끝 레코드 위치
+          [4, 0],
+          [8, offset],
+          [4, 1],
+        ])
+      );
     parts.push(
-      header(22, [
+      header([
         [4, 0x06054b50],
         [2, 0],
         [2, 0],
-        [2, entries.length],
-        [2, entries.length],
-        [4, offset - start],
-        [4, start],
+        [2, zip64 ? U16 : count],
+        [2, zip64 ? U16 : count],
+        [4, zip64 ? U32 : size],
+        [4, zip64 ? U32 : start],
         [2, 0],
       ])
     );
     return parts;
   };
-  return { add, finish, count: () => entries.length };
+  return { add, finish, count: () => entries.length, zip64: () => force64 || entries.length >= U16 || offset >= U32 };
 };
 
 const pad = (n, width = 2) => String(n).padStart(width, "0");

@@ -49,7 +49,7 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
   throwsRange(() => V.normalizeSettings({ ...base, width: 8000 }, { limit: 4096 }), /크기/, "GPU 한도 초과 거절");
   throwsRange(() => V.normalizeSettings({ ...base, width: 8 }), /크기/, "너무 작은 크기 거절");
   throwsRange(() => V.normalizeSettings({ ...base, format: "gif" }), /형식/, "모르는 형식 거절");
-  throwsRange(() => V.normalizeSettings({ ...base, format: "png", duration: 600, fps: 120 }), /PNG/, "PNG는 65535장까지");
+  check(V.normalizeSettings({ ...base, format: "png", duration: 600, fps: 120 }).frames === 72000, "PNG도 600초 × 120fps(72000장)까지(ZIP64)");
   check(/^shader-\d{8}-\d{6}-1280x720-30fps\.webm$/.test(V.fileName(s)), "파일 이름에 크기·fps");
   check(V.estimateBytes(s) === (s.bitrate / 8) * 2, "WebM 예상 크기");
 
@@ -111,7 +111,7 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
   // ---- ZIP ----
   const sample = new TextEncoder().encode("hello shader");
   check(V.crc32(sample) === zlib.crc32(sample) && V.crc32(new Uint8Array(0)) === 0, "CRC-32가 zlib와 같다");
-  const zip = V.createZipWriter(new Date(2026, 10, 6, 12, 30, 10));
+  const zip = V.createZipWriter({ date: new Date(2026, 10, 6, 12, 30, 10) });
   const files = [["frame_00000.png", Uint8Array.of(1, 2, 3)], ["frame_00001.png", new Uint8Array(1000).fill(7)], ["README.txt", sample]];
   for (const [name, data] of files) zip.add(name, data);
   const zbytes = await bytesOf(zip.finish()), zv = new DataView(zbytes.buffer);
@@ -130,6 +130,66 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
     at += 46 + nameLen;
   }
   check(true, "중앙 디렉터리 → 로컬 헤더 → 내용·CRC 일치");
+  check(!zip.zip64(), "작은 ZIP은 ZIP64를 쓰지 않는다");
+
+  // ---- ZIP64 ----
+  // 읽기: 끝 레코드(0xFFFF·0xFFFFFFFF) → ZIP64 위치 레코드 → ZIP64 끝 레코드 → 중앙 디렉터리(오프셋은 추가 필드 0x0001)
+  const readZip64 = bytes => {
+    const view = new DataView(bytes.buffer), eocd = bytes.length - 22;
+    assert.equal(view.getUint32(eocd, true), 0x06054b50);
+    assert.equal(view.getUint16(eocd + 10, true), 0xffff);
+    assert.equal(view.getUint32(eocd + 16, true), 0xffffffff);
+    const locator = eocd - 20;
+    assert.equal(view.getUint32(locator, true), 0x07064b50);
+    const record = Number(view.getBigUint64(locator + 8, true));
+    assert.equal(view.getUint32(record, true), 0x06064b50);
+    assert.equal(Number(view.getBigUint64(record + 4, true)), 44);
+    const count = Number(view.getBigUint64(record + 32, true)), cdSize = Number(view.getBigUint64(record + 40, true)), cdStart = Number(view.getBigUint64(record + 48, true));
+    assert.equal(cdStart + cdSize, record, "중앙 디렉터리 바로 뒤에 ZIP64 끝 레코드");
+    const out = [];
+    for (let at = cdStart, i = 0; i < count; i++) {
+      assert.equal(view.getUint32(at, true), 0x02014b50);
+      const nameLength = view.getUint16(at + 28, true), extraLength = view.getUint16(at + 30, true);
+      let local = view.getUint32(at + 42, true);
+      if (local === 0xffffffff) {
+        const extra = at + 46 + nameLength;
+        assert.equal(view.getUint16(extra, true), 0x0001);
+        assert.equal(view.getUint16(extra + 2, true), 8);
+        local = Number(view.getBigUint64(extra + 4, true));
+      }
+      assert.equal(view.getUint32(local, true), 0x04034b50, `파일 ${i}의 로컬 헤더`);
+      const size = view.getUint32(local + 22, true), lnl = view.getUint16(local + 26, true);
+      out.push({ name: new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength)), data: bytes.subarray(local + 30 + lnl, local + 30 + lnl + size), crc: view.getUint32(at + 16, true) });
+      at += 46 + nameLength + extraLength;
+    }
+    return out;
+  };
+  const z64 = V.createZipWriter({ force64: true });
+  for (const [name, data] of files) z64.add(name, data);
+  const z64files = readZip64(await bytesOf(z64.finish()));
+  check(z64files.length === 3 && z64files.every((f, i) => f.name === files[i][0] && f.crc === zlib.crc32(f.data) && f.data.length === files[i][1].length), "ZIP64 구조(강제): 끝 레코드 → 위치 → 중앙 디렉터리 → 내용");
+  // 65535개를 넘으면 저절로 ZIP64
+  const many = V.createZipWriter(), tiny = Uint8Array.of(42);
+  for (let i = 0; i < 70000; i++) many.add(`f${i}.bin`, tiny);
+  check(many.zip64(), "파일 70000개면 ZIP64");
+  const manyFiles = readZip64(await bytesOf(many.finish()));
+  check(manyFiles.length === 70000 && manyFiles[69999].name === "f69999.bin" && manyFiles[69999].data[0] === 42, "파일 70000개를 모두 읽을 수 있다");
+  // 4GB 넘는 위치: 실제로 4GB를 만들 수 없어 크기만 큰 가짜 Blob 조각으로 위치 계산을 확인한다
+  const huge = V.createZipWriter(), fakeBlob = { size: 0x7fffffff };
+  huge.add("a.png", { byteLength: 0x7fffffff, length: 0 }, fakeBlob);
+  huge.add("b.png", { byteLength: 0x7fffffff, length: 0 }, fakeBlob);
+  huge.add("c.png", Uint8Array.of(1));
+  check(huge.zip64(), "4GB를 넘는 위치면 ZIP64");
+  const hugeParts = huge.finish(), tail = await bytesOf(hugeParts.slice(hugeParts.indexOf(fakeBlob, 2) + 1).filter(p => p !== fakeBlob));
+  const cOffset = 2 * (30 + 5 + 0x7fffffff);
+  const tailView = new DataView(tail.buffer);
+  let found = false;
+  for (let at = 0; at + 4 <= tail.length; at++)
+    if (tailView.getUint32(at, true) === 0x02014b50 && new TextDecoder().decode(tail.subarray(at + 46, at + 51)) === "c.png") {
+      found = tailView.getUint32(at + 42, true) === 0xffffffff && Number(tailView.getBigUint64(at + 46 + 5 + 4, true)) === cOffset;
+      break;
+    }
+  check(found, "4GB 뒤 파일의 위치는 ZIP64 추가 필드에(0xFFFFFFFF 대신)");
 
   // ---- 렌더링 실행(가짜 렌더러·인코더) ----
   const fakeRenderer = () => {
