@@ -172,13 +172,34 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   const references = name => Model.references(project, name);
   const activeSource = () => (selected === "Image" ? project.image : find(selected)?.fragment);
-  // 브라우저 탭 제목: 보관함 프로젝트 이름(없으면 "저장 안 한 작업")과 미적용 변경(●)·적용 실패(⚠) 표시.
+  // 보관함에 저장한 상태의 지문: 보관함(Pack)에 담기는 것 — 코드(편집 중인 것 포함)·버퍼 구성·파라미터·렌더링 설정.
+  // 패널 표시(panelHidden)는 이 기기의 화면 배치라 빼고, 보고 있는 탭도 뺀다. 같은 내용이면 새로고침 뒤에도 같은 값이 나온다.
+  const fingerprint = () => {
+    const scene = JSON.parse(JSON.stringify(project)),
+      code = $("studioCode").value;
+    if (selected === "Image") scene.image = code;
+    else {
+      const pass = scene.passes.find(p => p.name === selected);
+      if (pass) pass.fragment = code;
+    }
+    const state = settings?.snapshot() ?? null;
+    if (state) delete state.panelHidden;
+    const text = JSON.stringify({ scene, state });
+    let hash = 0x811c9dc5; // FNV-1a 32비트
+    for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+    return `${text.length.toString(36)}-${(hash >>> 0).toString(36)}`;
+  };
+  // 브라우저 탭 제목: 보관함 프로젝트 이름(없으면 "저장 안 한 작업")과 상태 표시.
+  //   ● 보관함에 저장한 뒤 바뀜(저장하면 사라짐) · ✎ 코드 편집이 아직 실행에 반영되지 않음 · ⚠ 마지막 적용이 컴파일 오류
   let titleName = "저장 안 한 작업",
-    titleState = "applied";
+    titleState = "applied",
+    isModified = () => false; // 보관함(studio-projects.js)을 만든 뒤 연결한다
   const syncTitle = () => {
-    const mark = titleState === "error" ? "⚠ " : titleState === "dirty" ? "● " : "";
+    const modified = isModified(),
+      mark = (titleState === "error" ? "⚠ " : titleState === "dirty" ? "✎ " : "") + (modified ? "● " : "");
     const title = `${mark}${titleName} — FIELD Studio`;
     if (document.title !== title) document.title = title;
+    projectMenu.setModified(modified);
   };
   const setStatus = (message, style = "") => {
     if ($("studioMessage").textContent !== message) $("studioMessage").textContent = message;
@@ -1680,6 +1701,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       projectMenu.setLabel(titleName, !!current);
       syncTitle();
     },
+    fingerprint,
     $,
     on,
     element,
@@ -1690,8 +1712,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     setStatus,
     showError,
   });
+  isModified = () => projects.modified();
   renderEditor();
   restore();
+  // 파라미터·설정은 여러 곳에서 바뀌므로 저장 후 변경 여부(●)는 1초마다 확인한다(보관함 프로젝트일 때만 지문을 계산).
+  const titleTimer = setInterval(syncTitle, 1000);
   loadDraft(savedDraft);
   undoStack.length = redoStack.length = 0;
   checkpoint = historyState();
@@ -1834,6 +1859,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     },
     dispose: () => {
       disposed = true;
+      clearInterval(titleTimer);
       if (timer) clearTimeout(timer);
       if (draftTimer) clearTimeout(draftTimer);
       if (dirty) {

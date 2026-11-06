@@ -26,14 +26,64 @@ void main() { fragColor = vec4(uTint * uAmount * (0.5 + uFree), 1.0); }
     // ---- 브라우저 탭 제목 ----
     test(document.title === "저장 안 한 작업 — FIELD Studio", `탭 제목 기본값: ${document.title}`);
     setCode(scene);
-    test(document.title === "● 저장 안 한 작업 — FIELD Studio", `미적용 변경이면 ●: ${document.title}`);
+    test(document.title === "✎ 저장 안 한 작업 — FIELD Studio", `미적용 변경이면 ✎: ${document.title}`);
     test(studio.apply(), "어노테이션 장면 적용");
     test(document.title === "저장 안 한 작업 — FIELD Studio", "적용하면 ● 사라짐");
     setCode(scene.replace("fragColor = vec4", "fragColor = vec5"));
     studio.apply();
     test(document.title.startsWith("⚠ "), `컴파일 실패면 ⚠: ${document.title}`);
     setCode(scene);
-    test(studio.apply() && !/^[●⚠]/.test(document.title), "다시 적용하면 표시 없음");
+    test(studio.apply() && !/^[●✎⚠]/.test(document.title), "다시 적용하면 표시 없음");
+
+    // ---- 보관함에 저장한 뒤 바뀜(●) ----
+    const P = studio.projects, toggle = $("projectMenuToggle");
+    const answer = async value => {
+      await until(() => $("studioPromptDialog").open, 2000);
+      $("studioDialogInput").value = value;
+      $("studioDialogForm").requestSubmit();
+    };
+    const marked = () => document.title.includes("● ") && toggle.dataset.modified === "true";
+    await P.ready();
+    await wait(1200);
+    test(!marked(), "보관함에 없는 작업에는 ●를 붙이지 않는다(전부 저장 안 된 작업)");
+    const name = `변경 추적 ${Date.now().toString(36)}`;
+    let pending = P.save(false);
+    await answer(name);
+    test(await pending, "보관함에 저장");
+    const savedId = P.current().id;
+    try {
+      await wait(1200);
+      test(document.title === `${name} — FIELD Studio` && !marked(), `저장 직후 표시 없음: ${document.title}`);
+      renderer.setUniform("uAmount", 1.25);
+      test(await until(marked, 2500), `파라미터를 바꾸면 ● (탭 제목·프로젝트 메뉴): ${document.title}`);
+      renderer.setUniform("uAmount", 0.5);
+      test(await until(() => !marked(), 2500), "저장한 값으로 되돌리면 ● 사라짐");
+      setCode(scene.replace("0.5 + uFree", "0.25 + uFree"));
+      test(await until(() => document.title.startsWith("✎ ● "), 2500), `코드를 고치면(미적용) ✎와 ● 함께: ${document.title}`);
+      test(studio.apply() && (await until(() => document.title.startsWith("● "), 2500)), "적용해도 저장 전이면 ●");
+      pending = P.save(false); // 덮어쓰기는 묻지 않는다
+      test(await pending, "덮어쓰기 저장");
+      test(await until(() => !marked(), 2500), "저장하면 ● 사라짐");
+      renderer.setFpsLimit(30);
+      test(await until(marked, 2500), "렌더링 설정(프레임 제한)도 저장 대상이라 ●");
+      renderer.setFpsLimit(0);
+      document.body.classList.toggle("panel-hidden");
+      await wait(1200);
+      test(!marked(), "패널 숨김(이 기기의 화면 배치)은 변경으로 치지 않는다");
+      document.body.classList.toggle("panel-hidden");
+      setCode(scene);
+      studio.apply();
+      test(await until(marked, 2500), "저장 뒤 코드를 바꿈");
+      test(await P.open(savedId), "보관함에서 다시 열기");
+      test(await until(() => !marked(), 2500) && area.value.includes("0.25 + uFree"), "다시 열면 저장한 상태 · ● 없음");
+      const stored = JSON.parse(localStorage.getItem("webgl.shader-studio.current-project.v1"));
+      test(stored?.id === savedId && typeof stored.fingerprint === "string" && stored.fingerprint.length > 4, "저장 상태 지문을 브라우저에 기억(새로고침해도 비교)");
+    } finally {
+      pending = P.remove(savedId);
+      await until(() => $("studioPromptDialog").open, 2000);
+      $("studioDialogForm").requestSubmit();
+      await pending;
+    }
 
     // ---- 파라미터 기본값 되돌리기 ----
     $("tab-uniforms").click();

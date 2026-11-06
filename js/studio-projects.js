@@ -16,7 +16,20 @@ const when = time => {
 // buildPack(): Promise<{text, passes, images} | null>
 // openPack(loadText): Promise<boolean> — loadText()가 돌려준 Pack 텍스트로 현재 작업을 바꾼다(미적용 변경 확인 포함).
 // onCurrent(current, busy): 지금 작업 이름이 바뀔 때마다(프로젝트 메뉴 버튼 표시용)
-const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, showError, onCurrent = () => {} }) => {
+// fingerprint(): 지금 작업 상태의 지문. 저장·열기 직후 값을 기억해 두고(새로고침해도 유지) 달라지면 modified()가 true.
+const create = ({
+  $,
+  on,
+  element,
+  ask,
+  store,
+  buildPack,
+  openPack,
+  setStatus,
+  showError,
+  onCurrent = () => {},
+  fingerprint = () => "",
+}) => {
   let current = Store.readJSON(CURRENT_KEY, null),
     items = [],
     busy = false,
@@ -24,7 +37,7 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
   if (!current || typeof current.id !== "string" || typeof current.name !== "string") current = null;
 
   const remember = () => {
-    if (current) Store.writeJSON(CURRENT_KEY, { id: current.id, name: current.name });
+    if (current) Store.writeJSON(CURRENT_KEY, { id: current.id, name: current.name, fingerprint: current.fingerprint });
     else Store.remove(CURRENT_KEY);
   };
   const syncCurrent = () => {
@@ -40,7 +53,7 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
     onCurrent(current ? { ...current } : null, busy);
   };
   const setCurrent = record => {
-    current = record ? { id: record.id, name: record.name } : null;
+    current = record ? { id: record.id, name: record.name, fingerprint: record.fingerprint } : null;
     remember();
     syncCurrent();
     render().catch(error => console.warn("프로젝트 목록 표시 실패:", error));
@@ -163,7 +176,7 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
         passes: pack.passes,
         images: pack.images,
       });
-      current = { id: record.id, name: record.name };
+      current = { id: record.id, name: record.name, fingerprint: fingerprint() };
       remember();
       setStatus(`프로젝트 '${record.name}' 저장됨 · 이 브라우저의 보관함`);
       return true;
@@ -172,7 +185,7 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
     exclusive(async () => {
       const ok = await openPack(() => store.load(item.id));
       if (!ok) return false;
-      current = { id: item.id, name: item.name };
+      current = { id: item.id, name: item.name, fingerprint: fingerprint() };
       remember();
       setStatus(`프로젝트 '${item.name}' 열림`);
       return true;
@@ -189,7 +202,7 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
       if (name === null || name === undefined) return false;
       const record = await store.rename(item.id, name);
       if (current?.id === item.id) {
-        current = { id: record.id, name: record.name };
+        current = { ...current, name: record.name };
         remember();
       }
       setStatus(`이름 바꿈 · ${record.name}`);
@@ -225,6 +238,8 @@ const create = ({ $, on, element, ask, store, buildPack, openPack, setStatus, sh
       if (current) setCurrent(null);
     },
     current: () => (current ? { ...current } : null),
+    // 보관함 프로젝트를 저장·연 뒤 바뀌었는지. 지문을 모르면(예전 버전에서 저장) false.
+    modified: () => !!current?.fingerprint && current.fingerprint !== fingerprint(),
     list: async () => {
       await render();
       return items.map(item => ({ ...item }));
