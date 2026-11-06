@@ -119,6 +119,7 @@ const withTimeout = (promise, ms, label) => {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 };
 
+const MEDIA_BROWSER_TESTS = new Set(["toolbar-browser-regression.js", "video-render-browser-regression.js"]);
 const runBrowser = async () => {
   let chromium;
   try { ({chromium} = await import("playwright")); }
@@ -130,7 +131,7 @@ const runBrowser = async () => {
   } catch(error) { skipSuite("browser", `Chromium을 띄우지 못했습니다(\`npx playwright install chromium\`): ${String(error.message).split("\n")[0]}`); return; }
   const server = await serve(), base = `http://127.0.0.1:${server.address().port}/`;
   try {
-    await pool(plan.browser, jobs || 3, async name => {
+    const runOne = async name => {
       const started = Date.now(), logs = [], errors = [];
       const context = await browser.newContext({viewport:{width:1440, height:900}});
       // 첫 실행 안내(갤러리)가 모달로 뜨지 않게 한다. 나머지 저장소는 비어 있는 새 상태.
@@ -183,7 +184,12 @@ const runBrowser = async () => {
       } finally {
         await context.close();
       }
-    });
+    };
+    // 영상을 인코딩하는 테스트(녹화 MediaRecorder · 영상 렌더링 WebCodecs)는 같은 브라우저의 미디어 인코더를 나눠 쓰면
+    // 서로 프레임을 빼앗겨 실패할 수 있다(녹화가 한 프레임만 담김). 나머지를 병렬로 돌린 뒤 하나씩 따로 돌린다.
+    const serial = plan.browser.filter(name => MEDIA_BROWSER_TESTS.has(name));
+    await pool(plan.browser.filter(name => !serial.includes(name)), jobs || 3, runOne);
+    await pool(serial, 1, runOne);
   } finally {
     server.close(); await browser.close();
   }
