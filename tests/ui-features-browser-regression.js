@@ -71,6 +71,12 @@ void main() { fragColor = vec4(uTint * uAmount * (0.5 + uFree), 1.0); }
     const find = text => { search.value = text; search.dispatchEvent(new Event("input", { bubbles: true })); };
     $("galleryToggle").click();
     test(dialog.open, "갤러리 열림");
+    // 같은 줄의 카드는 가장 높은 카드에 맞춰 늘어난다. 버튼 기본값(justify-content:center)이면 내용이 가운데로 내려가 썸네일 위에 여백이 생겼다.
+    const gaps = [...dialog.querySelectorAll(".gallery-card")].map(card => {
+      const box = card.getBoundingClientRect(), thumb = card.querySelector(".gallery-thumb").getBoundingClientRect();
+      return Math.round(thumb.top - box.top - parseFloat(getComputedStyle(card).borderTopWidth));
+    });
+    test(gaps.every(gap => gap === 0), `모든 카드의 썸네일이 카드 맨 위에서 시작 (${gaps.filter(Boolean).length}개 어긋남)`);
     const total = dialog.querySelectorAll(".gallery-card").length;
     test(visible().length === total && $("galleryCount").textContent === "", "검색 전에는 모든 카드");
     find("sdf");
