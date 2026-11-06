@@ -126,7 +126,7 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
         settings: s,
         hasBuffers,
         signal: controller.signal,
-        onProgress: ({ phase, done, total }) => {
+        onProgress: ({ phase, done, total, tiles = 1 }) => {
           if (phase === "warmup") showProgress(0, `버퍼 준비 중 · 0초부터 시작 시간까지 ${done} / ${total}프레임`);
           else if (phase === "render") {
             renderStarted ||= performance.now();
@@ -134,7 +134,7 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
               left = done > 1 ? (elapsed / done) * (total - done) : NaN;
             showProgress(
               done / total,
-              `${done.toLocaleString("ko-KR")} / ${total.toLocaleString("ko-KR")}프레임 · 경과 ${formatTime((performance.now() - began) / 1000)}${Number.isFinite(left) ? ` · 남은 약 ${formatTime(left)}` : ""}`
+              `${done.toLocaleString("ko-KR")} / ${total.toLocaleString("ko-KR")}프레임 · 경과 ${formatTime((performance.now() - began) / 1000)}${Number.isFinite(left) ? ` · 남은 약 ${formatTime(left)}` : ""}${tiles > 1 ? ` · 프레임마다 타일 ${tiles}개로 나눠 그림` : ""}`
             );
           } else showProgress(1, "파일 만드는 중…");
         },

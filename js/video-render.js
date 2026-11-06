@@ -597,10 +597,16 @@ const render = async ({
     if (!context) throw new Error("2D Canvas를 사용할 수 없습니다.");
     const dt = 1 / s.fps,
       first = Math.round(s.start * s.fps);
+    // 타일 렌더링(renderer.renderOfflineFrameTiled)이 있으면 쓴다: 무거운 셰이더도 GPU 응답 제한에 걸리지 않게
+    // 프레임을 나눠 그리고 타일마다 GPU를 기다린다. capture(canvas)는 다 그린 직후 같은 작업 안에서 불린다.
+    const drawFrame = async (frame, capture) =>
+      typeof renderer.renderOfflineFrameTiled === "function"
+        ? renderer.renderOfflineFrameTiled(frame, capture)
+        : capture(renderer.renderOfflineFrame(frame));
     // 버퍼 상태 쌓기: 시작 시간 전의 프레임을 같은 간격으로 그린다(저장하지 않음).
     if (hasBuffers && first > 0)
       for (let j = 0; j < first; j++) {
-        renderer.renderOfflineFrame({ time: Math.max(0, s.start - (first - j) * dt), delta: dt, frame: j });
+        await drawFrame({ time: Math.max(0, s.start - (first - j) * dt), delta: dt, frame: j }, () => {});
         if (j % 4 === 3 || j === first - 1) {
           onProgress({ phase: "warmup", done: j + 1, total: first });
           await yieldTask();
@@ -649,12 +655,14 @@ const render = async ({
       new Promise((resolve, reject) =>
         mirror.toBlob(blob => (blob ? resolve(blob) : reject(new Error("PNG 생성 실패"))), "image/png")
       );
+    let lastTiles = renderer.getOfflineTiling?.().tiles ?? 0;
     for (let i = 0; i < s.frames; i++) {
       check();
       if (failure) throw failure;
-      const drawn = renderer.renderOfflineFrame({ time: s.start + i * dt, delta: dt, frame: baseFrame + i });
       // WebGL 캔버스는 그린 직후(같은 작업 안)에만 읽을 수 있으므로 곧바로 2D 캔버스에 옮긴다.
-      context.drawImage(drawn, 0, 0);
+      await drawFrame({ time: s.start + i * dt, delta: dt, frame: baseFrame + i }, drawn =>
+        context.drawImage(drawn, 0, 0)
+      );
       if (encoder) {
         const frame = new Frame(mirror, {
           timestamp: Math.round((i * 1e6) / s.fps),
@@ -671,7 +679,11 @@ const render = async ({
         const blob = await toBlob();
         zip.add(frameName(i), new Uint8Array(await blob.arrayBuffer()), blob);
       }
-      onProgress({ phase: "render", done: i + 1, total: s.frames });
+      // 이번 프레임을 몇 개의 타일로 나눠 그렸는지(무거운 셰이더일수록 많다)
+      const tiling = renderer.getOfflineTiling?.(),
+        tiles = tiling ? tiling.tiles - lastTiles : 1;
+      lastTiles = tiling?.tiles ?? 0;
+      onProgress({ phase: "render", done: i + 1, total: s.frames, tiles });
       await yieldTask();
     }
     check();

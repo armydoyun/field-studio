@@ -560,6 +560,42 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null) => 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
   };
+  // 영상 렌더링용 타일 그리기: drawPasses와 같은 순서·같은 결과지만, 패스마다 tilesFor(pass)가 준 사각형만큼씩
+  // 가위(scissor)로 나눠 그리고 타일마다 afterTile(pass, rect)을 기다린다(그동안 GPU가 그 타일을 끝낸다).
+  // 한 번에 GPU에 맡기는 일이 작아져, 무거운 셰이더도 GPU 응답 제한(Windows TDR 등)에 걸려 컨텍스트를 잃지 않는다.
+  // 타일마다 같은 Uniform·입력을 쓰고 gl_FragCoord도 그대로라, 나눠 그려도 한 번에 그린 것과 같다.
+  const drawPassesTiled = async (uploadGlobals, tilesFor, afterTile) => {
+    if (!passes.length) return;
+    try {
+      for (const pass of passes) {
+        for (const [x, y, w, h] of tilesFor(pass)) {
+          releaseChannels();
+          gl.bindFramebuffer(gl.FRAMEBUFFER, pass.fbos[1 - pass.readIndex]);
+          gl.viewport(0, 0, pass.width, pass.height);
+          gl.useProgram(pass.program);
+          uploadGlobals(pass.locations, pass.width, pass.height);
+          bindChannels(pass.channels, pass.locations);
+          gl.enable(gl.SCISSOR_TEST);
+          gl.scissor(x, y, w, h);
+          try {
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+          } finally {
+            gl.disable(gl.SCISSOR_TEST);
+          }
+          await afterTile(pass, [x, y, w, h]);
+        }
+        if (pass.mipmap) {
+          releaseChannels();
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          generateMips(pass, 1 - pass.readIndex);
+        }
+      }
+      for (const pass of passes) pass.readIndex = 1 - pass.readIndex;
+    } finally {
+      releaseChannels();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+  };
   const bindImage = locations => bindChannels(imageChannels, locations, true);
   const unbindImage = () => releaseChannels();
   // 미리보기 셰이더: 채널 분리(R/G/B/A 단색)와 노출 배율. HDR·음수 값은 화면에서 0~1로 잘린다.
@@ -782,6 +818,7 @@ void main(){
     setPasses,
     stashTargets,
     restoreTargets,
+    drawPassesTiled,
     updatePasses,
     validateConfiguration,
     refreshPrograms,
