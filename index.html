@@ -101,7 +101,7 @@
                         <p id="uniformResults" class="help" role="status"></p>
                         <div id="uniformList" class="uniform-list"></div>
                         <p class="help uniform-footnote">선언은 자동 생성됩니다. 실제 화면에 반영하려면 GLSL에서 해당 변수를 참조해야 합니다.</p>
-                        <details class="builtin-reference"><summary>내장 Uniform 참조</summary><p class="help">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
+                        <details class="builtin-reference"><summary>내장 Uniform 참조</summary><p class="help">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>float uWheel</dt><dd>마우스 휠 누적 칸 수 (위로 +1)</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
                     </section>
                 </div>
 

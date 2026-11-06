@@ -11,6 +11,7 @@ const BUILTINS = {
   delta: ["uDeltaTime", ["float"]],
   frame: ["uFrame", ["int", "float", "uint"]],
   mouse: ["uMouse", ["vec2", "vec4"]],
+  wheel: ["uWheel", ["float"]],
   debug: ["uDebugRaySteps", ["bool", "int"]],
   maxSteps: ["uMaxSteps", ["int", "float"]],
   maxDistance: ["uMaxDistance", ["float"]],
@@ -783,6 +784,8 @@ void main(){
     getPreview,
     getMemoryBytes,
     getReflection,
+    // 버퍼 패스 가운데 하나라도 이 내장 Uniform(BUILTINS 키)을 쓰는지.
+    usesBuiltin: key => passes.some(p => p.locations?.[key] != null),
     detachTexture,
     onLost,
     restore,

@@ -11,7 +11,7 @@ const root=path.join(__dirname,"..");
 const load=file=>{let mod;vm.runInNewContext(fs.readFileSync(path.join(root,"js",file),"utf8"),{define:(deps,factory)=>mod=factory()},{filename:file});return mod;};
 const Annotations=load("annotations.js"),Shader=load("shader.js");
 // 렌더러가 주는 값과 텍스처: 어노테이션 대상이 아니다.
-const BUILTIN=new Set(["uResolution","uTime","uDeltaTime","uFrame","uMouse","uDebugRaySteps","uMaxSteps","uMaxDistance","uSurfaceEpsilon","uNormalEpsilon","iChannelResolution"]);
+const BUILTIN=new Set(["uResolution","uTime","uDeltaTime","uFrame","uMouse","uWheel","uDebugRaySteps","uMaxSteps","uMaxDistance","uSurfaceEpsilon","uNormalEpsilon","iChannelResolution"]);
 // 이름으로 색인 것을 알아본다. 새 색 Uniform 이름이 여기에 안 걸리면 목록에 더한다.
 const COLOR_NAME=/col|color|tint|sky|fog|ink|lead|glow|hot|cool|back|high|low|sun/i;
 // 파일 안의 모든 Uniform 선언 줄(템플릿 문자열의 실제 줄과 head("…\n…") 같은 한 줄짜리 문자열 둘 다).

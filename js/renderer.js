@@ -35,6 +35,7 @@ const DEFAULT_BUILTIN_TYPES = Object.freeze({
   delta: "float",
   frame: "int",
   mouse: "vec2",
+  wheel: "float",
   debug: "bool",
   maxSteps: "int",
   maxDistance: "float",
@@ -99,6 +100,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     click = [0, 0];
   let mouseDown = false,
     clickPending = false;
+  // uWheel: 뷰포트에서 굴린 휠의 누적 칸 수(위로 굴리면 +1). 시간 초기화 때 0으로 돌아간다.
+  let wheel = 0;
   // 성능 지표: cpuMs는 프레임당 GL 명령 제출 시간(JS), frameMs는 rAF 간격, GPU 시간은 gpuTimer가 측정한다.
   const clock =
     typeof performance === "object" && typeof performance.now === "function"
@@ -255,6 +258,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         gl.uniform4f(target.mouse, x, y, mouseDown ? cx : -cx, clickPending ? cy : -cy);
       } else gl.uniform2f(target.mouse, x, y);
     }
+    if (target.wheel != null) gl.uniform1f(target.wheel, wheel);
     if (target.debug != null) gl.uniform1i(target.debug, debugHeatmap ? 1 : 0);
     if (target.maxSteps != null) {
       if (types.maxSteps === "float") gl.uniform1f(target.maxSteps, raymarchSettings.maxSteps);
@@ -517,7 +521,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed || lost) throw new Error("시뮬레이션을 초기화할 수 없습니다.");
     passManager.resetTargets();
     frameCount = 0;
-    time = lastDelta = 0;
+    time = lastDelta = wheel = 0;
     lastTime = null;
     nextFrameAt = 0;
     scheduleFrame();
@@ -553,6 +557,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const onPointerUp = () => {
     mouseDown = false;
+  };
+  // 셰이더가 uWheel을 쓸 때만 휠을 가로챈다(아니면 페이지 스크롤 등 기본 동작을 그대로 둔다). Ctrl+휠은 브라우저 확대.
+  const usesWheel = () => !!program && (uniforms?.wheel != null || passManager.usesBuiltin("wheel"));
+  const onWheel = event => {
+    if (event.ctrlKey || !usesWheel()) return;
+    event.preventDefault();
+    // 한 칸(마우스 휠 한 번)을 1로 맞춘다: 픽셀 단위는 100px, 줄 단위는 3줄을 한 칸으로 본다.
+    const unit = event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 1 : 100;
+    wheel -= event.deltaY / unit; // uMouse처럼 일시정지 중에는 다시 그리지 않는다(재생하거나 한 프레임 진행하면 반영)
   };
   const onPointerLeave = () => {
     // 드래그 중(포인터 캡처)에는 캔버스 밖으로 나가도 위치를 유지한다.
@@ -619,6 +632,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     canvas.removeEventListener("pointerdown", onPointerDown);
     canvas.removeEventListener("pointerup", onPointerUp);
     canvas.removeEventListener("pointercancel", onPointerUp);
+    canvas.removeEventListener("wheel", onWheel);
     gpuTimer.dispose();
     canvas.removeEventListener("webglcontextlost", onContextLost);
     canvas.removeEventListener("webglcontextrestored", onContextRestored);
@@ -638,6 +652,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("webglcontextlost", onContextLost);
   canvas.addEventListener("webglcontextrestored", onContextRestored);
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -711,6 +726,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     "uDeltaTime",
     "uFrame",
     "uMouse",
+    "uWheel",
     "uDebugRaySteps",
     "uMaxSteps",
     "uMaxDistance",
@@ -948,6 +964,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const getStats = () => ({
     fps: Math.round(fps * 10) / 10,
     frame: frameCount,
+    wheel,
     time,
     timeScale,
     width: gl.drawingBufferWidth,
