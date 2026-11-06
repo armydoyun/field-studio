@@ -630,6 +630,47 @@ const mount = (renderer, input, settings) => {
       })
     );
   listen($("stepFrame"), "click", () => attempt(stepFrame));
+  // 무거운 예제 안내: 갤러리에서 예제를 연 뒤 몇 초 동안의 실제 FPS가 낮으면 해상도 배율을 낮추자고 한 번 제안한다.
+  // "그대로 두기"를 고른 예제는 이번 세션에서 다시 묻지 않는다.
+  const SLOW_FPS = 30,
+    declined = new Set();
+  let suggestTimer = 0,
+    suggestTarget = 1;
+  const hideSuggest = () => {
+    clearTimeout(suggestTimer);
+    suggestTimer = 0;
+    $("perfSuggest").hidden = true;
+  };
+  const checkHeavy = ({ id, title }) => {
+    const s = renderer.getStats();
+    if (!s.running || s.resolutionScale <= 0.5 || declined.has(id)) return;
+    const floor = s.fpsLimit > 0 ? Math.min(SLOW_FPS, s.fpsLimit * 0.8) : SLOW_FPS;
+    if (!(s.fps > 0 && s.fps < floor)) return;
+    suggestTarget = s.resolutionScale > 0.75 ? 0.75 : 0.5;
+    $("perfSuggestText").textContent =
+      `이 예제(${title})는 지금 약 ${s.fps.toFixed(0)} FPS로 무겁습니다. 해상도 배율을 낮출까요?`;
+    $("perfSuggestApply").textContent = `${Math.round(suggestTarget * 100)}%로 낮추기`;
+    $("perfSuggest").dataset.example = id;
+    $("perfSuggest").hidden = false;
+  };
+  listen(document, "gallery-example-loaded", event => {
+    hideSuggest();
+    const detail = event.detail || {};
+    // 예제를 바꾼 직후에는 컴파일·첫 프레임 때문에 FPS가 흔들린다. 1초 구간 FPS가 두 번 갱신될 만큼 기다린다.
+    suggestTimer = setTimeout(() => checkHeavy(detail), 3000);
+  });
+  listen($("perfSuggestApply"), "click", () =>
+    attempt(() => {
+      renderer.setResolutionScale(suggestTarget);
+      hideSuggest();
+      updateStats();
+    })
+  );
+  listen($("perfSuggestDismiss"), "click", () => {
+    if ($("perfSuggest").dataset.example) declined.add($("perfSuggest").dataset.example);
+    hideSuggest();
+  });
+  signal.addEventListener("abort", () => clearTimeout(suggestTimer));
   listen($("resolutionScale"), "input", event =>
     attempt(() => {
       const value = Number(event.target.value);

@@ -788,7 +788,15 @@ const mount = ({ studio, Shader, preview = null }) => {
     finishOnboarding();
     const project = item.project || { image: item.image, passes: [], imageChannels: {} };
     const ok = await (item.action ? studio[item.action]() : studio.loadExample(project, params(sourcesOf(item))));
-    if (ok) studio.open();
+    if (ok) {
+      studio.open();
+      // 설정 패널이 실제 FPS를 보고 무거우면 해상도를 낮추자고 제안한다(ui.js).
+      document.dispatchEvent(
+        new CustomEvent("gallery-example-loaded", {
+          detail: { id: item.id, title: item.title, level: perfResults.get(item.id)?.level ?? null },
+        })
+      );
+    }
     return ok;
   };
   // 가이드의 "예제 열기" 버튼용: id로 예제를 바로 연다.
