@@ -35,6 +35,7 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
   // ---- 설정 ----
   const base = { start: 0, duration: 2, fps: 30, width: 1281, height: 721, format: "webm-vp9", quality: "high" };
   const s = V.normalizeSettings(base, { limit: 4096 });
+  check(V.normalizeSettings({ ...base, format: undefined }).format === "mp4-h264", "기본 형식은 MP4(H.264)");
   check(s.width === 1280 && s.height === 720, "WebM은 짝수 크기로 내림");
   check(s.frames === 60 && s.duration === 2, "프레임 수 = 길이 × fps");
   check(s.bitrate === Math.round(1280 * 720 * 30 * V.QUALITY.high), "비트레이트 = 픽셀 × fps × 품질");
@@ -107,6 +108,86 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
   for (let i = 0; i < 70; i++) long.addChunk({ type: i ? "delta" : "key", timestamp: i * 1e6, data: Uint8Array.of(i) });
   const longBytes = await bytesOf(long.finish()), longSeg = parse(longBytes, parse(longBytes)[1].body, parse(longBytes)[1].end);
   check(longSeg.filter(e => e.id === 0x1f43b675).length === 3 && longSeg.filter(e => e.id === 0x1c53bb6b).length === 1, "32초마다 클러스터 분할(Cue는 키프레임 클러스터만)");
+
+  // ---- MP4 먹서 ----
+  const boxes = (b, start = 0, end = b.length) => {
+    const out = [], view = new DataView(b.buffer, b.byteOffset);
+    for (let at = start; at < end; ) {
+      let size = view.getUint32(at), head = 8;
+      const type = String.fromCharCode(...b.subarray(at + 4, at + 8));
+      if (size === 1) { size = Number(view.getBigUint64(at + 8)); head = 16; }
+      out.push({ type, start: at, body: at + head, end: at + size });
+      at += size;
+    }
+    assert.equal(out.at(-1)?.end ?? start, end, "MP4 박스가 경계에 딱 맞아야 한다");
+    return out;
+  };
+  const find = (b, path, from = { body: 0, end: b.length }) => {
+    let node = from;
+    for (const type of path.split(".")) {
+      const skip = { stsd: 8, avc1: 78, dref: 8 }[node.type] || 0;
+      node = boxes(b, node.body + skip, node.end).find(x => x.type === type);
+      assert.ok(node, `${path}: ${type} 없음`);
+    }
+    return node;
+  };
+  const u32 = (b, at) => new DataView(b.buffer, b.byteOffset).getUint32(at);
+  const avcC = Uint8Array.of(1, 0x64, 0, 0x28, 0xff, 0xe1, 0, 4, 0x67, 0x64, 0, 0x28, 1, 0, 4, 0x68, 0xee, 0x3c, 0x80);
+  const mp4 = V.createMp4Muxer({ width: 320, height: 180, fps: 30 });
+  assert.throws(() => mp4.addChunk({ type: "delta", timestamp: 0, data: Uint8Array.of(1) }), /키프레임/);
+  mp4.setDescription(avcC.buffer);
+  mp4.setDescription(Uint8Array.of(9, 9)); // 두 번째부터는 무시
+  for (let i = 0; i < 75; i++) mp4.addChunk({ type: i % 30 === 0 ? "key" : "delta", timestamp: Math.round((i * 1e6) / 30), data: Uint8Array.of(0, 0, 0, 1, i) });
+  const m = await bytesOf(mp4.finish());
+  const mtop = boxes(m);
+  check(mtop.map(x => x.type).join() === "ftyp,moov,mdat", "ftyp → moov → mdat (앞쪽 moov: 받자마자 재생)");
+  check(String.fromCharCode(...m.subarray(8, 12)) === "isom", "ftyp isom");
+  const mvhd = find(m, "moov.mvhd");
+  check(u32(m, mvhd.body + 12) === 1000 && u32(m, mvhd.body + 16) === 2500, "mvhd: 1000 단위, 2500ms");
+  const tkhd = find(m, "moov.trak.tkhd");
+  check(u32(m, tkhd.body + 76) === 320 * 65536 && u32(m, tkhd.body + 80) === 180 * 65536, "tkhd 크기");
+  const mdhd = find(m, "moov.trak.mdia.mdhd");
+  check(u32(m, mdhd.body + 12) === 90000 && u32(m, mdhd.body + 16) === 75 * 3000, "mdhd: 90000 단위(30fps면 프레임당 3000)");
+  check(String.fromCharCode(...m.subarray(find(m, "moov.trak.mdia.hdlr").body + 8, find(m, "moov.trak.mdia.hdlr").body + 12)) === "vide", "hdlr vide");
+  const avc1 = find(m, "moov.trak.mdia.minf.stbl.stsd.avc1");
+  check(m[avc1.body + 24] * 256 + m[avc1.body + 25] === 320 && m[avc1.body + 26] * 256 + m[avc1.body + 27] === 180, "avc1 샘플 항목 크기");
+  const avcBox = find(m, "moov.trak.mdia.minf.stbl.stsd.avc1.avcC");
+  check([...m.subarray(avcBox.body, avcBox.end)].join() === [...avcC].join(), "avcC = 인코더 description(첫 것)");
+  const stbl = find(m, "moov.trak.mdia.minf.stbl");
+  const stts = find(m, "stts", stbl);
+  check(u32(m, stts.body + 4) === 1 && u32(m, stts.body + 8) === 75 && u32(m, stts.body + 12) === 3000, "stts: 75프레임 × 3000");
+  const stss = find(m, "stss", stbl);
+  check(u32(m, stss.body + 4) === 3 && [0, 1, 2].map(i => u32(m, stss.body + 8 + i * 4)).join() === "1,31,61", "stss: 키프레임 1·31·61");
+  const stsz = find(m, "stsz", stbl);
+  check(u32(m, stsz.body + 8) === 75 && u32(m, stsz.body + 12) === 5, "stsz: 프레임 크기");
+  const stco = find(m, "stco", stbl), mdat = mtop[2];
+  check(u32(m, stco.body + 8) === mdat.body && m[mdat.body + 4] === 0 && m[mdat.body + 9] === 1 && m[mdat.end - 1] === 74, "stco가 mdat 데이터 시작을 가리키고 프레임이 순서대로");
+  check(!boxes(m, stbl.body, stbl.end).some(x => x.type === "ctts"), "표시 순서 = 디코딩 순서면 ctts 없음");
+  check(V.createMp4Muxer({ width: 16, height: 16, fps: 7 }).timescale === 7000, "90000으로 나누어떨어지지 않는 fps는 fps×1000 단위");
+  // B 프레임: 디코딩 순서 I P B B → 표시 시간 0, 3, 1, 2 (프레임 단위)
+  const bm = V.createMp4Muxer({ width: 16, height: 16, fps: 30 });
+  bm.setDescription(avcC);
+  [0, 3, 1, 2].forEach((f, i) => bm.addChunk({ type: i ? "delta" : "key", timestamp: Math.round((f * 1e6) / 30), data: Uint8Array.of(i) }));
+  const bb = await bytesOf(bm.finish()), ctts = find(bb, "ctts", find(bb, "moov.trak.mdia.minf.stbl"));
+  const offsets = [0, 1, 2, 3].map(i => new DataView(bb.buffer).getInt32(ctts.body + 8 + i * 8 + 4));
+  check(bb[ctts.body] === 1 && offsets.join() === [0, 2, -1, -1].map(v => v * 3000).join(), "B 프레임이면 ctts v1(부호 있는 표시 시간 차이)");
+  await assert.rejects(async () => { const x = V.createMp4Muxer({ width: 16, height: 16, fps: 30 }); x.addChunk({ type: "key", timestamp: 0, data: Uint8Array.of(1) }); x.finish(); }, /avcC/);
+  check(true, "avcC를 못 받으면 오류");
+  // 4GB 넘는 mdat: 64비트 크기 + co64 (실제 데이터 대신 크기만 큰 가짜 조각)
+  const big = V.createMp4Muxer({ width: 16, height: 16, fps: 1 });
+  big.setDescription(avcC);
+  for (let i = 0; i < 3; i++) big.addChunk({ type: "key", timestamp: i * 1e6, data: { byteLength: 0x7fffffff } });
+  const bigParts = big.finish(), head = await bytesOf(bigParts.filter(p => p instanceof Uint8Array));
+  const bigTop = [], hv = new DataView(head.buffer);
+  for (let at = 0; at < head.length; ) {
+    const size = hv.getUint32(at), type = String.fromCharCode(...head.subarray(at + 4, at + 8));
+    bigTop.push(type);
+    if (type === "mdat") { check(size === 1 && Number(hv.getBigUint64(at + 8)) === 3 * 0x7fffffff + 16, "mdat 64비트 크기"); break; }
+    at += size;
+  }
+  const moovEnd = hv.getUint32(0) + hv.getUint32(hv.getUint32(0)); // ftyp + moov
+  const bigStbl = find(head, "moov.trak.mdia.minf.stbl", { body: 0, end: moovEnd });
+  check(boxes(head, bigStbl.body, bigStbl.end).some(x => x.type === "co64") && bigTop.join() === "ftyp,moov,mdat", "4GB 넘으면 co64");
 
   // ---- ZIP ----
   const sample = new TextEncoder().encode("hello shader");

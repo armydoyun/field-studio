@@ -117,26 +117,32 @@ void main() {
     test(after.time === time0 && after.width === size0[0] && after.height === size0[1] && !after.running && !after.offline,
       `끝나면 시간·크기·일시정지 상태 복원 ${JSON.stringify([after.time, time0, after.width, size0, after.running, after.offline])}`);
 
-    // ---- WebM ----
+    // ---- 영상(MP4 · WebM) ----
     const formats = [...$("videoFormat").options].filter(o => !o.disabled).map(o => o.value);
-    const webm = formats.find(f => f.startsWith("webm"));
-    if (!webm) console.warn("이 브라우저는 WebCodecs VP9/VP8 인코딩을 지원하지 않아 WebM 검사를 건너뜀");
-    else {
-      set("videoFormat", webm);
+    const videoFormats = ["mp4-h264", formats.find(f => f.startsWith("webm"))].filter(f => formats.includes(f));
+    if (!videoFormats.includes("mp4-h264")) console.warn("이 브라우저는 WebCodecs H.264 인코딩을 지원하지 않아 MP4 검사를 건너뜀");
+    if (!videoFormats.some(f => f.startsWith("webm"))) console.warn("이 브라우저는 WebCodecs VP9/VP8 인코딩을 지원하지 않아 WebM 검사를 건너뜀");
+    for (const format of videoFormats) {
+      const [container] = format.split("-");
+      set("videoFormat", format);
       set("videoStart", 0);
       set("videoDuration", 1);
       set("videoFps", 10);
       set("videoWidth", 129); // 홀수는 짝수로 내림
       set("videoHeight", 72);
-      test(/^10프레임 · 128 × 72/.test($("videoRenderSummary").textContent), "WebM은 짝수 크기");
+      test(/^10프레임 · 128 × 72/.test($("videoRenderSummary").textContent), `${container}: 짝수 크기`);
       const video = await runRender();
-      test(video.blob.type === "video/webm" && /-128x72-10fps\.webm$/.test(video.name), `WebM 파일: ${video.name}`);
+      test(video.blob.type === `video/${container}` && new RegExp(`-128x72-10fps\\.${container}$`).test(video.name), `${container} 파일: ${video.name}`);
       const element = document.createElement("video");
       element.muted = true;
       element.src = URL.createObjectURL(video.blob);
       await new Promise((resolve, reject) => { element.onloadedmetadata = resolve; element.onerror = () => reject(new Error(`video error ${element.error?.code}`)); });
-      test(element.videoWidth === 128 && element.videoHeight === 72, `재생 가능 · ${element.videoWidth}×${element.videoHeight}`);
-      test(Math.abs(element.duration - 1) < 0.01, `길이 1초 (${element.duration})`);
+      test(element.videoWidth === 128 && element.videoHeight === 72, `${container}: 재생 가능 · ${element.videoWidth}×${element.videoHeight}`);
+      test(Math.abs(element.duration - 1) < 0.01, `${container}: 길이 1초 (${element.duration})`);
+      // 마지막 프레임까지 디코딩되는지: 끝 근처로 옮겨 그 화면이 나오는지 본다
+      element.currentTime = 0.95;
+      await new Promise((resolve, reject) => { element.onseeked = resolve; element.onerror = () => reject(new Error(`seek error ${element.error?.code}`)); });
+      test(element.readyState >= 2, `${container}: 끝 프레임까지 디코딩`);
       URL.revokeObjectURL(element.src);
     }
 

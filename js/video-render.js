@@ -6,14 +6,33 @@
 //   · 버퍼 패스(피드백 시뮬레이션)가 있으면 시작 시간 전까지의 프레임을 먼저 그려(저장하지 않음) 상태를 쌓는다.
 // 순수 함수(normalizeSettings · createWebmMuxer · createZipWriter · crc32)는 DOM·GPU 없이 node 테스트에서 검사한다.
 
+// H.264 코덱 문자열은 레벨이 낮은 것부터: 이 크기·fps를 감당하는 가장 낮은 레벨을 고른다(브라우저가 레벨 한도를 검사한다).
+const H264_LEVELS = ["28", "2a", "32", "33", "34", "3c", "3d", "3e"];
 const FORMATS = Object.freeze({
+  "mp4-h264": {
+    label: "MP4 · H.264",
+    ext: "mp4",
+    container: "mp4",
+    mime: "video/mp4",
+    codecs: [...H264_LEVELS.map(level => `avc1.6400${level}`), ...H264_LEVELS.map(level => `avc1.4d00${level}`)],
+    encoder: { avc: { format: "avc" } }, // 길이 접두 NAL(AVCC) + description = avcC
+  },
   "webm-vp9": {
     label: "WebM · VP9",
     ext: "webm",
+    container: "webm",
+    mime: "video/webm",
     codecId: "V_VP9",
     codecs: ["vp09.00.51.08", "vp09.00.41.08", "vp09.00.10.08"],
   },
-  "webm-vp8": { label: "WebM · VP8", ext: "webm", codecId: "V_VP8", codecs: ["vp8"] },
+  "webm-vp8": {
+    label: "WebM · VP8",
+    ext: "webm",
+    container: "webm",
+    mime: "video/webm",
+    codecId: "V_VP8",
+    codecs: ["vp8"],
+  },
   png: { label: "PNG 연속 이미지 (ZIP)", ext: "zip" },
 });
 // 품질: 픽셀·프레임당 비트 수. 셰이더의 세밀한 무늬·그라디언트는 일반 영상보다 비트가 많이 든다.
@@ -29,7 +48,7 @@ const KEYFRAME_SECONDS = 2; // 키프레임 간격 = WebM 클러스터 길이(�
 
 // 입력값을 검사해 렌더링 설정으로 만든다. 잘못된 값은 RangeError. limit = 이 GPU가 그릴 수 있는 최대 변 길이.
 const normalizeSettings = (raw, { limit = 4096 } = {}) => {
-  const format = raw.format ?? "webm-vp9";
+  const format = raw.format ?? "mp4-h264";
   if (!Object.hasOwn(FORMATS, format)) throw new RangeError(`지원하지 않는 형식입니다: ${format}`);
   const quality = raw.quality ?? "high";
   if (!Object.hasOwn(QUALITY, quality)) throw new RangeError(`지원하지 않는 품질입니다: ${quality}`);
@@ -220,6 +239,149 @@ const createWebmMuxer = ({ codecId, width, height, fps }) => {
   return { addChunk, finish, frames: () => count };
 };
 
+// ---- MP4(ISO BMFF) 먹서 ----
+// 조각(fragment) 없는 일반 MP4: ftyp · moov(앞쪽 — 받자마자 재생 가능) · mdat. 모든 프레임을 한 덩어리(chunk)에 담는다.
+// 샘플 = AVCC(길이 접두 NAL) H.264 프레임. description = avcC(인코더의 decoderConfig.description).
+// mdat이 4GB를 넘으면 64비트 크기(largesize)와 co64를 쓴다. B 프레임(표시 순서 ≠ 디코딩 순서)이면 ctts(v1, 부호 있음)를 쓴다.
+const fourcc = text => ascii(text);
+const be = (bytes, value) => {
+  const out = new Uint8Array(bytes),
+    view = new DataView(out.buffer);
+  if (bytes === 8) view.setBigUint64(0, BigInt(value));
+  else if (bytes === 4) view.setUint32(0, value >>> 0);
+  else if (bytes === 2) view.setUint16(0, value & 0xffff);
+  else out[0] = value & 0xff;
+  return out;
+};
+const box = (type, children) => {
+  const body = children.flat();
+  return [be(4, 8 + sizeOf(body)), fourcc(type), ...body];
+};
+const fullBox = (type, version, flags, children) =>
+  box(type, [be(1, version), be(1, flags >> 16), be(2, flags), ...children]);
+const MATRIX = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000].map(v => be(4, v));
+const createMp4Muxer = ({ width, height, fps }) => {
+  const samples = [];
+  let description = null;
+  // 트랙 시간 단위: fps로 나누어떨어지는 값(90000이 되면 그것). 프레임 길이(delta)가 정수가 된다.
+  const timescale = 90000 % fps === 0 ? 90000 : fps * 1000,
+    delta = timescale / fps;
+  const setDescription = bytes => {
+    if (bytes && !description)
+      description = new Uint8Array(
+        ArrayBuffer.isView(bytes) ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) : bytes
+      );
+  };
+  const addChunk = ({ type, timestamp, data }) => {
+    if (!samples.length && type !== "key") throw new Error("첫 프레임은 키프레임이어야 합니다.");
+    samples.push({ key: type === "key", pts: Math.round((timestamp * timescale) / 1e6), data });
+  };
+  const finish = () => {
+    if (!samples.length) throw new Error("인코딩된 프레임이 없습니다.");
+    if (!description) throw new Error("H.264 설정(avcC)을 받지 못했습니다.");
+    const count = samples.length,
+      duration = count * delta,
+      movieDuration = Math.round((duration * 1000) / timescale),
+      dataSize = samples.reduce((sum, s) => sum + s.data.byteLength, 0),
+      large = dataSize + 16 > 0xffffffff;
+    // 디코딩 순서 = 인코더 출력 순서. 디코딩 시간 i·delta, 표시 시간 pts.
+    const offsets = samples.map((s, i) => s.pts - i * delta),
+      reordered = offsets.some(v => v !== 0);
+    const ftyp = box("ftyp", [
+      fourcc("isom"),
+      be(4, 0x200),
+      fourcc("isom"),
+      fourcc("iso2"),
+      fourcc("avc1"),
+      fourcc("mp41"),
+    ]);
+    const stbl = chunkOffset =>
+      box("stbl", [
+        fullBox("stsd", 0, 0, [
+          be(4, 1),
+          box("avc1", [
+            new Uint8Array(6),
+            be(2, 1), // data_reference_index
+            new Uint8Array(16),
+            be(2, width),
+            be(2, height),
+            be(4, 0x00480000),
+            be(4, 0x00480000),
+            be(4, 0),
+            be(2, 1), // frame_count
+            new Uint8Array(32), // compressorname
+            be(2, 0x18),
+            be(2, 0xffff),
+            box("avcC", [description]),
+          ]),
+        ]),
+        fullBox("stts", 0, 0, [be(4, 1), be(4, count), be(4, delta)]),
+        ...(reordered ? [fullBox("ctts", 1, 0, [be(4, count), ...offsets.flatMap(v => [be(4, 1), be(4, v)])])] : []),
+        fullBox("stss", 0, 0, [
+          be(4, samples.filter(s => s.key).length),
+          ...samples.flatMap((s, i) => (s.key ? [be(4, i + 1)] : [])),
+        ]),
+        fullBox("stsc", 0, 0, [be(4, 1), be(4, 1), be(4, count), be(4, 1)]),
+        fullBox("stsz", 0, 0, [be(4, 0), be(4, count), ...samples.map(s => be(4, s.data.byteLength))]),
+        large
+          ? fullBox("co64", 0, 0, [be(4, 1), be(8, chunkOffset)])
+          : fullBox("stco", 0, 0, [be(4, 1), be(4, chunkOffset)]),
+      ]);
+    const moov = chunkOffset =>
+      box("moov", [
+        fullBox("mvhd", 0, 0, [
+          be(4, 0),
+          be(4, 0),
+          be(4, 1000),
+          be(4, movieDuration),
+          be(4, 0x00010000),
+          be(2, 0x0100),
+          new Uint8Array(10),
+          ...MATRIX,
+          new Uint8Array(24),
+          be(4, 2),
+        ]),
+        box("trak", [
+          fullBox("tkhd", 0, 3, [
+            be(4, 0),
+            be(4, 0),
+            be(4, 1),
+            be(4, 0),
+            be(4, movieDuration),
+            new Uint8Array(8),
+            be(2, 0),
+            be(2, 0),
+            be(2, 0),
+            be(2, 0),
+            ...MATRIX,
+            be(4, width * 65536),
+            be(4, height * 65536),
+          ]),
+          box("mdia", [
+            fullBox("mdhd", 0, 0, [be(4, 0), be(4, 0), be(4, timescale), be(4, duration), be(2, 0x55c4), be(2, 0)]), // 언어 und
+            fullBox("hdlr", 0, 0, [
+              be(4, 0),
+              fourcc("vide"),
+              new Uint8Array(12),
+              ascii("VideoHandler"),
+              new Uint8Array(1),
+            ]),
+            box("minf", [
+              fullBox("vmhd", 0, 1, [new Uint8Array(8)]),
+              box("dinf", [fullBox("dref", 0, 0, [be(4, 1), fullBox("url ", 0, 1, [])])]),
+              stbl(chunkOffset),
+            ]),
+          ]),
+        ]),
+      ]);
+    // moov 크기는 덩어리 위치 값과 상관없다(고정 폭) → 한 번 재고 위치를 넣어 다시 만든다.
+    const mdatHeader = large ? [be(4, 1), fourcc("mdat"), be(8, dataSize + 16)] : [be(4, dataSize + 8), fourcc("mdat")];
+    const chunkOffset = sizeOf(ftyp) + sizeOf(moov(0)) + sizeOf(mdatHeader);
+    return [...ftyp, ...moov(chunkOffset), ...mdatHeader, ...samples.map(s => s.data)];
+  };
+  return { addChunk, setDescription, finish, frames: () => samples.length, timescale };
+};
+
 // ---- ZIP(압축 없음) ----
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -370,7 +532,14 @@ const probeFormats = async ({ width = 1920, height = 1080, fps = 30, Encoder = g
     if (typeof Encoder?.isConfigSupported !== "function") continue;
     for (const codec of spec.codecs)
       try {
-        const { supported } = await Encoder.isConfigSupported({ codec, width, height, framerate: fps, bitrate: 8e6 });
+        const { supported } = await Encoder.isConfigSupported({
+          codec,
+          width,
+          height,
+          framerate: fps,
+          bitrate: 8e6,
+          ...(spec.encoder || {}),
+        });
         if (supported) {
           result[format] = codec;
           break;
@@ -444,12 +613,17 @@ const render = async ({
       muxer = null,
       zip = null;
     if (codec) {
-      muxer = createWebmMuxer({ codecId: FORMATS[s.format].codecId, width: s.width, height: s.height, fps: s.fps });
+      const spec = FORMATS[s.format];
+      muxer =
+        spec.container === "mp4"
+          ? createMp4Muxer({ width: s.width, height: s.height, fps: s.fps })
+          : createWebmMuxer({ codecId: spec.codecId, width: s.width, height: s.height, fps: s.fps });
       encoder = new Encoder({
-        output: chunk => {
+        output: (chunk, metadata) => {
           const data = new Uint8Array(chunk.byteLength);
           chunk.copyTo(data);
           try {
+            if (metadata?.decoderConfig?.description) muxer.setDescription?.(metadata.decoderConfig.description);
             muxer.addChunk({ type: chunk.type, timestamp: chunk.timestamp, data });
           } catch (error) {
             failure ??= error;
@@ -467,6 +641,7 @@ const render = async ({
         bitrate: s.bitrate,
         bitrateMode: "variable",
         latencyMode: "quality",
+        ...(spec.encoder || {}),
       });
     } else zip = createZipWriter();
     const gop = Math.max(1, Math.round(s.fps * KEYFRAME_SECONDS));
@@ -522,7 +697,7 @@ const render = async ({
       zip.add("README.txt", new TextEncoder().encode(note));
       parts = zip.finish();
     }
-    const type = codec ? "video/webm" : "application/zip";
+    const type = codec ? FORMATS[s.format].mime : "application/zip";
     return { blob: new Blob(parts, { type }), name: fileName(s), settings: s, codec };
   } finally {
     if (encoder && encoder.state !== "closed") encoder.close();
@@ -537,6 +712,7 @@ export {
   normalizeSettings,
   estimateBytes,
   createWebmMuxer,
+  createMp4Muxer,
   createZipWriter,
   crc32,
   vint,
