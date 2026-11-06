@@ -44,6 +44,12 @@
                             <div class="preset-row" aria-label="빠른 FPS 설정"><button type="button" data-fps-preset="0">Auto</button><button type="button" data-fps-preset="30">30</button><button type="button" data-fps-preset="60">60</button><button type="button" data-fps-preset="120">120</button></div>
                         </div>
                         <div class="field">
+                            <label id="timeScaleTitle">재생 속도 <output id="timeScaleLabel">1×</output></label>
+                            <div class="preset-row" role="group" aria-labelledby="timeScaleTitle"><button type="button" data-time-scale="0.25">0.25×</button><button type="button" data-time-scale="0.5">0.5×</button><button type="button" data-time-scale="1">1×</button><button type="button" data-time-scale="2">2×</button></div>
+                            <button id="stepFrame" type="button" class="step-frame" title="한 프레임(1/60초) 진행 · 재생 중이면 먼저 멈춥니다 (.)">한 프레임 진행 <kbd>.</kbd></button>
+                            <p class="help">uTime이 흐르는 빠르기입니다. 새로고침하면 1×로 돌아옵니다.</p>
+                        </div>
+                        <div class="field">
                             <label for="resolutionScale">해상도 배율 <output id="resolutionLabel">100%</output></label>
                             <input id="resolutionScale" class="range-accent" type="range" min="0.25" max="1" step="0.05" value="1">
                             <div class="range-ends"><span>25%</span><span>100%</span></div>
@@ -237,6 +243,7 @@
             <div id="stats" class="stage-stats" aria-live="off">
                 <div class="stat-item"><span class="stat-caption">FPS</span><strong id="statFps">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">RESOLUTION</span><strong id="statResolution">--</strong></div>
+                <div class="stat-item"><span class="stat-caption">TIME</span><strong id="statTime">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">FRAME</span><strong id="statFrame">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">GPU</span><strong id="statGpu">--</strong></div>
             </div>

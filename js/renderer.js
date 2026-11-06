@@ -65,6 +65,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     lastTime = null,
     time = 0,
     lastDelta = 0;
+  // timeScale: 재생 배속(uTime·uTimeDelta에 곱한다). stepDelta: 일시정지 중 한 프레임 진행할 때 쓸 시간(초).
+  let timeScale = 1,
+    stepDelta = 0;
   // FPS는 약 1초 구간의 화면 갱신 횟수다. 정확한 GPU 셰이더 실행 시간은 아니다.
   let resolutionScale = 1,
     fps = 0,
@@ -318,7 +321,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         : now + interval;
     }
     resize();
-    const delta = lastTime === null ? 0 : Math.max(0, (now - lastTime) * 0.001);
+    const elapsed = lastTime === null ? 0 : Math.max(0, (now - lastTime) * 0.001),
+      delta = stepDelta || elapsed * timeScale;
+    stepDelta = 0;
     lastTime = now;
     time += delta;
     const cpuStart = clock();
@@ -347,7 +352,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       keyboard.endFrame();
       const cpu = clock() - cpuStart;
       cpuMs = cpuMs ? cpuMs * 0.9 + cpu * 0.1 : cpu;
-      if (delta > 0) frameMs = frameMs ? frameMs * 0.9 + delta * 100 : delta * 1000;
+      if (elapsed > 0) frameMs = frameMs ? frameMs * 0.9 + elapsed * 100 : elapsed * 1000;
     } catch (error) {
       const pending = captureQueue.splice(0);
       pending.forEach(({ reject }) => reject(error));
@@ -492,6 +497,21 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     }
     scheduleFrame();
     return true;
+  };
+  // 일시정지 중에 한 프레임만 진행한다(시간·프레임 수·피드백 버퍼가 함께 나아간다). 재생 중이면 아무것도 하지 않는다.
+  // 진행 시간은 배속과 관계없이 seconds(기본 1/60초)다.
+  const stepFrame = (seconds = 1 / 60) => {
+    if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 1)
+      throw new RangeError("stepFrame 시간은 0초 초과 1초 이하여야 합니다.");
+    if (running || disposed || lost || document.hidden || !program) return false;
+    stepDelta = seconds;
+    return redraw();
+  };
+  const setTimeScale = value => {
+    if (!Number.isFinite(value) || value < 0.05 || value > 8)
+      throw new RangeError("재생 배속은 0.05부터 8 사이여야 합니다.");
+    timeScale = value;
+    return timeScale;
   };
   const resetSimulation = () => {
     if (disposed || lost) throw new Error("시뮬레이션을 초기화할 수 없습니다.");
@@ -928,6 +948,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const getStats = () => ({
     fps: Math.round(fps * 10) / 10,
     frame: frameCount,
+    time,
+    timeScale,
     width: gl.drawingBufferWidth,
     height: gl.drawingBufferHeight,
     resolutionScale,
@@ -995,6 +1017,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     start,
     stop,
     resetSimulation,
+    stepFrame,
+    setTimeScale,
     captureScreenshot,
     onFrame,
     redraw,

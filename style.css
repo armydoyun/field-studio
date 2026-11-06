@@ -506,6 +506,8 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .field-hint { color:var(--faint);font-size:11px; }
 .input-unit { border-color:var(--line-strong);background:var(--surface);color:var(--muted); }
 .preset-row button { color:var(--muted); }
+.step-frame { display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:32px;margin-top:8px;font-size:12px; }
+.step-frame kbd { min-width:20px;min-height:20px; }
 .preset-row button.is-selected { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
 .range-ends { color:var(--faint); }
 /* 화면 테마 선택: 세 칸 분할 버튼 */

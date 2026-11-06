@@ -622,6 +622,14 @@ const mount = (renderer, input, settings) => {
       })
     );
   }
+  for (const button of document.querySelectorAll("[data-time-scale]"))
+    listen(button, "click", () =>
+      attempt(() => {
+        syncTimeScale(renderer.setTimeScale(Number(button.dataset.timeScale)));
+        updateStats();
+      })
+    );
+  listen($("stepFrame"), "click", () => attempt(stepFrame));
   listen($("resolutionScale"), "input", event =>
     attempt(() => {
       const value = Number(event.target.value);
@@ -698,6 +706,24 @@ const mount = (renderer, input, settings) => {
     const hidden = stage.classList.toggle("hud-hidden");
     $("hudToggle").setAttribute("aria-label", hidden ? "HUD 표시" : "HUD 숨기기");
     $("hudToggle").setAttribute("aria-pressed", String(!hidden));
+  };
+  const syncTimeScale = scale => {
+    for (const button of document.querySelectorAll("[data-time-scale]")) {
+      const active = Number(button.dataset.timeScale) === scale;
+      button.classList.toggle("is-selected", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+    setText("timeScaleLabel", `${scale}×`);
+  };
+  // 한 프레임 진행: 재생 중이면 먼저 멈추고, 멈춘 상태에서 1/60초만큼 그린다.
+  const stepFrame = () => {
+    const studio = window.shaderStudio;
+    if (studio ? studio.getPlaybackState() : renderer.getStats().running) {
+      if (studio) studio.togglePlayback();
+      else renderer.stop();
+    }
+    renderer.stepFrame();
+    requestAnimationFrame(() => requestAnimationFrame(updateStats));
   };
   const syncFpsPresets = fps => {
     for (const button of document.querySelectorAll("[data-fps-preset]")) {
@@ -844,6 +870,9 @@ const mount = (renderer, input, settings) => {
     } else if (key === "g") {
       event.preventDefault();
       toggleHud();
+    } else if (event.key === ".") {
+      event.preventDefault();
+      attempt(stepFrame);
     } else if (key === "/") {
       event.preventDefault();
       document.body.classList.remove("panel-hidden");
@@ -905,6 +934,8 @@ const mount = (renderer, input, settings) => {
     $("statFps").textContent = s.fps.toFixed(1) + (s.fpsLimit ? ` / ${s.fpsLimit}` : "");
     $("statResolution").textContent = `${s.width} × ${s.height}`;
     $("statFrame").textContent = s.frame.toLocaleString("ko-KR");
+    setText("statTime", `${(s.time ?? 0).toFixed(2)}s` + (s.timeScale && s.timeScale !== 1 ? ` ×${s.timeScale}` : ""));
+    syncTimeScale(s.timeScale ?? 1);
     // GPU 시간은 EXT_disjoint_timer_query_webgl2가 있을 때만 측정된다. 없으면 CPU 제출 시간만 표시한다.
     const gpu = s.gpu,
       gpuText =
