@@ -47,7 +47,7 @@
                             <label id="timeScaleTitle">재생 속도 <output id="timeScaleLabel">1×</output></label>
                             <div class="preset-row" role="group" aria-labelledby="timeScaleTitle"><button type="button" data-time-scale="0.25">0.25×</button><button type="button" data-time-scale="0.5">0.5×</button><button type="button" data-time-scale="1">1×</button><button type="button" data-time-scale="2">2×</button></div>
                             <button id="stepFrame" type="button" class="step-frame" title="한 프레임(1/60초) 진행 · 재생 중이면 먼저 멈춥니다 (.)">한 프레임 진행 <kbd>.</kbd></button>
-                            <p class="help">uTime이 흐르는 빠르기입니다. 새로고침하면 1×로 돌아옵니다.</p>
+                            <p class="help">uTime이 흐르는 빠르기입니다. 다른 렌더링 설정처럼 이 브라우저에 저장되고, Pack에도 함께 담깁니다.</p>
                         </div>
                         <div class="field">
                             <label for="resolutionScale">해상도 배율 <output id="resolutionLabel">100%</output></label>
@@ -383,11 +383,11 @@
                     <label for="videoSize"><span class="video-label">크기</span><select id="videoSize"><option value="screen">지금 화면</option><option value="1280x720">1280 × 720 · HD</option><option value="1920x1080" selected>1920 × 1080 · Full HD</option><option value="2560x1440">2560 × 1440 · QHD</option><option value="3840x2160">3840 × 2160 · 4K</option><option value="1080x1080">1080 × 1080 · 정사각</option><option value="1080x1920">1080 × 1920 · 세로</option><option value="custom">직접 입력</option></select></label>
                     <label for="videoWidth" class="video-custom-size" hidden><span class="video-label">너비 <span class="field-hint">px</span></span><input id="videoWidth" type="number" min="16" step="2" value="1920" inputmode="numeric"></label>
                     <label for="videoHeight" class="video-custom-size" hidden><span class="video-label">높이 <span class="field-hint">px</span></span><input id="videoHeight" type="number" min="16" step="2" value="1080" inputmode="numeric"></label>
-                    <label for="videoFormat"><span class="video-label">형식</span><select id="videoFormat"><option value="webm-vp9">WebM · VP9</option><option value="webm-vp8">WebM · VP8</option><option value="png">PNG 연속 이미지 (ZIP)</option></select></label>
+                    <label for="videoFormat"><span class="video-label">형식</span><select id="videoFormat"><option value="mp4-h264" selected>MP4 · H.264</option><option value="webm-vp9">WebM · VP9</option><option value="webm-vp8">WebM · VP8</option><option value="png">PNG 연속 이미지 (ZIP)</option></select></label>
                     <label for="videoQuality" id="videoQualityField"><span class="video-label">품질</span><select id="videoQuality"><option value="standard">보통</option><option value="high" selected>높음</option><option value="max">최고</option></select></label>
                 </fieldset>
                 <p id="videoRenderSummary" class="video-render-summary" aria-live="polite"></p>
-                <p class="help video-render-note">셰이더 시간(uTime)은 프레임마다 <code>시작 + 번호 ÷ FPS</code>, uDeltaTime은 <code>1 ÷ FPS</code>입니다. 재생 배속과 상관없고, 렌더링하는 동안 마우스·키 입력은 고정됩니다. 버퍼 패스가 있으면 0초부터 시작 시간까지 먼저 계산하고(저장하지 않음), 끝나면 버퍼는 처음부터 다시 시작합니다.</p>
+                <p class="help video-render-note">셰이더 시간(uTime)은 프레임마다 <code>시작 + 번호 ÷ FPS</code>, uDeltaTime은 <code>1 ÷ FPS</code>입니다. 재생 배속과 상관없고, 렌더링하는 동안 마우스·키 입력은 고정됩니다. 버퍼 패스가 있으면 0초부터 시작 시간까지 먼저 계산하고(저장하지 않음), 화면의 시뮬레이션은 렌더링 전 상태 그대로 이어집니다.</p>
                 <div id="videoRenderProgressBox" class="video-render-progress" hidden>
                     <progress id="videoRenderProgress" max="1" value="0"></progress>
                     <p id="videoRenderStatus" role="status"></p>

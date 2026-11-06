@@ -7,6 +7,7 @@ const mount = renderer => {
     resolutionScale: 1,
     maxPixels: 0,
     debugHeatmap: false,
+    timeScale: 1,
     raymarch: renderer.getRaymarchSettings(),
   };
   let available = true,
@@ -23,6 +24,7 @@ const mount = renderer => {
         resolutionScale: stats.resolutionScale,
         maxPixels: stats.maxPixels,
         debugHeatmap: stats.debugHeatmap,
+        timeScale: stats.timeScale,
       },
       raymarch: renderer.getRaymarchSettings(),
       user: renderer.getUserUniforms().map(({ name, type, value, options }) => ({ name, type, value, options })),
@@ -105,6 +107,7 @@ const mount = renderer => {
       ["resolutionScale", "setResolutionScale"],
       ["maxPixels", "setMaxPixels"],
       ["debugHeatmap", "setDebugHeatmap"],
+      ["timeScale", "setTimeScale"],
     ]) {
       if (Object.prototype.hasOwnProperty.call(rendering, key)) {
         try {
@@ -187,6 +190,10 @@ const mount = renderer => {
     )
       throw new Error("Pack Ray Marching 설정 키 오류");
     if (typeof data.rendering.debugHeatmap !== "boolean") throw new Error("Pack 히트맵 설정 오류");
+    // 재생 배속은 나중에 더한 항목이라 예전 Pack에는 없다(없으면 1×).
+    const scale = data.rendering.timeScale;
+    if (scale !== undefined && (typeof scale !== "number" || !Number.isFinite(scale) || scale < 0.05 || scale > 8))
+      throw new Error("Pack 설정 범위 오류: timeScale");
     return data;
   };
   const applyPack = data => {
@@ -196,6 +203,7 @@ const mount = renderer => {
     renderer.setResolutionScale(s.resolutionScale);
     renderer.setMaxPixels(s.maxPixels);
     renderer.setDebugHeatmap(s.debugHeatmap);
+    renderer.setTimeScale(s.timeScale ?? defaults.timeScale);
     renderer.setRaymarchSettings(data.raymarch);
     // panelHidden은 Pack 형식 호환을 위해 검증·저장만 한다. 패널 표시는 이 기기의 화면 배치이므로 프로젝트를 열어도 바꾸지 않는다.
     document.dispatchEvent(new Event("shader-settings-applied"));
@@ -207,6 +215,7 @@ const mount = renderer => {
     renderer.setResolutionScale(defaults.resolutionScale);
     renderer.setMaxPixels(defaults.maxPixels);
     renderer.setDebugHeatmap(defaults.debugHeatmap);
+    renderer.setTimeScale(defaults.timeScale);
     renderer.setRaymarchSettings(defaults.raymarch);
     document.body.classList.remove("panel-hidden");
     savedText = null;

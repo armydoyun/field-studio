@@ -56,7 +56,13 @@ const create = ({ $, on }) => {
     $("projectMenuLabel").textContent = text;
     toggle.dataset.saved = String(saved);
   };
-  return { open, close, isOpen, setLabel };
+  // modified: 보관함에 저장한 뒤 바뀌었는지(이름 옆 점). 저장하면 사라진다.
+  const setModified = modified => {
+    if (toggle.dataset.modified === String(modified)) return;
+    toggle.dataset.modified = String(modified);
+    toggle.setAttribute("aria-description", modified ? "보관함에 저장한 뒤 바뀜 · Ctrl+Shift+S로 저장" : "");
+  };
+  return { open, close, isOpen, setLabel, setModified };
 };
 
 export { create };

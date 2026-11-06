@@ -25,7 +25,7 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
     cancelButton = $("videoRenderCancel");
   const listen = (el, type, fn) => el.addEventListener(type, fn, { signal });
   let running = null, // AbortController
-    supported = { "webm-vp9": null, "webm-vp8": null, png: "png" },
+    supported = { "mp4-h264": null, "webm-vp9": null, "webm-vp8": null, png: "png" },
     probed = false;
   const gpuLimit = () => {
     const caps = renderer.getCapabilities?.();
@@ -85,7 +85,7 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
     try {
       supported = await Video.probeFormats();
     } catch (_) {
-      supported = { "webm-vp9": null, "webm-vp8": null, png: "png" };
+      supported = { "mp4-h264": null, "webm-vp9": null, "webm-vp8": null, png: "png" };
     }
     probed = true;
     for (const option of $("videoFormat").options) {
