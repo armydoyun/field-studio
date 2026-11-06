@@ -1674,6 +1674,7 @@ precision highp float;
 //  · Shadertoy 이름(iTime·iResolution·iMouse)은 아래 #define으로 FIELD Uniform에 연결했다. mainImage는 그대로다
 //  · uSpeed(시간 배속) 파라미터를 더했다
 //  · iMouse 대신 커서 위치를 쓴다: 커서를 올리면 시점이 바뀌고, 뷰포트 밖이면 원본의 기본 시점
+//  · 버퍼 폭이 600px 미만이면 시점을 고정하던 원본 분기를 뺐다(해상도 비율을 낮춰도 시점 조작이 된다)
 //
 // 원리: 파도 높이를 exp(sin(x)-1) 파형 여러 개의 합으로 만들고(노이즈가 없어 빠르다), 그 높이장 사이를 광선으로 좁혀 들어가 수면을 찾는다.
 uniform vec2 uResolution;
@@ -1800,9 +1801,8 @@ vec3 getRay(vec2 fragCoord) {
   // for fisheye, uncomment following line and comment the next one
   //vec3 proj = normalize(vec3(uv.x, uv.y, 1.0) + vec3(uv.x, uv.y, -1.0) * pow(length(uv), 2.0) * 0.05);  
   vec3 proj = normalize(vec3(uv.x, uv.y, 1.5));
-  if(iResolution.x < 600.0) {
-    return proj;
-  }
+  // 원본은 iResolution.x < 600이면 마우스 회전 없이 proj를 돌려준다(모바일 대비).
+  // FIELD에서는 해상도 비율을 낮추면 버퍼 폭이 600 아래로 내려가 시점 조작이 멈추므로 그 분기를 뺐다.
   return createRotationMatrixAxisAngle(vec3(0.0, -1.0, 0.0), 3.0 * ((NormalizedMouse.x + 0.5) * 2.0 - 1.0)) 
     * createRotationMatrixAxisAngle(vec3(1.0, 0.0, 0.0), 0.5 + 1.5 * (((NormalizedMouse.y == 0.0 ? 0.27 : NormalizedMouse.y) * 1.0) * 2.0 - 1.0))
     * proj;

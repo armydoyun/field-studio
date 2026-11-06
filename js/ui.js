@@ -1,6 +1,7 @@
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
 import * as StageMenu from "./stage-menu.js";
 import * as Recorder from "./recorder.js";
+import * as Annotations from "./annotations.js";
 const mount = (renderer, input, settings) => {
   const $ = id => document.getElementById(id);
   const controller = new AbortController(),
@@ -151,11 +152,27 @@ const mount = (renderer, input, settings) => {
     $("uniformNotice").textContent = "";
   };
   let uniformSnapshot = "";
+  // 셰이더 주석(@default·@range…)에서 읽은 파라미터 기본값. 코드에 어노테이션이 없는 파라미터는 되돌릴 값이 없다.
+  const annotatedDefaults = () => {
+    const project = window.shaderStudio?.getProject?.();
+    if (!project) return new Map();
+    const specs = Annotations.collect([project.image, ...(project.passes || []).map(p => p.fragment)]);
+    return new Map(specs.filter(spec => !spec.error).map(spec => [spec.name, spec]));
+  };
+  const sameValue = (a, b) =>
+    Array.isArray(a)
+      ? Array.isArray(b) && a.length === b.length && a.every((v, i) => sameValue(v, b[i]))
+      : typeof a === "number" && typeof b === "number"
+        ? Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b))
+        : a === b;
+  const formatDefault = value =>
+    (Array.isArray(value) ? value : [value]).map(v => (typeof v === "number" ? +v.toFixed(4) : String(v))).join(", ");
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
     const search = $("uniformSearch").value.trim().toLowerCase();
     uniformSnapshot = JSON.stringify(items);
+    const defaults = annotatedDefaults();
     userList.replaceChildren();
     $("uniformCount").textContent = `${items.length} / 64`;
     $("uniformCreate").disabled = items.length >= 64;
@@ -192,11 +209,42 @@ const mount = (renderer, input, settings) => {
           $("undoUniform").focus();
         })
       );
-      top.append(title, remove);
+      const spec = defaults.get(item.name);
+      let reset = null,
+        syncReset = null;
+      if (spec && spec.type === item.type) {
+        // 기본값으로 되돌리기: 버튼 또는 슬라이더 더블클릭. 이미 기본값이면 버튼을 비활성화한다.
+        const fallback = Annotations.clampValue(spec.value, item.options || {});
+        reset = element("button");
+        reset.className = "reset-uniform glyph-icon icon-reset";
+        reset.type = "button";
+        reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
+        reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
+        syncReset = () => {
+          reset.disabled = sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback);
+        };
+        syncReset();
+        const restore = () => {
+          if (sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback)) return;
+          if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
+          renderUniforms();
+          $("uniformNotice").textContent = `${item.name} 기본값으로 되돌림`;
+          [...userList.querySelectorAll(".uniform-row")]
+            .find(r => r.querySelector(".uniform-name")?.textContent === item.name)
+            ?.querySelector(".reset-uniform, input")
+            ?.focus();
+        };
+        reset.addEventListener("click", restore);
+        row.addEventListener("dblclick", event => {
+          if (event.target instanceof HTMLInputElement && event.target.type === "range") restore();
+        });
+      }
+      top.append(title, ...(reset ? [reset] : []), remove);
       const commit = (field, value) => {
         try {
           renderer.setUniform(item.name, value);
           item.value = value;
+          syncReset?.();
           field.removeAttribute("aria-invalid");
           showError("");
           return true;
@@ -574,6 +622,55 @@ const mount = (renderer, input, settings) => {
       })
     );
   }
+  for (const button of document.querySelectorAll("[data-time-scale]"))
+    listen(button, "click", () =>
+      attempt(() => {
+        syncTimeScale(renderer.setTimeScale(Number(button.dataset.timeScale)));
+        updateStats();
+      })
+    );
+  listen($("stepFrame"), "click", () => attempt(stepFrame));
+  // 무거운 예제 안내: 갤러리에서 예제를 연 뒤 몇 초 동안의 실제 FPS가 낮으면 해상도 배율을 낮추자고 한 번 제안한다.
+  // "그대로 두기"를 고른 예제는 이번 세션에서 다시 묻지 않는다.
+  const SLOW_FPS = 30,
+    declined = new Set();
+  let suggestTimer = 0,
+    suggestTarget = 1;
+  const hideSuggest = () => {
+    clearTimeout(suggestTimer);
+    suggestTimer = 0;
+    $("perfSuggest").hidden = true;
+  };
+  const checkHeavy = ({ id, title }) => {
+    const s = renderer.getStats();
+    if (!s.running || s.resolutionScale <= 0.5 || declined.has(id)) return;
+    const floor = s.fpsLimit > 0 ? Math.min(SLOW_FPS, s.fpsLimit * 0.8) : SLOW_FPS;
+    if (!(s.fps > 0 && s.fps < floor)) return;
+    suggestTarget = s.resolutionScale > 0.75 ? 0.75 : 0.5;
+    $("perfSuggestText").textContent =
+      `이 예제(${title})는 지금 약 ${s.fps.toFixed(0)} FPS로 무겁습니다. 해상도 배율을 낮출까요?`;
+    $("perfSuggestApply").textContent = `${Math.round(suggestTarget * 100)}%로 낮추기`;
+    $("perfSuggest").dataset.example = id;
+    $("perfSuggest").hidden = false;
+  };
+  listen(document, "gallery-example-loaded", event => {
+    hideSuggest();
+    const detail = event.detail || {};
+    // 예제를 바꾼 직후에는 컴파일·첫 프레임 때문에 FPS가 흔들린다. 1초 구간 FPS가 두 번 갱신될 만큼 기다린다.
+    suggestTimer = setTimeout(() => checkHeavy(detail), 3000);
+  });
+  listen($("perfSuggestApply"), "click", () =>
+    attempt(() => {
+      renderer.setResolutionScale(suggestTarget);
+      hideSuggest();
+      updateStats();
+    })
+  );
+  listen($("perfSuggestDismiss"), "click", () => {
+    if ($("perfSuggest").dataset.example) declined.add($("perfSuggest").dataset.example);
+    hideSuggest();
+  });
+  signal.addEventListener("abort", () => clearTimeout(suggestTimer));
   listen($("resolutionScale"), "input", event =>
     attempt(() => {
       const value = Number(event.target.value);
@@ -650,6 +747,24 @@ const mount = (renderer, input, settings) => {
     const hidden = stage.classList.toggle("hud-hidden");
     $("hudToggle").setAttribute("aria-label", hidden ? "HUD 표시" : "HUD 숨기기");
     $("hudToggle").setAttribute("aria-pressed", String(!hidden));
+  };
+  const syncTimeScale = scale => {
+    for (const button of document.querySelectorAll("[data-time-scale]")) {
+      const active = Number(button.dataset.timeScale) === scale;
+      button.classList.toggle("is-selected", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+    setText("timeScaleLabel", `${scale}×`);
+  };
+  // 한 프레임 진행: 재생 중이면 먼저 멈추고, 멈춘 상태에서 1/60초만큼 그린다.
+  const stepFrame = () => {
+    const studio = window.shaderStudio;
+    if (studio ? studio.getPlaybackState() : renderer.getStats().running) {
+      if (studio) studio.togglePlayback();
+      else renderer.stop();
+    }
+    renderer.stepFrame();
+    requestAnimationFrame(() => requestAnimationFrame(updateStats));
   };
   const syncFpsPresets = fps => {
     for (const button of document.querySelectorAll("[data-fps-preset]")) {
@@ -756,6 +871,25 @@ const mount = (renderer, input, settings) => {
       button.disabled = false;
     }
   });
+  // 고해상도 PNG: 2× = 지금 렌더 크기의 두 배, 4K = 긴 변 3840px(비율 유지). Image 패스만 다시 그린다.
+  for (const button of document.querySelectorAll("[data-capture]"))
+    listen(button, "click", async () => {
+      const { width: w, height: h } = renderer.getStats(),
+        mode = button.dataset.capture,
+        factor = mode === "4k" ? 3840 / Math.max(w, h) : 2,
+        width = Math.max(1, Math.round(w * factor)),
+        height = Math.max(1, Math.round(h * factor));
+      button.disabled = true;
+      try {
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        download(await renderer.captureScreenshotAt(width, height), `shader-${stamp}-${width}x${height}.png`);
+        showError("");
+      } catch (error) {
+        showError(`고해상도 PNG 저장 실패: ${error.message}`);
+      } finally {
+        button.disabled = false;
+      }
+    });
   listen($("previewPause"), "click", () =>
     attempt(() => {
       window.shaderStudio?.togglePlayback();
@@ -796,6 +930,9 @@ const mount = (renderer, input, settings) => {
     } else if (key === "g") {
       event.preventDefault();
       toggleHud();
+    } else if (event.key === ".") {
+      event.preventDefault();
+      attempt(stepFrame);
     } else if (key === "/") {
       event.preventDefault();
       document.body.classList.remove("panel-hidden");
@@ -857,6 +994,8 @@ const mount = (renderer, input, settings) => {
     $("statFps").textContent = s.fps.toFixed(1) + (s.fpsLimit ? ` / ${s.fpsLimit}` : "");
     $("statResolution").textContent = `${s.width} × ${s.height}`;
     $("statFrame").textContent = s.frame.toLocaleString("ko-KR");
+    setText("statTime", `${(s.time ?? 0).toFixed(2)}s` + (s.timeScale && s.timeScale !== 1 ? ` ×${s.timeScale}` : ""));
+    syncTimeScale(s.timeScale ?? 1);
     // GPU 시간은 EXT_disjoint_timer_query_webgl2가 있을 때만 측정된다. 없으면 CPU 제출 시간만 표시한다.
     const gpu = s.gpu,
       gpuText =

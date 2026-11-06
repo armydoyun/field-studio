@@ -44,6 +44,12 @@
                             <div class="preset-row" aria-label="빠른 FPS 설정"><button type="button" data-fps-preset="0">Auto</button><button type="button" data-fps-preset="30">30</button><button type="button" data-fps-preset="60">60</button><button type="button" data-fps-preset="120">120</button></div>
                         </div>
                         <div class="field">
+                            <label id="timeScaleTitle">재생 속도 <output id="timeScaleLabel">1×</output></label>
+                            <div class="preset-row" role="group" aria-labelledby="timeScaleTitle"><button type="button" data-time-scale="0.25">0.25×</button><button type="button" data-time-scale="0.5">0.5×</button><button type="button" data-time-scale="1">1×</button><button type="button" data-time-scale="2">2×</button></div>
+                            <button id="stepFrame" type="button" class="step-frame" title="한 프레임(1/60초) 진행 · 재생 중이면 먼저 멈춥니다 (.)">한 프레임 진행 <kbd>.</kbd></button>
+                            <p class="help">uTime이 흐르는 빠르기입니다. 새로고침하면 1×로 돌아옵니다.</p>
+                        </div>
+                        <div class="field">
                             <label for="resolutionScale">해상도 배율 <output id="resolutionLabel">100%</output></label>
                             <input id="resolutionScale" class="range-accent" type="range" min="0.25" max="1" step="0.05" value="1">
                             <div class="range-ends"><span>25%</span><span>100%</span></div>
@@ -95,7 +101,7 @@
                         <p id="uniformResults" class="help" role="status"></p>
                         <div id="uniformList" class="uniform-list"></div>
                         <p class="help uniform-footnote">선언은 자동 생성됩니다. 실제 화면에 반영하려면 GLSL에서 해당 변수를 참조해야 합니다.</p>
-                        <details class="builtin-reference"><summary>내장 Uniform 참조</summary><p class="help">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
+                        <details class="builtin-reference"><summary>내장 Uniform 참조</summary><p class="help">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>float uWheel</dt><dd>마우스 휠 누적 칸 수 (위로 +1)</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
                     </section>
                 </div>
 
@@ -215,6 +221,8 @@
                     <!-- 캡처 ▾ 메뉴 -->
                     <div id="captureMenu" class="stage-menu" role="group" aria-label="캡처" hidden>
                         <button id="screenshotButton" type="button" class="stage-menu-item" title="화면을 PNG로 저장" aria-label="PNG 스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>스크린샷 저장</span><kbd>PNG</kbd></button>
+                        <button id="screenshot2x" type="button" class="stage-menu-item" data-capture="2" title="지금 화면을 두 배 해상도로 다시 그려 PNG로 저장 · 버퍼 패스가 없는 프로젝트만" aria-label="2배 해상도 PNG 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>고해상도 저장</span><kbd>2×</kbd></button>
+                        <button id="screenshot4k" type="button" class="stage-menu-item" data-capture="4k" title="긴 변 3840px(4K)로 다시 그려 PNG로 저장 · 무거운 셰이더는 몇 초 걸릴 수 있음 · 버퍼 패스가 없는 프로젝트만" aria-label="4K PNG 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>고해상도 저장</span><kbd>4K</kbd></button>
                         <button id="recordButton" type="button" class="stage-menu-item" title="뷰포트를 영상으로 녹화" aria-label="녹화 시작"><span class="record-dot" aria-hidden="true"></span><span id="recordButtonLabel">녹화 시작</span><kbd id="recordFormat">WebM</kbd></button>
                     </div>
                     <!-- ⋯ 더보기 메뉴: 자주 쓰지 않는 도구. 단축키(X ? H G)는 그대로 동작한다. -->
@@ -232,11 +240,13 @@
             <div id="stageHint" class="stage-hint" aria-hidden="true">E 편집기 열기 · / 파라미터 찾기</div>
             <p id="keyboardHint" class="keyboard-hint" role="status" hidden>키보드 입력 중 · 키가 셰이더로 갑니다 · <kbd>Esc</kbd>로 나가기</p>
             <p id="previewNotice" class="preview-notice" role="status" hidden></p>
+            <div id="perfSuggest" class="perf-suggest" role="status" hidden><span id="perfSuggestText"></span><span class="perf-suggest-actions"><button id="perfSuggestApply" type="button" class="primary"></button><button id="perfSuggestDismiss" type="button">그대로 두기</button></span></div>
             <div class="viewport-footer">
             <div id="viewportInfo" class="viewport-info"><span class="info-dot"></span><span>미리보기</span><span id="viewportMode">IMAGE</span><span class="viewport-info-sep">|</span><span>GLSL ES 3.00</span></div>
             <div id="stats" class="stage-stats" aria-live="off">
                 <div class="stat-item"><span class="stat-caption">FPS</span><strong id="statFps">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">RESOLUTION</span><strong id="statResolution">--</strong></div>
+                <div class="stat-item"><span class="stat-caption">TIME</span><strong id="statTime">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">FRAME</span><strong id="statFrame">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">GPU</span><strong id="statGpu">--</strong></div>
             </div>
@@ -370,6 +380,7 @@
             <button id="galleryClose" type="button" class="glyph-icon icon-close" aria-label="갤러리 닫기" title="닫기 (Esc)"></button>
         </header>
         <div class="gallery-body">
+            <div class="gallery-search"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="gallerySearch" type="search" placeholder="제목·태그·설명·작가로 찾기 (예: SDF, 유체, noise)" title="예제 검색 (/) · Enter로 첫 결과 열기 · Esc로 지우기" autocomplete="off" spellcheck="false" aria-label="예제 검색" aria-controls="galleryResults"><span id="galleryCount" class="gallery-count" aria-live="polite"></span></div>
             <ol class="gallery-steps gallery-welcome-only">
                 <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Ctrl+S</kbd>로 즉시 실행</span></li>
                 <li><kbd>/</kbd><span><b>파라미터</b> — 슬라이더로 값을 조절하고 Uniform을 추가</span></li>
@@ -377,13 +388,16 @@
                 <li><kbd>?</kbd><span><b>가이드</b> — 모든 기능 설명·코드 예시, 처음이라면 아래 <b>UI 둘러보기</b></span></li>
             </ol>
             <p class="gallery-perf-legend"><span>카드 오른쪽 위 배지는 이 컴퓨터에서, 지금 미리보기 크기(해상도 배율 포함)로 한 프레임을 그리는 데 걸리는 시간의 어림값입니다. 카드가 화면에 보이면 잽니다.</span><span><span class="gallery-perf" data-level="light">가벼움</span> 4ms 미만 · <span class="gallery-perf" data-level="medium">보통</span> 12ms 미만 · <span class="gallery-perf" data-level="heavy">무거움</span> 33ms 미만 · <span class="gallery-perf" data-level="extreme">매우 무거움</span></span></p>
-            <h3>Shader Art</h3>
-            <div id="galleryGrid" class="gallery-grid"></div>
-            <h3>커뮤니티 셰이더</h3>
+            <div id="galleryResults">
+            <section class="gallery-section"><h3>Shader Art</h3>
+            <div id="galleryGrid" class="gallery-grid"></div></section>
+            <section class="gallery-section"><h3>커뮤니티 셰이더</h3>
             <p class="gallery-note">다른 사람이 MIT·CC0 등으로 재배포를 허락한 작품을 옮겨 왔습니다. 원작자·출처·바꾼 점은 각 셰이더 맨 위 주석에, 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있습니다.</p>
-            <div id="galleryCommunity" class="gallery-grid"></div>
-            <h3>기법 배우기</h3>
-            <div id="galleryLessons" class="gallery-grid"></div>
+            <div id="galleryCommunity" class="gallery-grid"></div></section>
+            <section class="gallery-section"><h3>기법 배우기</h3>
+            <div id="galleryLessons" class="gallery-grid"></div></section>
+            <p id="galleryEmpty" class="gallery-empty" hidden>찾는 예제가 없습니다. 다른 낱말로 찾아 보세요.</p>
+            </div>
         </div>
         <footer class="gallery-foot"><span>갤러리는 뷰포트 툴바 또는 <kbd>X</kbd>로 다시 열 수 있습니다.</span><div class="gallery-foot-actions"><button id="galleryTour" type="button" title="화면 요소를 하나씩 강조하며 설명합니다">UI 둘러보기</button><button id="galleryBlank" type="button">현재 작업 계속하기</button></div></footer>
     </dialog>

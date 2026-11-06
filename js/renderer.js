@@ -35,6 +35,7 @@ const DEFAULT_BUILTIN_TYPES = Object.freeze({
   delta: "float",
   frame: "int",
   mouse: "vec2",
+  wheel: "float",
   debug: "bool",
   maxSteps: "int",
   maxDistance: "float",
@@ -65,6 +66,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     lastTime = null,
     time = 0,
     lastDelta = 0;
+  // timeScale: 재생 배속(uTime·uTimeDelta에 곱한다). stepDelta: 일시정지 중 한 프레임 진행할 때 쓸 시간(초).
+  let timeScale = 1,
+    stepDelta = 0;
   // FPS는 약 1초 구간의 화면 갱신 횟수다. 정확한 GPU 셰이더 실행 시간은 아니다.
   let resolutionScale = 1,
     fps = 0,
@@ -96,6 +100,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     click = [0, 0];
   let mouseDown = false,
     clickPending = false;
+  // uWheel: 뷰포트에서 굴린 휠의 누적 칸 수(위로 굴리면 +1). 시간 초기화 때 0으로 돌아간다.
+  let wheel = 0;
   // 성능 지표: cpuMs는 프레임당 GL 명령 제출 시간(JS), frameMs는 rAF 간격, GPU 시간은 gpuTimer가 측정한다.
   const clock =
     typeof performance === "object" && typeof performance.now === "function"
@@ -252,6 +258,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         gl.uniform4f(target.mouse, x, y, mouseDown ? cx : -cx, clickPending ? cy : -cy);
       } else gl.uniform2f(target.mouse, x, y);
     }
+    if (target.wheel != null) gl.uniform1f(target.wheel, wheel);
     if (target.debug != null) gl.uniform1i(target.debug, debugHeatmap ? 1 : 0);
     if (target.maxSteps != null) {
       if (types.maxSteps === "float") gl.uniform1f(target.maxSteps, raymarchSettings.maxSteps);
@@ -318,7 +325,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         : now + interval;
     }
     resize();
-    const delta = lastTime === null ? 0 : Math.max(0, (now - lastTime) * 0.001);
+    const elapsed = lastTime === null ? 0 : Math.max(0, (now - lastTime) * 0.001),
+      delta = stepDelta || elapsed * timeScale;
+    stepDelta = 0;
     lastTime = now;
     time += delta;
     const cpuStart = clock();
@@ -347,7 +356,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       keyboard.endFrame();
       const cpu = clock() - cpuStart;
       cpuMs = cpuMs ? cpuMs * 0.9 + cpu * 0.1 : cpu;
-      if (delta > 0) frameMs = frameMs ? frameMs * 0.9 + delta * 100 : delta * 1000;
+      if (elapsed > 0) frameMs = frameMs ? frameMs * 0.9 + elapsed * 100 : elapsed * 1000;
     } catch (error) {
       const pending = captureQueue.splice(0);
       pending.forEach(({ reject }) => reject(error));
@@ -478,6 +487,63 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       nextFrameAt = 0;
       scheduleFrame();
     });
+  // 화면보다 큰 PNG: Image 패스만 width×height 크기의 화면 밖 Texture에 지금 시간 그대로 한 번 더 그려 읽는다.
+  // 시간·프레임 수는 바뀌지 않는다. 버퍼 패스가 있으면 버퍼가 화면 크기라(texelFetch 좌표가 어긋남) 지원하지 않는다.
+  const MAX_CAPTURE_PIXELS = 7680 * 4320;
+  const captureScreenshotAt = (width, height) =>
+    new Promise((resolve, reject) => {
+      if (disposed || lost || !program || !vao) throw new Error("지금은 캡처할 수 없습니다.");
+      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1)
+        throw new RangeError("캡처 크기는 1 이상의 정수여야 합니다.");
+      if (passManager.getReflection().length)
+        throw new Error("버퍼 패스가 있는 프로젝트는 화면 크기로만 저장할 수 있습니다.");
+      const limit = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), ...gl.getParameter(gl.MAX_VIEWPORT_DIMS));
+      if (width > limit || height > limit || width * height > MAX_CAPTURE_PIXELS)
+        throw new RangeError(`이 GPU에서 저장할 수 있는 크기를 넘습니다 (최대 ${limit}px · 33MP).`);
+      const texture = gl.createTexture(),
+        fbo = gl.createFramebuffer();
+      let pixels;
+      try {
+        Diagnostics.clearErrors(gl);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+          throw new Error("캡처용 Framebuffer를 만들지 못했습니다(GPU 메모리 부족일 수 있음).");
+        gl.viewport(0, 0, width, height);
+        gl.bindVertexArray(vao);
+        gl.useProgram(program);
+        uploadGlobals(uniforms, width, height);
+        passManager.bindImage(uniforms);
+        try {
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        } finally {
+          passManager.unbindImage();
+        }
+        pixels = new Uint8Array(width * height * 4);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        const error = gl.getError();
+        if (error !== gl.NO_ERROR) throw new Error(`고해상도 캡처 GL 오류: ${error}`);
+      } finally {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.deleteFramebuffer(fbo);
+        gl.deleteTexture(texture);
+      }
+      const output = document.createElement("canvas");
+      output.width = width;
+      output.height = height;
+      const context = output.getContext("2d");
+      if (!context) throw new Error("2D Canvas를 사용할 수 없습니다.");
+      const image = context.createImageData(width, height),
+        stride = width * 4;
+      for (let y = 0; y < height; y++)
+        image.data.set(pixels.subarray(y * stride, (y + 1) * stride), (height - 1 - y) * stride);
+      context.putImageData(image, 0, 0);
+      output.toBlob(blob => (blob ? resolve(blob) : reject(new Error("PNG 생성 실패"))), "image/png");
+    });
   // 프레임을 그린 직후마다 listener(canvas)를 부른다. 해제 함수를 돌려준다.
   const onFrame = listener => {
     frameListeners.add(listener);
@@ -493,11 +559,26 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     scheduleFrame();
     return true;
   };
+  // 일시정지 중에 한 프레임만 진행한다(시간·프레임 수·피드백 버퍼가 함께 나아간다). 재생 중이면 아무것도 하지 않는다.
+  // 진행 시간은 배속과 관계없이 seconds(기본 1/60초)다.
+  const stepFrame = (seconds = 1 / 60) => {
+    if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 1)
+      throw new RangeError("stepFrame 시간은 0초 초과 1초 이하여야 합니다.");
+    if (running || disposed || lost || document.hidden || !program) return false;
+    stepDelta = seconds;
+    return redraw();
+  };
+  const setTimeScale = value => {
+    if (!Number.isFinite(value) || value < 0.05 || value > 8)
+      throw new RangeError("재생 배속은 0.05부터 8 사이여야 합니다.");
+    timeScale = value;
+    return timeScale;
+  };
   const resetSimulation = () => {
     if (disposed || lost) throw new Error("시뮬레이션을 초기화할 수 없습니다.");
     passManager.resetTargets();
     frameCount = 0;
-    time = lastDelta = 0;
+    time = lastDelta = wheel = 0;
     lastTime = null;
     nextFrameAt = 0;
     scheduleFrame();
@@ -533,6 +614,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const onPointerUp = () => {
     mouseDown = false;
+  };
+  // 셰이더가 uWheel을 쓸 때만 휠을 가로챈다(아니면 페이지 스크롤 등 기본 동작을 그대로 둔다). Ctrl+휠은 브라우저 확대.
+  const usesWheel = () => !!program && (uniforms?.wheel != null || passManager.usesBuiltin("wheel"));
+  const onWheel = event => {
+    if (event.ctrlKey || !usesWheel()) return;
+    event.preventDefault();
+    // 한 칸(마우스 휠 한 번)을 1로 맞춘다: 픽셀 단위는 100px, 줄 단위는 3줄을 한 칸으로 본다.
+    const unit = event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 1 : 100;
+    wheel -= event.deltaY / unit; // uMouse처럼 일시정지 중에는 다시 그리지 않는다(재생하거나 한 프레임 진행하면 반영)
   };
   const onPointerLeave = () => {
     // 드래그 중(포인터 캡처)에는 캔버스 밖으로 나가도 위치를 유지한다.
@@ -599,6 +689,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     canvas.removeEventListener("pointerdown", onPointerDown);
     canvas.removeEventListener("pointerup", onPointerUp);
     canvas.removeEventListener("pointercancel", onPointerUp);
+    canvas.removeEventListener("wheel", onWheel);
     gpuTimer.dispose();
     canvas.removeEventListener("webglcontextlost", onContextLost);
     canvas.removeEventListener("webglcontextrestored", onContextRestored);
@@ -618,6 +709,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("webglcontextlost", onContextLost);
   canvas.addEventListener("webglcontextrestored", onContextRestored);
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -691,6 +783,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     "uDeltaTime",
     "uFrame",
     "uMouse",
+    "uWheel",
     "uDebugRaySteps",
     "uMaxSteps",
     "uMaxDistance",
@@ -928,6 +1021,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const getStats = () => ({
     fps: Math.round(fps * 10) / 10,
     frame: frameCount,
+    wheel,
+    time,
+    timeScale,
     width: gl.drawingBufferWidth,
     height: gl.drawingBufferHeight,
     resolutionScale,
@@ -995,7 +1091,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     start,
     stop,
     resetSimulation,
+    stepFrame,
+    setTimeScale,
     captureScreenshot,
+    captureScreenshotAt,
     onFrame,
     redraw,
     validateFragment,
