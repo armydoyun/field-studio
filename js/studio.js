@@ -172,6 +172,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   const references = name => Model.references(project, name);
   const activeSource = () => (selected === "Image" ? project.image : find(selected)?.fragment);
+  // 브라우저 탭 제목: 보관함 프로젝트 이름(없으면 "저장 안 한 작업")과 미적용 변경(●)·적용 실패(⚠) 표시.
+  let titleName = "저장 안 한 작업",
+    titleState = "applied";
+  const syncTitle = () => {
+    const mark = titleState === "error" ? "⚠ " : titleState === "dirty" ? "● " : "";
+    const title = `${mark}${titleName} — FIELD Studio`;
+    if (document.title !== title) document.title = title;
+  };
   const setStatus = (message, style = "") => {
     if ($("studioMessage").textContent !== message) $("studioMessage").textContent = message;
     $("studioMessage").title = message;
@@ -180,6 +188,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       label = state === "error" ? "오류 확인" : dirty ? "미적용 변경" : "실행 반영됨";
     if ($("studioState").textContent !== label) $("studioState").textContent = label;
     $("studioState").dataset.state = state;
+    titleState = state;
+    syncTitle();
     $("studioRun").dataset.pending = String(dirty);
     $("studioGraphState").textContent = dirty ? "편집 중인 구성 · 실행 반영 대기" : "실행에 반영된 구성";
     if (changeText) showChange(changeText);
@@ -1665,7 +1675,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 화면 배치·리사이저·편집기 메뉴(studio-layout.js). 편집기 열림 상태는 전체화면 중이면 전체화면 전 상태를 남긴다.
   const workspace = Layout.create({ $, on, editor, editorOpen: () => (afterFullscreen ? true : openState) });
   projects = Projects.create({
-    onCurrent: current => projectMenu.setLabel(current ? current.name : "저장 안 한 작업", !!current),
+    onCurrent: current => {
+      titleName = current ? current.name : "저장 안 한 작업";
+      projectMenu.setLabel(titleName, !!current);
+      syncTitle();
+    },
     $,
     on,
     element,
