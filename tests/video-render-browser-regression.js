@@ -10,6 +10,24 @@
   const until = async (condition, ms) => { for (const end = Date.now() + ms; Date.now() < end; await wait(30)) if (condition()) return true; return condition(); };
   const area = $("studioCode"), live = $("studioLive"), original = area.value, wasLive = live.checked;
   const setScene = source => { area.value = source; area.dispatchEvent(new Event("input", { bubbles: true })); return studio.apply(); };
+  // 같은 프레임들을 타일로(tilePixels 고정) 또는 한 번에 그려 마지막 프레임 픽셀을 돌려준다
+  const offlinePixels = async ({ tiled, tilePixels = 0, frames = 3, width = 97, height = 61 }) => {
+    r.beginOffline({ width, height, tilePixels });
+    const canvas = new OffscreenCanvas(width, height), ctx = canvas.getContext("2d");
+    const perFrame = [];
+    try {
+      for (let i = 0; i < frames; i++) {
+        const frame = { time: 0.3 + i / 10, delta: 0.1, frame: i }, before = r.getOfflineTiling().tiles;
+        if (tiled) await r.renderOfflineFrameTiled(frame, drawn => ctx.drawImage(drawn, 0, 0));
+        else ctx.drawImage(r.renderOfflineFrame(frame), 0, 0);
+        perFrame.push(r.getOfflineTiling().tiles - before);
+      }
+      return { data: ctx.getImageData(0, 0, width, height).data, perFrame };
+    } finally {
+      r.endOffline();
+    }
+  };
+  const sameImage = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
   const set = (id, value) => { const node = $(id); node.value = String(value); node.dispatchEvent(new Event("change", { bubbles: true })); };
   // 내려받기를 가로채 Blob을 얻는다(ui.js의 download는 <a download>.click()을 쓴다).
   const downloads = [];
@@ -73,6 +91,16 @@
     test(r.getStats().running, "렌더링 중에 누른 재생을 끝난 뒤 이어 감");
     studio.togglePlayback();
     await wait(50);
+
+    // ---- 타일 렌더링: 나눠 그려도 한 번에 그린 것과 같다 ----
+    {
+      const single = await offlinePixels({ tiled: false });
+      const tiles = await offlinePixels({ tiled: true, tilePixels: 300 });
+      test(tiles.perFrame.every(n => n > 10), `작은 타일로 나눠 그림 (프레임마다 ${tiles.perFrame.join("·")}개)`);
+      test(sameImage(single.data, tiles.data), "타일로 그린 결과 = 한 번에 그린 결과 (Image)");
+      const auto = await offlinePixels({ tiled: true, frames: 4, width: 256, height: 144 });
+      test(auto.perFrame.at(-1) === 1, `가벼운 셰이더는 잰 시간에 따라 곧 한 장으로 (${auto.perFrame.join("·")})`);
+    }
 
     // ---- PNG 연속 이미지: 프레임마다 정확한 시간 ----
     test(setScene(`#version 300 es
@@ -148,6 +176,12 @@ void main() {
 
     // ---- 버퍼 패스: 시작 시간 전 프레임을 먼저 그린다 ----
     test(await studio.exampleFeedback(), "버퍼 예제 열기");
+    {
+      // 버퍼(피드백) 패스도 타일로 나눠 그린다: 여러 프레임 뒤의 결과가 한 번에 그린 것과 같아야 한다
+      const single = await offlinePixels({ tiled: false, frames: 6 });
+      const tiles = await offlinePixels({ tiled: true, tilePixels: 400, frames: 6 });
+      test(sameImage(single.data, tiles.data), `타일로 그린 결과 = 한 번에 그린 결과 (버퍼 패스 · 6프레임, 프레임마다 타일 ${tiles.perFrame[0]}개)`);
+    }
     // 화면의 시뮬레이션을 조금 돌린 뒤 멈추고, 버퍼 내용·프레임 수·시간을 적어 둔다(렌더링 뒤 그대로여야 한다).
     if (!studio.getPlaybackState()) studio.togglePlayback();
     await until(() => r.getStats().frame > 30, 20000);
@@ -163,8 +197,8 @@ void main() {
     });
     const sim0 = snapshot();
     test(sim0.pixels[1].split(" ").some(p => p !== "0,0,0,0"), "버퍼 B에 시뮬레이션 내용이 있다");
-    const realFrame = r.renderOfflineFrame, seen = [];
-    r.renderOfflineFrame = frame => { seen.push(frame); return realFrame(frame); };
+    const realFrame = r.renderOfflineFrameTiled, seen = [];
+    r.renderOfflineFrameTiled = (frame, capture) => { seen.push(frame); return realFrame(frame, capture); };
     try {
       set("videoFormat", "png");
       set("videoStart", 0.5);
@@ -174,7 +208,7 @@ void main() {
       set("videoHeight", 36);
       await runRender();
     } finally {
-      r.renderOfflineFrame = realFrame;
+      r.renderOfflineFrameTiled = realFrame;
     }
     test(seen.length === 7, `준비 5프레임 + 본 2프레임 (${seen.length})`);
     test(seen.map(f => f.frame).join() === "0,1,2,3,4,5,6" && Math.abs(seen[5].time - 0.5) < 1e-9 && seen[0].time === 0, "uFrame은 0부터 이어지고 본 영상은 0.5초부터");
@@ -183,6 +217,38 @@ void main() {
     test(sim1.frame === sim0.frame && sim1.time === sim0.time, `렌더링 뒤 프레임 수·시간 그대로 (${sim0.frame} → ${sim1.frame})`);
     test(sim1.pixels[0] === sim0.pixels[0] && sim1.pixels[1] === sim0.pixels[1], "렌더링 뒤 버퍼 내용(시뮬레이션 상태) 그대로");
     test(!r.getStats().running && r.getStats().width === width0, "멈춘 상태·화면 크기 그대로");
+
+    // ---- 렌더링 중 WebGL 컨텍스트 손실 ----
+    {
+      const lose = $("screen").getContext("webgl2").getExtension("WEBGL_lose_context");
+      if (!lose) console.warn("WEBGL_lose_context가 없어 컨텍스트 손실 검사를 건너뜀");
+      else {
+        set("videoFormat", "png");
+        set("videoStart", 0);
+        set("videoDuration", 600);
+        set("videoFps", 30);
+        set("videoWidth", 64);
+        set("videoHeight", 36);
+        const before = downloads.length;
+        $("videoRenderStart").click();
+        test(await until(() => $("videoRenderProgress").value > 0, 30000), "손실 검사: 렌더링 시작");
+        lose.loseContext();
+        test(await until(() => dialog.dataset.state !== "running", 10000), "컨텍스트를 잃으면 렌더링이 멈춘다(멈춰 있지 않음)");
+        test(/컨텍스트를 잃었습니다/.test($("videoRenderStatus").textContent) && /크기를 줄여/.test($("videoRenderStatus").textContent), `원인과 해결 안내: ${$("videoRenderStatus").textContent}`);
+        test(downloads.length === before && !r.getStats().offline, "파일 없음 · 오프라인 모드 해제");
+        lose.restoreContext();
+        test(await until(() => !$("screen").getContext("webgl2").isContextLost(), 5000), "컨텍스트 복구");
+        await wait(200);
+        if (!studio.getPlaybackState()) studio.togglePlayback();
+        test(await until(() => r.getStats().running && r.getStats().frame > 3, 10000), `복구 뒤 다시 그린다 (프레임 ${r.getStats().frame})`);
+        test(await r.captureScreenshot().then(blob => blob.size > 0), "복구 뒤 스크린샷");
+        studio.togglePlayback();
+        set("videoDuration", 0.2);
+        set("videoFps", 10);
+        const again = await runRender();
+        test(/\.zip$/.test(again.name), "복구 뒤 다시 영상 렌더링");
+      }
+    }
 
     // ---- 취소 ----
     set("videoDuration", 600);

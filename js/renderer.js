@@ -71,7 +71,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stepDelta = 0;
   // 오프라인(영상) 렌더링 중이면 { width, height, saved, resume }. 이 동안에는 실시간 루프·입력·구성 변경을 막고,
   // renderOfflineFrame()이 정한 시간·크기로만 그린다.
-  let offline = null;
+  let offline = null,
+    offlineLost = null; // 영상 렌더링 중에 컨텍스트를 잃었을 때 endOffline()이 되돌릴 상태
   const assertOnline = () => {
     if (offline) throw new Error("영상 렌더링 중에는 바꿀 수 없습니다.");
   };
@@ -575,7 +576,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   //   preserveDrawingBuffer가 false라 그림은 이 호출과 같은 작업(task) 안에서만 읽을 수 있다 — 바로 복사할 것.
   // endOffline(): 크기·시간·프레임 수·버퍼 내용을 렌더링 전으로 되돌리고, 렌더링 전(또는 그동안 누른) 재생 상태로 돌아간다.
   const offlineLimit = () => Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), ...gl.getParameter(gl.MAX_VIEWPORT_DIMS));
-  const beginOffline = ({ width, height }) => {
+  // tilePixels(선택): 타일 하나의 픽셀 수를 고정한다(검사·진단용). 없으면 잰 GPU 시간으로 정한다.
+  const beginOffline = ({ width, height, tilePixels = 0 }) => {
     if (disposed || lost || !program || !vao) throw new Error("지금은 영상을 렌더링할 수 없습니다.");
     if (offline) throw new Error("이미 영상을 렌더링하고 있습니다.");
     if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2)
@@ -585,14 +587,22 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       throw new RangeError(`이 GPU에서 렌더링할 수 있는 크기를 넘습니다 (최대 ${limit}px).`);
     const resume = running && !capturePaused;
     stop();
-    offline = { width, height, resume, saved: { time, frameCount, lastDelta } };
+    offline = {
+      width,
+      height,
+      resume,
+      tilePixels: Math.max(0, Math.floor(tilePixels) || 0),
+      saved: { time, frameCount, lastDelta },
+    };
+    tileCost.clear();
+    tileStats = { tiles: 0, frames: 0 };
     resize();
     passManager.stashTargets();
     frameCount = 0;
     return { width: gl.drawingBufferWidth, height: gl.drawingBufferHeight };
   };
   const renderOfflineFrame = ({ time: at, delta, frame: index }) => {
-    if (!offline) throw new Error("beginOffline()을 먼저 호출하세요.");
+    if (!offline) throw offlineLost ? lostError() : new Error("beginOffline()을 먼저 호출하세요.");
     if (lost || disposed) throw new Error("WebGL 컨텍스트를 잃어 영상 렌더링을 멈췄습니다.");
     if (![at, delta].every(Number.isFinite) || !Number.isInteger(index) || index < 0)
       throw new RangeError("프레임 시간·번호가 올바르지 않습니다.");
@@ -621,8 +631,216 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     frameCount = index + 1;
     return canvas;
   };
+  // ---- 타일 렌더링(영상 렌더링용) ----
+  // 무거운 셰이더를 큰 크기로 한 번에 그리면 한 번의 GPU 작업이 몇 초씩 걸려, 브라우저·OS가 GPU를 초기화한다
+  // (WebGL 컨텍스트 손실 · Windows TDR 등). 그래서 패스마다 화면을 타일로 나눠 그리고, 타일마다 GPU가 끝날 때까지 기다린다.
+  // 타일 크기는 잰 시간으로 정한다: 픽셀당 GPU 시간을 패스별로 기억하고, 타일 하나가 TILE_TARGET_MS 안에 끝나게 한다.
+  // 가벼운 셰이더는 곧 한 장(타일 1개)으로 그리므로 느려지지 않는다. Image는 화면 밖 Texture에 타일로 그린 뒤
+  // 마지막에 캔버스로 한 번에 옮긴다(타일 사이에 화면이 합성되어 캔버스가 비워져도 결과가 남게).
+  const TILE_TARGET_MS = 100, // GPU 응답 제한(Windows TDR 약 2초)보다 훨씬 짧게
+    FIRST_TILE = 128 * 128, // 처음 재는 타일(어떤 셰이더도 이 정도는 금방 끝난다)
+    MIN_TILE = 64 * 64,
+    REMEASURE = 15;
+  const tileCost = new Map(); // 패스 이름 → 픽셀당 ms (늘어나면 바로, 줄어들면 천천히 따라간다)
+  let offlineTarget = null,
+    tileStats = { tiles: 0, frames: 0 };
+  const tilesFor = (key, w, h) => {
+    const cost = tileCost.get(key),
+      budget = offline?.tilePixels || (cost ? Math.max(MIN_TILE, TILE_TARGET_MS / cost) : FIRST_TILE);
+    if (budget >= w * h) return [[0, 0, w, h]];
+    // 한 줄 전체를 담을 수 있으면 가로 띠, 아니면 정사각에 가까운 타일
+    const tw = budget >= w * 16 ? w : Math.max(Math.min(64, w), Math.min(w, Math.floor(Math.sqrt(budget)))),
+      th = Math.max(1, Math.min(h, Math.floor(budget / tw)));
+    const rects = [];
+    for (let y = 0; y < h; y += th)
+      for (let x = 0; x < w; x += tw) rects.push([x, y, Math.min(tw, w - x), Math.min(th, h - y)]);
+    return rects;
+  };
+  // 잰 시간에는 타이머 지연 같은 고정 비용이 섞여 작은 타일일수록 픽셀당 비용이 부풀려진다(안전한 쪽으로 틀림).
+  // 목표의 1/4 안에 끝난 타일이면 다음에는 최소 4배 큰 타일을 허락해 빨리 제 크기를 찾게 한다.
+  const learn = (key, pixels, ms) => {
+    const n = Math.max(1, pixels);
+    let cost = ms / n;
+    if (ms < TILE_TARGET_MS / 4) cost = Math.min(cost, TILE_TARGET_MS / (4 * n));
+    const prev = tileCost.get(key);
+    tileCost.set(key, prev === undefined || cost > prev ? cost : Math.min(prev, prev * 0.5 + cost * 0.5));
+  };
+  const contextLost = () => lost || !!gl.isContextLost?.();
+  const lostError = () =>
+    Object.assign(
+      new Error(
+        "WebGL 컨텍스트를 잃었습니다. GPU가 한 번에 맡은 일이 너무 오래 걸렸거나 GPU 메모리가 부족했을 수 있습니다. 크기를 줄여 다시 시도하세요."
+      ),
+      { name: "ContextLostError" }
+    );
+  // 지금까지 보낸 GL 명령을 GPU가 끝낼 때까지 기다린다(메인 스레드는 막지 않는다). 컨텍스트를 잃으면 false.
+  const waitGPU = () =>
+    new Promise(resolve => {
+      if (contextLost()) return resolve(false);
+      const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+      if (!sync) return resolve(!contextLost());
+      const poll = () => {
+        const status = contextLost() ? gl.WAIT_FAILED : gl.clientWaitSync(sync, 0, 0);
+        if (status === gl.TIMEOUT_EXPIRED) return void setTimeout(poll, 1);
+        if (!contextLost()) gl.deleteSync(sync);
+        resolve(status !== gl.WAIT_FAILED);
+      };
+      poll();
+    });
+  let copyProgram = null;
+  const copyToCanvas = (texture, w, h) => {
+    if (!copyProgram) {
+      const vs = createShader(
+          gl.VERTEX_SHADER,
+          "#version 300 es\nvoid main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.0-1.0,0.0,1.0);}"
+        ),
+        fs = createShader(
+          gl.FRAGMENT_SHADER,
+          "#version 300 es\nprecision highp float;uniform sampler2D uCopy;out vec4 o;void main(){o=texelFetch(uCopy,ivec2(gl_FragCoord.xy),0);}"
+        );
+      copyProgram = gl.createProgram();
+      gl.attachShader(copyProgram, vs);
+      gl.attachShader(copyProgram, fs);
+      gl.linkProgram(copyProgram);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      if (!gl.getProgramParameter(copyProgram, gl.LINK_STATUS)) {
+        const log = gl.getProgramInfoLog(copyProgram);
+        gl.deleteProgram(copyProgram);
+        copyProgram = null;
+        throw new Error(`복사 셰이더 링크 실패: ${log}`);
+      }
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(copyProgram);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(gl.getUniformLocation(copyProgram, "uCopy"), 0);
+    gl.bindVertexArray(vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  };
+  const deleteOfflineTarget = () => {
+    if (offlineTarget && !contextLost()) {
+      gl.deleteFramebuffer(offlineTarget.fbo);
+      gl.deleteTexture(offlineTarget.texture);
+    }
+    offlineTarget = null;
+  };
+  const ensureOfflineTarget = (w, h) => {
+    if (offlineTarget && offlineTarget.width === w && offlineTarget.height === h) return offlineTarget;
+    deleteOfflineTarget();
+    const texture = gl.createTexture(),
+      fbo = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    // 기본 축소 필터는 밉맵이 있어야 해서(없으면 "불완전"이라 읽으면 0) NEAREST로 둔다.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    offlineTarget = { texture, fbo, width: w, height: h };
+    if (!complete) {
+      deleteOfflineTarget();
+      throw new Error("영상 렌더링용 Framebuffer를 만들지 못했습니다(GPU 메모리 부족일 수 있음).");
+    }
+    return offlineTarget;
+  };
+  // renderOfflineFrame과 같은 프레임을 타일로 나눠 그린다. 다 그리면 캔버스로 옮기고, 같은 작업 안에서 capture(canvas)를 부른다
+  // (preserveDrawingBuffer가 false라 캔버스는 그 자리에서만 읽을 수 있다). 컨텍스트를 잃으면 ContextLostError.
+  const renderOfflineFrameTiled = async ({ time: at, delta, frame: index }, capture = () => {}) => {
+    if (!offline) throw offlineLost ? lostError() : new Error("beginOffline()을 먼저 호출하세요.");
+    if (contextLost() || disposed) throw lostError();
+    if (![at, delta].every(Number.isFinite) || !Number.isInteger(index) || index < 0)
+      throw new RangeError("프레임 시간·번호가 올바르지 않습니다.");
+    const session = offline;
+    resize();
+    const w = gl.drawingBufferWidth,
+      h = gl.drawingBufferHeight;
+    passManager.ensureTargets(w, h);
+    const target = ensureOfflineTarget(w, h);
+    time = at;
+    lastDelta = delta;
+    frameCount = index;
+    keyboard.upload();
+    gl.bindVertexArray(vao);
+    const measure = tileStats.frames < 3 || tileStats.frames % REMEASURE === 0 || !!offline.tilePixels;
+    // 잴 프레임은 앞에서 기다리지 않고 쌓아 둔 GPU 작업을 먼저 비운다(그 시간이 첫 타일의 비용으로 잡히지 않게).
+    if (measure && !(await waitGPU())) throw lostError();
+    if (offline !== session) throw lostError();
+    // 타일마다: 그리기 → GPU가 끝날 때까지 기다림 → 걸린 시간으로 그 패스의 타일 크기를 고침
+    let started = clock();
+    // 한 장 전체가 TILE_TARGET_MS 안에 끝난다고 이미 잰 패스는 매 프레임 기다리지 않는다. 그러면 GPU가 그리는 동안
+    // 앞 프레임을 인코딩하는 식으로 겹쳐 돌아 가벼운 셰이더가 느려지지 않는다. 셰이더가 시간에 따라 무거워질 수 있으니
+    // REMEASURE 프레임마다 다시 잰다.
+    const afterTile = async (key, [, , tw, th], whole) => {
+      const cost = tileCost.get(key);
+      if (!measure && whole && cost !== undefined && cost * tw * th < TILE_TARGET_MS) {
+        tileStats.tiles++;
+        return;
+      }
+      const ok = await waitGPU();
+      if (!ok || contextLost() || offline !== session) throw lostError();
+      learn(key, tw * th, clock() - started);
+      tileStats.tiles++;
+      gl.bindVertexArray(vao);
+      started = clock();
+    };
+    await passManager.drawPassesTiled(
+      uploadGlobals,
+      pass => tilesFor(pass.name, pass.width, pass.height),
+      (pass, rect) => afterTile(pass.name, rect, rect[2] * rect[3] === pass.width * pass.height)
+    );
+    for (const rect of tilesFor("Image", w, h)) {
+      const [x, y, tw, th] = rect;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+      gl.viewport(0, 0, w, h);
+      gl.useProgram(program);
+      uploadGlobals(uniforms, w, h);
+      passManager.bindImage(uniforms);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(x, y, tw, th);
+      try {
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      } finally {
+        gl.disable(gl.SCISSOR_TEST);
+        passManager.unbindImage();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
+      await afterTile("Image", rect, tw * th === w * h);
+    }
+    // 화면 밖 Texture → 캔버스(한 번의 짧은 복사) → 같은 작업 안에서 바로 읽기.
+    // blitFramebuffer로 옮기면 브라우저가 캔버스를 "새로 그림"으로 치지 않을 때가 있어(drawImage가 이전 화면을 읽음)
+    // 그리기 호출(drawArrays)로 옮긴다.
+    copyToCanvas(target.texture, w, h);
+    clickPending = false;
+    keyboard.endFrame();
+    frameCount = index + 1;
+    tileStats.frames++;
+    capture(canvas);
+    return canvas;
+  };
+  // 지금까지 그린 타일 수와 패스별 픽셀당 GPU 시간(진행 표시·테스트용)
+  const getOfflineTiling = () => ({ ...tileStats, costs: Object.fromEntries(tileCost) });
   const endOffline = () => {
+    // 렌더링 중에 컨텍스트를 잃었으면(onContextLost가 이미 오프라인을 끝냈다) 시간·재생 상태만 되돌린다.
+    if (!offline && offlineLost) {
+      const { saved, resume } = offlineLost;
+      offlineLost = null;
+      time = saved.time;
+      lastDelta = saved.lastDelta;
+      lastTime = null;
+      frameCount = 0;
+      if (resume && !disposed) start();
+      return true;
+    }
     if (!offline) return false;
+    deleteOfflineTarget();
     const { saved, resume } = offline;
     offline = null;
     time = saved.time;
@@ -755,6 +973,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed) return;
     if (capturePaused) running = false;
     lost = true;
+    // 영상 렌더링 중이었으면 오프라인 모드를 바로 끝낸다(크기 고정·구성 변경 금지를 풀어야 복구가 셰이더를 다시 만들 수 있다).
+    // 보관한 버퍼는 이미 무효라 버리고, 시간·재생 상태는 렌더링 쪽이 endOffline()을 부를 때 되돌린다.
+    if (offline) {
+      offlineLost = offline;
+      offline = null;
+      offlineTarget = null;
+      passManager.restoreTargets({ discard: true });
+    }
+    copyProgram = null; // 잃은 컨텍스트의 객체라 다시 만든다
     cancelFrame();
     captureQueue.splice(0).forEach(({ reject }) => reject(new Error("WebGL 컨텍스트가 손실되었습니다.")));
     capturePaused = false;
@@ -1210,6 +1437,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     setTimeScale,
     beginOffline,
     renderOfflineFrame,
+    renderOfflineFrameTiled,
+    getOfflineTiling,
     endOffline,
     isOffline,
     captureScreenshot,

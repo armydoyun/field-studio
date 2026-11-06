@@ -335,6 +335,17 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
     error => error.name === "AbortError"
   );
   check(r.calls.at(-1)[0] === "end" && r.calls.filter(c => c[0] === "frame").length === 3 && FakeEncoder.last.state === "closed", "취소하면 멈추고 정리(endOffline·인코더 닫기)");
+  // 타일 렌더링(renderOfflineFrameTiled)이 있으면 그것을 쓰고, 다 그린 캔버스를 capture로 받아 옮긴다
+  r = fakeRenderer();
+  const tiledCalls = [];
+  r.renderOfflineFrameTiled = async (f, capture) => { tiledCalls.push(f); await Promise.resolve(); capture({ kind: "gl-canvas", frame: f }); };
+  r.getOfflineTiling = () => ({ tiles: tiledCalls.length * 3 });
+  const tileProgress = [];
+  FakeFrame.made = [];
+  await V.render({ renderer: r, settings, Encoder: FakeEncoder, Frame: FakeFrame, createCanvas: fakeCanvas, onProgress: p => tileProgress.push(p) });
+  check(tiledCalls.length === 10 && !r.calls.some(c => c[0] === "frame"), "타일 렌더링 함수가 있으면 그것으로 그린다");
+  check(FakeFrame.made.length === 10 && FakeFrame.made.every((f, i) => f.frame.frame === 10 + i), "capture로 받은 캔버스를 인코더에 넘긴다");
+  check(tileProgress.filter(p => p.phase === "render").every(p => p.tiles === 3), "진행률에 프레임마다 타일 수");
   // 렌더러 오류도 정리한다
   r = fakeRenderer();
   r.renderOfflineFrame = () => { throw new Error("context lost"); };
