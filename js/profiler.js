@@ -1,9 +1,10 @@
 // 성능·디버그 패널. Renderer 공개 API만 읽으며 GPU 리소스를 소유하지 않는다.
 // 패널이 화면에 보일 때만 샘플링·그리기를 하여 셰이더 성능 측정 자체를 방해하지 않는다.
+import * as PreviewDOM from "./preview-dom.js";
 const HISTORY = 180,
   SAMPLE_MS = 100;
 const mount = renderer => {
-  const $ = id => document.getElementById(id),
+  const $ = PreviewDOM.createLookup(),
     controller = new AbortController(),
     signal = controller.signal;
   const element = (tag, className = "", text = "") => {

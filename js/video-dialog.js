@@ -1,6 +1,7 @@
 // 영상 렌더링 대화상자: 캡처 메뉴의 "영상 렌더링…"으로 연다. 설정을 받아 video-render.js로 렌더링하고 파일을 내려받는다.
 // 렌더링 중에는 설정을 잠그고 진행률·남은 시간을 보인다. Esc·취소는 렌더링을 멈추고(파일 없음) 대화상자는 열어 둔다.
 import * as Video from "./video-render.js";
+import * as PreviewDOM from "./preview-dom.js";
 
 const formatTime = seconds => {
   const total = Math.max(0, Math.round(seconds)),
@@ -17,7 +18,7 @@ const formatBytes = bytes =>
 
 // renderer: renderer.js 공개 API · download(blob, name) · isBusy() → 녹화 중이면 이유 문자열 · onDone(message)
 const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signal }) => {
-  const $ = id => document.getElementById(id);
+  const $ = PreviewDOM.createLookup();
   const dialog = $("videoRenderDialog"),
     fields = $("videoRenderFields"),
     summary = $("videoRenderSummary"),

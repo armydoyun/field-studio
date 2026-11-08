@@ -15,7 +15,7 @@ import * as Popout from "./popout.js";
 
 // 테마는 WebGL 초기화와 무관하게 먼저 연결한다(렌더러가 실패해도 화면 테마 전환은 동작해야 한다).
 window.shaderTheme = Theme.mount();
-// 미리보기 분리 창(캔버스를 옮길 뿐이므로 렌더러보다 먼저 연결해도 된다).
+// 미리보기 분리 창(캔버스·상단 도구의 원본을 옮기므로 렌더러보다 먼저 연결해도 된다).
 window.shaderPopout = Popout.mount();
 
 // 편집기 시그니처 힌트용 사전: "sin · cos · tan", "atan (2인수)"처럼 묶인 항목을 함수 이름별로 펼치고 같은 이름은 합친다.

@@ -3,8 +3,9 @@ import * as StageMenu from "./stage-menu.js";
 import * as Recorder from "./recorder.js";
 import * as Annotations from "./annotations.js";
 import * as VideoDialog from "./video-dialog.js";
+import * as PreviewDOM from "./preview-dom.js";
 const mount = (renderer, input, settings) => {
-  const $ = id => document.getElementById(id);
+  const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
     signal = controller.signal;
   const element = tag => document.createElement(tag),
@@ -776,8 +777,10 @@ const mount = (renderer, input, settings) => {
   };
   const toggleFullscreen = async () => {
     try {
-      if (document.fullscreenElement === stage) await document.exitFullscreen();
-      else await stage.requestFullscreen();
+      const doc = $("screen").ownerDocument || document,
+        surface = doc === document ? stage : doc.body;
+      if (doc.fullscreenElement) await doc.exitFullscreen();
+      else await surface.requestFullscreen();
       showError("");
     } catch (error) {
       showError(`전체화면 전환 실패: ${error.message}`);
@@ -913,10 +916,30 @@ const mount = (renderer, input, settings) => {
   );
   listen($("screen"), "pointerdown", () => stage.classList.add("has-interacted"));
   listen($("screen"), "wheel", () => stage.classList.add("has-interacted"));
-  listen(document, "fullscreenchange", () => {
-    const active = document.fullscreenElement === stage;
+  const syncFullscreen = () => {
+    const doc = $("screen").ownerDocument || document,
+      active = !!doc.fullscreenElement,
+      pip = !!window.documentPictureInPicture?.window && window.documentPictureInPicture.window === doc.defaultView;
+    $("fullscreenToggle").disabled = pip;
     $("fullscreenToggle").setAttribute("aria-label", active ? "전체화면 종료" : "전체화면");
-    $("fullscreenToggle").title = active ? "전체화면 종료 (F)" : "전체화면 (F)";
+    $("fullscreenToggle").title = pip
+      ? "항상 위에 표시되는 분리 창에서는 전체화면을 지원하지 않습니다"
+      : active
+        ? "전체화면 종료 (F)"
+        : "전체화면 (F)";
+  };
+  const fullscreenDocs = new WeakSet();
+  const bindFullscreen = () => {
+    const doc = $("screen").ownerDocument || document;
+    if (!fullscreenDocs.has(doc)) {
+      fullscreenDocs.add(doc);
+      listen(doc, "fullscreenchange", syncFullscreen);
+    }
+    syncFullscreen();
+  };
+  bindFullscreen();
+  listen(document, "preview-popout-changed", () => {
+    bindFullscreen();
   });
   listen(document, "keydown", event => {
     if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;

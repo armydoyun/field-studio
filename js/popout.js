@@ -24,13 +24,26 @@ const mount = ({ doc = document } = {}) => {
     };
   let target = null,
     marker = null,
+    moved = [],
     statusTimer = 0,
     hudObserver = null;
   // HUD(왼쪽 아래 미리보기 정보 · 오른쪽 아래 FPS·해상도·시간·프레임·GPU)도 분리 창에 보인다.
   // 원래 HUD는 설정 패널(ui.js)이 id로 찾아 갱신하므로 메인 문서에 그대로 두고, 분리 창에는 사본을 두어
   // 바뀔 때마다(MutationObserver) 내용을 옮겨 적는다. HUD 숨기기(G)도 따라간다. 메인 창의 HUD는 CSS로 숨긴다.
   const footer = $("viewportFooter"),
-    stage = $("stage");
+    stage = $("stage"),
+    header = $("stageHeader"),
+    prompt = $("studioPromptDialog"),
+    videoDialog = $("videoRenderDialog");
+  // 상단 도구와 대화상자는 원본을 옮긴다. 녹화·프로젝트 메뉴의 이벤트와 갱신을 그대로 유지한다.
+  const moveControls = d => {
+    moved = [header, prompt, videoDialog].filter(Boolean).map(node => {
+      const placeholder = doc.createComment(`preview ${node.id}`);
+      node.replaceWith(placeholder);
+      d.body.append(node);
+      return { node, placeholder };
+    });
+  };
   const mirrorHud = (copy, d) => () => {
     copy.className = footer.className;
     copy.innerHTML = footer.innerHTML;
@@ -102,6 +115,16 @@ const mount = ({ doc = document } = {}) => {
     if (marker?.isConnected) marker.replaceWith(canvas);
     else doc.getElementById("renderViewport")?.prepend(canvas);
     marker = null;
+    for (const { node, placeholder } of moved) {
+      // 닫히는 창의 모달은 취소해서 입력 요청을 기다리는 Promise도 끝낸다.
+      if (node.open && node.tagName === "DIALOG") {
+        // pagehide에서 예약된 close 이벤트는 닫힌 창에 남을 수 있어, 취소를 동기적으로 알린다.
+        node.dispatchEvent(new view.Event("cancel", { cancelable: true }));
+        if (node.open) node.close();
+      }
+      placeholder.replaceWith(node);
+    }
+    moved = [];
     hudObserver?.disconnect();
     hudObserver = null;
     doc.removeEventListener("theme-changed", syncTheme);
@@ -146,16 +169,54 @@ const mount = ({ doc = document } = {}) => {
     marker = doc.createComment("preview canvas");
     canvas.replaceWith(marker);
     d.body.append(canvas);
+    moveControls(d);
     attachHud(win, d);
     // 분리 창 안에서도 Space로 재생/정지, G로 HUD 보이기/숨기기, Esc로 되돌리기.
     d.addEventListener("keydown", event => {
+      if (event.defaultPrevented || event.repeat || event.isComposing) return;
+      if (event.target?.closest?.("input, textarea, select, [contenteditable], dialog[open]")) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+          const key = event.key.toLowerCase();
+          if (key === "s" && event.shiftKey) {
+            event.preventDefault();
+            header?.querySelector("#studioProjectSave:not(:disabled)")?.click();
+          } else if (key === "o") {
+            event.preventDefault();
+            header?.querySelector("#projectMenuToggle")?.click();
+          }
+        }
+        return;
+      }
       if (event.code === "Space") {
+        if (event.target?.closest?.("button")) return;
         event.preventDefault();
         view.shaderStudio?.togglePlayback();
       } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
-        $("hudToggle")?.click();
-      } else if (event.key === "Escape") restore();
+        header?.querySelector("#hudToggle")?.click();
+      } else if (event.key === "Escape") {
+        // 저장 뒤 초점이 본문으로 돌아와도, 먼저 열린 메뉴만 닫는다.
+        for (const [menuId, toggleId] of [
+          ["projectMenu", "projectMenuToggle"],
+          ["captureMenu", "captureToggle"],
+          ["moreMenu", "moreToggle"],
+        ]) {
+          if (header?.querySelector(`#${menuId}:not([hidden])`)) {
+            event.preventDefault();
+            header.querySelector(`#${toggleId}`).click();
+            return;
+          }
+        }
+        restore();
+      }
+    });
+    // 편집기·설정·갤러리·가이드는 메인 창에 열리므로 해당 도구를 누르면 그 창을 보여 준다.
+    d.addEventListener("click", event => {
+      if (
+        ["studioToggle", "panelToggle", "galleryToggle", "helpToggle"].includes(event.target?.closest?.("button")?.id)
+      )
+        view.focus();
     });
     win.addEventListener("pagehide", restore, { once: true });
     sync();
