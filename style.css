@@ -619,6 +619,10 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .preview-popout-mark.glyph-icon::before { flex-basis:20px;width:20px;height:20px; }
 .preview-popout-window { background:var(--stage-bg); }
 .preview-popout-window #screen { width:100vw;height:100vh; }
+/* HUD는 분리 창으로 옮겨 보인다(popout.js가 사본을 둔다). 메인 창의 원본은 그동안 숨긴다. */
+.preview-popout-window>[data-mirror="hud"] { position:fixed;inset:auto 12px 12px; }
+.preview-popout-window.hud-hidden>[data-mirror="hud"] { display:none; }
+.preview-popped .viewport-footer { display:none; }
 @container preview (max-height:220px) { .preview-popout-notice p span { display:none; } }
 .stage-hint { border-radius:var(--radius);color:var(--text-soft);font-size:12px; }
 .viewport-footer { inset:auto 12px 12px; }

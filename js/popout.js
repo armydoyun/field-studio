@@ -24,7 +24,30 @@ const mount = ({ doc = document } = {}) => {
     };
   let target = null,
     marker = null,
-    statusTimer = 0;
+    statusTimer = 0,
+    hudObserver = null;
+  // HUD(왼쪽 아래 미리보기 정보 · 오른쪽 아래 FPS·해상도·시간·프레임·GPU)도 분리 창에 보인다.
+  // 원래 HUD는 설정 패널(ui.js)이 id로 찾아 갱신하므로 메인 문서에 그대로 두고, 분리 창에는 사본을 두어
+  // 바뀔 때마다(MutationObserver) 내용을 옮겨 적는다. HUD 숨기기(G)도 따라간다. 메인 창의 HUD는 CSS로 숨긴다.
+  const footer = doc.querySelector(".viewport-footer"),
+    stage = $("stage");
+  const mirrorHud = (copy, d) => () => {
+    copy.className = footer.className;
+    copy.innerHTML = footer.innerHTML;
+    for (const node of copy.querySelectorAll("[id]")) node.removeAttribute("id");
+    d.body.classList.toggle("hud-hidden", !!stage?.classList.contains("hud-hidden"));
+  };
+  const attachHud = (win, d) => {
+    if (!footer || !win.MutationObserver) return;
+    const copy = d.createElement("div");
+    copy.dataset.mirror = "hud";
+    d.body.append(copy);
+    const mirror = mirrorHud(copy, d);
+    mirror();
+    hudObserver = new win.MutationObserver(mirror);
+    hudObserver.observe(footer, { subtree: true, childList: true, characterData: true, attributes: true });
+    if (stage) hudObserver.observe(stage, { attributes: true, attributeFilter: ["class"] });
+  };
 
   const tell = message => {
     if (!status) return;
@@ -79,6 +102,8 @@ const mount = ({ doc = document } = {}) => {
     if (marker?.isConnected) marker.replaceWith(canvas);
     else doc.getElementById("renderViewport")?.prepend(canvas);
     marker = null;
+    hudObserver?.disconnect();
+    hudObserver = null;
     doc.removeEventListener("theme-changed", syncTheme);
     if (!win.closed) win.close();
     sync();
@@ -121,11 +146,15 @@ const mount = ({ doc = document } = {}) => {
     marker = doc.createComment("preview canvas");
     canvas.replaceWith(marker);
     d.body.append(canvas);
-    // 분리 창 안에서도 Space로 재생/정지, Esc로 되돌리기.
+    attachHud(win, d);
+    // 분리 창 안에서도 Space로 재생/정지, G로 HUD 보이기/숨기기, Esc로 되돌리기.
     d.addEventListener("keydown", event => {
       if (event.code === "Space") {
         event.preventDefault();
         view.shaderStudio?.togglePlayback();
+      } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        $("hudToggle")?.click();
       } else if (event.key === "Escape") restore();
     });
     win.addEventListener("pagehide", restore, { once: true });
