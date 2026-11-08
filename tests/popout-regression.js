@@ -14,6 +14,7 @@ class El {
   replaceChildren() { for(const child of this.children) child.parent = null; this.children = []; }
   get isConnected() { let node = this; while(node.parent) node = node.parent; return node.isRoot === true; }
   setAttribute(key, value) { this.attrs[key] = String(value); } removeAttribute(key) { delete this.attrs[key]; }
+  querySelector() { return null; }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); } removeEventListener() {}
   fire(type, extra = {}) { const event = {type, defaultPrevented:false, preventDefault() { this.defaultPrevented = true; }, ...extra}; for(const fn of this.listeners[type] || []) fn(event); return event; }
   click() { return this.fire("click"); } focus() { this.focused = true; } getBoundingClientRect() { return {width:800, height:450}; }
@@ -51,6 +52,7 @@ const check = (ok, name) => { assert(ok, name); console.log("PASS", name); };
   {
     const t = setup(); t.button.click(); await flush();
     check(t.canvas.parent === t.win.document.body, "PiP: 캔버스 요소 자체가 분리 창 본문으로 옮겨진다");
+    check(t.header.parent === t.win.document.body && t.viewport.children[2].tagName === "#comment", "상단 도구 원본도 분리 창으로 옮기고 원래 위치에 표식을 남긴다");
     check(t.calls.options.width === 400 && t.calls.options.height === 225, "PiP: 창 크기는 현재 미리보기의 절반 · 같은 비율");
     check(t.viewport.children[0].tagName === "#comment" && t.viewport.children[0].isConnected, "원래 자리에 표식을 남긴다");
     check(t.doc.body.classes.has("preview-popped") && !t.notice.hidden && t.button.attrs["aria-pressed"] === "true", "메인 화면: 분리 상태 표시 · 안내 · 버튼 눌림");
@@ -65,6 +67,7 @@ const check = (ok, name) => { assert(ok, name); console.log("PASS", name); };
     check(t.calls.toggle === 1 && space.defaultPrevented, "분리 창에서 Space는 재생/정지");
     t.win.document.fire("keydown", {code:"Escape", key:"Escape"});
     check(t.canvas.parent === t.viewport && t.viewport.children[0] === t.canvas, "Esc: 캔버스가 원래 순서(맨 앞) 그대로 돌아온다");
+    check(t.header.parent === t.viewport && t.viewport.children[2] === t.header, "상단 도구도 원래 위치와 순서로 돌아온다");
     check(t.win.closed && !t.doc.body.classes.has("preview-popped") && t.notice.hidden && t.button.attrs["aria-pressed"] === "false", "되돌리면 창을 닫고 메인 표시를 원래대로");
     check(t.doc.events.at(-1).detail.open === false, "되돌린 사실도 알린다");
   }
@@ -75,6 +78,7 @@ const check = (ok, name) => { assert(ok, name); console.log("PASS", name); };
   {
     const t = setup(); await t.api.open(); t.win.closed = true; t.win.fire("pagehide");
     check(t.canvas.parent === t.viewport && !t.api.isOpen, "사용자가 분리 창을 닫으면(pagehide) 캔버스를 되돌린다");
+    check(t.header.parent === t.viewport, "창을 직접 닫아도 상단 도구 원본이 복원된다");
     await t.api.open(); t.view.fire("pagehide");
     check(t.canvas.parent === t.viewport, "메인 페이지를 떠날 때도 되돌린다");
   }

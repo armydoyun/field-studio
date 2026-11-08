@@ -9,16 +9,18 @@ const create = ({ toggle, menu, signal }) => {
   menu.hidden = true;
   toggle.setAttribute("aria-expanded", "false");
   const isOpen = () => !menu.hidden;
+  const owner = () => menu.ownerDocument || document;
   const items = () =>
     [...menu.querySelectorAll("button")].filter(item => !item.disabled && !item.hidden && item.offsetParent !== null);
   const place = () => {
     const rect = toggle.getBoundingClientRect(),
+      view = owner().defaultView || window,
       width = menu.offsetWidth,
-      left = Math.max(MARGIN, Math.min(rect.right - width, window.innerWidth - MARGIN - width)),
+      left = Math.max(MARGIN, Math.min(rect.right - width, view.innerWidth - MARGIN - width)),
       top = rect.bottom + GAP;
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
-    menu.style.maxHeight = `${Math.max(120, window.innerHeight - top - MARGIN)}px`;
+    menu.style.maxHeight = `${Math.max(0, view.innerHeight - top - MARGIN)}px`;
   };
   const open = ({ focus = true } = {}) => {
     menu.hidden = false;
@@ -35,20 +37,32 @@ const create = ({ toggle, menu, signal }) => {
   on(toggle, "click", () => (isOpen() ? close() : open()));
   // 항목의 동작이 먼저 실행되도록(포커스를 옮기는 동작 등) 닫기는 버블 단계에서 한다.
   on(menu, "click", event => {
-    if (event.target instanceof Element && event.target.closest("button")) close();
+    if (event.target?.closest?.("button")) close();
   });
-  on(document, "pointerdown", event => {
+  const outside = event => {
     if (!isOpen()) return;
     const target = event.target;
     if (menu.contains(target) || toggle.contains(target)) return;
     close();
-  });
-  on(window, "resize", () => {
-    if (isOpen()) place();
+  };
+  const bound = new WeakSet();
+  const bind = () => {
+    const doc = owner();
+    if (bound.has(doc)) return;
+    bound.add(doc);
+    on(doc, "pointerdown", outside);
+    on(doc.defaultView || window, "resize", () => {
+      if (isOpen()) place();
+    });
+  };
+  bind();
+  on(document, "preview-popout-changed", () => {
+    close();
+    bind();
   });
   on(menu, "keydown", event => {
     const list = items(),
-      index = list.indexOf(document.activeElement);
+      index = list.indexOf(owner().activeElement);
     let next = null;
     if (event.key === "Escape") {
       event.preventDefault();

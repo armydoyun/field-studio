@@ -15,6 +15,7 @@ import * as ProjectStore from "./project-store.js";
 import * as Projects from "./studio-projects.js";
 import * as ProjectMenu from "./project-menu.js";
 import * as ChannelPicker from "./channel-picker.js";
+import * as PreviewDOM from "./preview-dom.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -24,7 +25,7 @@ const STORAGE_KEY = "webgl.shader-studio.project.v1",
 const { copy, same, validateProject } = Model;
 // options.lookup(name): 내장 함수 설명 {sig, desc} 또는 null — 편집기 시그니처 힌트에 쓴다(main.js가 레퍼런스에서 만들어 넘긴다).
 const mount = (renderer, Shader, settings = null, options = {}) => {
-  const $ = id => document.getElementById(id);
+  const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
     signal = controller.signal;
   const element = tag => document.createElement(tag);

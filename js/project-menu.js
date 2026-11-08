@@ -9,18 +9,20 @@ const create = ({ $, on }) => {
   menu.hidden = true;
   toggle.setAttribute("aria-expanded", "false");
   const isOpen = () => !menu.hidden;
+  const owner = () => menu.ownerDocument || document;
   const GAP = 6,
     MARGIN = 12;
   const place = () => {
     const rect = toggle.getBoundingClientRect?.();
     if (!rect || !menu.style) return;
-    const width = Math.min(340, window.innerWidth - MARGIN * 2),
-      left = Math.max(MARGIN, Math.min(rect.left, window.innerWidth - MARGIN - width)),
+    const view = owner().defaultView || window,
+      width = Math.min(340, view.innerWidth - MARGIN * 2),
+      left = Math.max(MARGIN, Math.min(rect.left, view.innerWidth - MARGIN - width)),
       top = rect.bottom + GAP;
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
     menu.style.width = `${width}px`;
-    menu.style.maxHeight = `${Math.max(160, window.innerHeight - top - MARGIN)}px`;
+    menu.style.maxHeight = `${Math.max(0, view.innerHeight - top - MARGIN)}px`;
   };
   const firstAction = () => menu.querySelector?.("button:not([disabled]):not([hidden])");
   const open = ({ focus = true } = {}) => {
@@ -36,14 +38,26 @@ const create = ({ $, on }) => {
     if (refocus) toggle.focus?.();
   };
   on(toggle, "click", () => (isOpen() ? close() : open()));
-  on(document, "pointerdown", event => {
+  const outside = event => {
     if (!isOpen()) return;
     const target = event.target;
     if (menu.contains?.(target) || toggle.contains?.(target) || target?.closest?.("dialog")) return;
     close();
-  });
-  on(window, "resize", () => {
-    if (isOpen()) place();
+  };
+  const bound = new WeakSet();
+  const bind = () => {
+    const doc = owner();
+    if (bound.has(doc)) return;
+    bound.add(doc);
+    on(doc, "pointerdown", outside);
+    on(doc.defaultView || window, "resize", () => {
+      if (isOpen()) place();
+    });
+  };
+  bind();
+  on(document, "preview-popout-changed", () => {
+    close();
+    bind();
   });
   on(menu, "keydown", event => {
     if (event.key !== "Escape") return;

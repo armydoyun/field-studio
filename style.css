@@ -616,7 +616,7 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 @keyframes record-blink { to { visibility:hidden; } }
 @media (prefers-reduced-motion:reduce) { .record-stop .record-dot { animation:none; } }
 .record-stop.is-preparing .record-dot { animation:none;opacity:.45; } /* 인코더 준비 중: 깜빡이지 않는 흐린 점 + '준비' */
-/* 미리보기 분리: 메인 뷰포트에는 안내만 남기고, 분리 창은 캔버스 하나로 꽉 채운다. */
+/* 미리보기 분리: 캔버스와 상단 도구는 원본을 옮기고, 하단 HUD는 갱신되는 사본을 둔다. */
 .preview-popout-notice { position:absolute;inset:0;z-index:1;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:var(--stage-bg);color:var(--muted);text-align:center; }
 .preview-popout-notice p { display:grid;gap:4px;max-width:340px;margin:0;font-size:12px;line-height:1.6; }
 .preview-popout-notice b { color:var(--text);font-size:13px;font-weight:600; }
@@ -624,6 +624,14 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .preview-popout-mark.glyph-icon::before { flex-basis:20px;width:20px;height:20px; }
 .preview-popout-window { background:var(--stage-bg); }
 .preview-popout-window #screen { width:100vw;height:100vh; }
+.preview-popout-window .stage-header { position:fixed;flex-wrap:wrap;gap:6px; }
+.preview-popout-window #stageToolbar { margin-left:auto; }
+@media (max-width:620px) {
+ .preview-popout-window .stage-header { padding:8px; }
+ .preview-popout-window .stage-label .stage-separator,.preview-popout-window .stage-label>span:last-child { display:none; }
+ .preview-popout-window .project-menu-wrap { flex:1; }
+ .preview-popout-window .project-toggle { max-width:100%; }
+}
 /* HUD는 분리 창으로 옮겨 보인다(popout.js가 사본을 둔다). 메인 창의 원본은 그동안 숨긴다. */
 .preview-popout-window>[data-mirror="hud"] { position:fixed;inset:auto 12px 12px; }
 .preview-popout-window.hud-hidden>[data-mirror="hud"] { display:none; }

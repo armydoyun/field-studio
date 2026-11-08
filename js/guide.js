@@ -8,6 +8,7 @@ import * as Reference from "./glsl-reference.js";
 import * as Highlight from "./glsl-highlight.js";
 import * as SnippetPreview from "./snippet-preview.js";
 import * as Store from "./storage.js";
+import * as PreviewDOM from "./preview-dom.js";
 // 블록 형식: {p}, {list:[…]}, {steps:[…]}, {table:{head, rows}}, {code, title, insert?:true}, {keys:[[설명, 키]…]},
 //            {note}, {actions:[{label, run:"tour"|"gallery"|"topic:<id>"|"example:<id>"}]}
 const TOPICS = [
@@ -623,7 +624,7 @@ const TOUR = [
   },
 ];
 const mount = ({ studio, gallery }) => {
-  const $ = id => document.getElementById(id),
+  const $ = PreviewDOM.createLookup(),
     controller = new AbortController(),
     signal = controller.signal;
   const dialog = $("quickHelp"),
