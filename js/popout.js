@@ -29,7 +29,7 @@ const mount = ({ doc = document } = {}) => {
   // HUD(왼쪽 아래 미리보기 정보 · 오른쪽 아래 FPS·해상도·시간·프레임·GPU)도 분리 창에 보인다.
   // 원래 HUD는 설정 패널(ui.js)이 id로 찾아 갱신하므로 메인 문서에 그대로 두고, 분리 창에는 사본을 두어
   // 바뀔 때마다(MutationObserver) 내용을 옮겨 적는다. HUD 숨기기(G)도 따라간다. 메인 창의 HUD는 CSS로 숨긴다.
-  const footer = doc.querySelector(".viewport-footer"),
+  const footer = $("viewportFooter"),
     stage = $("stage");
   const mirrorHud = (copy, d) => () => {
     copy.className = footer.className;
