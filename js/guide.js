@@ -73,7 +73,10 @@ void main() {
               "툴바(오른쪽 위)",
               "재생/일시정지 · 편집기 · 캡처(스크린샷·녹화) · 전체화면 · ⋯ 더보기(갤러리·가이드·패널·HUD·분리 창·테마)",
             ],
-            ["HUD(오른쪽 아래)", "FPS · 렌더 해상도 · 시간(uTime, 배속) · 프레임 수 · GPU 시간(지원 시)"],
+            [
+              "HUD(오른쪽 아래)",
+              "FPS · 렌더 해상도 · 시간(uTime, 배속) · 프레임 수 · GPU 시간(지원 시). 미리보기를 분리 창으로 옮기면 HUD도 그 창에 보이고, 분리 창에서도 G로 숨깁니다",
+            ],
             ["설정 패널(왼쪽)", "렌더링 품질 · 파라미터 · 성능/디버그 · 작업공간 탭"],
             ["편집기", "패스 탭(Image/Buffer) · 입력 채널 · GLSL 코드 · 오류 표시"],
           ],
@@ -469,7 +472,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
       },
       { keycode: true },
       {
-        p: "**편집기 안에서** — VS Code 기본 단축키와 같습니다(Mac은 Ctrl 대신 Cmd). `Ctrl+K Ctrl+0`처럼 적힌 키는 두 번 이어서 누릅니다. Ctrl+W·Ctrl+N·Ctrl+Tab·Ctrl+PageUp/PageDown은 브라우저가 먼저 가져가므로, 패스 전환은 `Alt+PageUp/PageDown`을 씁니다.",
+        p: "**편집기 안에서** — VS Code 기본 단축키와 같습니다(Mac은 Ctrl 대신 Cmd). `Ctrl+K Ctrl+0`처럼 적힌 키는 두 번 이어서 누릅니다. Ctrl+W·Ctrl+N·Ctrl+Tab·Ctrl+PageUp/PageDown은 브라우저가 먼저 가져가므로, 패스 전환은 `Alt+PageUp/PageDown`을 씁니다. PageUp/PageDown 키가 없거나(노트북) 오른쪽 Alt가 한/영 키라 안 되면 **왼쪽** Alt와 `,` `.`(`Alt+,` / `Alt+.`)도 됩니다.",
       },
       {
         keys: [
@@ -502,7 +505,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           ["편집기 배치 / 집중 모드(Zen)", "Ctrl+\\ / Ctrl+K Z"],
           ["글자 크게 / 작게", "Ctrl+= / Ctrl+-"],
           ["긴 줄 자동 줄바꿈", "Alt+Z"],
-          ["이전·다음 패스", "Alt+PageUp / Alt+PageDown"],
+          ["이전·다음 패스", "Alt+PageUp / Alt+PageDown · Alt+, / Alt+."],
           ["커서 위 숫자 올리기 / 내리기 (Shift = 10배, 숫자 밖에서는 스크롤)", "Ctrl+↑ / Ctrl+↓"],
           ["숫자 끌어서 조절", "Alt + 좌우 드래그"],
           ["템플릿 다음 / 이전 자리", "Tab / Shift+Tab"],

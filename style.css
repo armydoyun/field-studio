@@ -497,6 +497,11 @@ body:has(#videoRenderDialog[data-state="running"]) #screen { object-fit:contain;
    레이아웃 규칙(그리드, 크기)은 위에서 정의하고 여기서는 시각 계층만 다룬다.
    ========================================================================== */
 html,body { font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased; }
+/* 코드 글꼴(JetBrains Mono·Cascadia Code)의 합자 끄기: -> <= != == 같은 두 글자가 한 글자처럼 합쳐 보이지 않고
+   입력한 그대로 보이게 한다. 이 글꼴들은 합자를 calt(문맥 대체)로 넣으므로 contextual까지 끈다.
+   font 단축 속성(font:13px/1.6 var(--mono) 등)이 요소마다 이 두 속성을 기본값으로 되돌리므로, 상속 대신 모든 요소에
+   !important로 둔다(편집기·코드 예시·HUD·입력 칸 모두). */
+*,::before,::after { font-variant-ligatures:no-common-ligatures no-contextual !important;font-feature-settings:"liga" 0,"calt" 0 !important; }
 ::selection { background:var(--accent-soft); }
 * { scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent; }
 button { border-color:var(--line-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-soft);font-size:12px;font-weight:550;letter-spacing:-.1px; }
@@ -619,6 +624,10 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .preview-popout-mark.glyph-icon::before { flex-basis:20px;width:20px;height:20px; }
 .preview-popout-window { background:var(--stage-bg); }
 .preview-popout-window #screen { width:100vw;height:100vh; }
+/* HUD는 분리 창으로 옮겨 보인다(popout.js가 사본을 둔다). 메인 창의 원본은 그동안 숨긴다. */
+.preview-popout-window>[data-mirror="hud"] { position:fixed;inset:auto 12px 12px; }
+.preview-popout-window.hud-hidden>[data-mirror="hud"] { display:none; }
+.preview-popped .viewport-footer { display:none; }
 @container preview (max-height:220px) { .preview-popout-notice p span { display:none; } }
 .stage-hint { border-radius:var(--radius);color:var(--text-soft);font-size:12px; }
 .viewport-footer { inset:auto 12px 12px; }

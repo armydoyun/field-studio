@@ -527,7 +527,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       inputs = Object.entries(channels)
         .sort(([a], [b]) => Number(a) - Number(b))
         .map(([i, ref]) => `iChannel${i} ← ${inputInfo(ref, assets).source}`);
-    return `${name} 패스 편집 (Alt+PageUp/Down)${inputs.length ? `\n${inputs.join("\n")}` : ""}`;
+    return `${name} 패스 편집 (Alt+PageUp/Down · Alt+, / Alt+.)${inputs.length ? `\n${inputs.join("\n")}` : ""}`;
   };
   const renderGraph = () => {
     const holder = $("studioGraph"),
@@ -1411,6 +1411,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         /^(deleteContent|insertCompositionText|insertReplacementText)/.test(event.inputType || "")
     );
   });
+  // 이전·다음 패스 단축키: Alt+PageUp/PageDown, 또는 Alt+, / Alt+. (PageUp/PageDown 키가 없는 노트북·
+  // 오른쪽 Alt가 한/영 키인 한국어 키보드용). 키 이름 대신 물리 키(code)로도 보아 배열·Mac Option 문자와 상관없게 한다.
+  const passStep = event => {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return 0;
+    if (event.key === "PageDown" || event.code === "PageDown" || event.code === "Period") return 1;
+    if (event.key === "PageUp" || event.code === "PageUp" || event.code === "Comma") return -1;
+    return 0;
+  };
   on($("studioCode"), "keydown", event => {
     if (event.isComposing) return;
     if (
@@ -1420,11 +1428,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     ) {
       event.preventDefault();
       historyMove(event.key.toLowerCase() === "z" && !event.shiftKey);
-    } else if (event.altKey && ["PageUp", "PageDown"].includes(event.key)) {
+    } else if (passStep(event)) {
       event.preventDefault();
       const tabs = ["Image", ...project.passes.map(p => p.name)],
         index = tabs.indexOf(selected);
-      select(tabs[(index + (event.key === "PageDown" ? 1 : -1) + tabs.length) % tabs.length]);
+      select(tabs[(index + passStep(event) + tabs.length) % tabs.length]);
       $("studioCode").focus();
     } else if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
       // Ctrl+Enter · Ctrl+Shift+Enter는 편집기의 '아래/위에 줄 삽입'(VS Code)
@@ -1783,6 +1791,17 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       at = tabs.findIndex(tab => tab.classList.contains("is-active"));
     tabs[(at + step + tabs.length) % tabs.length]?.click();
   };
+  // 편집기가 열려 있으면 포커스가 코드 밖(패스 탭·편집기 도구·뷰포트 등)에 있어도 패스를 옮긴다.
+  // 코드 편집기 안의 키는 위의 studioCode 처리가 먼저 받는다(defaultPrevented). 다른 입력 칸에서는 건드리지 않는다.
+  on(document, "keydown", event => {
+    if (event.defaultPrevented || !openState) return;
+    const step = passStep(event);
+    if (!step) return;
+    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (document.querySelector("dialog[open]")) return;
+    event.preventDefault();
+    stepPass(step);
+  });
   on($("studioPreviewTarget"), "click", togglePreview);
   on($("studioPreviewPin"), "click", () => setPreviewPinned(!previewPinned));
   // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
@@ -1796,8 +1815,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     { label: "미리보기: Image ↔ 편집 중인 패스", run: togglePreview },
     { label: "미리보기 고정 켜기/끄기", run: () => setPreviewPinned(!previewPinned) },
     press("버퍼 패스 추가", "studioAdd"),
-    { label: "다음 패스로", key: "Alt+PageDown", run: () => stepPass(1) },
-    { label: "이전 패스로", key: "Alt+PageUp", run: () => stepPass(-1) },
+    { label: "다음 패스로", key: "Alt+PageDown · Alt+.", run: () => stepPass(1) },
+    { label: "이전 패스로", key: "Alt+PageUp · Alt+,", run: () => stepPass(-1) },
     press("재생 / 일시정지", "studioPause"),
     press("시간·프레임 초기화", "studioResetFrames"),
     press("프로젝트 메뉴 열기", "projectMenuToggle", "Ctrl+O"),

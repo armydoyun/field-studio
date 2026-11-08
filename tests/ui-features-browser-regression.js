@@ -23,6 +23,14 @@ void main() { fragColor = vec4(uTint * uAmount * (0.5 + uFree), 1.0); }
   live.checked = false;
   live.dispatchEvent(new Event("change"));
   try {
+    // ---- 코드 글꼴 합자 끄기: -> <= != 등이 한 글자처럼 합쳐 보이지 않게(font 단축 속성이 되돌려도 꺼져 있어야) ----
+    for (const node of [document.querySelector(".cm-content"), document.querySelector(".cm-line"), $("statFps"), document.querySelector(".uniform-row input") || $("uniformSearch")]) {
+      if (!node) continue;
+      const style = getComputedStyle(node);
+      test(/no-contextual/.test(style.fontVariantLigatures) && /"calt" 0/.test(style.fontFeatureSettings) && /"liga" 0/.test(style.fontFeatureSettings),
+        `합자 꺼짐: ${node.className || node.id} (${style.fontVariantLigatures} · ${style.fontFeatureSettings})`);
+    }
+
     // ---- 브라우저 탭 제목 ----
     test(document.title === "저장 안 한 작업 — FIELD Studio", `탭 제목 기본값: ${document.title}`);
     setCode(scene);
@@ -188,6 +196,25 @@ void main() { fragColor = vec4(uTint * uAmount * (0.5 + uFree), 1.0); }
     test(box.hidden, "이미 50% 이하면 묻지 않는다");
     renderer.getStats = realStats;
     renderer.setResolutionScale(1);
+    // ---- 패스 전환 단축키: 편집기 밖(패스 탭)에 포커스가 있어도 · Alt+, / Alt+. ----
+    test(await studio.exampleFeedback(), "버퍼 예제 열기");
+    studio.open();
+    const active = () => document.querySelector("#studioPassTabs [aria-selected='true']")?.textContent.trim();
+    const press = (target, init) => target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, altKey: true, ...init }));
+    const firstTab = document.querySelector("#studioPassTabs [role=tab]");
+    firstTab.click();
+    firstTab.focus();
+    test(active() === "Image", "Image 탭에서 시작");
+    press(document.activeElement, { key: "PageDown", code: "PageDown" });
+    test(active() === "Buffer A", `패스 탭에 포커스가 있어도 Alt+PageDown (${active()})`);
+    press(document.activeElement, { key: ".", code: "Period" });
+    test(active() === "Buffer B", `Alt+. 다음 패스 (${active()})`);
+    press(document.activeElement, { key: "≤", code: "Comma" }); // Mac Option+, 는 다른 문자가 나와도 물리 키로 본다
+    test(active() === "Buffer A", `Alt+, 이전 패스 (${active()})`);
+    press(document.activeElement, { key: "PageUp", code: "PageUp", ctrlKey: true });
+    test(active() === "Buffer A", "Ctrl이 함께 눌리면 하지 않는다(브라우저 탭 전환 키)");
+    press($("uniformSearch"), { key: ".", code: "Period" });
+    test(active() === "Buffer A", "다른 입력 칸에서는 하지 않는다");
     console.log("UI 기능 회귀 검사 통과");
   } finally {
     renderer.getStats = realStats;
