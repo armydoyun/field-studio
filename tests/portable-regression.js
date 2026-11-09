@@ -1,6 +1,8 @@
 // 실브라우저 콘솔 검사. GPU 피드백은 초기화될 수 있으므로 테스트 전에 프로젝트를 저장한다.
 // Shader Studio가 초기화된 뒤 이 파일의 내용을 개발자 콘솔에서 실행한다.
 (async () => {
+  // 작업을 바꿀 때 뜨는 '저장하지 않은 변경' 확인에는 '저장하지 않고 계속'으로 답한다(이 검사는 보관함 저장을 다루지 않는다).
+  setInterval(() => { const d = document.getElementById("studioPromptDialog"), b = document.getElementById("studioDialogAlt"); if (d?.open && document.getElementById("studioDialogTitle").textContent === "저장하지 않은 변경") (b.hidden ? document.getElementById("studioDialogOK") : b).click(); }, 10);
     const r = window.shaderPlayground, studio = window.shaderStudio, settings = window.shaderSettings;
     if (!r || !studio) throw new Error("Shader Studio 초기화 후 실행하세요.");
     const assert = (ok, name) => { if (!ok) throw new Error(`FAIL: ${name}`); console.log(`PASS: ${name}`); };

@@ -37,6 +37,8 @@ with sync_playwright() as p:
         testRenderer.setPasses(scene.passes,scene.imageChannels);testRenderer.setFragment(scene.image);return true;
       };
       window.testStudio=TestStudio.mount(testRenderer,Shader);testStudio.open();document.getElementById('studioLive').checked=false;
+      // 작업을 바꿀 때의 '저장하지 않은 변경' 확인에는 '저장하지 않고 계속'으로 답한다(이 검사는 보관함 저장을 다루지 않는다).
+      setInterval(()=>{const $=id=>document.getElementById(id),b=$('studioDialogAlt');if($('studioPromptDialog').open&&$('studioDialogTitle').textContent==='저장하지 않은 변경')(b.hidden?$('studioDialogOK'):b).click();},10);
     }''')
     def check(condition,label):
         assert condition,label;count[0]+=1;print('PASS',f'{count[0]:02d}',label,flush=True)

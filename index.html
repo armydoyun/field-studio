@@ -186,18 +186,18 @@
             <header id="stageHeader" class="stage-header">
                 <div class="stage-label"><span class="live-indicator" aria-hidden="true"></span><span id="renderState">재생 중</span><span class="stage-separator">/</span><span>FIELD / WEBGL 2</span></div>
                 <div class="project-menu-wrap">
-                    <button id="projectMenuToggle" type="button" class="project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+Shift+S)"><span id="projectMenuLabel">저장 안 한 작업</span></button>
+                    <button id="projectMenuToggle" type="button" class="project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+S)"><span id="projectMenuLabel">저장 안 한 작업</span><span id="projectMenuState" class="project-save-state" hidden>저장 안 됨</span></button>
                     <div id="projectMenu" class="project-menu" role="dialog" aria-label="프로젝트" hidden>
                         <section id="studioFiles" class="project-menu-section" aria-labelledby="projectMenuFilesTitle"><h2 id="projectMenuFilesTitle">프로젝트</h2>
                             <div class="studio-projects">
-                                <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">보관함에 저장하지 않은 작업</p>
-                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" title="이 브라우저의 프로젝트 보관함에 새로 저장 · 코드·파라미터·설정·이미지 포함">브라우저에 저장</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장" hidden>다른 이름으로 저장</button></div>
+                                <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">프로젝트로 저장하지 않은 작업</p>
+                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" title="이 브라우저의 프로젝트 보관함에 이름을 붙여 저장 (Ctrl+S) · 코드·파라미터·설정·이미지 포함">프로젝트 저장…</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장 (Ctrl+Shift+S)" hidden>다른 이름으로 저장</button></div>
                                 <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
                             </div>
-                            <p class="studio-hint">다른 컴퓨터로 옮길 때는 Pack 파일을 사용하세요. 소스 JSON에는 파라미터·이미지 원본이 포함되지 않습니다.</p>
-                            <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 Pack으로 저장">전체 프로젝트 저장</button><button id="studioImportPack" type="button" title="다른 컴퓨터에서 이미지까지 복원할 수 있는 프로젝트 열기">Pack 열기</button></div>
+                            <p class="studio-hint">다른 컴퓨터·브라우저로 옮길 때는 프로젝트 파일(코드·파라미터·설정·이미지 포함)로 내보내세요.</p>
+                            <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 프로젝트 파일(Pack .json)로 내려받기 · 내려받는 순간의 내용만 담깁니다">프로젝트 파일 내보내기</button><button id="studioImportPack" type="button" title="내보낸 프로젝트 파일(Pack)을 열어 이미지까지 복원">프로젝트 파일 열기</button></div>
                         <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
-                            <div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트를 JSON 파일로 저장 (이미지 파일 제외)">소스 JSON 저장</button><button id="studioImport" type="button" title="JSON 프로젝트 파일 불러오기">소스 JSON 열기</button></div>
+                            <details class="project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="studio-hint">코드와 버퍼 구성만 담습니다. 파라미터·이미지 원본은 빠집니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트의 코드·버퍼 구성만 JSON 파일로 내보내기 (파라미터·이미지 원본 제외)">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
                             <button id="studioReset" type="button" title="모든 패스와 파라미터를 지우고 기본 Shader Art 장면으로 새로 시작 · Undo 가능">새 프로젝트 (기본 장면)</button>
                         <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
                         </section>
@@ -322,7 +322,7 @@
                                         <p class="studio-menu-title">편집</p>
                                         <button id="studioReplace" type="button" title="찾아 바꾸기 (Ctrl+H)">찾아 바꾸기 <kbd>Ctrl+H</kbd></button>
                                         <button id="studioDefinition" type="button" title="커서 아래 이름의 정의로 이동 (F12 · Ctrl+클릭)">정의로 이동 <kbd>F12</kbd></button>
-                                        <button id="studioRename" type="button" title="커서 아래 이름을 이 패스에서 모두 바꾸기 (F2)">이름 바꾸기 <kbd>F2</kbd></button>
+                                        <button id="studioRename" type="button" title="커서 아래 이름과 같은 이름을 이 패스에서 모두 바꾸기 · 함수 범위를 구분하지 않으며 바꾸기 전에 바뀔 곳을 보여 줍니다 (F2)">같은 이름 모두 바꾸기 <kbd>F2</kbd></button>
                                         <button id="studioLintPanel" type="button" title="컴파일 오류를 목록으로 보기 · F8로 다음 오류 (Ctrl+Shift+M)">오류 목록 <kbd>Ctrl+Shift+M</kbd></button>
                                         <div class="studio-menu-row"><span>코드 접기</span><span class="studio-stepper"><button id="studioFoldAll" type="button" title="모든 블록 접기 (Ctrl+K Ctrl+0)">모두 접기</button><button id="studioUnfoldAll" type="button" title="모든 블록 펴기 (Ctrl+K Ctrl+J)">펴기</button></span></div>
                                         <button id="studioSampleUV" type="button" title="texture(iChannel0, uv) 샘플 코드 삽입">텍스처 읽기 코드 삽입 <kbd>texture</kbd></button>
@@ -336,6 +336,7 @@
                                         <div class="studio-menu-row"><span>글자 크기</span><span class="studio-stepper"><button id="studioZoomOut" type="button" aria-label="글자 작게" title="편집기 글씨 크기 -1">A−</button><span id="studioFontSize">12px</span><button id="studioZoomIn" type="button" aria-label="글자 크게" title="편집기 글씨 크기 +1">A+</button></span></div>
                                         <label class="studio-menu-row" title="Tab 키로 넣을 공백 수"><span>들여쓰기</span><select id="studioIndent" aria-label="들여쓰기 공백 수"><option value="4">공백 4</option><option value="2">공백 2</option></select></label>
                                         <button id="studioLineWrap" type="button" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
+                                        <button id="studioCtrlSRuns" type="button" aria-pressed="false" title="켜면 Ctrl+S가 프로젝트 저장 대신 셰이더 실행이 됩니다(이전 방식). 실행은 언제나 Ctrl+Enter · Alt+Enter로도 됩니다.">Ctrl+S로 실행 (이전 방식)</button>
                                         <p class="studio-menu-title">창</p>
                                         <button id="studioLayout" type="button" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>
                                         <button id="studioParameters" type="button" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 패널 열기</button>
@@ -367,7 +368,7 @@
         <form id="studioDialogForm" method="dialog">
             <header class="studio-dialog-head"><div class="studio-dialog-mark glyph-icon icon-edit" aria-hidden="true"></div><div><h2 id="studioDialogTitle">확인</h2><p id="studioDialogMessage"></p></div><button id="studioDialogClose" type="button" aria-label="닫기" title="닫기 (Esc)" class="glyph-icon icon-close"></button></header>
             <label id="studioDialogField" class="studio-dialog-field" for="studioDialogInput" hidden>값 입력<input id="studioDialogInput" type="text" autocomplete="off" required></label>
-            <footer class="studio-dialog-actions"><button id="studioDialogCancel" type="button">취소 <kbd>Esc</kbd></button><button id="studioDialogOK" type="submit">확인 <kbd>Enter</kbd></button></footer>
+            <footer class="studio-dialog-actions"><button id="studioDialogCancel" type="button">취소 <kbd>Esc</kbd></button><button id="studioDialogAlt" type="button" hidden></button><button id="studioDialogOK" type="submit">확인 <kbd>Enter</kbd></button></footer>
         </form>
     </dialog>
 

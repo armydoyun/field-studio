@@ -2,6 +2,8 @@
 // "기법 배우기"의 PBR · 볼류메트릭 구름 · 2D 유체: 갤러리에서 열면 오류 없이 돌고, 파라미터가 어노테이션대로 등록되고,
 // 유체는 수백 프레임 뒤에도 값이 터지지 않는다(NaN·무한·속도 상한 넘음 없음). 물감이 실제로 퍼진다.
 (async () => {
+  // 작업을 바꿀 때 뜨는 '저장하지 않은 변경' 확인에는 '저장하지 않고 계속'으로 답한다(이 검사는 보관함 저장을 다루지 않는다).
+  setInterval(() => { const d = document.getElementById("studioPromptDialog"), b = document.getElementById("studioDialogAlt"); if (d?.open && document.getElementById("studioDialogTitle").textContent === "저장하지 않은 변경") (b.hidden ? document.getElementById("studioDialogOK") : b).click(); }, 10);
   const $ = id => document.getElementById(id), renderer = window.shaderPlayground, studio = window.shaderStudio;
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));

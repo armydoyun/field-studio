@@ -233,7 +233,11 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .project-toggle span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .project-toggle[data-saved="false"] span { color:var(--muted); }
 /* 보관함에 저장한 뒤 바뀜: 이름 뒤 점(편집기 탭의 '저장 안 됨' 표시와 같은 관례) */
-.project-toggle[data-modified="true"] #projectMenuLabel::after { content:"";display:inline-block;width:6px;height:6px;margin-left:7px;border-radius:50%;background:var(--warning);vertical-align:middle; }
+/* 저장 상태는 창 크기와 상관없이 머리줄 버튼에 남긴다: 이름 + "저장 안 됨" 표시(아주 좁으면 점만). */
+.project-toggle .project-save-state { flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;color:var(--warning);font-weight:600; }
+.project-toggle[data-saved="false"] .project-save-state { color:var(--warning); }
+.project-toggle .project-save-state::before { content:"";width:6px;height:6px;border-radius:50%;background:var(--warning); }
+@container preview (max-width:420px) { .project-toggle .project-save-state { font-size:0;gap:0; } }
 .project-toggle[aria-expanded="true"] { border-color:var(--accent);color:var(--text); }
 .project-menu { position:fixed;top:56px;left:12px;z-index:40;display:grid;gap:0;width:min(340px,calc(100vw - 24px));max-height:calc(100vh - 80px);overflow-y:auto;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);box-shadow:var(--shadow);scrollbar-width:thin; }
 .project-menu[hidden] { display:none; }
@@ -245,6 +249,10 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .project-menu-section>* { min-width:0;margin:0; }
 .project-menu-section>button { width:100%;min-height:36px;justify-content:flex-start;text-align:left; }
 .project-menu .studio-file-actions { display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:0; }
+.project-advanced { display:grid;gap:8px; }
+.project-advanced>summary { width:max-content;color:var(--muted);font-size:11px;cursor:pointer; }
+.project-advanced>summary:hover { color:var(--text-soft); }
+.project-advanced[open] { padding-bottom:2px; }
 .tool-button { flex:0 0 32px;width:32px;min-height:32px;height:32px;padding:0;border-color:transparent;background:transparent;font-size:14px; }
 .tool-button svg { width:18px;height:18px; }
 #studioToggle { flex-basis:40px;width:40px;font:bold 12px/1 var(--mono); }
@@ -407,6 +415,9 @@ dialog { margin:auto;padding:0;border:1px solid var(--line-strong);color:var(--t
 .studio-dialog-field input { min-height:40px;margin-top:8px; }
 .studio-dialog-actions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:16px 20px;border-top:1px solid var(--line); }
 .studio-dialog-actions button { min-width:0;min-height:40px;gap:8px;padding:8px 10px;font-size:12px; }
+/* 세 갈래 확인(저장하고 계속 · 저장하지 않고 계속 · 취소): 좁으면 세로로 쌓는다. */
+.studio-dialog-actions:has(#studioDialogAlt:not([hidden])) { grid-template-columns:repeat(3,minmax(0,1fr)); }
+@media (max-width:520px) { .studio-dialog-actions:has(#studioDialogAlt:not([hidden])) { grid-template-columns:minmax(0,1fr); }.studio-dialog-actions:has(#studioDialogAlt:not([hidden])) #studioDialogOK { order:-1; } }
 .studio-dialog-actions kbd { min-width:0;min-height:20px;padding:2px 4px;border-color:currentColor;background:transparent;color:inherit;font-size:9px;opacity:.7; }
 .studio-prompt-dialog[data-danger="true"] .studio-dialog-mark { background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger); }
 .studio-prompt-dialog[data-danger="true"] .studio-dialog-actions #studioDialogOK { border-color:transparent;background:var(--danger);color:#fff; }
@@ -511,8 +522,8 @@ input[type="number"]:hover,input[type="text"]:hover,input[type="search"]:hover,i
 input:focus,select:focus { border-color:var(--accent);outline:none; }
 button:focus-visible,summary:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
 kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--text-soft);font-size:10px; }
-.primary,.studio-launch,#studioExportPack,.studio-run-tools .studio-primary,.studio-dialog-actions #studioDialogOK { border-color:transparent;background:var(--accent);color:var(--accent-ink);font-weight:600; }
-.primary:hover,.studio-launch:hover,#studioExportPack:hover,.studio-run-tools .studio-primary:hover,.studio-dialog-actions #studioDialogOK:hover { border-color:transparent;background:color-mix(in srgb,var(--accent) 88%,#000);color:var(--accent-ink); }
+.primary,.studio-launch,#studioProjectSave,.studio-run-tools .studio-primary,.studio-dialog-actions #studioDialogOK { border-color:transparent;background:var(--accent);color:var(--accent-ink);font-weight:600; }
+.primary:hover,.studio-launch:hover,#studioProjectSave:hover,.studio-run-tools .studio-primary:hover,.studio-dialog-actions #studioDialogOK:hover { border-color:transparent;background:color-mix(in srgb,var(--accent) 88%,#000);color:var(--accent-ink); }
 .studio-primary span { color:color-mix(in srgb,var(--accent-ink) 70%,transparent); }
 
 /* 설정 패널 */

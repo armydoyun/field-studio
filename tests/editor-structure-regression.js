@@ -30,5 +30,5 @@ for(const [name,key] of [['패스로 이동(Ctrl+P)','Mod-p'],['모두 접기(Ct
   check(has(editor,`key:"${key}"`),`VS Code 단축키: ${name}`);
 check(has(editor,'both("Mod-Shift-p"','both("Mod-Shift-l", selectAllOccurrences)','both("Shift-Alt-i"'),'VS Code 단축키: 명령 팔레트 · 모든 일치 선택 · 줄 끝 커서');
 check(has(studio,'"Mod-\\\\"','"Mod-k z"')&&!has(studio,'"Mod-b"'),'VS Code 단축키: 배치(Ctrl+\\) · Zen(Ctrl+K Z) · 사이드바(Ctrl+B)는 없앰');
-check(!has(studio,'key==="Enter"'),'Ctrl+Enter · Ctrl+Shift+Enter는 실행이 아니라 아래/위에 줄 삽입(실행은 Ctrl+S)');
+check(has(studio,'event.key === "Enter"','!ctrlSRuns()','saveShortcut()'),'실행은 Ctrl+Enter · Alt+Enter, Ctrl+S는 프로젝트 저장(이전 방식: Ctrl+S 실행 · Ctrl+Enter 줄 삽입)');
 console.log(`Editor structure: ${passed} checks passed`);
