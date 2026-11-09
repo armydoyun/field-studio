@@ -368,7 +368,7 @@
     <dialog id="studioPromptDialog" class="studio-prompt-dialog" aria-labelledby="studioDialogTitle" aria-describedby="studioDialogMessage">
         <form id="studioDialogForm" method="dialog">
             <header class="studio-dialog-head"><div class="studio-dialog-mark glyph-icon icon-edit" aria-hidden="true"></div><div><h2 id="studioDialogTitle">확인</h2><p id="studioDialogMessage"></p></div><button id="studioDialogClose" type="button" aria-label="닫기" title="닫기 (Esc)" class="glyph-icon icon-close"></button></header>
-            <label id="studioDialogField" class="studio-dialog-field" for="studioDialogInput" hidden>값 입력<input id="studioDialogInput" type="text" autocomplete="off" required></label>
+            <label id="studioDialogField" class="studio-dialog-field" for="studioDialogInput" hidden>값 입력<input id="studioDialogInput" type="text" autocomplete="off" required aria-describedby="studioDialogError"><span id="studioDialogError" class="studio-dialog-error" role="alert" hidden></span></label>
             <footer class="studio-dialog-actions"><button id="studioDialogCancel" type="button">취소 <kbd>Esc</kbd></button><button id="studioDialogAlt" type="button" hidden></button><button id="studioDialogOK" type="submit">확인 <kbd>Enter</kbd></button></footer>
         </form>
     </dialog>
