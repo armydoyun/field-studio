@@ -67,7 +67,13 @@ try:
 
             # 메뉴는 분리 창 크기로 배치되고, 그 문서의 바깥 클릭·키보드로 닫힌다.
             popup.set_viewport_size({"width": 360, "height": 500})
-            expect(popup.locator("#renderState")).to_be_visible()
+            # 좁은 분리 창: 재생 상태 라벨은 숨기고(재생 버튼 아이콘이 상태를 보인다) 프로젝트 버튼·도구 막대가 겹치지 않는다.
+            expect(popup.locator("#renderState")).to_be_hidden()
+            assert popup.evaluate("""() => {
+                const a = document.getElementById('projectMenuToggle').getBoundingClientRect(),
+                  b = document.getElementById('stageToolbar').getBoundingClientRect();
+                return a.right <= b.left + 1 && b.right <= innerWidth && a.left >= 0;
+            }"""), "좁은 분리 창에서 프로젝트 버튼과 도구 막대가 겹치지 않는다"
             popup.click("#captureToggle")
             expect(popup.locator("#captureMenu")).to_be_visible()
             assert popup.evaluate("""() => {

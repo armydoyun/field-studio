@@ -63,6 +63,9 @@ const check = (ok, name) => { assert(ok, name); console.log("PASS", name); };
     check(t.win.document.documentElement.dataset.theme === "dark" && t.win.document.body.className === "preview-popout-window", "분리 창도 같은 테마와 전용 본문 클래스");
     t.doc.documentElement.dataset.theme = "light"; t.doc.dispatchEvent({type:"theme-changed"});
     check(t.win.document.documentElement.dataset.theme === "light", "테마를 바꾸면 분리 창도 따라 바뀐다");
+    // '시스템 설정 따르기'(메인 창에 data-theme 없음): 분리 창은 메인 창이 실제로 쓰는 테마를 그대로 받는다(PiP 창의 미디어 쿼리에 맡기지 않음).
+    delete t.doc.documentElement.dataset.theme; t.view.shaderTheme = {theme:"light"}; t.doc.dispatchEvent({type:"theme-changed"});
+    check(t.win.document.documentElement.dataset.theme === "light", "시스템 테마일 때도 분리 창에 메인 창의 실제 테마를 지정한다");
     const space = t.win.document.fire("keydown", {code:"Space", key:" "});
     check(t.calls.toggle === 1 && space.defaultPrevented, "분리 창에서 Space는 재생/정지");
     t.win.document.fire("keydown", {code:"Escape", key:"Escape"});

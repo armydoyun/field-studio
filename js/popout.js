@@ -90,12 +90,19 @@ const mount = ({ doc = document } = {}) => {
       }
     }
   };
+  // 분리 창에는 메인 창이 '실제로 쓰는' 테마를 그대로 박는다. '시스템 설정 따르기'일 때 메인 창은 data-theme 없이
+  // prefers-color-scheme를 따르는데, 분리 창(특히 Picture-in-Picture 창)은 그 미디어 쿼리를 다르게 볼 수 있어
+  // 메인은 라이트인데 분리 창만 다크로 뜨는 일이 있었다. 테마를 바꾸면(theme-changed) 다시 맞춘다.
+  const resolvedTheme = () =>
+    view.shaderTheme?.theme ||
+    doc.documentElement.dataset.theme ||
+    (view.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark");
   const syncTheme = () => {
     if (!target) return;
-    const theme = doc.documentElement.dataset.theme,
+    const theme = resolvedTheme(),
       root = target.document.documentElement;
-    if (theme) root.dataset.theme = theme;
-    else delete root.dataset.theme;
+    root.dataset.theme = theme;
+    if (root.style) root.style.colorScheme = theme;
   };
   const sync = () => {
     const open = !!target;
@@ -195,6 +202,10 @@ const mount = ({ doc = document } = {}) => {
       } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         header?.querySelector("#hudToggle")?.click();
+      } else if (event.key === "Escape" && d.body.classList.contains("hud-hidden")) {
+        // HUD를 숨긴 동안의 Esc는 HUD만 되돌린다(창은 그대로).
+        event.preventDefault();
+        header?.querySelector("#hudReveal")?.click();
       } else if (event.key === "Escape") {
         // 저장 뒤 초점이 본문으로 돌아와도, 먼저 열린 메뉴만 닫는다.
         for (const [menuId, toggleId] of [
