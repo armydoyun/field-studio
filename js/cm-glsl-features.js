@@ -318,13 +318,15 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       if (plan.reason === "braces")
         return renameEverywhere(view, word, "괄호 { } 짝이 맞지 않아 범위를 알 수 없습니다(작성 중인 코드).", false);
       notify(
-        plan.reason === "field"
-          ? `'${word}'은(는) 구조체 필드나 스위즐('.' 뒤)이라 어느 타입의 것인지 정확히 알 수 없어 바꾸지 않습니다 · 같은 이름을 모두 고르려면 Ctrl+Shift+L`
-          : plan.reason === "undeclared"
-            ? options.lookup?.(word) || Object.hasOwn(BUILTIN_VARS, word)
-              ? `${word}은(는) GLSL 내장 이름이라 바꿀 수 없습니다`
-              : `${word}의 선언을 이 패스에서 찾지 못했습니다`
-            : "이름을 바꿀 변수나 함수 위에 커서를 두세요"
+        plan.reason === "swizzle"
+          ? `'.${word}'은(는) 벡터의 성분(스위즐)이라 이름이 아닙니다`
+          : plan.reason === "field"
+            ? `'.${word}' 앞 식의 타입을 알 수 없어(매크로·구조체가 섞인 괄호 식) 어느 구조체의 필드인지 정할 수 없습니다 · struct 안의 필드 선언에서 F2를 누르면 타입을 아는 곳을 모두 바꿉니다`
+            : plan.reason === "undeclared"
+              ? options.lookup?.(word) || Object.hasOwn(BUILTIN_VARS, word)
+                ? `${word}은(는) GLSL 내장 이름이라 바꿀 수 없습니다`
+                : `${word}의 선언을 이 패스에서 찾지 못했습니다`
+              : "이름을 바꿀 변수나 함수 위에 커서를 두세요"
       );
       return true;
     }
@@ -336,7 +338,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     const uniform = symbol.uniform && symbol.global && typeof options.renameUniform === "function";
     const next = await askNewName(
       `'${word}' 이름 바꾸기 · ${plan.label}`,
-      `이 ${plan.label}을(를) 가리키는 ${plan.spots.length}곳(${lineList(src, plan.spots)}번째 줄)만 바꿉니다. 다른 함수의 같은 이름이나 안쪽에서 가린 같은 이름은 그대로 둡니다.${uniform ? " 다른 패스의 같은 Uniform과 파라미터 값도 함께 바뀝니다." : ""}${plan.warnings.length ? ` ${plan.warnings.join(" ")}` : ""}`,
+      `이 ${plan.label}을(를) 가리키는 ${plan.spots.length}곳(${lineList(src, plan.spots)}번째 줄)만 바꿉니다. ${symbol.kind === "field" ? "다른 구조체의 같은 이름 필드와 벡터 성분(.xyz)은 그대로 둡니다." : "다른 함수의 같은 이름이나 안쪽에서 가린 같은 이름은 그대로 둡니다."}${uniform ? " 다른 패스의 같은 Uniform과 파라미터 값도 함께 바뀝니다." : ""}${plan.warnings.length ? ` ${plan.warnings.join(" ")}` : ""}`,
       word
     );
     if (next === null || next === undefined || next === word || badName(next)) return true;

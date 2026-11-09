@@ -72,8 +72,12 @@ void other() { float x = 4.0; float y = x; }`;
   // 구조체 타입 · 필드
   const ray=plan('Ray r');
   check(ray.label==='구조체 타입'&&ray.spots.length===3,`구조체 이름: 정의·다른 구조체의 필드 타입·변수 선언 ${ray.spots.length}`);
-  check(plan('o; vec3 d').reason==='field'&&plan('r.o',0,null,2).reason==='field','구조체 필드·.뒤 이름은 거절');
-  check(plan('value . x',0,null,8).reason==='field',"'value . x'처럼 공백 있는 필드도 거절");
+  // 구조체 필드: 선언·r.o·h... 모두 같은 필드 기호로 이어진다
+  const fieldO=plan('o; vec3 d');
+  check(fieldO.ok&&fieldO.label==='구조체 Ray의 필드'&&fieldO.spots.length===3,`Ray.o 필드: 선언·r.o 두 곳 ${fieldO.spots.length}`);
+  check(plan('r.o',0,null,2).symbol===fieldO.symbol,'r.o에서 시작해도 같은 필드');
+  check(plan('value . x',0,null,8).reason==='swizzle',"float 값 뒤의 '. x'는 스위즐(필드 아님)");
+  check(plan('o; vec3 d',0,'d').conflicts.some(c=>c.includes('이미')),'같은 구조체의 다른 필드 이름과 겹침');
   // Uniform · 내장 · 매크로
   const u=plan('uSpeed',1);
   check(u.label==='전역 Uniform'&&u.symbol.uniform&&u.spots.length===2,'Uniform: 선언과 쓰임');
@@ -96,5 +100,33 @@ void other() { float x = 4.0; float y = x; }`;
   // 작성 중(괄호 짝 안 맞음)
   const open='void main() {\n float a = 1.0;\n a += 1.0;\n';
   check(S.planRename(open,open.indexOf('a +=')).reason==='braces','괄호 짝이 맞지 않으면 범위 분석을 쓰지 않는다');
+  // 필드 참조의 여러 형태: 중첩 · 배열 · 함수 결과 · 생성자 · 매개변수 · 같은 이름의 다른 구조체 필드 · 모르는 식 · 스위즐
+  const F=`#version 300 es
+precision highp float;
+struct Ray { vec3 o; vec3 d; };
+struct Hit { Ray ray; float t; vec3 o; };
+uniform Ray uRays[2];
+Ray makeRay(vec3 o) { return Ray(o, vec3(0.0)); }
+Hit trace(Ray r) { Hit h; h.ray = r; h.t = r.o.x; h.o = r.o; return h; }
+void main() {
+    Hit h = trace(makeRay(vec3(1.0)));
+    vec3 a = h.ray.o + uRays[1].o + makeRay(a).o + Ray(a, a).o + h.o;
+    vec3 b = (true ? h.ray : uRays[0]).o;
+    float s = a.x + a.xyz.y;
+}`;
+  const fp=(t,n=0,off=0,next=null)=>{let p=-1;for(let k=0;k<=n;k++)p=F.indexOf(t,p+1);if(p<0)throw Error('없음 '+t);return S.planRename(F,p+off,next);};
+  const rayO=fp('vec3 o;',0,5);
+  check(rayO.label==='구조체 Ray의 필드',`필드 설명: ${rayO.label}`);
+  const want=['r.o.x','h.o = r.o','h.ray.o','uRays[1].o','makeRay(a).o','Ray(a, a).o'];
+  check(rayO.spots.length===1+want.length,`Ray.o: 선언 + 매개변수·중첩·배열·함수 결과·생성자 ${rayO.spots.length}`);
+  const hitO=fp('vec3 o; }',0,5);
+  check(hitO.label==='구조체 Hit의 필드'&&hitO.spots.length===3&&!hitO.spots.some(at=>rayO.spots.includes(at)),'같은 이름 o라도 Hit.o는 따로(선언·h.o 두 곳)');
+  check(rayO.warnings.some(w=>w.includes('타입을 알 수 없어')),'괄호 식 뒤의 .o는 타입을 몰라 바꾸지 않는다고 경고');
+  check(fp('(true ? h.ray : uRays[0]).o',0,27).reason==='field','괄호 식 뒤의 필드는 거절(타입 모름)');
+  check(fp('a.x + a.xyz.y',0,2).reason==='swizzle'&&fp('a.xyz.y',0,6).reason==='swizzle','벡터 성분(.x · .xyz.y)은 스위즐');
+  const renamed=S.applyRename(F,rayO.spots,'o','origin');
+  check(renamed.includes('struct Ray { vec3 origin; vec3 d; };')&&renamed.includes('h.ray.origin + uRays[1].origin + makeRay(a).origin + Ray(a, a).origin + h.o;')&&renamed.includes('h.o = r.origin;'),'적용 결과: Ray.o만 바뀌고 Hit.o·매개변수 o는 그대로');
+  check(renamed.includes('Ray makeRay(vec3 o)'),'같은 이름의 매개변수 o는 그대로');
+  check(S.symbolAt(F,F.indexOf('h.ray.o')+6).symbol.at===F.indexOf('vec3 o;')+5,'정의로 이동: 필드 참조 → 필드 선언');
   console.log(`GLSL scope: ${passed} checks passed`);
 })().catch(error=>{console.error(error);process.exit(1);});

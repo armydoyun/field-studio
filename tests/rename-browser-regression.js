@@ -1,9 +1,9 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
 // 이름 바꾸기(F2)가 실제 코드 편집기처럼 범위를 따르는지 본다.
-//   1) 지역 변수: 그 함수 안의 그 변수만 · 다른 함수의 같은 이름 · 구조체 필드('value . x' 포함)는 그대로
+//   1) 지역 변수: 그 함수 안의 그 변수만 · 다른 함수의 같은 이름 · 구조체 필드는 그대로
 //   2) 겹치는 이름: 무엇이 바뀌는지 보여 주고 한 번 더 묻는다(취소하면 그대로)
 //   3) Uniform: 다른 패스의 같은 Uniform과 파라미터 값까지 함께 바꾸고 Undo 한 번으로 되돌린다
-//   4) 거절: 구조체 필드 · 앱 Uniform(uTime 등) · 내장 함수
+//   4) 구조체 필드: 그 구조체의 필드만 · 거절: 벡터 성분(스위즐) · 앱 Uniform(uTime 등)
 (async () => {
   const $ = id => document.getElementById(id), renderer = window.shaderPlayground, studio = window.shaderStudio;
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
@@ -25,6 +25,11 @@
     await wait(30);
     $("studioRename").click();
     await wait(30);
+  };
+  const setCodeAndApply = text => {
+    area.value = text;
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+    test(studio.apply(), "코드 적용");
   };
   const answer = async value => {
     test(await until(() => $("studioPromptDialog").open), "대화상자 열림");
@@ -70,9 +75,19 @@ void main() {
     await wait(30);
     test(area.value === scene, "취소하면 그대로");
 
-    // 4) 거절: 필드 · 내장 함수 · 앱 Uniform
+    // 4) 구조체 필드: 그 구조체의 필드 선언과 필드 참조만(같은 이름의 지역 변수 x는 그대로)
     await renameAt("value.x;", 6);
-    test(!$("studioPromptDialog").open && /구조체 필드/.test(status()), `필드는 거절: ${status()}`);
+    test(await until(() => $("studioPromptDialog").open), "필드 F2 대화상자");
+    test(/구조체 S의 필드/.test($("studioDialogTitle").textContent) && /4곳/.test($("studioDialogMessage").textContent), `필드 설명: ${$("studioDialogTitle").textContent} · ${$("studioDialogMessage").textContent}`);
+    await answer("w");
+    test(await until(() => area.value.includes("struct S { float w; };")), "필드 선언이 바뀐다");
+    test(area.value.includes("value . w = 1.0;") && area.value.includes("float x = value.w;") && area.value.includes("value.w += x;"), "필드 참조('value . x' 포함)가 모두 바뀐다");
+    test(area.value.includes("vec4(glow(x), x,") && area.value.includes("float glow(float x)"), "같은 이름의 변수·매개변수 x는 그대로");
+    test(studio.undo() && area.value === scene, "Undo");
+    // 거절: 벡터 성분(스위즐) · 앱 Uniform
+    setCodeAndApply(scene.replace("fragColor = vec4(glow(x), x, 0.0, 1.0);", "vec3 c = vec3(x); fragColor = vec4(c.xyz, 1.0);"));
+    await renameAt("c.xyz", 3);
+    test(!$("studioPromptDialog").open && /스위즐/.test(status()), `벡터 성분은 거절: ${status()}`);
     await renameAt("uResolution", 2);
     test(!$("studioPromptDialog").open && /앱이 값을 넣는 Uniform/.test(status()), `앱 Uniform은 거절: ${status()}`);
 

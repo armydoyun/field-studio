@@ -4,9 +4,11 @@
 // 다루는 범위
 //   · 전역 · { } 블록 · 함수 매개변수(본문까지) · for (int i …)의 초기화(반복 본문까지, 중괄호 없는 본문 포함)
 //   · 선언: [한정어] 타입 이름 [배열] [= 식] [, 이름 …]   (타입 = 내장 타입 또는 앞서 선언한 struct)
-//   · 함수 정의·선언(같은 이름은 오버로드 묶음으로 본다) · struct 이름 · struct 필드(바꾸지 않음)
+//   · 함수 정의·선언(같은 이름은 오버로드 묶음으로 본다) · struct 이름 · struct 필드
+//   · 필드 참조: '.' 앞 식의 타입을 거꾸로 읽어 구한다 — 변수(선언 타입) · a.b(필드 타입) · a[i](배열 원소) ·
+//     f(…)(반환 타입) · Ray(…)(생성자). 타입이 벡터면 스위즐(.xyz)이라 필드가 아니다.
 // 하지 않는 것(정확히 알 수 없어 이유와 함께 거절하거나 경고한다)
-//   · '.' 뒤의 이름(구조체 필드·스위즐)은 앞 식의 타입을 따라가야 하므로 참조로 치지 않는다.
+//   · (a + b).x · (c ? p : q).o처럼 괄호 식 결과의 타입은 구하지 않는다(그 필드 참조는 '타입을 알 수 없음').
 //   · #define 매크로 본문은 글자를 그대로 끼워 넣는 것이라 범위가 없다. 매크로 이름은 파일 전체에서 바꾸고,
 //     바꿀 이름이 매크로 본문에 나오면 경고만 한다. #ifdef로 갈라진 코드는 양쪽을 모두 코드로 본다.
 //   · 괄호 짝이 맞지 않으면(작성 중인 코드) 분석을 믿을 수 없다고 알린다(ok: false, reason: "braces").
@@ -21,6 +23,8 @@ const TYPES = new Set(
     " "
   )
 );
+// 내장 변수: 구조체가 아니므로 그 뒤의 '.'은 성분 접근이다.
+const BUILTIN_VARS = new Set(["gl_FragCoord", "gl_FrontFacing", "gl_PointCoord", "gl_FragDepth"]);
 const QUALIFIERS = new Set("const uniform in out inout highp mediump lowp flat smooth centroid invariant".split(" "));
 
 // 주석·문자열을 같은 길이 공백으로 지운다(위치 보존). keepDirectives가 false면 전처리문(#…)도 지운다.
@@ -156,12 +160,14 @@ const analyze = src => {
       structNames.add(name.v);
       let j = i + 2;
       if (tokens[j]?.v === "{") {
+        let fieldType = null;
         for (j++; j < tokens.length && tokens[j].v !== "}"; j++) {
           const t = tokens[j];
           if (!t.id) continue;
-          if (structNames.has(t.v) && t.v !== name.v) refs.push({ name: t.v, at: t.at, scope: cur });
+          if (isType(t.v)) fieldType = t.v;
+          if (structNames.has(t.v) && t.v !== name.v) refs.push({ name: t.v, at: t.at, scope: cur, index: j });
           else if (isName(t) && !isType(t.v) && (isType(tokens[j - 1].v) || tokens[j - 1].v === ","))
-            declare(t, "field", { struct: name.v, scope: -1 });
+            declare(t, "field", { struct: name.v, type: fieldType, scope: -1 });
         }
         if (tokens[j]?.v !== "}") balanced = false;
         for (let k = j + 1; k < tokens.length && tokens[k].v !== ";"; k++)
@@ -171,7 +177,7 @@ const analyze = src => {
       } else i++;
     } else if (token.id && isType(v) && tokens[i - 1]?.v !== ".") {
       // 타입 다음에 이름이 오면 선언. 타입이 struct면 그 이름은 struct를 가리키는 참조이기도 하다.
-      if (structNames.has(v)) refs.push({ name: v, at: token.at, scope: cur });
+      if (structNames.has(v)) refs.push({ name: v, at: token.at, scope: cur, index: i });
       const j = skipBrackets(i + 1),
         name = tokens[j];
       if (!isName(name) || isType(name.v)) continue;
@@ -189,13 +195,84 @@ const analyze = src => {
       }
       i = j; // 선언한 이름은 참조로 세지 않는다(아래 declAt 검사로도 막힌다)
     } else if (token.id && !KEYWORDS.has(v) && !TYPES.has(v) && !declAt.has(token.at)) {
-      refs.push({ name: v, at: token.at, scope: cur, member: tokens[i - 1]?.v === "." });
+      refs.push({ name: v, at: token.at, scope: cur, index: i, member: tokens[i - 1]?.v === "." });
     }
   }
   if (frames.some(frame => frame.kind === "block") || paren !== 0) balanced = false;
-  const result = { src, clean, scopes, decls, refs, balanced };
+  const macros = new Set([...src.matchAll(/^[ \t]*#\s*define[ \t]+([A-Za-z_]\w*)/gm)].map(m => m[1]));
+  const result = { src, clean, tokens, scopes, decls, refs, balanced, structNames, macros };
+  // 필드 참조('.' 뒤 이름)를 그 구조체의 필드 선언에 잇는다. ref.field: 필드 선언 · ref.swizzle: 벡터 성분 · 둘 다 없으면 타입을 모름
+  const refAt = new Map(refs.map(ref => [ref.index, ref]));
+  for (const ref of refs) {
+    if (!ref.member) continue;
+    if (tokens[ref.index + 1]?.v === "(") {
+      ref.swizzle = true; // 배열의 .length() 같은 메서드
+      continue;
+    }
+    const base = exprType(result, refAt, ref.index - 2);
+    if (base && structNames.has(base))
+      ref.field = decls.find(d => d.kind === "field" && d.struct === base && d.name === ref.name) || null;
+    else if (base) ref.swizzle = true;
+  }
   cache = { src, result };
   return result;
+};
+
+// end 토큰에서 끝나는 식의 타입(이름). 모르면 null. 구조체 타입이 아니어도(vec3 등) 아는 타입이면 돌려준다.
+const exprType = (info, refAt, end, guard = 0) => {
+  const { tokens, decls } = info,
+    t = tokens[end];
+  if (!t || guard > 32) return null;
+  const match = (close, open) => {
+    let depth = 0;
+    for (let k = end; k >= 0; k--) {
+      if (tokens[k].v === close) depth++;
+      else if (tokens[k].v === open && !--depth) return k;
+    }
+    return -1;
+  };
+  if (t.v === "]") {
+    // 배열 원소: 구조체 배열이면 원소도 그 구조체. 벡터·행렬의 [i]는 성분이라 구조체가 아니다.
+    const open = match("]", "[");
+    const base = open > 0 ? exprType(info, refAt, open - 1, guard + 1) : null;
+    return base && info.structNames.has(base) ? base : null;
+  }
+  if (t.v === ")") {
+    const open = match(")", "(");
+    const callee = tokens[open - 1];
+    if (!callee?.id) {
+      // (a + b).x 같은 괄호 식: 안에 구조체 타입(변수·함수 결과·생성자)이 하나도 없으면 결과도 구조체가 아니다.
+      // 구조체가 섞여 있으면((c ? p : q).o) 타입을 모른다.
+      for (let k = open + 1; k < end; k++) {
+        const inner = tokens[k];
+        if (!inner.id) continue;
+        if (info.structNames.has(inner.v) || info.macros?.has(inner.v)) return null;
+        const ref = refAt.get(k);
+        if (!ref || ref.member) continue;
+        const decl = resolve(info, ref.name, ref.at, ref.scope);
+        if (!decl && !BUILTIN_VARS.has(inner.v) && tokens[k + 1]?.v !== "(") return null;
+        if (decl && info.structNames.has(decl.type)) return null;
+      }
+      return "swizzle";
+    }
+    if (info.structNames.has(callee.v) || TYPES.has(callee.v)) return callee.v; // 생성자
+    const overloads = decls.filter(d => d.kind === "function" && d.name === callee.v),
+      types = new Set(overloads.map(d => d.type));
+    // 이 패스에 없는 함수는 GLSL 내장 함수(normalize · texture …)로 본다: 구조체를 돌려주지 않는다.
+    if (!overloads.length) return refAt.get(open - 1) && !info.macros?.has(callee.v) ? "swizzle" : null;
+    return types.size === 1 ? [...types][0] : null;
+  }
+  if (!t.id) return null;
+  if (tokens[end - 1]?.v === ".") {
+    const owner = exprType(info, refAt, end - 2, guard + 1);
+    if (!owner) return null;
+    if (!info.structNames.has(owner)) return "swizzle"; // 벡터의 성분(.xyz)도 벡터·스칼라 — 구조체가 아니라는 것만 안다
+    return decls.find(d => d.kind === "field" && d.struct === owner && d.name === t.v)?.type || null;
+  }
+  const ref = refAt.get(end);
+  const decl = ref ? resolve(info, ref.name, ref.at, ref.scope) : decls.find(d => d.at === t.at);
+  if (!decl && BUILTIN_VARS.has(t.v)) return "swizzle";
+  return decl && decl.kind !== "function" ? decl.type || null : null;
 };
 
 // scope에서 바깥으로 올라가며 name의 선언을 찾는다(at보다 앞에 선언된 것만). 함수는 같은 이름 전체(오버로드 묶음).
@@ -214,6 +291,10 @@ const resolve = (info, name, at, scope) => {
 };
 // 한 기호(선언 묶음)를 가리키는 선언과 참조 위치들.
 const occurrences = (info, symbol) => {
+  if (symbol.kind === "field") {
+    const spots = [symbol.at, ...info.refs.filter(ref => ref.member && ref.field === symbol).map(ref => ref.at)];
+    return { group: [symbol], spots: spots.sort((a, b) => a - b) };
+  }
   const group =
     symbol.kind === "function" ? info.decls.filter(d => d.kind === "function" && d.name === symbol.name) : [symbol];
   const spots = new Set(group.map(d => d.at));
@@ -226,7 +307,8 @@ const occurrences = (info, symbol) => {
 };
 
 // 커서 위치(pos)의 이름이 가리키는 기호. {symbol} 또는 {reason}
-//   reason: "none"(이름 아님) · "field"(구조체 필드·스위즐) · "undeclared"(내장 이름 또는 이 패스에 선언 없음) · "macro" · "braces"
+//   reason: "none"(이름 아님) · "swizzle"(벡터 성분 .xyz) · "field"(타입을 알 수 없는 식의 필드)
+//           · "undeclared"(내장 이름 또는 이 패스에 선언 없음) · "macro" · "braces"
 const symbolAt = (src, pos, { macros = [] } = {}) => {
   const info = analyze(src);
   const word = (() => {
@@ -241,10 +323,11 @@ const symbolAt = (src, pos, { macros = [] } = {}) => {
   if (macros.includes(word.text)) return { info, word, reason: "macro" };
   if (!info.balanced) return { info, word, reason: "braces" };
   const decl = info.decls.find(d => d.at === word.at);
-  if (decl) return decl.kind === "field" ? { info, word, reason: "field" } : { info, word, symbol: decl };
+  if (decl) return { info, word, symbol: decl };
   const ref = info.refs.find(r => r.at === word.at);
   if (!ref) return { info, word, reason: "none" };
-  if (ref.member) return { info, word, reason: "field" };
+  if (ref.member)
+    return ref.field ? { info, word, symbol: ref.field } : { info, word, reason: ref.swizzle ? "swizzle" : "field" };
   const symbol = resolve(info, ref.name, ref.at, ref.scope);
   return symbol ? { info, word, symbol } : { info, word, reason: "undeclared" };
 };
@@ -254,6 +337,7 @@ const lineOf = (src, at) => src.slice(0, at).split("\n").length;
 const describe = (info, symbol, group) => {
   if (symbol.kind === "function") return group.length > 1 ? `함수 (오버로드 ${group.length}개 모두)` : "함수";
   if (symbol.kind === "struct") return "구조체 타입";
+  if (symbol.kind === "field") return `구조체 ${symbol.struct}의 필드`;
   const fn = info.scopes[symbol.scope]?.fn;
   if (symbol.kind === "param") return `${fn} 함수의 매개변수`;
   if (symbol.global) return symbol.uniform ? "전역 Uniform" : "전역 변수";
@@ -279,8 +363,20 @@ const planRename = (src, pos, next, { macros = [] } = {}) => {
     conflicts: [],
     warnings: [],
   };
-  if (next && next !== symbol.name) {
-    const where = at => `${lineOf(src, at)}번째 줄`;
+  const where = at => `${lineOf(src, at)}번째 줄`;
+  if (symbol.kind === "field") {
+    // 필드: 같은 구조체의 다른 필드와 겹치는지만 본다(필드는 '.' 뒤에서만 쓰여 바깥 이름을 가리지 않는다).
+    if (next && next !== symbol.name) {
+      const clash = info.decls.find(d => d.kind === "field" && d.struct === symbol.struct && d.name === next);
+      if (clash) result.conflicts.push(`구조체 ${symbol.struct}에 이미 '${next}' 필드가 있습니다(${where(clash.at)}).`);
+    }
+    // 같은 이름인데 '.' 앞 식의 타입을 알 수 없는 곳: 이 필드일 수도 있지만 확실하지 않아 바꾸지 않는다.
+    const unknown = info.refs.filter(r => r.member && r.name === symbol.name && !r.field && !r.swizzle);
+    if (unknown.length)
+      result.warnings.push(
+        `'.${symbol.name}' ${unknown.length}곳(${unknown.map(r => where(r.at)).join(", ")})은 앞 식의 타입을 알 수 없어 바꾸지 않습니다.`
+      );
+  } else if (next && next !== symbol.name) {
     // ① 같은 범위에 이미 있는 이름
     for (const d of group) {
       const clash = info.decls.find(
