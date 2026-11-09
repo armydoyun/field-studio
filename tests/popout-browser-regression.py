@@ -120,6 +120,34 @@ try:
             expect(popup.locator("#videoRenderDialog")).to_be_hidden()
             assert not popup.is_closed()
 
+            # 메인 창 편집기에서 띄운 대화상자(F2 같은 이름 바꾸기)와 Ctrl+O 프로젝트 메뉴는 분리 창이 아니라 메인 창에 뜬다.
+            page.evaluate("shaderStudio.open()")
+            page.wait_for_selector("#studioDock .cm-content")
+            page.click("#studioDock .cm-content")
+            page.evaluate("""() => { const area = document.getElementById('studioCode'), at = area.value.indexOf('uv') + 1;
+                area.setSelectionRange(at, at); }""")
+            page.keyboard.press("F2")
+            expect(page.locator("#studioPromptDialog")).to_be_visible()
+            assert popup.evaluate("!document.getElementById('studioPromptDialog')"), "이름 바꾸기 대화상자가 분리 창에 뜨면 안 된다"
+            page.keyboard.press("Escape")
+            expect(page.locator("#studioPromptDialog")).to_be_hidden()
+            page.keyboard.press("Control+o")
+            expect(page.locator("#projectMenu")).to_be_visible()
+            assert popup.evaluate("!document.getElementById('projectMenu')"), "메인 창의 Ctrl+O 메뉴는 메인 창에 연다"
+            page.keyboard.press("Escape")
+            expect(page.locator("#projectMenu")).to_have_count(0)
+            assert popup.evaluate("!!document.querySelector('#stageHeader #projectMenu')"), "닫으면 메뉴가 분리 창 머리줄로 돌아간다"
+            page.evaluate("shaderStudio.close()")
+            # 다시 분리 창에서 저장하면 대화상자는 분리 창에 뜬다.
+            popup.click("#projectMenuToggle")
+            popup.click("#studioProjectSaveAs")
+            expect(popup.locator("#studioPromptDialog")).to_be_visible()
+            assert page.evaluate("!document.getElementById('studioPromptDialog')")
+            popup.keyboard.press("Escape")
+            expect(popup.locator("#studioPromptDialog")).to_be_hidden()
+            popup.click("#projectMenuToggle")
+            expect(popup.locator("#projectMenu")).to_be_hidden()
+
             # PiP에서는 창 안에서 중지, 일반 팝업에서는 녹화 중 복귀한 뒤 메인에서 중지한다.
             popup.click("#captureToggle")
             popup.click("#recordButton")

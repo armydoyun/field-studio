@@ -12,13 +12,17 @@ const create = ({ $, on }) => {
   const owner = () => menu.ownerDocument || document;
   const GAP = 6,
     MARGIN = 12;
+  // 메뉴의 원래 자리(머리줄의 버튼 옆). 미리보기 분리 창이 열려 있으면 머리줄은 분리 창에 있는데, 메인 창에서 Ctrl+O를 누르면
+  // 메뉴만 메인 창으로 잠시 옮겨 그 창 왼쪽 위에 띄우고, 닫을 때 원래 자리로 되돌린다.
+  const home = menu.parentNode;
+  const away = () => menu.ownerDocument !== toggle.ownerDocument;
   const place = () => {
-    const rect = toggle.getBoundingClientRect?.();
-    if (!rect || !menu.style) return;
+    const rect = away() ? null : toggle.getBoundingClientRect?.();
+    if (!menu.style || (!rect && !away())) return;
     const view = owner().defaultView || window,
       width = Math.min(340, view.innerWidth - MARGIN * 2),
-      left = Math.max(MARGIN, Math.min(rect.left, view.innerWidth - MARGIN - width)),
-      top = rect.bottom + GAP;
+      left = rect ? Math.max(MARGIN, Math.min(rect.left, view.innerWidth - MARGIN - width)) : MARGIN,
+      top = rect ? rect.bottom + GAP : MARGIN;
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
     menu.style.width = `${width}px`;
@@ -26,6 +30,11 @@ const create = ({ $, on }) => {
   };
   const firstAction = () => menu.querySelector?.("button:not([disabled]):not([hidden])");
   const open = ({ focus = true } = {}) => {
+    const host = globalThis.shaderPopout?.activeDocument?.();
+    if (host && host !== menu.ownerDocument && host.body) {
+      host.body.append(menu);
+      bind();
+    }
     menu.hidden = false;
     place();
     toggle.setAttribute("aria-expanded", "true");
@@ -33,9 +42,11 @@ const create = ({ $, on }) => {
   };
   const close = ({ refocus = false } = {}) => {
     if (menu.hidden) return;
+    const wasAway = away();
     menu.hidden = true;
     toggle.setAttribute("aria-expanded", "false");
-    if (refocus) toggle.focus?.();
+    if (home && menu.parentNode !== home) home.append(menu);
+    if (refocus && !wasAway) toggle.focus?.();
   };
   on(toggle, "click", () => (isOpen() ? close() : open()));
   const outside = event => {

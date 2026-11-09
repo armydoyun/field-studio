@@ -85,6 +85,8 @@ const create = ({ $, on, pause = () => null, resume = () => {} }) => {
       const paused = pause();
       pending = { resolve, hasValue, paused };
       try {
+        // 미리보기 분리 창이 열려 있어도, 요청한 쪽(사용자가 마지막으로 조작한 창)에 띄운다.
+        globalThis.shaderPopout?.place?.(dialog);
         dialog.showModal();
         (hasValue ? valueInput : $("studioDialogCancel")).focus();
         if (hasValue) valueInput.select();
