@@ -21,7 +21,16 @@ const mount = ({ doc = document } = {}) => {
       get isOpen() {
         return false;
       },
+      activeDocument: () => doc,
+      place: () => doc,
     };
+  // 마지막으로 사용자가 조작한(누르거나 키를 친) 창의 문서. 대화상자·프로젝트 메뉴는 이 창에 띄운다
+  // (분리 창의 프로젝트 메뉴에서 저장하면 분리 창에, 메인 창 편집기에서 F2를 누르면 메인 창에).
+  let lastInput = doc;
+  const noteInput = d => () => {
+    lastInput = d;
+  };
+  for (const type of ["pointerdown", "keydown", "focusin"]) doc.addEventListener(type, noteInput(doc), true);
   let target = null,
     marker = null,
     moved = [],
@@ -119,17 +128,20 @@ const mount = ({ doc = document } = {}) => {
     if (!target) return;
     const win = target;
     target = null;
+    lastInput = doc;
     if (marker?.isConnected) marker.replaceWith(canvas);
     else doc.getElementById("renderViewport")?.prepend(canvas);
     marker = null;
     for (const { node, placeholder } of moved) {
-      // 닫히는 창의 모달은 취소해서 입력 요청을 기다리는 Promise도 끝낸다.
-      if (node.open && node.tagName === "DIALOG") {
+      // 닫히는 창의 모달은 취소해서 입력 요청을 기다리는 Promise도 끝낸다. 메인 창에 띄운 모달(place)은 그대로 둔다.
+      if (node.open && node.tagName === "DIALOG" && node.ownerDocument === win.document) {
         // pagehide에서 예약된 close 이벤트는 닫힌 창에 남을 수 있어, 취소를 동기적으로 알린다.
         node.dispatchEvent(new view.Event("cancel", { cancelable: true }));
         if (node.open) node.close();
       }
-      placeholder.replaceWith(node);
+      // 메인 창에 띄워 둔 채 열려 있는 모달은 옮기지 않는다(옮기면 모달 상태가 풀린다). 표식만 지운다.
+      if (node.open && node.ownerDocument === doc && node.tagName === "DIALOG") placeholder.remove?.();
+      else placeholder.replaceWith(node);
     }
     moved = [];
     hudObserver?.disconnect();
@@ -170,6 +182,7 @@ const mount = ({ doc = document } = {}) => {
     d.documentElement.lang = "ko";
     copyStyles(win);
     d.body.className = "preview-popout-window";
+    for (const type of ["pointerdown", "keydown", "focusin"]) d.addEventListener(type, noteInput(d), true);
     target = win;
     syncTheme();
     doc.addEventListener("theme-changed", syncTheme);
@@ -248,6 +261,14 @@ const mount = ({ doc = document } = {}) => {
     toggle,
     get isOpen() {
       return !!target;
+    },
+    // 대화상자·메뉴를 띄울 문서: 분리 창이 열려 있고 사용자가 마지막으로 그 창을 조작했으면 분리 창, 아니면 메인 창.
+    activeDocument: () => (target && !target.closed && lastInput === target.document ? target.document : doc),
+    // node(<dialog> 등)를 지금 사용자가 보고 있는 창으로 옮긴다. 원래 자리는 분리 창을 닫을 때 popout이 되돌린다.
+    place: node => {
+      const host = target && !target.closed && lastInput === target.document ? target.document : doc;
+      if (node && node.ownerDocument !== host) host.body.append(node);
+      return host;
     },
   };
 };

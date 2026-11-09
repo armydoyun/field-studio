@@ -173,7 +173,10 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
     }
   };
   const open = () => {
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) {
+      globalThis.shaderPopout?.place?.(dialog); // 분리 창이 열려 있으면 요청한 창에 띄운다
+      dialog.showModal();
+    }
     $("videoRenderProgressBox").hidden = true;
     refresh();
     if (!probed) probe();
