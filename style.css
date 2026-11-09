@@ -374,6 +374,9 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-texture { display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:10px;padding:12px;border:1px solid var(--line-strong);border-radius:8px; }
 .studio-texture span {min-width:0;color:var(--text-soft);font-size:11px;overflow-wrap:anywhere; }
 .studio-texture small { color:var(--muted);font-size:10px; }
+.studio-texture[data-usage="unused"] { border-style:dashed; }.studio-texture[data-usage="unused"] span { color:var(--muted); }
+.studio-texture-summary { display:flex;align-items:center;flex-wrap:wrap;gap:8px;justify-content:space-between;color:var(--muted);font-size:11px; }
+.studio-texture-summary button { min-height:30px;padding:4px 10px;font-size:11px; }
 .studio-texture .icon-close { grid-column:2;grid-row:1; flex:0 0 28px;width:28px;min-height:28px;height:28px;padding:0; }
 .studio-texture .texture-connect { grid-column:1/-1;grid-row:2;min-width:0;min-height:32px;padding:6px 8px;font-size:10px;white-space:normal;overflow-wrap:anywhere; }
 .studio-sampling { grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
@@ -433,7 +436,7 @@ dialog { margin:auto;padding:0;border:1px solid var(--line-strong);color:var(--t
 .video-render-grid input,.video-render-grid select { min-height:36px; }
 .video-render-grid .video-label { display:flex;align-items:baseline;justify-content:space-between;gap:8px; }
 .video-render-grid .field-hint { color:var(--faint);font-weight:500; }
-.video-render-summary { margin:14px 0 0;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--text-soft);font:11px/1.6 var(--mono); }
+.video-render-summary { white-space:pre-line;margin:14px 0 0;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--text-soft);font:11px/1.6 var(--mono); }
 .video-render-summary.is-invalid { border-color:var(--danger);color:var(--danger); }
 .video-render-note { margin:10px 0 0;font-size:11px;line-height:1.7; }
 .video-render-note code { font-size:10.5px; }

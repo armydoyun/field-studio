@@ -118,21 +118,44 @@ const createTextureInput = gl => {
       return { id: key, saved: false, error: error.message };
     }
   };
-  const restoreSaved = async () => {
+  // 저장해 둔 이미지를 되살린다. priority(id 목록)에 든 것(지금 프로젝트가 쓰는 것)부터 기다려 되살리고,
+  // 나머지는 앱이 뜬 뒤 하나씩 이어서 되살린다(시작이 이미지 수에 비례해 느려지지 않게). 나머지까지 끝나면 whenRestored()가 풀린다.
+  // onProgress({done, total, failed}): 뒤쪽 복원 진행. failed: 복원하지 못한 이미지 id 목록.
+  let restoring = Promise.resolve();
+  const failed = [];
+  const restoreOne = async record => {
+    try {
+      await add(record.blob, record.id, record.sampling);
+    } catch (error) {
+      failed.push(record.id);
+      console.warn("Texture 복원 실패:", record.id, error);
+    }
+  };
+  const restoreSaved = async ({ priority = null, onProgress = () => {} } = {}) => {
     let records;
     try {
       records = await accessDB("readonly", store => store.getAll());
     } catch (_) {
       return false;
     }
-    for (const record of records)
-      try {
-        await add(record.blob, record.id, record.sampling);
-      } catch (error) {
-        console.warn("Texture 복원 실패:", record.id, error);
+    const wanted = priority ? new Set(priority) : null,
+      first = wanted ? records.filter(record => wanted.has(record.id)) : records,
+      rest = wanted ? records.filter(record => !wanted.has(record.id)) : [];
+    for (const record of first) await restoreOne(record);
+    restoring = (async () => {
+      let done = 0;
+      for (const record of rest) {
+        if (disposed) return;
+        // 한 장씩 다음 작업으로 미뤄 화면 그리기·입력을 막지 않는다.
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await restoreOne(record);
+        onProgress({ done: ++done, total: rest.length, failed: [...failed] });
       }
+    })();
     return true;
   };
+  const whenRestored = () => restoring;
+  const failedIds = () => [...failed];
   const remove = async id => {
     const entry = library.get(id);
     if (!entry) return false;
@@ -212,6 +235,6 @@ const createTextureInput = gl => {
     }
     library.clear();
   };
-  return { add, remove, restoreSaved, setSampling, get, list, onLost, restore, dispose };
+  return { add, remove, restoreSaved, whenRestored, failedIds, setSampling, get, list, onLost, restore, dispose };
 };
 export { createTextureInput };

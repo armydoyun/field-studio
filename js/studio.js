@@ -642,9 +642,58 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderGraph();
     return false;
   };
+  // ---- 이미지 자원 ----
+  // 쓰는 이미지: 지금 작업 · 되돌리기/다시 실행 기록 · 이 탭의 자동 복구본이 연결한 이미지. 보관함 프로젝트와 내보낸 파일은
+  // 이미지 원본을 따로 담고 있으므로(열 때 다시 등록) 여기서 지워도 잃지 않는다.
+  const textureUsage = () => {
+    const current = new Set(Pack.textureIds(captureScene())),
+      kept = new Set();
+    const add = scene => {
+      try {
+        for (const id of Pack.textureIds(scene)) if (!current.has(id)) kept.add(id);
+      } catch (_) {
+        /* 모양이 깨진 기록은 건너뛴다. */
+      }
+    };
+    for (const entry of [...undoStack, ...redoStack, checkpoint]) add(entry.project);
+    for (const key of [STORAGE_KEY, DRAFT_KEY]) {
+      const stored = Store.readTabJSON(key)?.project;
+      if (stored) add(stored);
+    }
+    return { current, kept };
+  };
+  const megabytes = bytes =>
+    bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  // GPU에 올린 RGBA8 텍스처의 어림 크기(밉맵 제외).
+  const gpuBytes = asset => asset.width * asset.height * 4;
+  const cleanupTextures = async () => {
+    const { current, kept } = textureUsage(),
+      unused = renderer.getTextures().filter(asset => !current.has(asset.id) && !kept.has(asset.id));
+    if (!unused.length) return setStatus("정리할 이미지가 없습니다 · 모두 지금 작업이나 되돌리기 기록에서 씁니다");
+    const bytes = unused.reduce((sum, asset) => sum + (renderer.getTextureFile(asset.id)?.size || 0), 0);
+    const ok = await ask({
+      title: "쓰지 않는 이미지 정리",
+      message: `지금 작업·되돌리기 기록·자동 복구본 어디에서도 쓰지 않는 이미지 ${unused.length}개(파일 ${megabytes(bytes)} · GPU 약 ${megabytes(unused.reduce((sum, asset) => sum + gpuBytes(asset), 0))})를 이 브라우저에서 지웁니다. 보관함에 저장한 프로젝트와 내보낸 프로젝트 파일은 이미지 원본을 따로 담고 있어 영향이 없습니다. 지울 이미지: ${unused.map(asset => asset.name).join(", ")}`,
+      ok: "정리",
+      danger: true,
+    });
+    if (!ok) return;
+    let removed = 0;
+    for (const asset of unused)
+      try {
+        if (await renderer.removeTexture(asset.id)) removed++;
+      } catch (error) {
+        console.warn("이미지 정리 실패:", asset.id, error);
+      }
+    renderTextures();
+    renderChannels();
+    setStatus(`쓰지 않는 이미지 ${removed}개를 정리했습니다`);
+  };
   const renderTextures = () => {
     const holder = $("studioTextureList"),
-      assets = renderer.getTextures();
+      assets = renderer.getTextures(),
+      usage = textureUsage();
+    let footer = null; // 전체 용량 요약은 목록 아래에 둔다
     textureButtons = [];
     holder.replaceChildren();
     if (!assets.length) {
@@ -652,13 +701,37 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       hint.className = "studio-hint";
       hint.textContent = "등록된 이미지가 없습니다. PNG·JPEG·WebP 파일을 추가하고 입력 채널에 연결하세요.";
       holder.append(hint);
+    } else {
+      // 전체 용량: 이 브라우저에 보관한 원본 파일과 GPU 메모리 어림값. 쓰지 않는 이미지가 있으면 정리 버튼을 보인다.
+      const files = assets.reduce((sum, asset) => sum + (renderer.getTextureFile(asset.id)?.size || 0), 0),
+        gpu = assets.reduce((sum, asset) => sum + gpuBytes(asset), 0),
+        unused = assets.filter(asset => !usage.current.has(asset.id) && !usage.kept.has(asset.id)).length,
+        failed = renderer.failedTextures?.() || [],
+        summary = element("div"),
+        text = element("span");
+      summary.className = "studio-texture-summary";
+      text.textContent = `이미지 ${assets.length}개 · 파일 ${megabytes(files)} · GPU 약 ${megabytes(gpu)}${unused ? ` · 쓰지 않음 ${unused}개` : ""}${failed.length ? ` · 복원 실패 ${failed.length}개` : ""}`;
+      text.title = "파일: 이 브라우저에 보관한 이미지 원본 합계 · GPU: 화면에 올린 텍스처의 어림 크기";
+      summary.append(text);
+      if (unused) {
+        const clean = element("button");
+        clean.type = "button";
+        clean.id = "studioTextureCleanup";
+        clean.textContent = "쓰지 않는 이미지 정리…";
+        clean.addEventListener("click", cleanupTextures);
+        summary.append(clean);
+      }
+      footer = summary;
     }
     for (const asset of assets) {
       const row = element("div"),
         name = element("span"),
         del = element("button");
       row.className = "studio-texture";
-      name.textContent = `${asset.name} · ${asset.width}×${asset.height}`;
+      const state = usage.current.has(asset.id) ? "current" : usage.kept.has(asset.id) ? "history" : "unused";
+      row.dataset.usage = state;
+      const size = renderer.getTextureFile(asset.id)?.size || 0;
+      name.textContent = `${asset.name} · ${asset.width}×${asset.height}${size ? ` · ${megabytes(size)}` : ""} · ${{ current: "사용 중", history: "되돌리기 기록에서 씀", unused: "쓰지 않음" }[state]}`;
       del.type = "button";
       del.className = "glyph-icon icon-close";
       del.title = `${asset.name} 삭제`;
@@ -757,6 +830,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       row.append(name, use, del, controls);
       holder.append(row);
     }
+    if (footer) holder.append(footer);
     syncTextureTargets();
   };
   const renderTabs = () => {
@@ -1288,6 +1362,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       before = settings?.snapshot(),
       beforeTab = selected;
     try {
+      // 같은 이미지를 다시 쓰려면 뒤에서 복원 중인 이미지까지 다 올라와 있어야 한다.
+      if (reuse) await renderer.texturesRestored?.();
+      check();
       for (const asset of decoded) {
         const existing = reuse ? await sameTexture(asset) : null;
         check();
@@ -1396,6 +1473,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   };
   renderTextures();
+  // 앱이 뜬 뒤 이어서 복원되는 이미지(main.js의 restoreTextures)가 올라올 때마다 목록과 채널 표시를 맞춘다.
+  on(document, "shader-textures-restored", () => {
+    if (disposed) return;
+    renderTextures();
+    renderChannels();
+    renderGraph();
+  });
   const savedDraft = Store.readTab(DRAFT_KEY);
   const loadImage = async (file, slot) => {
     const check = beginLoad(),
@@ -1657,6 +1741,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       const data = JSON.parse(text);
       if (data.version !== 1) throw new Error("지원하지 않는 프로젝트 형식입니다.");
       if (await confirmReplace()) {
+        await renderer.texturesRestored?.();
         check();
         const next = validateProject(data.project),
           count = detachMissing(next);
@@ -2032,4 +2117,18 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     },
   };
 };
-export { mount };
+// 앱 시작 때 먼저 되살릴 이미지: 이 탭의 자동 복구본(실행본·편집본)이 연결한 이미지 id. 나머지 이미지는 뒤에서 이어서 되살린다.
+const savedTextureIds = () => {
+  const ids = new Set();
+  for (const key of [STORAGE_KEY, DRAFT_KEY]) {
+    const project = Store.readTabJSON(key)?.project;
+    if (!project || typeof project !== "object") continue;
+    try {
+      for (const id of Pack.textureIds(project)) ids.add(id);
+    } catch (_) {
+      /* 모양이 깨진 복구본은 Studio가 따로 검사한다. */
+    }
+  }
+  return [...ids];
+};
+export { mount, savedTextureIds };

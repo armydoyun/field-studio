@@ -1353,7 +1353,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     passManager.detachTexture(id);
     return textureInput.remove(id);
   };
-  const restoreTextures = () => textureInput.restoreSaved();
+  // options.priority: 먼저 되살릴 이미지 id(지금 프로젝트가 쓰는 것). 나머지는 뒤에서 이어지고 texturesRestored()로 기다린다.
+  const restoreTextures = options => textureInput.restoreSaved(options);
   const getTextures = () => textureInput.list();
   const setTextureSampling = (id, options) => {
     if (disposed || lost) throw new Error("현재 Texture 설정을 바꿀 수 없습니다.");
@@ -1484,6 +1485,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     addTexture,
     removeTexture,
     restoreTextures,
+    texturesRestored: () => textureInput.whenRestored(),
+    failedTextures: () => textureInput.failedIds(),
     getTextures,
     getTextureFile: id => textureInput.get(id)?.file || null,
     setTextureSampling,

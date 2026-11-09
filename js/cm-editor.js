@@ -535,7 +535,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       editorView.dispatch({ changes, scrollIntoView: true, userEvent: add ? "input.comment" : "delete.comment" });
     return true;
   };
-  // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(아래는 Ctrl+Enter = CM.insertBlankLine, 셰이더 실행은 Ctrl+S).
+  // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(아래 줄 삽입 Ctrl+Enter는 'Ctrl+S로 실행' 이전 방식일 때만 — 기본은 Ctrl+Enter = 셰이더 실행).
   const insertLineAbove = editorView => {
     const state = editorView.state;
     editorView.dispatch(
@@ -997,14 +997,18 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "모든 일치 항목 선택", key: "Ctrl+Shift+L · Ctrl+F2", run: () => selectAllOccurrences(view) },
     { label: "선택 영역 확장 / 축소", key: "Shift+Alt+→ / ←", run: () => expandSelection(view) },
     { label: "선택한 줄마다 줄 끝에 커서", key: "Shift+Alt+I", run: () => cursorsAtLineEnds(view) },
-    { label: "아래에 줄 삽입", key: "Ctrl+Enter", run: () => CM.insertBlankLine(view) },
+    { label: "아래에 줄 삽입", run: () => CM.insertBlankLine(view) },
     { label: "위에 줄 삽입", key: "Ctrl+Shift+Enter", run: () => insertLineAbove(view) },
     { label: "줄 삭제", key: "Ctrl+Shift+K", run: () => CM.deleteLine(view) },
     { label: "짝 괄호로 이동", key: "Ctrl+Shift+\\", run: () => CM.cursorMatchingBracket(view) },
     { label: "들여쓰기", key: "Ctrl+]", run: () => CM.indentMore(view) },
     { label: "내어쓰기", key: "Ctrl+[", run: () => CM.indentLess(view) },
     { label: "정의로 이동", key: "F12 · Ctrl+클릭", run: () => features.goToDefinition(view) },
-    { label: "이름 바꾸기 (같은 이름 모두)", key: "F2", run: () => features.renameSymbol(view) },
+    {
+      label: "같은 이름 모두 바꾸기 (지금 패스 · 바뀔 곳 미리 보기)",
+      key: "F2",
+      run: () => features.renameSymbol(view),
+    },
     { label: "색상 선택기 열기 (커서 위치의 vec3/vec4)", run: () => features.openColorPicker(view) },
     {
       label: "커서 위 숫자 올리기 / 내리기 (숫자 밖에서는 한 줄 스크롤)",

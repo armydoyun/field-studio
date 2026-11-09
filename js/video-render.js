@@ -77,6 +77,27 @@ const normalizeSettings = (raw, { limit = 4096 } = {}) => {
 };
 // 대략의 파일 크기(바이트). PNG는 그림에 따라 크게 달라서 픽셀당 1.5바이트로 어림한다.
 const estimateBytes = s => (s.format === "png" ? s.frames * s.width * s.height * 1.5 : (s.bitrate / 8) * s.duration);
+// 렌더링 자원 예산. 결과 파일(영상 청크·PNG ZIP)은 모두 메모리에 모은 뒤 한 번에 내려받으므로 크기에 상한을 둔다.
+// 버퍼 패스가 있으면 시작 시간 전까지의 프레임(시작 × fps)을 먼저 그려야 하므로 그 수도 함께 본다.
+const BUDGET = Object.freeze({
+  maxBytes: 4e9, // 예상 결과 4GB 초과는 시작하지 않는다(브라우저 메모리·Blob 한도)
+  warnBytes: 1e9,
+  maxWarmup: 36000, // 준비 프레임(예: 60fps로 10분) 초과는 시작하지 않는다
+  warnWarmup: 3600,
+});
+// 시작 전에 비용을 계산한다. problems가 있으면 시작하지 않는다(대화상자는 버튼을 막고, render()도 거부한다).
+//   { bytes, frames, warmup, total, problems: [{code}], warnings: [{code}] }
+const assessBudget = (s, { hasBuffers = false } = {}) => {
+  const bytes = estimateBytes(s),
+    warmup = hasBuffers ? Math.round(s.start * s.fps) : 0,
+    problems = [],
+    warnings = [];
+  if (bytes > BUDGET.maxBytes) problems.push({ code: "bytes", limit: BUDGET.maxBytes });
+  else if (bytes > BUDGET.warnBytes) warnings.push({ code: "bytes", limit: BUDGET.warnBytes });
+  if (warmup > BUDGET.maxWarmup) problems.push({ code: "warmup", limit: BUDGET.maxWarmup });
+  else if (warmup > BUDGET.warnWarmup) warnings.push({ code: "warmup", limit: BUDGET.warnWarmup });
+  return { bytes, frames: s.frames, warmup, total: s.frames + warmup, problems, warnings };
+};
 
 // ---- WebM(Matroska) 먹서 ----
 // EBML: ID 바이트 + 길이(가변 길이 정수) + 내용. 모든 청크를 모은 뒤 한 번에 쓰므로 길이를 미리 안다.
@@ -579,6 +600,13 @@ const render = async ({
     if (signal?.aborted) throw abortError();
   };
   check();
+  const budget = assessBudget(s, { hasBuffers });
+  if (budget.problems.length)
+    throw new RangeError(
+      budget.problems[0].code === "bytes"
+        ? "예상 결과 크기가 렌더링 한도(4GB)를 넘습니다. 길이·크기·FPS를 줄이거나 시작 시간을 나눠 여러 번 렌더링하세요."
+        : `버퍼 준비 프레임이 한도(${BUDGET.maxWarmup.toLocaleString("ko-KR")}프레임)를 넘습니다. 시작 시간이나 FPS를 줄이세요.`
+    );
   let codec = null;
   if (s.format !== "png") {
     codec = (await probeFormats({ width: s.width, height: s.height, fps: s.fps, Encoder }))[s.format];
@@ -732,4 +760,6 @@ export {
   frameName,
   probeFormats,
   render,
+  BUDGET,
+  assessBudget,
 };

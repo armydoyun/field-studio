@@ -53,6 +53,14 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
   check(V.normalizeSettings({ ...base, format: "png", duration: 600, fps: 120 }).frames === 72000, "PNG도 600초 × 120fps(72000장)까지(ZIP64)");
   check(/^shader-\d{8}-\d{6}-1280x720-30fps\.webm$/.test(V.fileName(s)), "파일 이름에 크기·fps");
   check(V.estimateBytes(s) === (s.bitrate / 8) * 2, "WebM 예상 크기");
+  // ---- 자원 예산: 결과 크기 · 버퍼 준비 프레임 ----
+  const hugePng = V.normalizeSettings({ ...base, format: "png", width: 3840, height: 2160, fps: 60, duration: 600 });
+  check(V.assessBudget(hugePng).problems.some(p => p.code === "bytes"), "4K PNG 60fps 600초(수백 GB)는 시작 전에 막는다");
+  check(V.assessBudget(s).problems.length === 0 && V.assessBudget(s).warmup === 0, "보통 설정은 통과 · 버퍼 없으면 준비 프레임 0");
+  const late = V.normalizeSettings({ ...base, start: 86400, fps: 120 });
+  check(V.assessBudget(late, { hasBuffers: true }).warmup === 10368000 && V.assessBudget(late, { hasBuffers: true }).problems.some(p => p.code === "warmup"), "버퍼 + 시작 86400초 × 120fps(약 1037만 준비 프레임)는 막는다");
+  check(V.assessBudget(late).problems.length === 0, "버퍼가 없으면 시작 시간이 길어도 준비 프레임이 없다");
+  check(V.assessBudget(V.normalizeSettings({ ...base, start: 120, fps: 60 }), { hasBuffers: true }).warnings.some(p => p.code === "warmup"), "준비 프레임이 많으면 경고");
 
   // ---- 가변 길이 정수 ----
   for (const n of [0, 1, 126, 127, 16382, 16383, 2 ** 21, 2 ** 40]) {
