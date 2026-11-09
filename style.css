@@ -281,7 +281,7 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 #uiToast { top:76px;right:16px;display:flex;align-items:flex-start;gap:12px;pointer-events:auto; }
 #toastMessage { flex:1;min-width:0; }
 #uiDismiss { flex:0 0 28px;width:28px;min-height:28px;height:28px;padding:0;border-color:transparent;background:transparent;color:inherit; }
-.hud-hidden .viewport-footer,.hud-hidden .stage-hint,.hud-hidden .stage-label { display:none; }
+
 #stage:fullscreen .stage-header { opacity:.25; }
 #stage:fullscreen .stage-header:hover,#stage:fullscreen .stage-header:focus-within { opacity:1; }
 /* 편집기: 공통 컨트롤 높이, 텍스트/아이콘 중앙 정렬. */
@@ -652,7 +652,6 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 }
 /* HUD는 분리 창으로 옮겨 보인다(popout.js가 사본을 둔다). 메인 창의 원본은 그동안 숨긴다. */
 .preview-popout-window>[data-mirror="hud"] { position:fixed;inset:auto 12px 12px; }
-.preview-popout-window.hud-hidden>[data-mirror="hud"] { display:none; }
 .preview-popped .viewport-footer { display:none; }
 @container preview (max-height:220px) { .preview-popout-notice p span { display:none; } }
 .stage-hint { border-radius:var(--radius);color:var(--text-soft);font-size:12px; }
@@ -1294,10 +1293,10 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
  #stageToolbar .tool-button { flex-basis:30px;width:30px;min-width:30px; }
 }
 @container preview (max-width:300px) { .viewport-info { display:none; } #projectMenuLabel { display:none; } }
-/* 화면만 보기(Shift+G): 위아래의 모든 HUD를 숨긴다. 포인터를 움직이면 'HUD 다시 보기'만 잠깐 보인다. */
-.clean-view-exit { display:none; }
-.clean-view .stage-header>:not(.clean-view-exit),.clean-view .viewport-footer,.clean-view .stage-hint,.clean-view .preview-notice,.clean-view .perf-suggest,
-.preview-popout-window.clean-view>[data-mirror="hud"] { display:none !important; }
-.clean-view .clean-view-exit { display:inline-flex;gap:6px;margin-left:auto;min-height:30px;padding:4px 10px;border-color:var(--line);border-radius:var(--radius);background:var(--hud-bg);color:var(--text-soft);font-size:11px;opacity:0;pointer-events:none;transition:opacity .2s; }
-.clean-view .clean-view-exit.is-visible,.clean-view .clean-view-exit:focus-visible { opacity:1;pointer-events:auto; }
-.clean-view .clean-view-exit kbd { font-size:9px; }
+/* HUD 숨기기(G): 위아래의 모든 HUD를 숨기고 셰이더만 남긴다. 포인터를 움직이면 'HUD 다시 보기'만 잠깐 보인다. */
+.hud-reveal { display:none; }
+.hud-hidden .stage-header>:not(.hud-reveal),.hud-hidden .viewport-footer,.hud-hidden .stage-hint,.hud-hidden .preview-notice,.hud-hidden .perf-suggest,
+.preview-popout-window.hud-hidden>[data-mirror="hud"] { display:none !important; }
+.hud-hidden .hud-reveal { display:inline-flex;gap:6px;margin-left:auto;min-height:30px;padding:4px 10px;border-color:var(--line);border-radius:var(--radius);background:var(--hud-bg);color:var(--text-soft);font-size:11px;opacity:0;pointer-events:none;transition:opacity .2s; }
+.hud-hidden .hud-reveal.is-visible,.hud-hidden .hud-reveal:focus-visible { opacity:1;pointer-events:auto; }
+.hud-hidden .hud-reveal kbd { font-size:9px; }

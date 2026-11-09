@@ -49,7 +49,6 @@ const mount = ({ doc = document } = {}) => {
     copy.innerHTML = footer.innerHTML;
     for (const node of copy.querySelectorAll("[id]")) node.removeAttribute("id");
     d.body.classList.toggle("hud-hidden", !!stage?.classList.contains("hud-hidden"));
-    d.body.classList.toggle("clean-view", !!stage?.classList.contains("clean-view"));
   };
   const attachHud = (win, d) => {
     if (!footer || !win.MutationObserver) return;
@@ -202,11 +201,11 @@ const mount = ({ doc = document } = {}) => {
         view.shaderStudio?.togglePlayback();
       } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
-        header?.querySelector(event.shiftKey ? "#cleanViewToggle" : "#hudToggle")?.click();
-      } else if (event.key === "Escape" && d.body.classList.contains("clean-view")) {
-        // 화면만 보기 중의 Esc는 그 모드만 끝낸다(창은 그대로).
+        header?.querySelector("#hudToggle")?.click();
+      } else if (event.key === "Escape" && d.body.classList.contains("hud-hidden")) {
+        // HUD를 숨긴 동안의 Esc는 HUD만 되돌린다(창은 그대로).
         event.preventDefault();
-        header?.querySelector("#cleanViewExit")?.click();
+        header?.querySelector("#hudReveal")?.click();
       } else if (event.key === "Escape") {
         // 저장 뒤 초점이 본문으로 돌아와도, 먼저 열린 메뉴만 닫는다.
         for (const [menuId, toggleId] of [

@@ -745,35 +745,30 @@ const mount = (renderer, input, settings) => {
       $("panelTabs").querySelector(`[data-tab="${activeTab}"]`)?.focus();
     else focusToolbar("panelToggle");
   };
-  // 화면만 보기: HUD(G)보다 한 단계 더 — 위쪽 도구 막대·프로젝트 이름·안내·FPS까지 모두 숨기고 셰이더만 남긴다.
-  // 포인터를 움직이면 오른쪽 위에 'HUD 다시 보기' 버튼이 잠깐 나타난다. Shift+G · Esc로 끝낸다. 분리 창에도 따라간다(popout.js).
-  let exitTimer = 0;
-  const showExit = () => {
-    if (!stage.classList.contains("clean-view")) return;
-    $("cleanViewExit").classList.add("is-visible");
-    clearTimeout(exitTimer);
-    exitTimer = setTimeout(() => $("cleanViewExit").classList.remove("is-visible"), 1600);
+  // HUD 숨기기(G · ⋯ 메뉴의 HUD): 위쪽 도구 막대·프로젝트 이름·안내와 아래쪽 미리보기 정보·FPS까지 모두 숨기고 셰이더만 남긴다.
+  // 포인터를 움직이면 오른쪽 위에 'HUD 다시 보기' 버튼이 잠깐 나타난다. G · Esc로도 되돌린다. 분리 창에도 따라간다(popout.js).
+  let revealTimer = 0;
+  const showReveal = () => {
+    if (!stage.classList.contains("hud-hidden")) return;
+    $("hudReveal").classList.add("is-visible");
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(() => $("hudReveal").classList.remove("is-visible"), 1600);
   };
-  const setCleanView = on => {
-    stage.classList.toggle("clean-view", on);
-    $("cleanViewToggle").setAttribute("aria-pressed", String(on));
-    $("cleanViewExit").classList.remove("is-visible");
-    clearTimeout(exitTimer);
-    if (on) {
-      for (const id of ["moreMenu", "captureMenu"]) if ($(id) && !$(id).hidden) $(id).hidden = true;
-      showError("");
-      showExit();
-      ($("screen").ownerDocument === document ? stage : $("screen")).focus?.({ preventScroll: true });
-    }
-  };
-  listen($("cleanViewToggle"), "click", () => setCleanView(!stage.classList.contains("clean-view")));
-  listen($("cleanViewExit"), "click", () => setCleanView(false));
-  listen($("screen"), "pointermove", showExit);
-  const toggleHud = () => {
-    const hidden = stage.classList.toggle("hud-hidden");
+  const setHud = visible => {
+    const hidden = !visible;
+    stage.classList.toggle("hud-hidden", hidden);
     $("hudToggle").setAttribute("aria-label", hidden ? "HUD 표시" : "HUD 숨기기");
     $("hudToggle").setAttribute("aria-pressed", String(!hidden));
+    $("hudReveal").classList.remove("is-visible");
+    clearTimeout(revealTimer);
+    if (hidden) {
+      for (const id of ["moreMenu", "captureMenu"]) if ($(id) && !$(id).hidden) $(id).hidden = true;
+      showReveal();
+    }
   };
+  const toggleHud = () => setHud(stage.classList.contains("hud-hidden"));
+  listen($("hudReveal"), "click", () => setHud(true));
+  listen($("screen"), "pointermove", showReveal);
   const syncTimeScale = scale => {
     for (const button of document.querySelectorAll("[data-time-scale]")) {
       const active = Number(button.dataset.timeScale) === scale;
@@ -982,12 +977,9 @@ const mount = (renderer, input, settings) => {
     } else if (key === "h") {
       event.preventDefault();
       togglePanel();
-    } else if (key === "g" && event.shiftKey) {
+    } else if (event.key === "Escape" && stage.classList.contains("hud-hidden")) {
       event.preventDefault();
-      setCleanView(!stage.classList.contains("clean-view"));
-    } else if (event.key === "Escape" && stage.classList.contains("clean-view")) {
-      event.preventDefault();
-      setCleanView(false);
+      setHud(true);
     } else if (key === "g") {
       event.preventDefault();
       toggleHud();
