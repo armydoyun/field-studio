@@ -638,7 +638,9 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .preview-popout-notice b { color:var(--text);font-size:13px;font-weight:600; }
 .preview-popout-mark { display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line-strong);border-radius:var(--radius);color:var(--faint); }
 .preview-popout-mark.glyph-icon::before { flex-basis:20px;width:20px;height:20px; }
-.preview-popout-window { background:var(--stage-bg); }
+/* 분리 창 본문도 미리보기 컨테이너로 삼는다: 머리줄·HUD가 #stage 밖(창 본문)으로 옮겨 가므로, 이것이 없으면
+   작은 분리 창에서 '@container preview' 규칙(라벨 숨김·HUD 줄이기·저장 상태 점)이 적용되지 않아 머리줄이 겹친다. */
+.preview-popout-window { background:var(--stage-bg);container:preview / size; }
 .preview-popout-window #screen { width:100vw;height:100vh; }
 .preview-popout-window .stage-header { position:fixed;flex-wrap:wrap;gap:6px; }
 .preview-popout-window #stageToolbar { margin-left:auto; }
@@ -1284,3 +1286,18 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
  .studio-storage { flex:0 0 auto;max-width:none;font-size:0; }.studio-storage::before { margin-right:0; }
  .studio-cursor { display:none; }
 }
+/* 작은 미리보기(분리 창 포함): FPS 줄은 덜 중요한 칸(프레임·GPU)부터 빼고, 머리줄 버튼은 줄어들게 한다. */
+@container preview (max-width:420px) {
+ .stat-item:nth-child(n+4) { display:none; }
+ .project-menu-wrap { flex:1 1 0;min-width:44px; }
+ .project-toggle { max-width:100%; }
+ #stageToolbar .tool-button { flex-basis:30px;width:30px;min-width:30px; }
+}
+@container preview (max-width:300px) { .viewport-info { display:none; } #projectMenuLabel { display:none; } }
+/* 화면만 보기(Shift+G): 위아래의 모든 HUD를 숨긴다. 포인터를 움직이면 'HUD 다시 보기'만 잠깐 보인다. */
+.clean-view-exit { display:none; }
+.clean-view .stage-header>:not(.clean-view-exit),.clean-view .viewport-footer,.clean-view .stage-hint,.clean-view .preview-notice,.clean-view .perf-suggest,
+.preview-popout-window.clean-view>[data-mirror="hud"] { display:none !important; }
+.clean-view .clean-view-exit { display:inline-flex;gap:6px;margin-left:auto;min-height:30px;padding:4px 10px;border-color:var(--line);border-radius:var(--radius);background:var(--hud-bg);color:var(--text-soft);font-size:11px;opacity:0;pointer-events:none;transition:opacity .2s; }
+.clean-view .clean-view-exit.is-visible,.clean-view .clean-view-exit:focus-visible { opacity:1;pointer-events:auto; }
+.clean-view .clean-view-exit kbd { font-size:9px; }

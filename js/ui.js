@@ -745,6 +745,30 @@ const mount = (renderer, input, settings) => {
       $("panelTabs").querySelector(`[data-tab="${activeTab}"]`)?.focus();
     else focusToolbar("panelToggle");
   };
+  // 화면만 보기: HUD(G)보다 한 단계 더 — 위쪽 도구 막대·프로젝트 이름·안내·FPS까지 모두 숨기고 셰이더만 남긴다.
+  // 포인터를 움직이면 오른쪽 위에 'HUD 다시 보기' 버튼이 잠깐 나타난다. Shift+G · Esc로 끝낸다. 분리 창에도 따라간다(popout.js).
+  let exitTimer = 0;
+  const showExit = () => {
+    if (!stage.classList.contains("clean-view")) return;
+    $("cleanViewExit").classList.add("is-visible");
+    clearTimeout(exitTimer);
+    exitTimer = setTimeout(() => $("cleanViewExit").classList.remove("is-visible"), 1600);
+  };
+  const setCleanView = on => {
+    stage.classList.toggle("clean-view", on);
+    $("cleanViewToggle").setAttribute("aria-pressed", String(on));
+    $("cleanViewExit").classList.remove("is-visible");
+    clearTimeout(exitTimer);
+    if (on) {
+      for (const id of ["moreMenu", "captureMenu"]) if ($(id) && !$(id).hidden) $(id).hidden = true;
+      showError("");
+      showExit();
+      ($("screen").ownerDocument === document ? stage : $("screen")).focus?.({ preventScroll: true });
+    }
+  };
+  listen($("cleanViewToggle"), "click", () => setCleanView(!stage.classList.contains("clean-view")));
+  listen($("cleanViewExit"), "click", () => setCleanView(false));
+  listen($("screen"), "pointermove", showExit);
   const toggleHud = () => {
     const hidden = stage.classList.toggle("hud-hidden");
     $("hudToggle").setAttribute("aria-label", hidden ? "HUD 표시" : "HUD 숨기기");
@@ -958,6 +982,12 @@ const mount = (renderer, input, settings) => {
     } else if (key === "h") {
       event.preventDefault();
       togglePanel();
+    } else if (key === "g" && event.shiftKey) {
+      event.preventDefault();
+      setCleanView(!stage.classList.contains("clean-view"));
+    } else if (event.key === "Escape" && stage.classList.contains("clean-view")) {
+      event.preventDefault();
+      setCleanView(false);
     } else if (key === "g") {
       event.preventDefault();
       toggleHud();
