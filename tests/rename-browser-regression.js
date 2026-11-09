@@ -1,6 +1,7 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
 // 이름 바꾸기(F2)가 실제 코드 편집기처럼 범위를 따르는지 본다.
 //   1) 지역 변수: 그 함수 안의 그 변수만 · 다른 함수의 같은 이름 · 구조체 필드는 그대로
+//   1-1) 올바르지 않은 새 이름은 대화상자 안에서 이유를 알린다
 //   2) 겹치는 이름: 무엇이 바뀌는지 보여 주고 한 번 더 묻는다(취소하면 그대로)
 //   3) Uniform: 다른 패스의 같은 Uniform과 파라미터 값까지 함께 바꾸고 Undo 한 번으로 되돌린다
 //   4) 구조체 필드: 그 구조체의 필드만 · 거절: 벡터 성분(스위즐) · 앱 Uniform(uTime 등)
@@ -65,6 +66,36 @@ void main() {
     test(area.value.includes("{ float x = 0.5; value.x += x; }"), "안쪽 블록에서 가린 x는 그대로");
     test(area.value.includes("struct S { float x; };") && area.value.includes("value . x = 1.0"), "구조체 필드는 그대로");
     test(studio.undo() && area.value === scene, "Undo 한 번에 되돌아간다");
+
+    // 1-1) 올바르지 않은 새 이름: 대화상자를 닫지 않고 입력 칸 아래에 이유를 보인다(지역 변수·필드 모두)
+    const tryName = async (value, pattern, label) => {
+      $("studioDialogInput").value = value;
+      $("studioDialogForm").requestSubmit();
+      await wait(30);
+      test($("studioPromptDialog").open && !$("studioDialogError").hidden && pattern.test($("studioDialogError").textContent) && $("studioDialogInput").getAttribute("aria-invalid") === "true",
+        `${label}: 닫지 않고 이유를 보인다 (${$("studioDialogError").textContent})`);
+    };
+    for (const [text, offset, kind] of [["float x = value.x", 6, "지역 변수"], ["value.x;", 6, "필드"]]) {
+      await renameAt(text, offset);
+      test(await until(() => $("studioPromptDialog").open), `${kind} F2 대화상자`);
+      await tryName("", /입력하세요/, `${kind} · 빈 이름`);
+      await tryName("2nd", /숫자로 시작/, `${kind} · 숫자로 시작`);
+      await tryName("my value", /공백/, `${kind} · 공백`);
+      await tryName("값", /'값'은\(는\) 이름에 쓸 수 없습니다/, `${kind} · 한글`);
+      await tryName("if", /키워드/, `${kind} · 키워드`);
+      await tryName("vec3", /타입 이름/, `${kind} · 타입 이름`);
+      await tryName("input", /예약해 둔 낱말/, `${kind} · 예약어`);
+      await tryName("gl_x", /gl_/, `${kind} · gl_ 접두`);
+      await tryName("a__b", /밑줄 두 개/, `${kind} · __`);
+      await tryName("x", /지금 이름과 같습니다/, `${kind} · 같은 이름`);
+      // 고치면 바로 문구가 사라지고, 취소하면 아무것도 바뀌지 않는다.
+      $("studioDialogInput").value = "ok_name";
+      $("studioDialogInput").dispatchEvent(new Event("input", { bubbles: true }));
+      test($("studioDialogError").hidden && !$("studioDialogInput").hasAttribute("aria-invalid"), `${kind} · 고치면 문구가 사라진다`);
+      $("studioDialogCancel").click();
+      await wait(30);
+      test(!$("studioPromptDialog").open && area.value === scene, `${kind} · 취소하면 그대로`);
+    }
 
     // 2) 겹치는 이름: 같은 범위의 이름과 겹치면 한 번 더 묻는다
     await renameAt("float x = 0.5", 6);

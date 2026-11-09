@@ -2,7 +2,8 @@
 // 한 번에 하나만 연다. 이미 열려 있으면 새 요청은 바로 '취소'로 끝난다.
 //   ask({title, message, ok, danger})             → Promise<boolean>        (확인)
 //   ask({title, message, ok, alt, danger})        → Promise<true|"alt"|false> (세 갈래: 확인 · 두 번째 선택 · 취소)
-//   ask({title, message, value, label, type, min, max}) → Promise<string|null> (값 입력)
+//   ask({title, message, value, label, type, min, max, validate}) → Promise<string|null> (값 입력)
+//     validate(값) → 문제를 설명하는 문장 또는 ""(통과). 문제가 있으면 닫지 않고 입력 칸 아래에 이유를 보인다.
 // hooks.pause(): 열기 직전에 부른다. 돌려준 값을 닫을 때 hooks.resume(값)으로 넘긴다(Studio는 자동 적용 타이머를 멈췄다 되살린다).
 
 const create = ({ $, on, pause = () => null, resume = () => {} }) => {
@@ -11,12 +12,36 @@ const create = ({ $, on, pause = () => null, resume = () => {} }) => {
     field = $("studioDialogField"),
     valueInput = $("studioDialogInput");
   let pending = null;
-  const altButton = $("studioDialogAlt");
+  const altButton = $("studioDialogAlt"),
+    errorText = $("studioDialogError");
+  // 입력 검사 결과를 입력 칸 아래에 보인다(빈 문장이면 지운다).
+  const showProblem = problem => {
+    if (!errorText) return;
+    errorText.textContent = problem;
+    errorText.hidden = !problem;
+    if (problem) valueInput.setAttribute("aria-invalid", "true");
+    else valueInput.removeAttribute("aria-invalid");
+  };
+  // 한 번 확인을 눌러 문제가 보인 뒤에는 고칠 때마다 다시 검사해 바로 알려 준다.
+  on(valueInput, "input", () => {
+    if (pending?.validate && pending.checked) showProblem(pending.validate(valueInput.value) || "");
+  });
   // accepted: true(확인) · "alt"(두 번째 선택) · false(취소)
   const finish = accepted => {
     if (!pending) return;
     if (accepted === true && pending.hasValue && !valueInput.reportValidity()) return;
+    if (accepted === true && pending.validate) {
+      const problem = pending.validate(valueInput.value) || "";
+      pending.checked = true;
+      showProblem(problem);
+      if (problem) {
+        valueInput.focus();
+        valueInput.select();
+        return;
+      }
+    }
     const { resolve, hasValue, paused } = pending;
+    showProblem("");
     pending = null;
     dialog.close();
     resume(paused);
@@ -57,6 +82,7 @@ const create = ({ $, on, pause = () => null, resume = () => {} }) => {
     type = "text",
     min,
     max,
+    validate = null,
   }) =>
     new Promise(resolve => {
       const hasValue = value !== undefined;
@@ -80,10 +106,11 @@ const create = ({ $, on, pause = () => null, resume = () => {} }) => {
         else valueInput.min = String(min);
         if (max === undefined) valueInput.removeAttribute("max");
         else valueInput.max = String(max);
-        valueInput.required = true;
+        valueInput.required = typeof validate !== "function"; // 검사 함수가 있으면 빈 값도 그 문장으로 알린다
       }
       const paused = pause();
-      pending = { resolve, hasValue, paused };
+      pending = { resolve, hasValue, paused, validate: hasValue && typeof validate === "function" ? validate : null };
+      showProblem("");
       try {
         // 미리보기 분리 창이 열려 있어도, 요청한 쪽(사용자가 마지막으로 조작한 창)에 띄운다.
         globalThis.shaderPopout?.place?.(dialog);

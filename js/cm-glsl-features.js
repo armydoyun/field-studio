@@ -271,13 +271,36 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     const lines = [...new Set(spots.map(at => src.slice(0, at).split("\n").length))];
     return lines.length > 8 ? `${lines.slice(0, 8).join(", ")} 외 ${lines.length - 8}줄` : lines.join(", ");
   };
-  const askNewName = (title, message, word) => ask({ title, message, value: word, label: "새 이름", ok: "바꾸기" });
-  const badName = next => {
-    if (!isIdent(next) || KEYWORDS.includes(next) || TYPES.includes(next) || /^gl_/.test(next)) {
-      notify(`'${next}'은(는) 쓸 수 없는 이름입니다`);
-      return true;
-    }
-    return false;
+  // GLSL ES 3.00이 앞으로 쓰려고 예약해 둔 낱말(지금은 쓰지 않지만 이름으로 쓰면 컴파일 오류).
+  const RESERVED = new Set(
+    "attribute varying coherent volatile restrict readonly writeonly resource atomic_uint noperspective patch sample subroutine common partition active asm class union enum typedef template this goto inline noinline public static extern external interface long short double half fixed unsigned superp input output hvec2 hvec3 hvec4 dvec2 dvec3 dvec4 fvec2 fvec3 fvec4 sampler3DRect filter sizeof cast namespace using".split(
+      " "
+    )
+  );
+  // 새 이름의 문제를 설명하는 문장(없으면 ""). 이름 입력 대화상자가 닫지 않고 입력 칸 아래에 보여 준다.
+  const nameProblem = (next, word) => {
+    const name = String(next ?? "");
+    if (!name.trim()) return "새 이름을 입력하세요.";
+    if (/\s/.test(name)) return "이름에는 공백을 넣을 수 없습니다.";
+    if (/^\d/.test(name)) return "이름은 숫자로 시작할 수 없습니다. 영문자나 밑줄(_)로 시작하세요.";
+    if (!isIdent(name))
+      return `'${[...name].find(ch => !/\w/.test(ch))}'은(는) 이름에 쓸 수 없습니다. 영문자·숫자·밑줄(_)만 쓸 수 있습니다.`;
+    if (name === word) return "지금 이름과 같습니다. 다른 이름을 입력하세요.";
+    if (KEYWORDS.includes(name)) return `'${name}'은(는) GLSL 키워드라 이름으로 쓸 수 없습니다.`;
+    if (TYPES.includes(name)) return `'${name}'은(는) GLSL 타입 이름이라 이름으로 쓸 수 없습니다.`;
+    if (RESERVED.has(name)) return `'${name}'은(는) GLSL이 예약해 둔 낱말이라 이름으로 쓸 수 없습니다.`;
+    if (/^gl_/.test(name)) return "gl_로 시작하는 이름은 GLSL 내장용으로 예약되어 있습니다.";
+    if (name.includes("__")) return "밑줄 두 개(__)가 들어간 이름은 GLSL이 예약해 두어 쓸 수 없습니다.";
+    if (name.length > 1024) return "이름이 너무 깁니다(최대 1024자).";
+    return "";
+  };
+  const askNewName = (title, message, word) =>
+    ask({ title, message, value: word, label: "새 이름", ok: "바꾸기", validate: next => nameProblem(next, word) });
+  // 대화상자가 검사를 못 했을 때(다른 ask 구현)를 위한 마지막 확인. 문제가 있으면 상태 줄에 알리고 바꾸지 않는다.
+  const badName = (next, word) => {
+    const problem = nameProblem(next, word);
+    if (problem) notify(problem);
+    return !!problem;
   };
   const dispatchRename = (view, spots, from, next) => {
     view.dispatch({
@@ -297,7 +320,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       `${why} 지금 패스에서 ${before.length}곳(${lineList(src, before)}번째 줄)을 모두 바꿉니다. 주석·문자열과 '.' 뒤의 필드 이름은 제외합니다.`,
       word
     );
-    if (next === null || next === undefined || next === word || badName(next)) return true;
+    if (next === null || next === undefined || badName(next, word)) return true;
     if (docText(view.state) !== src) {
       notify("확인하는 동안 코드가 바뀌어 이름 바꾸기를 취소했습니다");
       return true;
@@ -341,7 +364,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       `이 ${plan.label}을(를) 가리키는 ${plan.spots.length}곳(${lineList(src, plan.spots)}번째 줄)만 바꿉니다. ${symbol.kind === "field" ? "다른 구조체의 같은 이름 필드와 벡터 성분(.xyz)은 그대로 둡니다." : "다른 함수의 같은 이름이나 안쪽에서 가린 같은 이름은 그대로 둡니다."}${uniform ? " 다른 패스의 같은 Uniform과 파라미터 값도 함께 바뀝니다." : ""}${plan.warnings.length ? ` ${plan.warnings.join(" ")}` : ""}`,
       word
     );
-    if (next === null || next === undefined || next === word || badName(next)) return true;
+    if (next === null || next === undefined || badName(next, word)) return true;
     const now = docText(view.state);
     if (now !== src) {
       notify("확인하는 동안 코드가 바뀌어 이름 바꾸기를 취소했습니다");
