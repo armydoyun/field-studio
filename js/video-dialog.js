@@ -28,6 +28,7 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
   let running = null, // AbortController
     supported = { "mp4-h264": null, "webm-vp9": null, "webm-vp8": null, png: "png" },
     probed = false;
+  const hasBuffers = () => (renderer.getShaderReflection?.().passes?.length || 0) > 0;
   const gpuLimit = () => {
     const caps = renderer.getCapabilities?.();
     return Math.min(caps?.maxTextureSize || 4096, caps?.maxRenderbufferSize || 4096, 8192);
@@ -67,14 +68,30 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
     try {
       const s = read();
       const unsupported = s.format !== "png" && probed && !supported[s.format];
-      summary.classList.toggle("is-invalid", unsupported || !!busy);
+      // 시작 전 비용: 결과 크기 · 출력 프레임 · 버퍼 준비 프레임(시작 시간 × fps). 한도를 넘으면 시작하지 않는다.
+      const budget = Video.assessBudget(s, { hasBuffers: hasBuffers() }),
+        blocked = budget.problems.length > 0;
+      const base = `${s.frames.toLocaleString("ko-KR")}프레임 · ${s.width} × ${s.height} · ${s.fps}fps · ${formatTime(s.duration)} · 예상 ${s.format === "png" ? "약 " : ""}${formatBytes(budget.bytes)}${s.format === "png" ? "(그림에 따라 다름)" : ""}`;
+      const warmupText = budget.warmup
+        ? ` · 버퍼 준비 ${budget.warmup.toLocaleString("ko-KR")}프레임을 먼저 그림(저장 안 함)`
+        : "";
+      const notes = [...budget.problems, ...budget.warnings].map(item =>
+        item.code === "bytes"
+          ? budget.problems.includes(item)
+            ? `결과가 ${formatBytes(item.limit)}를 넘어 렌더링할 수 없습니다. 길이·크기·FPS를 줄이거나 시작 시간을 나눠 여러 번 렌더링하세요.`
+            : `결과가 ${formatBytes(item.limit)}를 넘습니다. 끝날 때까지 메모리에 모았다가 내려받으므로 메모리가 부족할 수 있습니다.`
+          : budget.problems.includes(item)
+            ? `버퍼 준비 프레임이 한도 ${item.limit.toLocaleString("ko-KR")}개를 넘습니다. 시작 시간이나 FPS를 줄이세요.`
+            : "시작 시간이 길어 버퍼 준비에 시간이 걸립니다."
+      );
+      summary.classList.toggle("is-invalid", unsupported || !!busy || blocked);
       summary.textContent = busy
         ? busy
         : unsupported
           ? `이 브라우저는 ${Video.FORMATS[s.format].label} 인코딩(WebCodecs)을 지원하지 않습니다. PNG 연속 이미지를 고르세요.`
-          : `${s.frames.toLocaleString("ko-KR")}프레임 · ${s.width} × ${s.height} · ${s.fps}fps · ${formatTime(s.duration)} · 예상 ${s.format === "png" ? "약 " : ""}${formatBytes(Video.estimateBytes(s))}${s.format === "png" ? "(그림에 따라 다름)" : ""}`;
-      startButton.disabled = unsupported || !!busy;
-      return s;
+          : `${base}${warmupText}${notes.length ? `\n${notes.join(" ")}` : ""}`;
+      startButton.disabled = unsupported || !!busy || blocked;
+      return blocked ? null : s;
     } catch (error) {
       summary.classList.add("is-invalid");
       summary.textContent = error.message;
@@ -121,11 +138,10 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
     showProgress(0, "준비 중…");
     let renderStarted = 0;
     try {
-      const hasBuffers = (renderer.getShaderReflection?.().passes?.length || 0) > 0;
       const result = await Video.render({
         renderer,
         settings: s,
-        hasBuffers,
+        hasBuffers: hasBuffers(),
         signal: controller.signal,
         onProgress: ({ phase, done, total, tiles = 1 }) => {
           if (phase === "warmup") showProgress(0, `버퍼 준비 중 · 0초부터 시작 시간까지 ${done} / ${total}프레임`);

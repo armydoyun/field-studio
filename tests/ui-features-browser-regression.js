@@ -34,14 +34,15 @@ void main() { fragColor = vec4(uTint * uAmount * (0.5 + uFree), 1.0); }
     // ---- 브라우저 탭 제목 ----
     test(document.title === "저장 안 한 작업 — FIELD Studio", `탭 제목 기본값: ${document.title}`);
     setCode(scene);
-    test(document.title === "✎ 저장 안 한 작업 — FIELD Studio", `미적용 변경이면 ✎: ${document.title}`);
+    // 이름 없는 작업도 시작한 뒤 바뀌면 ●(저장 안 됨). ✎(실행 대기)는 실행하면 사라진다.
+    test(document.title === "✎ ● 저장 안 한 작업 — FIELD Studio", `미적용 변경이면 ✎ · 바뀐 작업이면 ●: ${document.title}`);
     test(studio.apply(), "어노테이션 장면 적용");
-    test(document.title === "저장 안 한 작업 — FIELD Studio", "적용하면 ● 사라짐");
+    test(document.title === "● 저장 안 한 작업 — FIELD Studio", `적용하면 ✎ 사라지고 ●는 남음: ${document.title}`);
     setCode(scene.replace("fragColor = vec4", "fragColor = vec5"));
     studio.apply();
     test(document.title.startsWith("⚠ "), `컴파일 실패면 ⚠: ${document.title}`);
     setCode(scene);
-    test(studio.apply() && !/^[●✎⚠]/.test(document.title), "다시 적용하면 표시 없음");
+    test(studio.apply() && !/^[✎⚠]/.test(document.title), "다시 적용하면 실행 표시 없음");
 
     // ---- 보관함에 저장한 뒤 바뀜(●) ----
     const P = studio.projects, toggle = $("projectMenuToggle");
@@ -53,7 +54,7 @@ void main() { fragColor = vec4(uTint * uAmount * (0.5 + uFree), 1.0); }
     const marked = () => document.title.includes("● ") && toggle.dataset.modified === "true";
     await P.ready();
     await wait(1200);
-    test(!marked(), "보관함에 없는 작업에는 ●를 붙이지 않는다(전부 저장 안 된 작업)");
+    test(marked() && !$("projectMenuState").hidden, "바뀐 이름 없는 작업에는 ●와 '저장 안 됨'을 붙인다");
     const name = `변경 추적 ${Date.now().toString(36)}`;
     let pending = P.save(false);
     await answer(name);
@@ -82,11 +83,16 @@ void main() { fragColor = vec4(uTint * uAmount * (0.5 + uFree), 1.0); }
       setCode(scene);
       studio.apply();
       test(await until(marked, 2500), "저장 뒤 코드를 바꿈");
-      test(await P.open(savedId), "보관함에서 다시 열기");
+      pending = P.open(savedId);
+      test(await until(() => $("studioPromptDialog").open && !$("studioDialogAlt").hidden, 2000), "저장 안 된 변경이 있으면 열기 전에 세 갈래로 묻는다");
+      $("studioDialogAlt").click(); // 저장하지 않고 계속
+      test(await pending, "보관함에서 다시 열기");
       test(await until(() => !marked(), 2500) && area.value.includes("0.25 + uFree"), "다시 열면 저장한 상태 · ● 없음");
       const stored = JSON.parse(localStorage.getItem("webgl.shader-studio.current-project.v1"));
       test(stored?.id === savedId && typeof stored.fingerprint === "string" && stored.fingerprint.length > 4, "저장 상태 지문을 브라우저에 기억(새로고침해도 비교)");
     } finally {
+      // 이 뒤의 검사는 작업을 여러 번 바꾼다: '저장하지 않은 변경' 확인에는 '저장하지 않고 계속'으로 답한다.
+      setInterval(() => { const b = $("studioDialogAlt"); if ($("studioPromptDialog").open && $("studioDialogTitle").textContent === "저장하지 않은 변경") (b.hidden ? $("studioDialogOK") : b).click(); }, 10);
       pending = P.remove(savedId);
       await until(() => $("studioPromptDialog").open, 2000);
       $("studioDialogForm").requestSubmit();

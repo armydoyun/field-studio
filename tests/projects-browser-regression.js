@@ -63,7 +63,7 @@
     // 7) 미적용 변경이 있으면 열기 전에 묻는다. 취소하면 편집이 남는다.
     const area = $('studioCode'); area.value += '\n// unsaved'; area.dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data:'x'}));
     pending = P.open(a.id); for(let i = 0; i < 50 && !$('studioPromptDialog').open; i++) await tick(20);
-    check($('studioDialogTitle').textContent === '미적용 변경사항', '미적용 변경 확인'); $('studioDialogCancel').click();
+    check($('studioDialogTitle').textContent === '저장하지 않은 변경' && !$('studioDialogAlt').hidden, '저장하지 않은 변경 확인(저장하고 계속 · 저장하지 않고 계속 · 취소)'); $('studioDialogCancel').click();
     check(await pending === false && studio.getEditorSource().includes('// unsaved'), '취소하면 편집 유지');
 
     // 8) 삭제는 위험 확인을 거치고, 작업 중 항목을 지우면 표시도 사라진다.

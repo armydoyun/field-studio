@@ -50,7 +50,7 @@ const create = ({ $, on, editor, editorOpen }) => {
   const setDockHeight = (value, persist = true) => {
     dockHeight = clamp(value, HEIGHT);
     $("studioDock").style.setProperty("--studio-height", `${dockHeight}%`);
-    if (layout === "bottom") $("studioResize").setAttribute("aria-valuenow", String(Math.round(dockHeight)));
+    if (!splitRight()) $("studioResize").setAttribute("aria-valuenow", String(Math.round(dockHeight)));
     if (persist) {
       heightChosen = true;
       Store.write(HEIGHT_KEY, String(dockHeight));
@@ -65,12 +65,14 @@ const create = ({ $, on, editor, editorOpen }) => {
   const setDockWidth = (value, persist = true) => {
     dockWidth = clamp(value, WIDTH);
     $("stage").style.setProperty("--studio-width", `${dockWidth}%`);
-    if (layout === "right") $("studioResize").setAttribute("aria-valuenow", String(Math.round(dockWidth)));
+    if (splitRight()) $("studioResize").setAttribute("aria-valuenow", String(Math.round(dockWidth)));
     if (persist) saveLayout();
   };
+  // 리사이저의 ARIA 방향·값은 실제로 움직이는 방향을 따른다: 오른쪽 배치라도 좁은 화면(≤820px)에서는 CSS가 아래 배치로
+  // 되돌리므로 위아래(높이)로 움직인다.
   const applyLayout = () => {
-    const right = layout === "right";
-    $("stage").classList.toggle("studio-layout-right", right);
+    $("stage").classList.toggle("studio-layout-right", layout === "right");
+    const right = splitRight();
     const handle = $("studioResize");
     handle.setAttribute("aria-orientation", right ? "vertical" : "horizontal");
     handle.setAttribute("aria-valuemin", right ? "30" : "25");
@@ -79,9 +81,10 @@ const create = ({ $, on, editor, editorOpen }) => {
     handle.title = right
       ? "드래그 또는 ←→로 너비 조절 · 두 번 클릭해 기본 너비 복원"
       : "드래그 또는 ↑↓로 높이 조절 · Home/End · 두 번 클릭해 기본 높이 복원";
-    $("studioLayout").setAttribute("aria-pressed", String(right));
-    $("studioLayout").title = right ? "편집기를 캔버스 아래로 배치" : "편집기를 캔버스 오른쪽에 나란히 배치";
-    $("studioLayout").textContent = right ? "편집기를 아래에 배치" : "편집기를 오른쪽에 배치";
+    const chosenRight = layout === "right";
+    $("studioLayout").setAttribute("aria-pressed", String(chosenRight));
+    $("studioLayout").title = chosenRight ? "편집기를 캔버스 아래로 배치" : "편집기를 캔버스 오른쪽에 나란히 배치";
+    $("studioLayout").textContent = chosenRight ? "편집기를 아래에 배치" : "편집기를 오른쪽에 배치";
     editor.update();
   };
   const toggleLayout = () => {
@@ -142,14 +145,17 @@ const create = ({ $, on, editor, editorOpen }) => {
   setDockHeight(dockHeight, false);
   setDockWidth(dockWidth, false);
   applyLayout();
+  let wasNarrow = window.matchMedia("(max-width:820px)").matches;
   // 창 크기를 바꾸면(화면 분할 등) 사용자가 정하지 않은 높이·배치는 새 크기의 기본값으로 다시 맞춘다.
   on(window, "resize", () => {
     if (!heightChosen && dockHeight !== responsiveHeight()) setDockHeight(responsiveHeight(), false);
-    const fit = fitLayout();
+    const fit = fitLayout(),
+      narrow = window.matchMedia("(max-width:820px)").matches;
     if (!layoutChosen && layout !== fit) {
       layout = fit;
       applyLayout();
-    }
+    } else if (narrow !== wasNarrow) applyLayout(); // 좁은 화면 경계를 넘으면 리사이저 방향을 다시 맞춘다
+    wasNarrow = narrow;
   });
   const state = Store.readJSON(WORKSPACE_KEY, {});
   for (const id of GROUPS) if (typeof state?.open?.[id] === "boolean") $(id).open = state.open[id];

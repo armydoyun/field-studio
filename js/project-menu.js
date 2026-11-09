@@ -74,7 +74,9 @@ const create = ({ $, on }) => {
   const setModified = modified => {
     if (toggle.dataset.modified === String(modified)) return;
     toggle.dataset.modified = String(modified);
-    toggle.setAttribute("aria-description", modified ? "보관함에 저장한 뒤 바뀜 · Ctrl+Shift+S로 저장" : "");
+    const badge = $("projectMenuState");
+    if (badge) badge.hidden = !modified;
+    toggle.setAttribute("aria-description", modified ? "저장 안 된 변경 있음 · Ctrl+S로 저장" : "");
   };
   return { open, close, isOpen, setLabel, setModified };
 };

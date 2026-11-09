@@ -47,7 +47,7 @@
                             <label id="timeScaleTitle">재생 속도 <output id="timeScaleLabel">1×</output></label>
                             <div class="preset-row" role="group" aria-labelledby="timeScaleTitle"><button type="button" data-time-scale="0.25">0.25×</button><button type="button" data-time-scale="0.5">0.5×</button><button type="button" data-time-scale="1">1×</button><button type="button" data-time-scale="2">2×</button></div>
                             <button id="stepFrame" type="button" class="step-frame" title="한 프레임(1/60초) 진행 · 재생 중이면 먼저 멈춥니다 (.)">한 프레임 진행 <kbd>.</kbd></button>
-                            <p class="help">uTime이 흐르는 빠르기입니다. 다른 렌더링 설정처럼 이 브라우저에 저장되고, Pack에도 함께 담깁니다.</p>
+                            <p class="help">uTime이 흐르는 빠르기입니다. 다른 렌더링 설정처럼 이 브라우저에 저장되고, 프로젝트 저장·내보내기에도 함께 담깁니다.</p>
                         </div>
                         <div class="field">
                             <label for="resolutionScale">해상도 배율 <output id="resolutionLabel">100%</output></label>
@@ -186,18 +186,18 @@
             <header id="stageHeader" class="stage-header">
                 <div class="stage-label"><span class="live-indicator" aria-hidden="true"></span><span id="renderState">재생 중</span><span class="stage-separator">/</span><span>FIELD / WEBGL 2</span></div>
                 <div class="project-menu-wrap">
-                    <button id="projectMenuToggle" type="button" class="project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+Shift+S)"><span id="projectMenuLabel">저장 안 한 작업</span></button>
+                    <button id="projectMenuToggle" type="button" class="project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+S)"><span id="projectMenuLabel">저장 안 한 작업</span><span id="projectMenuState" class="project-save-state" hidden>저장 안 됨</span></button>
                     <div id="projectMenu" class="project-menu" role="dialog" aria-label="프로젝트" hidden>
                         <section id="studioFiles" class="project-menu-section" aria-labelledby="projectMenuFilesTitle"><h2 id="projectMenuFilesTitle">프로젝트</h2>
                             <div class="studio-projects">
-                                <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">보관함에 저장하지 않은 작업</p>
-                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" title="이 브라우저의 프로젝트 보관함에 새로 저장 · 코드·파라미터·설정·이미지 포함">브라우저에 저장</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장" hidden>다른 이름으로 저장</button></div>
+                                <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">프로젝트로 저장하지 않은 작업</p>
+                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" title="이 브라우저의 프로젝트 보관함에 이름을 붙여 저장 (Ctrl+S) · 코드·파라미터·설정·이미지 포함">프로젝트 저장…</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장 (Ctrl+Shift+S)" hidden>다른 이름으로 저장</button></div>
                                 <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
                             </div>
-                            <p class="studio-hint">다른 컴퓨터로 옮길 때는 Pack 파일을 사용하세요. 소스 JSON에는 파라미터·이미지 원본이 포함되지 않습니다.</p>
-                            <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 Pack으로 저장">전체 프로젝트 저장</button><button id="studioImportPack" type="button" title="다른 컴퓨터에서 이미지까지 복원할 수 있는 프로젝트 열기">Pack 열기</button></div>
+                            <p class="studio-hint">다른 컴퓨터·브라우저로 옮길 때는 프로젝트 파일(코드·파라미터·설정·이미지 포함)로 내보내세요.</p>
+                            <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 프로젝트 파일(Pack .json)로 내려받기 · 내려받는 순간의 내용만 담깁니다">프로젝트 파일 내보내기</button><button id="studioImportPack" type="button" title="내보낸 프로젝트 파일(Pack)을 열어 이미지까지 복원">프로젝트 파일 열기</button></div>
                         <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
-                            <div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트를 JSON 파일로 저장 (이미지 파일 제외)">소스 JSON 저장</button><button id="studioImport" type="button" title="JSON 프로젝트 파일 불러오기">소스 JSON 열기</button></div>
+                            <details class="project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="studio-hint">코드와 버퍼 구성만 담습니다. 파라미터·이미지 원본은 빠집니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트의 코드·버퍼 구성만 JSON 파일로 내보내기 (파라미터·이미지 원본 제외)">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
                             <button id="studioReset" type="button" title="모든 패스와 파라미터를 지우고 기본 Shader Art 장면으로 새로 시작 · Undo 가능">새 프로젝트 (기본 장면)</button>
                         <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
                         </section>
@@ -268,7 +268,7 @@
                             <button id="studioUndo" type="button" class="glyph-icon icon-undo" aria-label="되돌리기" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled></button>
                             <button id="studioRedo" type="button" class="glyph-icon icon-redo" aria-label="다시 실행" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled></button>
                             <label class="studio-live" title="코드를 고치면 0.9초 뒤 자동으로 적용"><input id="studioLive" type="checkbox" checked> 자동</label>
-                            <button id="studioRun" type="button" class="studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Ctrl+S)">실행 <span>Ctrl+S</span></button>
+                            <button id="studioRun" type="button" class="studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Ctrl+Enter · Alt+Enter)">실행 <span>Ctrl+↵</span></button>
                         </div>
                         <span class="studio-tool-sep" aria-hidden="true"></span>
                         <button id="studioPause" type="button" class="glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
@@ -322,7 +322,7 @@
                                         <p class="studio-menu-title">편집</p>
                                         <button id="studioReplace" type="button" title="찾아 바꾸기 (Ctrl+H)">찾아 바꾸기 <kbd>Ctrl+H</kbd></button>
                                         <button id="studioDefinition" type="button" title="커서 아래 이름의 정의로 이동 (F12 · Ctrl+클릭)">정의로 이동 <kbd>F12</kbd></button>
-                                        <button id="studioRename" type="button" title="커서 아래 이름을 이 패스에서 모두 바꾸기 (F2)">이름 바꾸기 <kbd>F2</kbd></button>
+                                        <button id="studioRename" type="button" title="커서 아래 이름과 같은 이름을 이 패스에서 모두 바꾸기 · 함수 범위를 구분하지 않으며 바꾸기 전에 바뀔 곳을 보여 줍니다 (F2)">같은 이름 모두 바꾸기 <kbd>F2</kbd></button>
                                         <button id="studioLintPanel" type="button" title="컴파일 오류를 목록으로 보기 · F8로 다음 오류 (Ctrl+Shift+M)">오류 목록 <kbd>Ctrl+Shift+M</kbd></button>
                                         <div class="studio-menu-row"><span>코드 접기</span><span class="studio-stepper"><button id="studioFoldAll" type="button" title="모든 블록 접기 (Ctrl+K Ctrl+0)">모두 접기</button><button id="studioUnfoldAll" type="button" title="모든 블록 펴기 (Ctrl+K Ctrl+J)">펴기</button></span></div>
                                         <button id="studioSampleUV" type="button" title="texture(iChannel0, uv) 샘플 코드 삽입">텍스처 읽기 코드 삽입 <kbd>texture</kbd></button>
@@ -336,6 +336,7 @@
                                         <div class="studio-menu-row"><span>글자 크기</span><span class="studio-stepper"><button id="studioZoomOut" type="button" aria-label="글자 작게" title="편집기 글씨 크기 -1">A−</button><span id="studioFontSize">12px</span><button id="studioZoomIn" type="button" aria-label="글자 크게" title="편집기 글씨 크기 +1">A+</button></span></div>
                                         <label class="studio-menu-row" title="Tab 키로 넣을 공백 수"><span>들여쓰기</span><select id="studioIndent" aria-label="들여쓰기 공백 수"><option value="4">공백 4</option><option value="2">공백 2</option></select></label>
                                         <button id="studioLineWrap" type="button" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
+                                        <button id="studioCtrlSRuns" type="button" aria-pressed="false" title="켜면 Ctrl+S가 프로젝트 저장 대신 셰이더 실행이 됩니다(이전 방식). 실행은 언제나 Ctrl+Enter · Alt+Enter로도 됩니다.">Ctrl+S로 실행 (이전 방식)</button>
                                         <p class="studio-menu-title">창</p>
                                         <button id="studioLayout" type="button" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>
                                         <button id="studioParameters" type="button" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 패널 열기</button>
@@ -355,7 +356,7 @@
                 <footer class="studio-bottom">
                     <span id="studioMessage" role="status">준비됨 · 코드를 편집하면 자동으로 적용됩니다.</span>
                     <button id="studioErrorToggle" type="button" hidden title="GLSL 컴파일러의 전체 오류 메시지 펼치기">전체 오류 보기</button>
-                    <span id="studioStorageState" class="studio-storage" data-state="none" role="status" title="브라우저 보관은 소스와 채널 구성에 관한 상태입니다. 파라미터·설정·이미지까지 파일로 보관하려면 Pack을 내보내세요.">소스 · 브라우저 보관 전</span>
+                    <span id="studioStorageState" class="studio-storage" data-state="none" role="status" title="자동 복구본은 이 브라우저 탭의 코드·채널 구성입니다. 파라미터·이미지까지 이름을 붙여 보관하려면 프로젝트 저장(Ctrl+S)을 쓰세요.">복구본 기록 전</span>
                     <span id="studioCursor" class="studio-cursor">Ln 1, Col 1</span>
                 </footer>
                 <pre id="studioError" class="studio-error" hidden></pre>
@@ -367,7 +368,7 @@
         <form id="studioDialogForm" method="dialog">
             <header class="studio-dialog-head"><div class="studio-dialog-mark glyph-icon icon-edit" aria-hidden="true"></div><div><h2 id="studioDialogTitle">확인</h2><p id="studioDialogMessage"></p></div><button id="studioDialogClose" type="button" aria-label="닫기" title="닫기 (Esc)" class="glyph-icon icon-close"></button></header>
             <label id="studioDialogField" class="studio-dialog-field" for="studioDialogInput" hidden>값 입력<input id="studioDialogInput" type="text" autocomplete="off" required></label>
-            <footer class="studio-dialog-actions"><button id="studioDialogCancel" type="button">취소 <kbd>Esc</kbd></button><button id="studioDialogOK" type="submit">확인 <kbd>Enter</kbd></button></footer>
+            <footer class="studio-dialog-actions"><button id="studioDialogCancel" type="button">취소 <kbd>Esc</kbd></button><button id="studioDialogAlt" type="button" hidden></button><button id="studioDialogOK" type="submit">확인 <kbd>Enter</kbd></button></footer>
         </form>
     </dialog>
 
@@ -408,13 +409,19 @@
         </header>
         <div class="gallery-body">
             <div class="gallery-search"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="gallerySearch" type="search" placeholder="제목·태그·설명·작가로 찾기 (예: SDF, 유체, noise)" title="예제 검색 (/) · Enter로 첫 결과 열기 · Esc로 지우기" autocomplete="off" spellcheck="false" aria-label="예제 검색" aria-controls="galleryResults"><span id="galleryCount" class="gallery-count" aria-live="polite"></span></div>
-            <ol class="gallery-steps gallery-welcome-only">
-                <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Ctrl+S</kbd>로 즉시 실행</span></li>
+            <div class="gallery-start gallery-welcome-only" role="group" aria-label="시작하기">
+                <button id="galleryStartDefault" type="button" class="gallery-start-card is-primary"><b>기본 예제로 시작</b><span>지금 보이는 장면의 코드를 열고 숫자 하나부터 바꿔 봅니다</span></button>
+                <button id="galleryStartBlank" type="button" class="gallery-start-card"><b>빈 프로젝트</b><span>짧은 셰이더 한 장에서 직접 만들어 갑니다</span></button>
+                <button id="galleryStartFile" type="button" class="gallery-start-card"><b>파일 열기</b><span>내보낸 프로젝트 파일(.json)을 이미지까지 불러옵니다</span></button>
+            </div>
+            <details class="gallery-tips gallery-welcome-only"><summary>처음이라면 · 화면 구성과 단축키</summary>
+            <ol class="gallery-steps">
+                <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Ctrl+Enter</kbd>로 즉시 실행, <kbd>Ctrl+S</kbd>로 프로젝트 저장</span></li>
                 <li><kbd>/</kbd><span><b>파라미터</b> — 슬라이더로 값을 조절하고 Uniform을 추가</span></li>
                 <li><kbd>성능</kbd><span><b>프로파일러</b> — 패스별 GPU 시간과 미등록 Uniform을 확인</span></li>
                 <li><kbd>?</kbd><span><b>가이드</b> — 모든 기능 설명·코드 예시, 처음이라면 아래 <b>UI 둘러보기</b></span></li>
-            </ol>
-            <p class="gallery-perf-legend"><span>카드 오른쪽 위 배지는 이 컴퓨터에서, 지금 미리보기 크기(해상도 배율 포함)로 한 프레임을 그리는 데 걸리는 시간의 어림값입니다. 카드가 화면에 보이면 잽니다.</span><span><span class="gallery-perf" data-level="light">가벼움</span> 4ms 미만 · <span class="gallery-perf" data-level="medium">보통</span> 12ms 미만 · <span class="gallery-perf" data-level="heavy">무거움</span> 33ms 미만 · <span class="gallery-perf" data-level="extreme">매우 무거움</span></span></p>
+            </ol></details>
+            <details class="gallery-perf-legend"><summary>카드 오른쪽 위 성능 배지란?</summary><span>이 컴퓨터에서, 지금 미리보기 크기(해상도 배율 포함)로 한 프레임을 그리는 데 걸리는 시간의 어림값입니다. 카드가 화면에 보이면 잽니다.</span><span><span class="gallery-perf" data-level="light">가벼움</span> 4ms 미만 · <span class="gallery-perf" data-level="medium">보통</span> 12ms 미만 · <span class="gallery-perf" data-level="heavy">무거움</span> 33ms 미만 · <span class="gallery-perf" data-level="extreme">매우 무거움</span></span></details>
             <div id="galleryResults">
             <section class="gallery-section"><h3>Shader Art</h3>
             <div id="galleryGrid" class="gallery-grid"></div></section>

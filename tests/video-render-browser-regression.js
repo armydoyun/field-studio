@@ -4,6 +4,8 @@
 //   · WebM: <video>로 열어 크기·길이 확인(이 브라우저가 VP9/VP8 인코딩을 지원할 때)
 //   · 버퍼 패스가 있으면 시작 시간 전 프레임을 먼저 그린다 · 취소 · 렌더링 중 보호 · 끝나면 원래 상태로
 (async () => {
+  // 작업을 바꿀 때 뜨는 '저장하지 않은 변경' 확인에는 '저장하지 않고 계속'으로 답한다(이 검사는 보관함 저장을 다루지 않는다).
+  setInterval(() => { const d = document.getElementById("studioPromptDialog"), b = document.getElementById("studioDialogAlt"); if (d?.open && document.getElementById("studioDialogTitle").textContent === "저장하지 않은 변경") (b.hidden ? document.getElementById("studioDialogOK") : b).click(); }, 10);
   const $ = id => document.getElementById(id), r = window.shaderPlayground, studio = window.shaderStudio;
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));

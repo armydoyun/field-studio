@@ -58,7 +58,11 @@ const initialize = async () => {
     input = Input.mount(canvas, renderer);
     settings = Settings.mount(renderer);
     settings.load(); // 저장 설정의 사용자 Uniform 복원
-    await renderer.restoreTextures(); // 프로젝트 채널 연결을 복원하기 전에 이미지 파일을 복구한다.
+    // 프로젝트 채널 연결을 복원하기 전에 지금 작업이 쓰는 이미지만 먼저 복구한다. 나머지는 앱이 뜬 뒤 이어서 복구한다.
+    await renderer.restoreTextures({
+      priority: Studio.savedTextureIds(),
+      onProgress: detail => document.dispatchEvent(new CustomEvent("shader-textures-restored", { detail })),
+    });
     ui = UI.mount(renderer, input, settings);
     studio = Studio.mount(renderer, Shader, settings, {
       lookup,

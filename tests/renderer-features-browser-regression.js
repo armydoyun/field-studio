@@ -1,6 +1,8 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
 // 렌더러 기능 묶음: HUD 시간 · 재생 배속 · 한 프레임 진행(. 키) · uWheel · 고해상도 PNG(captureScreenshotAt).
 (async () => {
+  // 작업을 바꿀 때 뜨는 '저장하지 않은 변경' 확인에는 '저장하지 않고 계속'으로 답한다(이 검사는 보관함 저장을 다루지 않는다).
+  setInterval(() => { const d = document.getElementById("studioPromptDialog"), b = document.getElementById("studioDialogAlt"); if (d?.open && document.getElementById("studioDialogTitle").textContent === "저장하지 않은 변경") (b.hidden ? document.getElementById("studioDialogOK") : b).click(); }, 10);
   const $ = id => document.getElementById(id), r = window.shaderPlayground, studio = window.shaderStudio;
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));

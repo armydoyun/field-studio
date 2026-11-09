@@ -1127,6 +1127,31 @@ const mount = ({ studio, Shader, preview = null }) => {
   $("galleryToggle").addEventListener("click", () => open(false), { signal });
   $("galleryClose").addEventListener("click", close, { signal });
   $("galleryBlank").addEventListener("click", close, { signal });
+  // 첫 실행의 세 가지 시작: 기본 예제(지금 장면의 코드 열기) · 빈 프로젝트 · 프로젝트 파일 열기
+  $("galleryStartDefault")?.addEventListener(
+    "click",
+    () => {
+      close();
+      studio.open();
+    },
+    { signal }
+  );
+  $("galleryStartBlank")?.addEventListener(
+    "click",
+    async () => {
+      close();
+      if (await studio.loadExample({ image: Examples.blank, passes: [], imageChannels: {} }, [])) studio.open();
+    },
+    { signal }
+  );
+  $("galleryStartFile")?.addEventListener(
+    "click",
+    () => {
+      close();
+      document.getElementById("studioImportPack")?.click();
+    },
+    { signal }
+  );
   dialog.addEventListener(
     "close",
     () => {

@@ -1,6 +1,7 @@
 // 앱 공용 입력·확인 대화상자(#studioPromptDialog). window.prompt/confirm 대신 쓰며, 편집기(cm-editor)도 같은 ask를 받는다.
 // 한 번에 하나만 연다. 이미 열려 있으면 새 요청은 바로 '취소'로 끝난다.
 //   ask({title, message, ok, danger})             → Promise<boolean>        (확인)
+//   ask({title, message, ok, alt, danger})        → Promise<true|"alt"|false> (세 갈래: 확인 · 두 번째 선택 · 취소)
 //   ask({title, message, value, label, type, min, max}) → Promise<string|null> (값 입력)
 // hooks.pause(): 열기 직전에 부른다. 돌려준 값을 닫을 때 hooks.resume(값)으로 넘긴다(Studio는 자동 적용 타이머를 멈췄다 되살린다).
 
@@ -10,15 +11,18 @@ const create = ({ $, on, pause = () => null, resume = () => {} }) => {
     field = $("studioDialogField"),
     valueInput = $("studioDialogInput");
   let pending = null;
+  const altButton = $("studioDialogAlt");
+  // accepted: true(확인) · "alt"(두 번째 선택) · false(취소)
   const finish = accepted => {
     if (!pending) return;
-    if (accepted && pending.hasValue && !valueInput.reportValidity()) return;
+    if (accepted === true && pending.hasValue && !valueInput.reportValidity()) return;
     const { resolve, hasValue, paused } = pending;
     pending = null;
     dialog.close();
     resume(paused);
-    resolve(accepted ? (hasValue ? valueInput.value : true) : hasValue ? null : false);
+    resolve(accepted === "alt" ? "alt" : accepted ? (hasValue ? valueInput.value : true) : hasValue ? null : false);
   };
+  if (altButton) on(altButton, "click", () => finish("alt"));
   on(form, "submit", event => {
     event.preventDefault();
     finish(true);
@@ -42,7 +46,18 @@ const create = ({ $, on, pause = () => null, resume = () => {} }) => {
     event.preventDefault();
     if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) finish(true);
   });
-  const ask = ({ title, message = "", value, ok = "확인", danger = false, label = "값", type = "text", min, max }) =>
+  const ask = ({
+    title,
+    message = "",
+    value,
+    ok = "확인",
+    alt = "",
+    danger = false,
+    label = "값",
+    type = "text",
+    min,
+    max,
+  }) =>
     new Promise(resolve => {
       const hasValue = value !== undefined;
       if (pending) return resolve(hasValue ? null : false);
@@ -50,6 +65,10 @@ const create = ({ $, on, pause = () => null, resume = () => {} }) => {
       $("studioDialogMessage").textContent = message;
       $("studioDialogOK").firstChild.textContent = ok + " ";
       dialog.dataset.danger = String(danger);
+      if (altButton) {
+        altButton.hidden = !alt || hasValue;
+        altButton.textContent = alt;
+      }
       // 확인 대화상자에서는 입력 칸을 숨기고 비활성화해 폼 검증에서 빠지게 한다.
       field.hidden = !hasValue;
       valueInput.disabled = !hasValue;

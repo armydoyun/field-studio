@@ -249,6 +249,18 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     view.focus();
     return true;
   };
+  // 같은 이름 모두 바꾸기(F2): 스코프를 분석하지 않는다. 지금 패스의 코드에서 같은 이름(주석·문자열·필드 이름 제외)을
+  // 모두 바꾸므로, 다른 함수의 같은 이름 지역 변수도 함께 바뀐다. 그래서 바꾸기 전에 몇 곳·몇째 줄인지 보여 주고,
+  // 새 이름이 이미 쓰이고 있으면(겹침) 한 번 더 확인한다.
+  // 필드 이름: 앞이 '.'이면(공백을 사이에 둔 'value . x'도) 구조체·스위즐 필드라 바꾸지 않는다.
+  const renameSpots = (clean, word) =>
+    [...clean.matchAll(new RegExp(`\\b${escapeRe(word)}\\b`, "g"))]
+      .map(m => m.index)
+      .filter(at => !/\.\s*$/.test(clean.slice(Math.max(0, at - 64), at)));
+  const lineList = (src, spots) => {
+    const lines = [...new Set(spots.map(at => src.slice(0, at).split("\n").length))];
+    return lines.length > 8 ? `${lines.slice(0, 8).join(", ")} 외 ${lines.length - 8}줄` : lines.join(", ");
+  };
   const renameSymbol = async view => {
     const src = docText(view.state),
       found = wordAround(src, view.state.selection.main.head);
@@ -256,12 +268,14 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       notify("이름을 바꿀 변수나 함수 위에 커서를 두세요");
       return true;
     }
+    const before = renameSpots(cleanOf(src), found.word);
+    if (!before.length) return true;
     const next = await ask({
-      title: `'${found.word}' 이름 바꾸기`,
-      message: "이 패스 안의 같은 이름을 모두 바꿉니다(주석·문자열과 '.' 뒤의 필드 이름은 제외).",
+      title: `'${found.word}' — 같은 이름 모두 바꾸기`,
+      message: `지금 패스에서 ${before.length}곳(${lineList(src, before)}번째 줄)을 바꿉니다. 함수 범위를 구분하지 않으므로 다른 함수의 같은 이름도 함께 바뀝니다. 주석·문자열과 '.' 뒤의 필드 이름은 제외합니다.`,
       value: found.word,
       label: "새 이름",
-      ok: "바꾸기",
+      ok: "모두 바꾸기",
     });
     if (next === null || next === undefined || next === found.word) return true;
     if (!isIdent(next) || KEYWORDS.includes(next) || TYPES.includes(next)) {
@@ -270,10 +284,23 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     }
     const now = docText(view.state),
       clean = cleanOf(now),
-      spots = [...clean.matchAll(new RegExp(`\\b${escapeRe(found.word)}\\b`, "g"))]
-        .map(m => m.index)
-        .filter(at => clean[at - 1] !== ".");
+      spots = renameSpots(clean, found.word);
     if (!spots.length) return true;
+    const clash = renameSpots(clean, next);
+    if (
+      clash.length &&
+      !(await ask({
+        title: "이미 쓰는 이름",
+        message: `'${next}'은(는) 이 패스에서 이미 ${clash.length}곳(${lineList(now, clash)}번째 줄)에 쓰입니다. 바꾸면 두 이름이 섞여 컴파일 오류나 다른 동작이 생길 수 있습니다. 그래도 바꿀까요?`,
+        ok: "그래도 바꾸기",
+        danger: true,
+      }))
+    )
+      return true;
+    if (docText(view.state) !== now) {
+      notify("확인하는 동안 코드가 바뀌어 이름 바꾸기를 취소했습니다");
+      return true;
+    }
     view.dispatch({
       changes: spots.map(at => ({ from: at, to: at + found.word.length, insert: next })),
       userEvent: "input.rename",

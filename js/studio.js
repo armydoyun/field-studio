@@ -23,6 +23,9 @@ const STORAGE_KEY = "webgl.shader-studio.project.v1",
   JSON_LIMIT = Pack.LIMITS.json,
   PACK_LIMIT = Pack.LIMITS.pack;
 const { copy, same, validateProject } = Model;
+// 이 폭보다 좁은 창에서는 편집기를 열 때 설정 패널을 자동으로 접는다(1/2·1/4 분할 창, 1440·1536 노트북).
+const PANEL_AUTO_WIDTH = 1600,
+  PANEL_AUTO_KEY = "field.panelAutoHidden.v1";
 // options.lookup(name): 내장 함수 설명 {sig, desc} 또는 null — 편집기 시그니처 힌트에 쓴다(main.js가 레퍼런스에서 만들어 넘긴다).
 const mount = (renderer, Shader, settings = null, options = {}) => {
   const $ = PreviewDOM.createLookup();
@@ -162,36 +165,78 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   const showChange = text => {
     changeText = text;
-    $("studioChangeText").textContent = text + (dirty ? " · 미적용 변경" : "");
+    $("studioChangeText").textContent = text + (dirty ? " · 실행 대기" : "");
     $("studioChangeNotice").hidden = false;
+  };
+  // 자동 복구본(이 탭의 localStorage·sessionStorage): 새로 고침·탭 닫힘 뒤 이어서 작업하기 위한 것. 이름 있는 '프로젝트 저장'과는 다르다.
+  const clock = () => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   };
   const setStorage = (state, text, detail = "") => {
     const node = $("studioStorageState");
     node.dataset.state = state;
     node.textContent = text;
-    node.title = `${detail ? detail + " · " : ""}브라우저 보관은 소스·채널 구성만 포함합니다. 전체 작업은 Pack으로 내보내세요.`;
+    node.title = `${detail ? detail + " · " : ""}자동 복구본은 이 브라우저 탭의 코드·채널 구성입니다. 파라미터·이미지까지 이름을 붙여 보관하려면 프로젝트 저장(Ctrl+S)을 쓰세요.`;
+    node.setAttribute("aria-label", node.title);
   };
   const references = name => Model.references(project, name);
   const activeSource = () => (selected === "Image" ? project.image : find(selected)?.fragment);
-  // 보관함에 저장한 상태의 지문: 보관함(Pack)에 담기는 것 — 코드(편집 중인 것 포함)·버퍼 구성·파라미터·렌더링 설정.
-  // 패널 표시(panelHidden)는 이 기기의 화면 배치라 빼고, 보고 있는 탭도 뺀다. 같은 내용이면 새로고침 뒤에도 같은 값이 나온다.
-  const fingerprint = () => {
-    const scene = JSON.parse(JSON.stringify(project)),
+  // ---- 프로젝트 스냅샷 규칙 ----
+  // 보관함·Pack에 '담기는 것'과 '저장한 뒤 바뀌었는지' 판단이 어긋나지 않도록 둘 다 이 한 규칙에서 만든다.
+  //   scene    코드(편집기에서 아직 실행하지 않은 것 포함)·버퍼 구성·채널 연결
+  //   state    파라미터·렌더링 설정(settings.snapshot)
+  //   textures 연결된 이미지의 이름·크기·샘플링(Filter·Wrap). 이미지 본문은 id가 같으면 같다(이미지 저장소는 바꿔 쓰지 않는다).
+  //   selected 보고 있던 탭(Pack에는 담지만 지문에서는 뺀다)
+  // 새 속성을 Pack에 넣을 때는 여기에 넣으면 지문에도 함께 들어간다.
+  const captureScene = () => {
+    const scene = copy(project),
       code = $("studioCode").value;
     if (selected === "Image") scene.image = code;
     else {
       const pass = scene.passes.find(p => p.name === selected);
       if (pass) pass.fragment = code;
     }
-    const state = settings?.snapshot() ?? null;
-    if (state) delete state.panelHidden;
-    const text = JSON.stringify({ scene, state });
+    return scene;
+  };
+  const textureInfo = scene => {
+    const assets = renderer.getTextures();
+    return Pack.textureIds(scene).map(id => {
+      const meta = assets.find(asset => asset.id === id);
+      return meta
+        ? { id, name: meta.name, width: meta.width, height: meta.height, sampling: { ...meta.sampling } }
+        : { id, missing: true };
+    });
+  };
+  const projectSnapshot = () => {
+    const scene = captureScene();
+    return { scene, selected, state: settings?.snapshot() ?? null, textures: textureInfo(scene) };
+  };
+  const hashText = text => {
     let hash = 0x811c9dc5; // FNV-1a 32비트
     for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
     return `${text.length.toString(36)}-${(hash >>> 0).toString(36)}`;
   };
+  // 저장 지문: 보관함에 담기는 전부. 패널 표시(panelHidden)는 이 기기의 화면 배치라 빼고, 보고 있는 탭도 뺀다.
+  // 이미지가 없으면 예전 지문과 같은 값이 나오게 둔다(업데이트 직후 저장한 프로젝트가 모두 '바뀜'으로 보이지 않게).
+  const printOf = snap => {
+    const state = snap.state ? { ...snap.state } : null;
+    if (state) delete state.panelHidden;
+    const body = snap.textures.length
+      ? { scene: snap.scene, state, textures: snap.textures }
+      : { scene: snap.scene, state };
+    return hashText(JSON.stringify(body));
+  };
+  // 작업 지문: 장면·파라미터·이미지만. 렌더링 설정(FPS 제한 등)은 예제를 열어도 그대로 남으므로 '이름 없는 작업이 바뀜' 판단에서 뺀다.
+  const workPrintOf = snap =>
+    hashText(JSON.stringify({ scene: snap.scene, user: snap.state?.user ?? null, textures: snap.textures }));
+  const fingerprint = () => printOf(projectSnapshot());
+  const workPrint = () => workPrintOf(projectSnapshot());
+  // 작업이 통째로 바뀔 때(예제·새 프로젝트·파일·보관함 열기)마다 1씩 오른다. 저장 도중 작업이 바뀌었는지 확인하는 데 쓴다.
+  let workEpoch = 0;
   // 브라우저 탭 제목: 보관함 프로젝트 이름(없으면 "저장 안 한 작업")과 상태 표시.
-  //   ● 보관함에 저장한 뒤 바뀜(저장하면 사라짐) · ✎ 코드 편집이 아직 실행에 반영되지 않음 · ⚠ 마지막 적용이 컴파일 오류
+  //   ● 보관함과 다름 — 저장한 뒤 바뀜, 또는 이름 없는 작업이 시작한 뒤 바뀜(저장하면 사라짐)
+  //   ✎ 코드 편집이 아직 실행에 반영되지 않음 · ⚠ 마지막 적용이 컴파일 오류
   let titleName = "저장 안 한 작업",
     titleState = "applied",
     isModified = () => false; // 보관함(studio-projects.js)을 만든 뒤 연결한다
@@ -207,19 +252,19 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioMessage").title = message;
     $("studioMessage").className = style;
     const state = dirty && compileFailed ? "error" : dirty ? "dirty" : "applied",
-      label = state === "error" ? "오류 확인" : dirty ? "미적용 변경" : "실행 반영됨";
+      label = state === "error" ? "컴파일 오류" : dirty ? "실행 대기" : "실행 반영됨";
     if ($("studioState").textContent !== label) $("studioState").textContent = label;
     $("studioState").dataset.state = state;
     titleState = state;
     syncTitle();
     $("studioRun").dataset.pending = String(dirty);
-    $("studioGraphState").textContent = dirty ? "편집 중인 구성 · 실행 반영 대기" : "실행에 반영된 구성";
+    $("studioGraphState").textContent = dirty ? "편집 중인 구성 · 실행 대기" : "실행에 반영된 구성";
     if (changeText) showChange(changeText);
     $("previewNotice").hidden = !dirty;
     $("previewNotice").textContent =
       state === "error"
         ? "코드를 적용하지 못했습니다. 화면은 마지막 성공 결과입니다."
-        : "미적용 변경이 있습니다. 화면은 마지막 성공 결과입니다.";
+        : "실행하지 않은 코드 변경이 있습니다. 화면은 마지막 성공 결과입니다.";
   };
   // 편집기 인라인 진단(패스별). 컴파일 성공 시 비우고, 탭 전환 시 해당 패스 항목만 보여준다.
   let diagnostics = [];
@@ -282,23 +327,23 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (draftTimer) clearTimeout(draftTimer);
     draftTimer = null;
     $("studioDraft").hidden = true;
-    Store.remove(DRAFT_KEY);
+    Store.removeTab(DRAFT_KEY);
   };
   const scheduleDraft = () => {
     if (draftTimer) clearTimeout(draftTimer);
-    setStorage("pending", "소스 · 편집본 보관 대기");
+    setStorage("pending", "복구본 기록 대기");
     draftTimer = setTimeout(() => {
       draftTimer = null;
       rememberEditor();
-      const error = Store.writeJSON(DRAFT_KEY, { version: 1, project, selected });
-      if (error) setStorage("error", "소스 · 브라우저 보관 실패", error.message);
-      else setStorage("draft", "소스 · 미적용 편집본 보관됨");
+      const error = Store.writeTabJSON(DRAFT_KEY, { version: 1, project, selected });
+      if (error) setStorage("error", "복구본 기록 실패 · 새로 고치면 복구되지 않을 수 있음", error.message);
+      else setStorage("draft", `복구본 저장됨 · ${clock()} · 실행 전 코드`);
     }, 550);
   };
   const saveLocal = () => {
-    const error = Store.writeJSON(STORAGE_KEY, { version: 1, project, selected });
-    if (error) setStorage("error", "소스 · 브라우저 보관 실패", error.message);
-    else setStorage("saved", "소스 · 브라우저 보관됨");
+    const error = Store.writeTabJSON(STORAGE_KEY, { version: 1, project, selected });
+    if (error) setStorage("error", "복구본 기록 실패 · 새로 고치면 복구되지 않을 수 있음", error.message);
+    else setStorage("saved", `복구본 저장됨 · ${clock()}`);
   };
   // 미리보기(뷰포트에 보이는 패스).
   //  · 탭을 바꾸면 그 패스를 따라간다(처음 쓰는 사람이 "내가 고치는 버퍼"를 바로 보게). 단, 고정(previewPinned)을 켜면 그대로 둔다.
@@ -600,9 +645,58 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderGraph();
     return false;
   };
+  // ---- 이미지 자원 ----
+  // 쓰는 이미지: 지금 작업 · 되돌리기/다시 실행 기록 · 이 탭의 자동 복구본이 연결한 이미지. 보관함 프로젝트와 내보낸 파일은
+  // 이미지 원본을 따로 담고 있으므로(열 때 다시 등록) 여기서 지워도 잃지 않는다.
+  const textureUsage = () => {
+    const current = new Set(Pack.textureIds(captureScene())),
+      kept = new Set();
+    const add = scene => {
+      try {
+        for (const id of Pack.textureIds(scene)) if (!current.has(id)) kept.add(id);
+      } catch (_) {
+        /* 모양이 깨진 기록은 건너뛴다. */
+      }
+    };
+    for (const entry of [...undoStack, ...redoStack, checkpoint]) add(entry.project);
+    for (const key of [STORAGE_KEY, DRAFT_KEY]) {
+      const stored = Store.readTabJSON(key)?.project;
+      if (stored) add(stored);
+    }
+    return { current, kept };
+  };
+  const megabytes = bytes =>
+    bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  // GPU에 올린 RGBA8 텍스처의 어림 크기(밉맵 제외).
+  const gpuBytes = asset => asset.width * asset.height * 4;
+  const cleanupTextures = async () => {
+    const { current, kept } = textureUsage(),
+      unused = renderer.getTextures().filter(asset => !current.has(asset.id) && !kept.has(asset.id));
+    if (!unused.length) return setStatus("정리할 이미지가 없습니다 · 모두 지금 작업이나 되돌리기 기록에서 씁니다");
+    const bytes = unused.reduce((sum, asset) => sum + (renderer.getTextureFile(asset.id)?.size || 0), 0);
+    const ok = await ask({
+      title: "쓰지 않는 이미지 정리",
+      message: `지금 작업·되돌리기 기록·자동 복구본 어디에서도 쓰지 않는 이미지 ${unused.length}개(파일 ${megabytes(bytes)} · GPU 약 ${megabytes(unused.reduce((sum, asset) => sum + gpuBytes(asset), 0))})를 이 브라우저에서 지웁니다. 보관함에 저장한 프로젝트와 내보낸 프로젝트 파일은 이미지 원본을 따로 담고 있어 영향이 없습니다. 지울 이미지: ${unused.map(asset => asset.name).join(", ")}`,
+      ok: "정리",
+      danger: true,
+    });
+    if (!ok) return;
+    let removed = 0;
+    for (const asset of unused)
+      try {
+        if (await renderer.removeTexture(asset.id)) removed++;
+      } catch (error) {
+        console.warn("이미지 정리 실패:", asset.id, error);
+      }
+    renderTextures();
+    renderChannels();
+    setStatus(`쓰지 않는 이미지 ${removed}개를 정리했습니다`);
+  };
   const renderTextures = () => {
     const holder = $("studioTextureList"),
-      assets = renderer.getTextures();
+      assets = renderer.getTextures(),
+      usage = textureUsage();
+    let footer = null; // 전체 용량 요약은 목록 아래에 둔다
     textureButtons = [];
     holder.replaceChildren();
     if (!assets.length) {
@@ -610,13 +704,37 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       hint.className = "studio-hint";
       hint.textContent = "등록된 이미지가 없습니다. PNG·JPEG·WebP 파일을 추가하고 입력 채널에 연결하세요.";
       holder.append(hint);
+    } else {
+      // 전체 용량: 이 브라우저에 보관한 원본 파일과 GPU 메모리 어림값. 쓰지 않는 이미지가 있으면 정리 버튼을 보인다.
+      const files = assets.reduce((sum, asset) => sum + (renderer.getTextureFile(asset.id)?.size || 0), 0),
+        gpu = assets.reduce((sum, asset) => sum + gpuBytes(asset), 0),
+        unused = assets.filter(asset => !usage.current.has(asset.id) && !usage.kept.has(asset.id)).length,
+        failed = renderer.failedTextures?.() || [],
+        summary = element("div"),
+        text = element("span");
+      summary.className = "studio-texture-summary";
+      text.textContent = `이미지 ${assets.length}개 · 파일 ${megabytes(files)} · GPU 약 ${megabytes(gpu)}${unused ? ` · 쓰지 않음 ${unused}개` : ""}${failed.length ? ` · 복원 실패 ${failed.length}개` : ""}`;
+      text.title = "파일: 이 브라우저에 보관한 이미지 원본 합계 · GPU: 화면에 올린 텍스처의 어림 크기";
+      summary.append(text);
+      if (unused) {
+        const clean = element("button");
+        clean.type = "button";
+        clean.id = "studioTextureCleanup";
+        clean.textContent = "쓰지 않는 이미지 정리…";
+        clean.addEventListener("click", cleanupTextures);
+        summary.append(clean);
+      }
+      footer = summary;
     }
     for (const asset of assets) {
       const row = element("div"),
         name = element("span"),
         del = element("button");
       row.className = "studio-texture";
-      name.textContent = `${asset.name} · ${asset.width}×${asset.height}`;
+      const state = usage.current.has(asset.id) ? "current" : usage.kept.has(asset.id) ? "history" : "unused";
+      row.dataset.usage = state;
+      const size = renderer.getTextureFile(asset.id)?.size || 0;
+      name.textContent = `${asset.name} · ${asset.width}×${asset.height}${size ? ` · ${megabytes(size)}` : ""} · ${{ current: "사용 중", history: "되돌리기 기록에서 씀", unused: "쓰지 않음" }[state]}`;
       del.type = "button";
       del.className = "glyph-icon icon-close";
       del.title = `${asset.name} 삭제`;
@@ -715,6 +833,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       row.append(name, use, del, controls);
       holder.append(row);
     }
+    if (footer) holder.append(footer);
     syncTextureTargets();
   };
   const renderTabs = () => {
@@ -840,10 +959,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   // 고른 패스 탭은 새로 고침 뒤에도 이어지도록 저장된 프로젝트의 selected만 갱신한다(소스는 실행 성공 때만 저장).
   const rememberTab = () => {
-    const data = Store.readJSON(STORAGE_KEY);
+    const data = Store.readTabJSON(STORAGE_KEY);
     if (data?.version !== 1 || data.selected === selected) return;
     data.selected = selected;
-    Store.writeJSON(STORAGE_KEY, data);
+    Store.writeTabJSON(STORAGE_KEY, data);
   };
   const normalizeDependencies = () => Model.normalizeDependencies(project);
   const add = () => {
@@ -924,6 +1043,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         return false;
       }
       recordEdit();
+      workEpoch++;
       return true;
     } catch (error) {
       project = before;
@@ -964,11 +1084,39 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     syncHistory();
     return true;
   };
-  const confirmReplace = () =>
+  // 지금 작업을 다른 작업(예제·새 프로젝트·파일·보관함 항목)으로 바꾸기 전에 묻는다.
+  //   지킬 것: 보관함과 다른 작업(저장한 뒤 바뀐 프로젝트, 시작한 뒤 바뀐 이름 없는 작업) · 실행하지 않은 코드
+  //   저장하고 계속(이름 없는 작업은 이름을 묻는다) · 저장하지 않고 계속 · 취소
+  // 돌려주는 값: true(계속) 또는 Promise<boolean>
+  const confirmReplace = () => {
+    const unsaved = !!projects?.modified(),
+      canSave = !!projects?.available();
+    if (!unsaved && !dirty) return true;
+    const name = projects?.current()?.name,
+      parts = [];
+    if (unsaved)
+      parts.push(name ? `'${name}'에 저장하지 않은 변경이 있습니다.` : "프로젝트로 저장하지 않은 작업입니다.");
+    if (dirty)
+      parts.push(
+        compileFailed ? "컴파일 오류로 실행하지 못한 코드가 있습니다." : "아직 실행하지 않은 코드 수정이 있습니다."
+      );
+    parts.push("계속하면 지금 작업은 Undo(Ctrl+Z)로만 되돌릴 수 있습니다.");
+    if (!unsaved || !canSave)
+      return ask({ title: "저장하지 않은 변경", message: parts.join(" "), ok: "계속", danger: true });
+    return ask({
+      title: "저장하지 않은 변경",
+      message: parts.join(" "),
+      ok: name ? "저장하고 계속" : "저장하고 계속…",
+      alt: "저장하지 않고 계속",
+    }).then(choice => (choice === "alt" ? true : choice === true ? projects.saveBeforeLeave() : false));
+  };
+  // 코드 파일(.frag) 열기처럼 지금 패스의 코드만 바꾸는 일(Undo로 되돌림)은 실행하지 않은 수정만 확인한다.
+  const confirmCodeReplace = () =>
     !dirty ||
     ask({
-      title: "미적용 변경사항",
-      message: "아직 실행하지 않은 GLSL 수정 내용이 있습니다. 계속하면 변경사항을 잃을 수 있어요.",
+      title: "실행하지 않은 코드",
+      message:
+        "아직 실행하지 않은 GLSL 수정 내용이 있습니다. 계속하면 지금 패스의 코드를 파일 내용으로 바꿉니다(Ctrl+Z로 되돌리기).",
       ok: "계속",
       danger: true,
     });
@@ -976,6 +1124,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   let projects = null;
   // 다른 작업(예제·새 프로젝트·Pack·보관함 항목)으로 통째로 바뀐다. 보관함의 "작업 중" 표시는 잊는다(열기 경로는 성공 후 다시 정한다).
   const adoptProject = (next, tab = "Image") => {
+    workEpoch++;
     projects?.forget();
     clearChange();
     views.clear();
@@ -1005,6 +1154,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       const count = renderer.getUserUniforms().length;
       settings?.save(true);
       document.dispatchEvent(new Event("shader-settings-applied"));
+      projects?.markClean();
       setStatus(`새 프로젝트 시작 · 파라미터 ${count}개 · Undo로 이전 작업 복원`);
       return true;
     } catch (error) {
@@ -1029,6 +1179,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       clearError();
       dirty = false;
       clearDraft();
+      workEpoch++;
       setStatus("렌더러의 현재 버퍼 구성을 불러왔습니다.");
       saveLocal();
       return true;
@@ -1041,6 +1192,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioToggle").setAttribute("aria-expanded", "true");
     if (window.matchMedia("(max-width:820px)").matches) {
       document.body.classList.add("panel-hidden");
+      document.dispatchEvent(new Event("shader-panel-changed"));
+    } else if (
+      window.matchMedia(`(max-width:${PANEL_AUTO_WIDTH - 1}px)`).matches &&
+      !document.body.classList.contains("panel-hidden")
+    ) {
+      // 반·4분할 창이나 노트북 화면에서는 편집기를 열 때 렌더링 설정 패널을 접어 미리보기와 코드에 자리를 준다.
+      // 편집기를 닫으면 다시 편다. 파라미터는 편집기 메뉴의 '파라미터 패널 열기'나 패널 버튼으로 언제든 연다.
+      document.body.classList.add("panel-hidden");
+      Store.write(PANEL_AUTO_KEY, "1");
       document.dispatchEvent(new Event("shader-panel-changed"));
     }
     $("studioCode").focus({ preventScroll: true });
@@ -1071,6 +1231,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   const close = () => {
     if (expanded) maximize();
+    // 편집기를 열 때 자동으로 접은 패널은 닫을 때 되돌린다(사용자가 그 사이 직접 열고 닫았으면 그대로 둔다).
+    // 전체화면으로 들어가며 닫을 때는 그대로 두었다가 전체화면을 마치고 다시 열 때 이어 간다.
+    if (Store.read(PANEL_AUTO_KEY) === "1" && !document.fullscreenElement) {
+      Store.remove(PANEL_AUTO_KEY);
+      if (document.body.classList.contains("panel-hidden") && !window.matchMedia("(max-width:820px)").matches) {
+        document.body.classList.remove("panel-hidden");
+        document.dispatchEvent(new Event("shader-panel-changed"));
+      }
+    }
     openState = false;
     $("studioDock").hidden = true;
     $("studioResize").hidden = true;
@@ -1081,6 +1250,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     workspace.saveWorkspace();
   };
   const toggle = () => (openState ? close() : open());
+  // 사용자가 패널을 직접 열거나 닫으면 그 선택을 따른다(편집기를 닫을 때 자동으로 되돌리지 않는다).
+  for (const id of ["panelToggle", "panelClose", "panelBackdrop", "studioParameters"])
+    if ($(id)) on($(id), "click", () => Store.remove(PANEL_AUTO_KEY));
   const download = (name, text, type, limit = Infinity) => {
     const blob = new Blob([text], { type });
     if (blob.size > limit) throw new Error(`내보내기 파일은 최대 ${limit / 1048576}MiB입니다.`);
@@ -1126,19 +1298,23 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   };
   // 지금 작업을 Pack 텍스트로 만든다. 파일 내보내기와 프로젝트 보관함이 같이 쓴다. 도중에 Studio가 닫히면 null.
+  // 담을 내용과 그 지문은 같은 순간(스냅샷)에서 만든다. 이미지를 읽는 동안 코드를 고쳐도 Pack에는 시작 시점의 내용이 들어가고,
+  // 돌려주는 fingerprint도 그 시점 것이라 저장 뒤의 수정은 계속 '저장 안 됨'으로 보인다. epoch: 시작할 때의 작업 번호.
   const buildPack = async () => {
-    rememberEditor();
-    const scene = copy(project),
-      tab = selected,
-      state = settings?.snapshot(),
+    const snap = projectSnapshot(),
+      print = printOf(snap),
+      work = workPrintOf(snap),
+      epoch = workEpoch,
       textures = [];
-    const files = Pack.collectTextures(scene, renderer.getTextures(), id => renderer.getTextureFile(id));
-    for (const { id, meta, file } of files)
+    const files = Pack.collectTextures(snap.scene, renderer.getTextures(), id => renderer.getTextureFile(id));
+    for (const { id, file } of files) {
+      const meta = snap.textures.find(item => item.id === id);
       textures.push({ id, name: meta.name, type: file.type, data: await Pack.readData(file), sampling: meta.sampling });
+    }
     if (disposed) return null;
-    const text = Pack.encode({ project: scene, selected: tab, textures, settings: state });
+    const text = Pack.encode({ project: snap.scene, selected: snap.selected, textures, settings: snap.state });
     if (text.length > PACK_LIMIT) throw new Error("프로젝트가 너무 큽니다(최대 64MiB). 연결된 이미지를 줄이세요.");
-    return { text, passes: scene.passes.length, images: textures.length };
+    return { text, passes: snap.scene.passes.length, images: textures.length, fingerprint: print, work, epoch };
   };
   const exportPack = async () => {
     const pack = await buildPack();
@@ -1210,6 +1386,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       before = settings?.snapshot(),
       beforeTab = selected;
     try {
+      // 같은 이미지를 다시 쓰려면 뒤에서 복원 중인 이미지까지 다 올라와 있어야 한다.
+      if (reuse) await renderer.texturesRestored?.();
+      check();
       for (const asset of decoded) {
         const existing = reuse ? await sameTexture(asset) : null;
         check();
@@ -1232,6 +1411,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       } else if (!setProject(next)) throw new Error("Pack 셰이더를 적용하지 못했습니다.");
       adoptProject(next, data.selected);
       renderTextures();
+      projects?.markClean();
       setStatus(`Pack 복원 완료 · 이미지 ${added.length}개${unsaved ? " · 일부 이미지 로컬 저장 불가" : ""}`);
       return true;
     } catch (error) {
@@ -1266,7 +1446,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 성공적으로 컴파일된 프로젝트를 자동 복원하고, 실패한 저장값은 실행하지 않는다.
   const restore = () => {
     try {
-      const raw = Store.read(STORAGE_KEY);
+      const raw = Store.readTab(STORAGE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
       if (data.version !== 1) throw new Error("저장된 프로젝트 버전이 다릅니다.");
@@ -1300,7 +1480,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       if (same(data.project, project)) return;
       $("studioDraft").hidden = false;
       // 초기화 과정에서 apply()가 draft 키를 지웠더라도 선택 전까지 복구 가능해야 한다.
-      Store.write(DRAFT_KEY, raw);
+      Store.writeTab(DRAFT_KEY, raw);
       on($("studioDraftRestore"), "click", () => {
         project = copy(data.project);
         selected = data.selected === "Image" || find(data.selected) ? data.selected : "Image";
@@ -1317,7 +1497,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   };
   renderTextures();
-  const savedDraft = Store.read(DRAFT_KEY);
+  // 앱이 뜬 뒤 이어서 복원되는 이미지(main.js의 restoreTextures)가 올라올 때마다 목록과 채널 표시를 맞춘다.
+  on(document, "shader-textures-restored", () => {
+    if (disposed) return;
+    renderTextures();
+    renderChannels();
+    renderGraph();
+  });
+  const savedDraft = Store.readTab(DRAFT_KEY);
   const loadImage = async (file, slot) => {
     const check = beginLoad(),
       result = await renderer.addTexture(file);
@@ -1338,7 +1525,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!/\.(frag|glsl|fs)$/i.test(file.name) || file.size > 1048576)
       throw new Error("1MiB 이하의 .frag/.glsl/.fs 파일만 지원합니다.");
     const check = beginLoad();
-    if (!(await confirmReplace())) return;
+    if (!(await confirmCodeReplace())) return;
     check();
     const code = (await file.text()).replace(/^\uFEFF/, "");
     check();
@@ -1435,11 +1622,24 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         index = tabs.indexOf(selected);
       select(tabs[(index + passStep(event) + tabs.length) % tabs.length]);
       $("studioCode").focus();
-    } else if (event.key.toLowerCase() === "s" && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
-      // Ctrl+Enter · Ctrl+Shift+Enter는 편집기의 '아래/위에 줄 삽입'(VS Code)
+    } else if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      ((event.altKey && !event.ctrlKey && !event.metaKey) ||
+        (!event.altKey && (event.ctrlKey || event.metaKey) && !ctrlSRuns()))
+    ) {
+      // 실행: Ctrl+Enter · Alt+Enter. 'Ctrl+S로 실행(이전 방식)'을 켜면 Ctrl+Enter는 편집기의 '아래에 줄 삽입'으로 남는다.
       event.preventDefault();
       rememberEditor();
       apply();
+    } else if (
+      event.key.toLowerCase() === "s" &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      saveShortcut();
     }
   });
   on($("studioRun"), "click", () => {
@@ -1537,15 +1737,19 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       timer = null;
     } else if (dirty) schedule();
   });
+  // 새 프로젝트: 잃을 것이 있으면 '저장하지 않은 변경' 확인 하나로 묻고, 없으면 새로 시작할지만 묻는다(확인 창을 두 번 띄우지 않는다).
   on($("studioReset"), "click", () =>
-    proceed(confirmReplace(), () =>
-      ask({
-        title: "새 프로젝트",
-        message:
-          "모든 편집 패스와 Custom Uniform을 지우고 기본 셰이더 아트 장면으로 새로 시작할까요? Undo로 되돌릴 수 있습니다.",
-        ok: "새로 시작",
-        danger: true,
-      }).then(ok => ok && replaceProject({ image: original, passes: [], imageChannels: {} }))
+    proceed(
+      dirty || projects?.modified()
+        ? confirmReplace()
+        : ask({
+            title: "새 프로젝트",
+            message:
+              "모든 편집 패스와 Custom Uniform을 지우고 기본 셰이더 아트 장면으로 새로 시작할까요? Undo로 되돌릴 수 있습니다.",
+            ok: "새로 시작",
+            danger: true,
+          }),
+      () => replaceProject({ image: original, passes: [], imageChannels: {} })
     )
   );
   on($("studioExport"), "click", exportJSON);
@@ -1561,12 +1765,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       const data = JSON.parse(text);
       if (data.version !== 1) throw new Error("지원하지 않는 프로젝트 형식입니다.");
       if (await confirmReplace()) {
+        await renderer.texturesRestored?.();
         check();
         const next = validateProject(data.project),
           count = detachMissing(next);
         const ok = setProject(next);
         if (ok) {
           projects?.forget();
+          projects?.markClean();
           revealCode();
         }
         if (ok && count) setStatus(`${count}개 이미지 연결이 해제됐습니다. 원본 이미지를 다시 가져오세요.`, "is-dirty");
@@ -1657,16 +1863,51 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       menu.querySelector?.("summary")?.focus();
     }
   });
+  // 저장 단축키. 기본은 Ctrl+S = 프로젝트 저장(이름 없는 작업은 이름을 묻는다), 실행은 Ctrl+Enter.
+  // 예전처럼 Ctrl+S로 실행하고 싶으면 편집기 메뉴(⋯)의 'Ctrl+S로 실행'을 켠다(이 브라우저에 기억).
+  const CTRL_S_KEY = "field.ctrlSRuns.v1";
+  const ctrlSRuns = () => Store.read(CTRL_S_KEY) === "1";
+  const syncCtrlS = () => {
+    const runs = ctrlSRuns(),
+      toggle = $("studioCtrlSRuns");
+    if (toggle) toggle.setAttribute("aria-pressed", String(runs));
+    $("studioRun").title = `현재 GLSL/채널 설정을 적용 (${runs ? "Ctrl+S · " : "Ctrl+Enter · "}Alt+Enter)`;
+    const hint = $("studioRun").querySelector("span");
+    if (hint) hint.textContent = runs ? "Ctrl+S" : "Ctrl+↵";
+  };
+  const setCtrlSRuns = runs => {
+    Store.write(CTRL_S_KEY, runs ? "1" : "0");
+    syncCtrlS();
+    setStatus(
+      runs ? "Ctrl+S = 실행(이전 방식) · 프로젝트 저장은 프로젝트 메뉴" : "Ctrl+S = 프로젝트 저장 · 실행은 Ctrl+Enter"
+    );
+  };
+  const saveProject = () => {
+    const button = $("studioProjectSave");
+    if (!button.disabled) button.click();
+  };
+  const saveShortcut = () => {
+    if (ctrlSRuns()) {
+      rememberEditor();
+      apply();
+    } else saveProject();
+  };
+  if ($("studioCtrlSRuns")) on($("studioCtrlSRuns"), "click", () => setCtrlSRuns(!ctrlSRuns()));
+  syncCtrlS();
   // 앱 어디서나 쓰는 단축키. 편집기 안에서 CodeMirror가 먼저 처리한 키(defaultPrevented)는 건드리지 않는다.
-  //   Ctrl+Shift+S 보관함에 저장 · Ctrl+O 프로젝트 메뉴 · Ctrl+Shift+P / F1 명령 팔레트(편집기가 닫혀 있으면 연다)
+  //   Ctrl+S 프로젝트 저장 · Ctrl+Shift+S 다른 이름으로 저장 · Ctrl+O 프로젝트 메뉴 · Ctrl+Shift+P / F1 명령 팔레트(편집기가 닫혀 있으면 연다)
   on(document, "keydown", event => {
     if (event.defaultPrevented || event.isComposing || event.altKey) return;
     if (document.querySelector?.("dialog[open]")) return;
     const mod = event.ctrlKey || event.metaKey,
       key = event.key.toLowerCase();
-    if (mod && event.shiftKey && key === "s") {
+    if (mod && !event.shiftKey && key === "s") {
       event.preventDefault();
-      if (!$("studioProjectSave").disabled) $("studioProjectSave").click();
+      saveShortcut();
+    } else if (mod && event.shiftKey && key === "s") {
+      event.preventDefault();
+      const target = $("studioProjectSaveAs").hidden ? $("studioProjectSave") : $("studioProjectSaveAs");
+      if (!target.disabled) target.click();
     } else if (mod && !event.shiftKey && key === "o") {
       event.preventDefault();
       projectMenu.isOpen() ? projectMenu.close({ refocus: true }) : projectMenu.open();
@@ -1711,6 +1952,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       syncTitle();
     },
     fingerprint,
+    workPrint,
+    epoch: () => workEpoch,
     $,
     on,
     element,
@@ -1724,8 +1967,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   isModified = () => projects.modified();
   renderEditor();
   restore();
-  // 파라미터·설정은 여러 곳에서 바뀌므로 저장 후 변경 여부(●)는 1초마다 확인한다(보관함 프로젝트일 때만 지문을 계산).
+  // 파라미터·설정·이미지 샘플링은 여러 곳에서 바뀌므로 저장 후 변경 여부(●)는 1초마다 확인한다.
   const titleTimer = setInterval(syncTitle, 1000);
+  // 이름 없는 작업의 기준점: 지난번에 기억해 둔 것이 없으면 지금(복원 직후)을 '바뀌지 않은 작업'으로 삼는다.
+  projects.markClean({ ifUnknown: true });
   loadDraft(savedDraft);
   undoStack.length = redoStack.length = 0;
   checkpoint = historyState();
@@ -1809,7 +2054,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on(document, "shader-preview-changed", syncPreviewControls);
   syncPreviewControls();
   editor.registerCommands?.([
-    press("셰이더 실행 (적용)", "studioRun", "Ctrl+S"),
+    press("셰이더 실행 (적용)", "studioRun", "Ctrl+Enter · Alt+Enter"),
+    { label: "프로젝트 저장", key: "Ctrl+S", run: () => saveProject() },
+    {
+      label: "Ctrl+S로 실행 (이전 방식) 켜기/끄기",
+      run: () => setCtrlSRuns(!ctrlSRuns()),
+    },
     press("되돌리기", "studioUndo", "Ctrl+Z"),
     press("다시 실행", "studioRedo", "Ctrl+Y"),
     { label: "자동 적용 켜기/끄기", run: () => $("studioLive").click() },
@@ -1829,10 +2079,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press("도움말 · 단축키", "studioHelp", "?"),
     press(".frag 파일로 저장", "studioSaveGLSL"),
     press(".frag 파일 열기", "studioOpenGLSL"),
-    press("브라우저에 프로젝트 저장", "studioProjectSave"),
-    press("다른 이름으로 프로젝트 저장", "studioProjectSaveAs"),
-    press("전체 프로젝트 저장 (Pack)", "studioExportPack"),
-    press("Pack 열기", "studioImportPack"),
+    press("다른 이름으로 프로젝트 저장", "studioProjectSaveAs", "Ctrl+Shift+S"),
+    press("프로젝트 파일 내보내기 (코드·파라미터·이미지)", "studioExportPack"),
+    press("프로젝트 파일 열기", "studioImportPack"),
     press("이미지 파일 불러오기", "studioTextureAdd"),
     press("새 프로젝트 (기본 장면)", "studioReset"),
   ]);
@@ -1884,7 +2133,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       if (draftTimer) clearTimeout(draftTimer);
       if (dirty) {
         rememberEditor();
-        Store.writeJSON(DRAFT_KEY, { version: 1, project, selected });
+        Store.writeTabJSON(DRAFT_KEY, { version: 1, project, selected });
       }
       dialogs.close();
       editor.dispose();
@@ -1892,4 +2141,18 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     },
   };
 };
-export { mount };
+// 앱 시작 때 먼저 되살릴 이미지: 이 탭의 자동 복구본(실행본·편집본)이 연결한 이미지 id. 나머지 이미지는 뒤에서 이어서 되살린다.
+const savedTextureIds = () => {
+  const ids = new Set();
+  for (const key of [STORAGE_KEY, DRAFT_KEY]) {
+    const project = Store.readTabJSON(key)?.project;
+    if (!project || typeof project !== "object") continue;
+    try {
+      for (const id of Pack.textureIds(project)) ids.add(id);
+    } catch (_) {
+      /* 모양이 깨진 복구본은 Studio가 따로 검사한다. */
+    }
+  }
+  return [...ids];
+};
+export { mount, savedTextureIds };
