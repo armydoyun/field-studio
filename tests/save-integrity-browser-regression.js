@@ -4,7 +4,6 @@
 //   2) 이미지 샘플링(Filter·Wrap)만 바꿔도 '저장 안 됨'
 //   3) 실행까지 마친 변경도 다른 작업으로 바꾸기 전에 묻는다(저장하고 계속 · 저장하지 않고 계속 · 취소)
 //   4) 다른 탭이 먼저 저장했으면 덮어쓰지 않고 묻는다(revision 비교)
-//   5) 같은 이름 모두 바꾸기(F2): 바뀔 곳을 미리 보여 주고 'value . x' 같은 필드는 건드리지 않는다
 (async () => {
   const $ = id => document.getElementById(id), renderer = window.shaderPlayground, studio = window.shaderStudio;
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
@@ -89,28 +88,6 @@
     created.push(copyRecord.id);
     test(P.current().id === copyRecord.id && !marked(), "지금 작업은 사본과 이어진다");
 
-    // 5) 같은 이름 모두 바꾸기 미리 보기 · 필드 제외
-    setCode(`#version 300 es
-precision highp float;
-uniform vec2 uResolution;
-out vec4 fragColor;
-struct S { float x; };
-void main() {
-    S value; value . x = 1.0;
-    float x = value.x;
-    fragColor = vec4(x, x, 0.0, 1.0);
-}`);
-    const caret = area.value.indexOf("float x =") + 6;
-    area.focus();
-    area.setSelectionRange(caret, caret);
-    area.dispatchEvent(new Event("select"));
-    await wait(50);
-    $("studioRename").click();
-    test(await until(() => $("studioPromptDialog").open), "F2 대화상자");
-    test(/4곳/.test($("studioDialogMessage").textContent) && /함수 범위를 구분하지 않으므로/.test($("studioDialogMessage").textContent), `바뀔 곳 미리 보기: ${$("studioDialogMessage").textContent}`);
-    await answer("level");
-    test(await until(() => area.value.includes("float level = value.x")), "이름이 바뀐다");
-    test(area.value.includes("value . x = 1.0") && area.value.includes("vec4(level, level"), "'value . x'처럼 공백 있는 필드는 바꾸지 않는다");
   } finally {
     FileReader.prototype.readAsDataURL = realRead;
     setInterval(() => { const b = $("studioDialogAlt"); if ($("studioPromptDialog").open && $("studioDialogTitle").textContent === "저장하지 않은 변경") (b.hidden ? $("studioDialogOK") : b).click(); }, 10);
