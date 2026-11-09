@@ -16,6 +16,7 @@ import * as Projects from "./studio-projects.js";
 import * as ProjectMenu from "./project-menu.js";
 import * as ChannelPicker from "./channel-picker.js";
 import * as PreviewDOM from "./preview-dom.js";
+import * as Scope from "./glsl-scope.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -154,6 +155,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       library,
       userUniforms: () => renderer.getUserUniforms().map(item => ({ name: item.name, type: item.type })),
       onScrub: scrubApply,
+      renameUniform: request => renameUniform(request),
       notify: text => setStatus(text, "is-dirty"),
     }
   );
@@ -1083,6 +1085,45 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     editTime = 0;
     syncHistory();
     return true;
+  };
+  // Uniform 이름 바꾸기(편집기 F2가 부른다): 지금 패스(spots), 같은 Uniform을 선언한 다른 패스, 등록된 파라미터 값을
+  // 한 번에 바꾸고 Undo 한 번으로 되돌린다. 실행에 실패해도(컴파일 오류) 코드 변경은 남기고 오류를 보인다.
+  //   돌려주는 값: {passes: 함께 바꾼 다른 패스 수, parameter: 파라미터 값을 옮겼는지} 또는 null(편집기가 지금 패스만 바꾼다)
+  const renameUniform = ({ from, to, spots, head }) => {
+    if (disposed) return null;
+    rememberEditor();
+    const code = $("studioCode").value,
+      before = copy(project),
+      users = renderer.getUserUniforms(),
+      registered = users.some(item => item.name === from);
+    if (users.some(item => item.name === to)) {
+      setStatus(`'${to}' 파라미터가 이미 있어 Uniform 이름을 바꾸지 않았습니다`, "is-error");
+      return { passes: 0, parameter: false, refused: true };
+    }
+    // Undo가 이름 바꾸기 직전의 파라미터 목록으로 돌아가도록 기록 지점의 파라미터를 지금 것으로 맞춘다
+    // (파라미터 패널·어노테이션으로 등록한 값은 코드 편집 기록과 따로 바뀐다).
+    checkpoint.users = users;
+    let passes = 0;
+    const renameIn = source => {
+      const plan = Scope.planGlobal(source, from, to);
+      if (!plan?.ok || !plan.symbol.uniform) return source;
+      passes++;
+      return Scope.applyRename(source, plan.spots, from, to);
+    };
+    const current = Scope.applyRename(code, spots, from, to);
+    if (selected === "Image") project.image = current;
+    else project.image = renameIn(project.image);
+    for (const pass of project.passes) pass.fragment = pass.name === selected ? current : renameIn(pass.fragment);
+    const nextUsers = registered ? users.map(item => (item.name === from ? { ...item, name: to } : item)) : null;
+    // 커서는 바뀐 글자 수만큼 옮긴다.
+    const shift = spots.filter(at => at < head).length * (to.length - from.length);
+    renderEditor();
+    $("studioCode").setSelectionRange(head + shift, head + shift);
+    const applied = apply(nextUsers);
+    if (applied && nextUsers) document.dispatchEvent(new Event("shader-settings-applied"));
+    if (!applied && same(before, project)) return null;
+    recordEdit(false, true);
+    return { passes, parameter: registered && applied };
   };
   // 지금 작업을 다른 작업(예제·새 프로젝트·파일·보관함 항목)으로 바꾸기 전에 묻는다.
   //   지킬 것: 보관함과 다른 작업(저장한 뒤 바뀐 프로젝트, 시작한 뒤 바뀐 이름 없는 작업) · 실행하지 않은 코드

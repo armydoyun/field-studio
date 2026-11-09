@@ -2,11 +2,14 @@
 //  · 시그니처 도움말: 호출 괄호 안이면 지금 쓰는 인수를 강조해 커서 위에 띄운다(showTooltip).
 //  · 숫자 조절: Ctrl+↑/↓(Shift = 10배), 숫자 위에서 Alt+좌우 드래그.
 //  · 색 견본: vec3/vec4(0~1 숫자) 앞에 색 견본을 끼워 넣고, 누르면 색상 선택기로 값을 바꾼다(VS Code식 인라인 위젯).
-//  · 정의로 이동(F12 · Ctrl+클릭), 이름 바꾸기(F2).
+//  · 정의로 이동(F12 · Ctrl+클릭), 이름 바꾸기(F2, 범위를 따름 — glsl-scope.js).
 //  · 들여쓰기 안내선, 컴파일 오류 메시지를 줄 끝에 표시(Error Lens).
-// 소스 분석은 glsl-language.js가 맡고, 여기서는 화면·키 동작만 다룬다.
+// 소스 분석은 glsl-language.js가 맡고, 여기서는 화면·키 동작만 다룬다. 이름이 가리키는 선언(범위)은 glsl-scope.js가 찾는다.
+import * as Scope from "./glsl-scope.js";
+
 const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = () => {} }) => {
-  const { cleanOf, symbolsOf, KEYWORDS, TYPES, isIdent, escapeRe } = language;
+  const { cleanOf, symbolsOf, KEYWORDS, TYPES, isIdent, escapeRe, APP_UNIFORMS = [], BUILTIN_VARS = {} } = language;
+  const appUniforms = new Set(APP_UNIFORMS.map(entry => entry[0]));
   const docText = state => state.doc.toString();
   const inCode = (src, pos) => cleanOf(src)[pos] === src[pos] || /\s/.test(src[pos] || ""); // 주석·문자열·전처리문 밖
   const wordAround = (src, pos) => {
@@ -218,6 +221,9 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
 
   // ==== 정의로 이동 · 이름 바꾸기 ====
   const definitionOf = (src, name, pos) => {
+    // 범위를 알 수 있으면 그 이름이 실제로 가리키는 선언으로 간다(같은 이름의 다른 함수 지역 변수로 가지 않게).
+    const scoped = Scope.symbolAt(src, pos, { macros: symbolsOf(src).defines.map(d => d.name) });
+    if (scoped.symbol) return scoped.symbol.at;
     const sym = symbolsOf(src),
       fn = sym.functions.find(f => f.name === name);
     if (fn) return fn.offset;
@@ -249,9 +255,13 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     view.focus();
     return true;
   };
-  // 같은 이름 모두 바꾸기(F2): 스코프를 분석하지 않는다. 지금 패스의 코드에서 같은 이름(주석·문자열·필드 이름 제외)을
-  // 모두 바꾸므로, 다른 함수의 같은 이름 지역 변수도 함께 바뀐다. 그래서 바꾸기 전에 몇 곳·몇째 줄인지 보여 주고,
-  // 새 이름이 이미 쓰이고 있으면(겹침) 한 번 더 확인한다.
+  // ==== 이름 바꾸기(F2) ====
+  // 실제 코드 편집기처럼 커서 아래 이름이 가리키는 그 선언과, 그 선언을 가리키는 곳만 바꾼다(glsl-scope.js).
+  //   · 다른 함수의 같은 이름 지역 변수, 안쪽 블록에서 가린 같은 이름은 그대로 둔다.
+  //   · 새 이름이 같은 범위의 이름과 겹치거나, 가려지거나, 기존 이름을 가리게 되면 무엇이 바뀌는지 보여 주고 한 번 더 묻는다.
+  //   · Uniform은 options.renameUniform(studio)이 다른 패스의 같은 Uniform과 파라미터 값까지 함께 바꾼다(Undo 한 번).
+  //   · 구조체 필드·스위즐('.' 뒤)과 내장 이름은 바꾸지 않는다. #define 매크로와 괄호 짝이 안 맞는 코드는 범위가 없으므로
+  //     이 패스의 같은 이름 전부를 바꾼다(그렇다고 알린다).
   // 필드 이름: 앞이 '.'이면(공백을 사이에 둔 'value . x'도) 구조체·스위즐 필드라 바꾸지 않는다.
   const renameSpots = (clean, word) =>
     [...clean.matchAll(new RegExp(`\\b${escapeRe(word)}\\b`, "g"))]
@@ -261,37 +271,90 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     const lines = [...new Set(spots.map(at => src.slice(0, at).split("\n").length))];
     return lines.length > 8 ? `${lines.slice(0, 8).join(", ")} 외 ${lines.length - 8}줄` : lines.join(", ");
   };
-  const renameSymbol = async view => {
-    const src = docText(view.state),
-      found = wordAround(src, view.state.selection.main.head);
-    if (!found || KEYWORDS.includes(found.word) || TYPES.includes(found.word) || !inCode(src, found.start)) {
-      notify("이름을 바꿀 변수나 함수 위에 커서를 두세요");
-      return true;
-    }
-    const before = renameSpots(cleanOf(src), found.word);
-    if (!before.length) return true;
-    const next = await ask({
-      title: `'${found.word}' — 같은 이름 모두 바꾸기`,
-      message: `지금 패스에서 ${before.length}곳(${lineList(src, before)}번째 줄)을 바꿉니다. 함수 범위를 구분하지 않으므로 다른 함수의 같은 이름도 함께 바뀝니다. 주석·문자열과 '.' 뒤의 필드 이름은 제외합니다.`,
-      value: found.word,
-      label: "새 이름",
-      ok: "모두 바꾸기",
-    });
-    if (next === null || next === undefined || next === found.word) return true;
-    if (!isIdent(next) || KEYWORDS.includes(next) || TYPES.includes(next)) {
+  const askNewName = (title, message, word) => ask({ title, message, value: word, label: "새 이름", ok: "바꾸기" });
+  const badName = next => {
+    if (!isIdent(next) || KEYWORDS.includes(next) || TYPES.includes(next) || /^gl_/.test(next)) {
       notify(`'${next}'은(는) 쓸 수 없는 이름입니다`);
       return true;
     }
-    const now = docText(view.state),
-      clean = cleanOf(now),
-      spots = renameSpots(clean, found.word);
-    if (!spots.length) return true;
-    const clash = renameSpots(clean, next);
+    return false;
+  };
+  const dispatchRename = (view, spots, from, next) => {
+    view.dispatch({
+      changes: spots.map(at => ({ from: at, to: at + from.length, insert: next })),
+      userEvent: "input.rename",
+    });
+    view.focus();
+  };
+  // 범위를 알 수 없을 때(매크로 · 괄호 짝 안 맞음): 이 패스의 같은 이름 전부. withDirectives: #define 줄도 포함
+  const renameEverywhere = async (view, word, why, withDirectives) => {
+    const src = docText(view.state),
+      spotsOf = text => (withDirectives ? Scope.macroSpots(text, word) : renameSpots(cleanOf(text), word)),
+      before = spotsOf(src);
+    if (!before.length) return true;
+    const next = await askNewName(
+      `'${word}' — 같은 이름 모두 바꾸기`,
+      `${why} 지금 패스에서 ${before.length}곳(${lineList(src, before)}번째 줄)을 모두 바꿉니다. 주석·문자열과 '.' 뒤의 필드 이름은 제외합니다.`,
+      word
+    );
+    if (next === null || next === undefined || next === word || badName(next)) return true;
+    if (docText(view.state) !== src) {
+      notify("확인하는 동안 코드가 바뀌어 이름 바꾸기를 취소했습니다");
+      return true;
+    }
+    dispatchRename(view, before, word, next);
+    notify(`${word} → ${next} · ${before.length}곳을 바꿨습니다 · Ctrl+Z로 되돌리기`);
+    return true;
+  };
+  const renameSymbol = async view => {
+    const src = docText(view.state),
+      head = view.state.selection.main.head,
+      macros = symbolsOf(src).defines.map(d => d.name),
+      plan = Scope.planRename(src, head, null, { macros });
+    if (!plan.ok) {
+      const word = plan.word;
+      if (plan.reason === "macro")
+        return renameEverywhere(view, word, "#define 매크로는 범위가 없어 정의와 쓰는 곳을 함께 바꿉니다.", true);
+      if (plan.reason === "braces")
+        return renameEverywhere(view, word, "괄호 { } 짝이 맞지 않아 범위를 알 수 없습니다(작성 중인 코드).", false);
+      notify(
+        plan.reason === "field"
+          ? `'${word}'은(는) 구조체 필드나 스위즐('.' 뒤)이라 어느 타입의 것인지 정확히 알 수 없어 바꾸지 않습니다 · 같은 이름을 모두 고르려면 Ctrl+Shift+L`
+          : plan.reason === "undeclared"
+            ? options.lookup?.(word) || Object.hasOwn(BUILTIN_VARS, word)
+              ? `${word}은(는) GLSL 내장 이름이라 바꿀 수 없습니다`
+              : `${word}의 선언을 이 패스에서 찾지 못했습니다`
+            : "이름을 바꿀 변수나 함수 위에 커서를 두세요"
+      );
+      return true;
+    }
+    const { word, symbol } = plan;
+    if (symbol.uniform && appUniforms.has(word)) {
+      notify(`${word}은(는) 앱이 값을 넣는 Uniform이라 이름을 바꿀 수 없습니다`);
+      return true;
+    }
+    const uniform = symbol.uniform && symbol.global && typeof options.renameUniform === "function";
+    const next = await askNewName(
+      `'${word}' 이름 바꾸기 · ${plan.label}`,
+      `이 ${plan.label}을(를) 가리키는 ${plan.spots.length}곳(${lineList(src, plan.spots)}번째 줄)만 바꿉니다. 다른 함수의 같은 이름이나 안쪽에서 가린 같은 이름은 그대로 둡니다.${uniform ? " 다른 패스의 같은 Uniform과 파라미터 값도 함께 바뀝니다." : ""}${plan.warnings.length ? ` ${plan.warnings.join(" ")}` : ""}`,
+      word
+    );
+    if (next === null || next === undefined || next === word || badName(next)) return true;
+    const now = docText(view.state);
+    if (now !== src) {
+      notify("확인하는 동안 코드가 바뀌어 이름 바꾸기를 취소했습니다");
+      return true;
+    }
+    const final = Scope.planRename(now, head, next, { macros }),
+      problems = [...final.conflicts];
+    if (options.lookup?.(next) || Object.hasOwn(BUILTIN_VARS, next))
+      problems.push(`'${next}'은(는) GLSL 내장 이름이라 그 내장 함수·변수를 가리게 됩니다.`);
+    if (appUniforms.has(next)) problems.push(`'${next}'은(는) 앱이 값을 넣는 Uniform 이름입니다.`);
     if (
-      clash.length &&
+      problems.length &&
       !(await ask({
-        title: "이미 쓰는 이름",
-        message: `'${next}'은(는) 이 패스에서 이미 ${clash.length}곳(${lineList(now, clash)}번째 줄)에 쓰입니다. 바꾸면 두 이름이 섞여 컴파일 오류나 다른 동작이 생길 수 있습니다. 그래도 바꿀까요?`,
+        title: "이름이 겹칩니다",
+        message: `${problems.join(" ")} 바꾸면 컴파일 오류나 다른 동작이 생길 수 있습니다. 그래도 바꿀까요?`,
         ok: "그래도 바꾸기",
         danger: true,
       }))
@@ -301,12 +364,18 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       notify("확인하는 동안 코드가 바뀌어 이름 바꾸기를 취소했습니다");
       return true;
     }
-    view.dispatch({
-      changes: spots.map(at => ({ from: at, to: at + found.word.length, insert: next })),
-      userEvent: "input.rename",
-    });
-    view.focus();
-    notify(`${found.word} → ${next} · ${spots.length}곳을 바꿨습니다 · Ctrl+Z로 되돌리기`);
+    if (uniform) {
+      const result = await options.renameUniform({ from: word, to: next, spots: final.spots, head });
+      if (result?.refused) return true; // studio가 이유를 상태 줄에 보였다
+      if (result) {
+        notify(
+          `${word} → ${next} · 이 패스 ${final.spots.length}곳${result.passes ? ` · 다른 패스 ${result.passes}개` : ""}${result.parameter ? " · 파라미터 값 유지" : ""} · Ctrl+Z로 되돌리기`
+        );
+        return true;
+      }
+    }
+    dispatchRename(view, final.spots, word, next);
+    notify(`${word} → ${next} · ${plan.label} ${final.spots.length}곳을 바꿨습니다 · Ctrl+Z로 되돌리기`);
     return true;
   };
 

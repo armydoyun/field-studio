@@ -1005,7 +1005,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "내어쓰기", key: "Ctrl+[", run: () => CM.indentLess(view) },
     { label: "정의로 이동", key: "F12 · Ctrl+클릭", run: () => features.goToDefinition(view) },
     {
-      label: "같은 이름 모두 바꾸기 (지금 패스 · 바뀔 곳 미리 보기)",
+      label: "이름 바꾸기 (그 변수·함수만 · Uniform은 모든 패스)",
       key: "F2",
       run: () => features.renameSymbol(view),
     },

@@ -62,6 +62,7 @@ js/
   cm-search-panel.js  # 두 줄 찾기 · 바꾸기 창 (찾기 → 바꿀 내용 Tab 순서)
   cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류
   glsl-language.js    # GLSL 언어 정보(키워드·타입·앱 Uniform·심볼 표·자동 완성 후보)
+  glsl-scope.js       # GLSL 범위 분석(이름이 가리키는 선언) — 이름 바꾸기(F2)·정의로 이동 (순수 함수)
   glsl-highlight.js   # GLSL 강조 (편집기·가이드 공용)
   codemirror.js       # CodeMirror 6 (MIT, 미리 번들링 · tools/codemirror에서 재생성) — 손으로 고치지 않는다
   # 설정 패널 · 화면
