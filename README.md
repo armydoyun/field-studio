@@ -51,7 +51,7 @@ js/
   studio-layout.js    # 편집기 배치 · 리사이저 · 도구 서랍
   studio-pack.js      # Pack 파일 형식 (순수 함수)
   studio-projects.js  # 프로젝트 보관함 화면
-  project-menu.js     # 머리줄 프로젝트 메뉴(팝오버) — 저장·열기·Pack·이미지 (Ctrl+O · Ctrl+Shift+S)
+  project-menu.js     # 머리줄 프로젝트 메뉴(팝오버) — 저장·열기·프로젝트 파일·이미지 (Ctrl+O · 저장 Ctrl+S · 다른 이름 Ctrl+Shift+S)
   channel-picker.js   # 입력 채널 칩(iChannel0–3)과 고르기 팝오버 · 코드 사용 여부 표시
   studio-examples.js  # Studio가 만드는 예제 프로젝트
   studio-dialog.js    # 공용 입력·확인 대화상자

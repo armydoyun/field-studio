@@ -492,6 +492,8 @@ body:has(#videoRenderDialog[data-state="running"]) #screen { object-fit:contain;
 /* 손가락 입력: 작은 버튼은 모양은 그대로 두고 누르는 영역만 넓힌다. */
 @media (pointer:coarse) {
  .guide-hint { position:relative; }.guide-hint::after { content:"";position:absolute;inset:-10px; }
+ .studio-code-label .studio-preview-pin { position:relative; }.studio-code-label .studio-preview-pin::after { content:"";position:absolute;inset:-8px; }
+ .studio-code-label .studio-preview-target { min-height:32px; }
  #profileChannel.profile-segment button { min-width:36px;min-height:32px; }#profileReset { min-height:32px; }
  .profile-view-controls.profile-view-controls { flex-wrap:wrap; }.profile-view-controls .profile-exposure { flex:1 1 100%; }
 }
@@ -801,7 +803,9 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 /* 아주 낮은 창(작은 노트북의 4분할 등): 보조 줄(파일 이름·파일/샘플 도구·커서 위치)을 숨기고 도구 줄을 줄여 코드가 몇 줄이라도 보이게 한다.
    실행 상태는 하단 메시지 줄에 계속 표시된다. */
 @media (max-height:450px) {
- .studio-preview-target,.studio-preview-pin,.studio-storage { display:none; }
+ .studio-preview-target,.studio-preview-pin { display:none; }
+ /* 복구본 상태는 낮은 창에서도 점(색)으로 남긴다. 글자는 title·스크린 리더용 aria-label에 있다. */
+ .studio-storage { flex:0 0 auto;max-width:none;font-size:0; }.studio-storage::before { margin-right:0; }
  .studio-top { min-height:0;padding-block:2px; }.studio-code-label { min-height:0;padding-block:1px; }.studio-pass-settings>summary { min-height:26px;padding-block:2px; }
 }
 .studio-error,.studio-diagnostics { border-top-color:color-mix(in srgb,var(--danger) 35%,transparent);background:color-mix(in srgb,var(--danger) 5%,var(--panel));color:var(--text-soft); }
@@ -937,7 +941,9 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 @media (max-width:820px) { #studioLayout { display:none; } }
 /* 휴대폰: 보조 행을 숨기고 도구 줄은 가로 스크롤 한 줄로 접어 코드 영역 높이를 확보한다. */
 @media (max-width:600px) {
- .studio-preview-target,.studio-preview-pin,.studio-storage,#studioComplete,#studioMaximize { display:none; }
+ .studio-preview-target,.studio-preview-pin,#studioComplete { display:none; }
+ /* 저장 상태는 휴대폰에서도 점으로 남긴다. 집중 모드(코드만 보기)는 미리보기 ↔ 코드 전환으로 쓴다. */
+ .studio-storage { flex:0 0 auto;max-width:none;font-size:0; }.studio-storage::before { margin-right:0; }
  .studio-top { padding:4px 6px; }
  .studio-window-tools { flex:1 1 100%;justify-content:flex-end;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none; }
  .studio-window-tools>* { flex-shrink:0;white-space:nowrap; }
@@ -985,7 +991,20 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .gallery-perf[data-level="medium"]::before { background:#e2c452; }
 .gallery-perf[data-level="heavy"]::before { background:#f3964c; }
 .gallery-perf[data-level="extreme"]::before { background:#f2707c; }
-.gallery-perf-legend { display:flex;flex-wrap:wrap;gap:4px 14px;margin:14px 0 0;color:var(--muted);font-size:11.5px;line-height:1.5; }
+.gallery-perf-legend { display:flex;flex-wrap:wrap;gap:4px 14px;margin:12px 0 0;color:var(--muted);font-size:11.5px;line-height:1.5; }
+.gallery-perf-legend>summary,.gallery-tips>summary { width:max-content;max-width:100%;color:var(--muted);font-size:11.5px;cursor:pointer; }
+.gallery-perf-legend>summary:hover,.gallery-tips>summary:hover { color:var(--text-soft); }
+.gallery-perf-legend:not([open]) { display:block; }
+.gallery-tips { margin:12px 0 0; }
+.gallery-tips .gallery-steps { margin-top:10px; }
+/* 첫 실행: 고를 행동 세 가지를 먼저, 크게 보인다. */
+.gallery-start { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 4px; }
+.gallery-start-card { display:grid;align-content:start;justify-items:start;gap:4px;min-height:84px;padding:14px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);color:var(--muted);font-size:12px;line-height:1.5;text-align:left;white-space:normal; }
+.gallery-start-card b { color:var(--text);font-size:14px; }
+.gallery-start-card.is-primary { border-color:var(--accent);background:var(--accent-soft); }
+.gallery-start-card:hover { border-color:var(--accent); }
+@media (max-width:700px) { .gallery-start { grid-template-columns:minmax(0,1fr); }.gallery-start-card { min-height:0; } }
+.gallery.is-searching .gallery-start,.gallery.is-searching .gallery-tips { display:none; }
 .gallery-perf-legend .gallery-perf { position:static;pointer-events:none; }
 .gallery-credit { color:var(--text-soft);font:500 10.5px/1.4 var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .gallery-search { position:sticky;top:0;z-index:3;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;margin:-8px -28px 0;padding:12px 28px 10px;background:var(--panel);border-bottom:1px solid transparent; }
@@ -1253,3 +1272,15 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .profile-extensions { display:flex;flex-wrap:wrap;gap:4px; }
 .profile-ext { padding:2px 6px;border:1px solid var(--line-strong);border-radius:20px;color:var(--faint);font-size:9.5px;text-decoration:line-through; }
 .profile-ext[data-ok="true"] { border-color:color-mix(in srgb,var(--success) 40%,transparent);color:var(--success);text-decoration:none; }
+/* (파일 끝에 두어 기본 규칙보다 우선한다) 반·4분할 창처럼 편집기 폭이 좁을 때: 코드 머리줄이 잘리지 않게 덜 쓰는 도구부터 숨긴다(모두 명령 팔레트 Ctrl+Shift+P와 단축키로 남는다).
+   ① ≤560px: 함수 위치·줄 이동·자동 완성 아이콘, 입력 줄 제목  ② ≤420px: 파일 이름·미리보기 고정·코드 조각 아이콘, 복구본 상태는 점만 */
+@container dock (max-width:560px) {
+ .studio-code-label #studioFunctions.studio-crumb,.studio-code-label #studioGoto,.studio-code-label #studioComplete,.studio-inputs-title { display:none; }
+ .studio-code-label { gap:6px;padding-left:8px; }.studio-inputs { padding-inline:8px; }
+ .studio-bottom { gap:8px;padding-inline:8px; }
+}
+@container dock (max-width:420px) {
+ .studio-code-label #studioCodeTitle,.studio-code-label .studio-preview-pin,.studio-code-label #studioSnippets { display:none; }
+ .studio-storage { flex:0 0 auto;max-width:none;font-size:0; }.studio-storage::before { margin-right:0; }
+ .studio-cursor { display:none; }
+}
