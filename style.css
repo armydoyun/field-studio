@@ -204,6 +204,25 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .uniform-dir-chip.is-active { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
 .uniform-dir-value { min-width:0;overflow:hidden;color:var(--faint);font:11px/1.4 var(--mono);text-overflow:ellipsis;white-space:nowrap; }
 .uniform-dir-pad.is-round { border-radius:50%; }
+/* 램프(@gradient · @curve): 미리보기 막대·곡선 캔버스는 행 폭을 다 쓴다 */
+.uniform-ramp { display:grid;gap:6px;min-width:0; }
+.uniform-ramp-bar { display:block;width:100%;height:22px;border:1px solid var(--line-strong);border-radius:var(--radius-sm); }
+.uniform-ramp-track { position:relative;height:18px;margin:0 6px;cursor:copy;touch-action:none; }
+.uniform-ramp-track::before { content:"";position:absolute;inset:8px 0 auto;height:2px;border-radius:1px;background:var(--line-strong); }
+.uniform-ramp-stop { position:absolute;top:0;width:12px;min-height:0;height:16px;margin:0;padding:0;transform:translateX(-50%);border:1px solid var(--line-hover);border-radius:3px 3px 6px 6px;background:var(--stop-color,#888);outline:2px solid var(--surface);outline-offset:-3px;cursor:ew-resize;touch-action:none; }
+.uniform-ramp-stop.is-active { z-index:1;border:2px solid var(--accent); }
+.uniform-ramp-stop:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+.uniform-ramp-stop[data-pointer]:focus,.uniform-ramp-stop[data-pointer]:focus-visible { outline:none; }
+.uniform-ramp-edit { display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0; }
+.uniform-ramp-edit input[type="color"] { width:32px;min-height:26px;height:26px;padding:2px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);cursor:pointer; }
+.uniform-ramp-edit input[type="color"]::-webkit-color-swatch-wrapper { padding:0; }
+.uniform-ramp-edit input[type="color"]::-webkit-color-swatch { border:0;border-radius:3px; }
+.uniform-ramp-edit input[type="number"] { flex:0 0 calc(5ch + 20px);width:calc(5ch + 20px);min-height:26px; }
+.uniform-ramp-edit .uniform-axis-label { flex:0 0 auto;width:auto; }
+.uniform-ramp-edit .uniform-dir-chip:disabled { opacity:.4;cursor:default; }
+.uniform-curve-pad { display:block;width:100%;height:128px;border:0 solid var(--accent);border-radius:var(--radius-sm);color:var(--faint);cursor:crosshair;touch-action:none; }
+.uniform-curve-pad:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+.uniform-curve-pad[data-pointer]:focus,.uniform-curve-pad[data-pointer]:focus-visible { outline:none; }
 /* @enum: 짧은 목록은 한 줄 세그먼트 버튼, 길면 드롭다운 */
 .uniform-enum { display:flex;flex-wrap:wrap;gap:0;min-width:0; }
 .uniform-enum-option { flex:1 1 auto;min-width:0;min-height:28px;margin:0 0 0 -1px;padding:0 10px;border:1px solid var(--line-strong);border-radius:0;background:var(--sunken);color:var(--text-soft);font:500 12px/1.2 var(--sans);white-space:nowrap;cursor:pointer; }

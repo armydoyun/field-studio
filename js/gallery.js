@@ -3,6 +3,7 @@
 import * as Annotations from "./annotations.js";
 import * as Community from "./community-examples.js";
 import * as Perf from "./gallery-perf.js";
+import * as Ramp from "./ramp.js";
 import * as Lazy from "./lazy-render.js";
 import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
@@ -275,25 +276,31 @@ const annotated = `#version 300 es
 precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
-// 아래 주석의 @태그가 파라미터 패널의 슬라이더·색상 선택기를 자동으로 만든다.
-uniform float uRadius;   // @range 0.05 0.6 @step 0.005 @default 0.28
-uniform float uSoftness; // @range 0.001 0.2 @step 0.001 @default 0.02
-uniform int   uCount;    // @min 1 @max 12 @default 6
-uniform vec2  uCenter;   // @range -1 1 @default 0
-uniform vec3  uColor;    // @color @default 1.0 0.45 0.2
-uniform vec3  uBack;     // @color @default 0.05 0.04 0.09
+// 아래 주석의 @태그가 파라미터 패널의 슬라이더·색상 선택기·그라데이션 편집기를 자동으로 만든다.
+// 태그 앞의 글은 설명으로, @group은 접히는 묶음으로 보인다.
+uniform float uRadius;   // 가운데 원 · @range 0.05 0.6 @step 0.005 @default 0.28 @group 모양
+uniform float uSoftness; // 가장자리 · @range 0.001 0.2 @step 0.001 @default 0.02 @group 모양
+uniform int   uCount;    // 위성 수 · @min 1 @max 12 @default 6 @group 모양
+uniform vec2  uCenter;   // 중심 · @pos @default 0 @group 모양
+uniform float uSpin;     // 회전 · @angle @anim 12 @default 0 @group 모양
+uniform vec3  uBack;     // 바탕 · @color @default 0.05 0.04 0.09 @group 색
+// 램프: sampler2D에 @gradient/@curve를 달면 256×1 텍스처가 되어 texture(이름, vec2(t, 0.5))로 읽는다.
+uniform sampler2D uRamp; // 중심에서 멀어질수록 · @gradient smooth @default 0 #fff1c1 0.35 #ff7a2e 0.7 #c2185b 1 #3b1060 @group 색
+uniform sampler2D uGlow; // 빛 번짐(거리 → 세기) · @curve @default 0 1 0.12 0.35 0.45 0.06 1 0 @group 색
 out vec4 fragColor;
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y - uCenter * 0.5;
     float d = 1e3;
     for (int i = 0; i < 12; i++) {
         if (i >= uCount) break;
-        float a = 6.28318 * float(i) / float(uCount) + uTime * 0.4;
+        float a = 6.28318 * float(i) / float(uCount) + uTime * 0.4 + uSpin;
         d = min(d, length(uv - 0.45 * vec2(cos(a), sin(a))) - uRadius * 0.4);
     }
     d = min(d, length(uv) - uRadius);
     float shape = 1.0 - smoothstep(-uSoftness, uSoftness, d);
-    fragColor = vec4(mix(uBack, uColor, shape), 1.0);
+    vec3 tint = texture(uRamp, vec2(clamp(length(uv) / 0.75, 0.0, 1.0), 0.5)).rgb;
+    float glow = texture(uGlow, vec2(clamp(d * 2.5, 0.0, 1.0), 0.5)).r;
+    fragColor = vec4(mix(uBack + tint * glow * 0.6, tint, shape), 1.0);
 }`;
 const hashPrecision = `#version 300 es
 precision highp float;
@@ -597,8 +604,8 @@ const LESSONS = [
   {
     id: "annotations",
     title: "Annotated Parameters",
-    tag: "@range · @color",
-    description: "GLSL 주석만으로 슬라이더·색상 파라미터를 만드는 법.",
+    tag: "@range · @color · @gradient · @curve",
+    description: "GLSL 주석만으로 슬라이더·색상·그라데이션·곡선 파라미터를 만드는 법.",
     image: annotated,
     thumb: "annotations",
     project: { image: annotated, passes: [], imageChannels: {} },
@@ -893,6 +900,30 @@ const mount = ({ studio, Shader, preview = null }) => {
       return programs.get(fragment);
     };
     // 렌더러가 넣는 기본 Uniform과 예제 파라미터. uMouse·uResolution은 선언한 타입에 맞춰 넣는다(vec2/vec4, vec2/vec3).
+    // 썸네일용 램프 텍스처(이름별, 대화상자가 닫힐 때 컨텍스트와 함께 사라진다).
+    const ramps = new Map();
+    const bindRamp = (name, options, value, unit, loc) => {
+      const key = JSON.stringify([options, value]);
+      let entry = ramps.get(name);
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      if (!entry || entry.key !== key) {
+        entry ??= { texture: gl.createTexture() };
+        entry.key = key;
+        ramps.set(name, entry);
+        gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+        const data = Ramp.bakeRamp(options, value);
+        if (options.gradient)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, Ramp.RAMP_SIZE, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+        else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, Ramp.RAMP_SIZE, 1, 0, gl.RED, gl.FLOAT, data);
+        const filter = options.gradient === "step" ? gl.NEAREST : gl.LINEAR;
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      } else gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+      gl.uniform1i(loc, unit);
+      gl.activeTexture(gl.TEXTURE0);
+    };
     const setup = (linked, users, { width, height }) => {
       gl.useProgram(linked);
       const types = new Map();
@@ -910,8 +941,15 @@ const mount = ({ studio, Shader, preview = null }) => {
       else gl.uniform2f(at("uMouse"), -1, -1);
       for (let unit = 0; unit < 4; unit++) gl.uniform1i(at(`iChannel${unit}`), unit);
       if (types.has("iChannelResolution")) gl.uniform3fv(at("iChannelResolution"), new Float32Array(12).fill(1));
-      for (const { name, type, value } of users) {
+      let rampUnit = 4;
+      for (const { name, type, value, options } of users) {
         const loc = at(name);
+        // 램프(@gradient · @curve)는 본 화면 렌더러처럼 4번 유닛부터 256×1 텍스처로 굽는다.
+        if (type === "sampler2D") {
+          const unit = rampUnit++;
+          if (loc) bindRamp(name, options, value, unit, loc);
+          continue;
+        }
         if (!loc) continue;
         if (type === "float") gl.uniform1f(loc, value);
         else if (type === "int" || type === "bool") gl.uniform1i(loc, Number(value));

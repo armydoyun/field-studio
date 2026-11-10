@@ -664,6 +664,471 @@ const mount = (renderer, input, settings) => {
     }
     return wrap;
   };
+  // 램프 편집기(uniform sampler2D · @gradient/@curve). 값은 렌더러가 위치 순으로 정렬해 256×1 텍스처로 굽는다.
+  // 편집기는 점 객체 배열을 들고 있어 끄는 동안 순서가 바뀌어도 선택한 점을 놓치지 않는다.
+  const RAMP_LIMIT = 16;
+  const rampButton = (text, label, onClick) => {
+    const button = element("button");
+    button.type = "button";
+    button.className = "uniform-dir-chip";
+    button.textContent = text;
+    button.setAttribute("aria-label", label);
+    button.addEventListener("click", onClick);
+    return button;
+  };
+  const rampNumber = (label, min, max, step) => {
+    const input = element("input");
+    input.type = "number";
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.setAttribute("aria-label", label);
+    return input;
+  };
+  const toHex = rgb =>
+    "#" +
+    rgb
+      .slice(0, 3)
+      .map(v =>
+        Math.round(Math.max(0, Math.min(1, v)) * 255)
+          .toString(16)
+          .padStart(2, "0")
+      )
+      .join("");
+  // 그라데이션: 미리보기 막대(투명은 체크무늬 위) + 정지점 손잡이 줄 + 선택한 정지점 편집 줄.
+  const gradientControl = (item, commit, current) => {
+    const mode = item.options.gradient,
+      clamp01 = v => Math.min(1, Math.max(0, v));
+    let stops = [],
+      selected = null;
+    const read = () => {
+      const value = current(),
+        next = [];
+      for (let i = 0; i < value.length; i += 5) next.push({ t: value[i], c: value.slice(i + 1, i + 5) });
+      return next;
+    };
+    const wrap = element("div");
+    wrap.className = "uniform-ramp is-gradient";
+    const bar = element("canvas");
+    bar.className = "uniform-ramp-bar";
+    bar.ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    bar.setAttribute("aria-hidden", "true");
+    const track = element("div");
+    track.className = "uniform-ramp-track";
+    track.title = "빈 곳을 누르면 정지점 추가 · 손잡이를 끌어 옮기기 · Delete로 지우기";
+    const edit = element("div");
+    edit.className = "uniform-ramp-edit";
+    const picker = element("input");
+    picker.type = "color";
+    picker.setAttribute("aria-label", `${item.name} 정지점 색`);
+    const position = rampNumber(`${item.name} 정지점 위치(0~1)`, 0, 1, 0.01),
+      alpha = rampNumber(`${item.name} 정지점 알파(0~1)`, 0, 1, 0.01);
+    const positionLabel = element("label"),
+      alphaLabel = element("label");
+    positionLabel.className = alphaLabel.className = "uniform-axis-label";
+    positionLabel.textContent = "t";
+    positionLabel.title = "위치";
+    alphaLabel.textContent = "A";
+    alphaLabel.title = "알파";
+    const remove = rampButton("삭제", `${item.name} 선택한 정지점 삭제`, () => removeStop());
+    const reverse = rampButton("뒤집기", `${item.name} 그라데이션 좌우 뒤집기`, () => {
+      for (const stop of stops) stop.t = 1 - stop.t;
+      apply(reverse);
+    });
+    const info = element("code");
+    info.className = "uniform-dir-value";
+    edit.append(picker, positionLabel, position, alphaLabel, alpha, remove, reverse);
+    wrap.append(bar, track, edit, info);
+    const apply = field => {
+      stops.sort((a, b) => a.t - b.t);
+      commit(
+        field,
+        stops.flatMap(stop => [stop.t, ...stop.c])
+      );
+      sync(false);
+    };
+    const removeStop = () => {
+      if (stops.length <= 2 || !selected) return;
+      const index = stops.indexOf(selected);
+      stops.splice(index, 1);
+      selected = stops[Math.min(index, stops.length - 1)];
+      apply(remove);
+      handles.get(selected)?.focus?.();
+    };
+    const handles = new Map();
+    const draw = () => {
+      const ctx = bar.getContext?.("2d");
+      if (typeof ctx?.fillRect !== "function") return;
+      const width = Math.round((bar.clientWidth || 240) * bar.ratio),
+        height = Math.round(22 * bar.ratio);
+      if (bar.width !== width) bar.width = width;
+      if (bar.height !== height) bar.height = height;
+      // 알파를 보이게 체크무늬를 먼저 깐다.
+      const cell = 6 * bar.ratio;
+      for (let y = 0; y < height; y += cell)
+        for (let x = 0; x < width; x += cell) {
+          ctx.fillStyle = (x / cell + y / cell) % 2 ? "#9a9da4" : "#d4d6da";
+          ctx.fillRect(x, y, cell, cell);
+        }
+      const samples = renderer.sampleRamp(item.options, current(), width);
+      samples.forEach((c, x) => {
+        ctx.fillStyle = `rgba(${c
+          .slice(0, 3)
+          .map(v => Math.round(clamp01(v) * 255))
+          .join(",")},${clamp01(c[3])})`;
+        ctx.fillRect(x, 0, 1, height);
+      });
+    };
+    const sync = (reread = true) => {
+      if (reread) {
+        const index = Math.max(0, stops.indexOf(selected));
+        stops = read();
+        selected = stops[Math.min(index, stops.length - 1)];
+      }
+      // 손잡이: 정지점 수가 바뀌었을 때만 다시 만들어 끄는 중인 손잡이(포인터 캡처)를 지킨다.
+      if (handles.size !== stops.length || stops.some(stop => !handles.has(stop))) {
+        handles.clear();
+        track.replaceChildren(
+          ...stops.map(stop => {
+            const handle = element("button");
+            handle.type = "button";
+            handle.className = "uniform-ramp-stop";
+            handles.set(stop, handle);
+            padDrag(handle, event => {
+              selected = stop;
+              const box = track.getBoundingClientRect();
+              stop.t = Number(clamp01((event.clientX - box.left) / box.width).toFixed(3));
+              apply(handle);
+            });
+            handle.addEventListener("keydown", event => {
+              const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -1, ArrowUp: 1 };
+              selected = stop;
+              if (event.key === "Delete" || event.key === "Backspace") {
+                event.preventDefault();
+                return removeStop();
+              }
+              if (!(event.key in moves)) return;
+              event.preventDefault();
+              stop.t = Number(clamp01(stop.t + moves[event.key] * (event.shiftKey ? 0.1 : 0.01)).toFixed(3));
+              apply(handle);
+            });
+            handle.addEventListener("focus", () => {
+              if (selected !== stop) {
+                selected = stop;
+                sync(false);
+              }
+            });
+            return handle;
+          })
+        );
+      }
+      stops.forEach((stop, index) => {
+        const handle = handles.get(stop);
+        handle.style.left = `${stop.t * 100}%`;
+        handle.style.setProperty("--stop-color", toHex(stop.c));
+        handle.setAttribute(
+          "aria-label",
+          `${item.name} 정지점 ${index + 1} · 위치 ${stop.t.toFixed(2)} · ${toHex(stop.c)}`
+        );
+        handle.setAttribute("aria-pressed", String(stop === selected));
+        handle.classList.toggle("is-active", stop === selected);
+      });
+      picker.value = toHex(selected.c);
+      showNumber(position, Number(selected.t.toFixed(3)));
+      showNumber(alpha, Number(selected.c[3].toFixed(3)));
+      remove.disabled = stops.length <= 2;
+      info.textContent = `${{ linear: "선형", smooth: "부드럽게", step: "계단" }[mode]} · 정지점 ${stops.length}개`;
+      draw();
+    };
+    // 빈 곳을 누르면 그 위치의 지금 색으로 정지점을 더한다.
+    track.addEventListener("pointerdown", event => {
+      if (event.target !== track || event.button !== 0 || stops.length >= RAMP_LIMIT) return;
+      const box = track.getBoundingClientRect(),
+        t = Number(clamp01((event.clientX - box.left) / box.width).toFixed(3)),
+        samples = renderer.sampleRamp(item.options, current(), 256);
+      selected = { t, c: samples[Math.round(t * 255)].map(v => Number(v.toFixed(4))) };
+      stops.push(selected);
+      apply(track);
+      handles.get(selected)?.focus?.();
+    });
+    picker.addEventListener("input", () => {
+      const rgb = picker.value.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16) / 255);
+      selected.c = [...rgb, selected.c[3]];
+      apply(picker);
+    });
+    position.addEventListener("change", () => {
+      const t = Number(position.value);
+      if (position.value.trim() && Number.isFinite(t)) selected.t = clamp01(t);
+      apply(position);
+    });
+    alpha.addEventListener("change", () => {
+      const a = Number(alpha.value);
+      if (alpha.value.trim() && Number.isFinite(a)) selected.c[3] = clamp01(a);
+      apply(alpha);
+    });
+    directionRedraws.push(draw);
+    stops = read();
+    selected = stops[0];
+    sync(false);
+    return wrap;
+  };
+  // 곡선: 캔버스에서 점을 끌어 모양을 만든다. 빈 곳을 누르면 점 추가, 점을 더블클릭하면 삭제.
+  // x는 이웃 점 사이로만 움직여 순서가 바뀌지 않는다. y는 @range(없으면 0~1) 안.
+  const curveControl = (item, commit, current) => {
+    const low = Number.isFinite(item.options.min) ? item.options.min : 0,
+      high = Number.isFinite(item.options.max) ? item.options.max : 1,
+      span = high - low,
+      ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1)),
+      HEIGHT = 128,
+      INSET = 8;
+    let points = [],
+      selected = 0;
+    const read = () => {
+      const value = current(),
+        next = [];
+      for (let i = 0; i < value.length; i += 2) next.push({ x: value[i], y: value[i + 1] });
+      return next;
+    };
+    const wrap = element("div");
+    wrap.className = "uniform-ramp is-curve";
+    const pad = element("canvas");
+    pad.className = "uniform-curve-pad";
+    pad.tabIndex = 0;
+    pad.setAttribute("role", "application");
+    pad.setAttribute(
+      "aria-label",
+      `${item.name} 곡선 · 끌어서 점 옮기기 · 빈 곳 클릭으로 점 추가 · 더블클릭·Delete로 삭제 · [ ] 키로 점 고르기 · 화살표로 이동`
+    );
+    pad.title = "점을 끌어 모양 만들기 · 빈 곳 클릭: 점 추가 · 더블클릭: 삭제";
+    const edit = element("div");
+    edit.className = "uniform-ramp-edit";
+    const xLabel = element("label"),
+      yLabel = element("label");
+    xLabel.className = yLabel.className = "uniform-axis-label";
+    xLabel.textContent = "X";
+    yLabel.textContent = "Y";
+    const xField = rampNumber(`${item.name} 선택한 점 X(0~1)`, 0, 1, 0.01),
+      yField = rampNumber(`${item.name} 선택한 점 Y`, low, high, "any");
+    const remove = rampButton("삭제", `${item.name} 선택한 점 삭제`, () => removePoint(remove));
+    const presets = [
+      ["직선", () => [low, high].map((y, i) => ({ x: i, y }))],
+      [
+        "S자",
+        () =>
+          [
+            [0, 0],
+            [0.3, 0.1],
+            [0.7, 0.9],
+            [1, 1],
+          ].map(([x, y]) => ({ x, y: low + y * span })),
+      ],
+      ["뒤집기", () => points.map(p => ({ x: p.x, y: high + low - p.y }))],
+    ].map(([text, make]) =>
+      rampButton(text, `${item.name} 곡선 ${text}`, event => {
+        points = make();
+        selected = Math.min(selected, points.length - 1);
+        apply(event.currentTarget || pad);
+      })
+    );
+    const info = element("code");
+    info.className = "uniform-dir-value";
+    edit.append(xLabel, xField, yLabel, yField, remove, ...presets);
+    wrap.append(pad, edit, info);
+    const decimals = Math.min(6, Math.max(2, Math.ceil(-Math.log10(span / 1000))));
+    const apply = field => {
+      commit(
+        field,
+        points.flatMap(p => [p.x, p.y])
+      );
+      sync(false);
+    };
+    // 이웃 사이로 x를 제한(간격 0.002)하고 y는 범위 안으로.
+    const place = (index, x, y) => {
+      const lowX = index ? points[index - 1].x + 0.002 : 0,
+        highX = index < points.length - 1 ? points[index + 1].x - 0.002 : 1;
+      points[index] = {
+        x: Number(Math.min(highX, Math.max(lowX, x)).toFixed(3)),
+        y: Number(Math.min(high, Math.max(low, y)).toFixed(decimals)),
+      };
+    };
+    const removePoint = field => {
+      if (points.length <= 2) return;
+      points.splice(selected, 1);
+      selected = Math.min(selected, points.length - 1);
+      apply(field);
+    };
+    const geometry = () => {
+      const width = Math.round((pad.clientWidth || 240) * ratio),
+        height = Math.round(HEIGHT * ratio),
+        inset = INSET * ratio;
+      return {
+        width,
+        height,
+        inset,
+        toX: x => inset + x * (width - inset * 2),
+        toY: y => height - inset - ((y - low) / span) * (height - inset * 2),
+      };
+    };
+    const draw = () => {
+      const ctx = pad.getContext?.("2d");
+      if (typeof ctx?.arc !== "function") return;
+      const { width, height, inset, toX, toY } = geometry(),
+        { sunken, accent, line } = padColors(pad);
+      if (pad.width !== width) pad.width = width;
+      if (pad.height !== height) pad.height = height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = `rgb(${sunken.join(",")})`;
+      ctx.fillRect(inset, inset, width - inset * 2, height - inset * 2);
+      ctx.strokeStyle = line;
+      ctx.lineWidth = ratio;
+      ctx.globalAlpha = 0.18;
+      ctx.beginPath();
+      for (let k = 1; k < 4; k++) {
+        const gx = inset + ((width - inset * 2) * k) / 4,
+          gy = inset + ((height - inset * 2) * k) / 4;
+        ctx.moveTo(gx, inset);
+        ctx.lineTo(gx, height - inset);
+        ctx.moveTo(inset, gy);
+        ctx.lineTo(width - inset, gy);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeRect(inset, inset, width - inset * 2, height - inset * 2);
+      if (low < 0 && high > 0) {
+        ctx.beginPath();
+        ctx.moveTo(inset, toY(0));
+        ctx.lineTo(width - inset, toY(0));
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      const samples = renderer.sampleRamp(item.options, current(), Math.max(2, width - inset * 2));
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2 * ratio;
+      ctx.beginPath();
+      samples.forEach((y, i) => {
+        const px = inset + i,
+          py = toY(Math.min(high, Math.max(low, y)));
+        if (i) ctx.lineTo(px, py);
+        else ctx.moveTo(px, py);
+      });
+      ctx.stroke();
+      points.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(toX(p.x), toY(p.y), (i === selected ? 5 : 4) * ratio, 0, Math.PI * 2);
+        ctx.fillStyle = i === selected ? accent : `rgb(${sunken.join(",")})`;
+        ctx.fill();
+        ctx.lineWidth = 1.5 * ratio;
+        ctx.stroke();
+      });
+    };
+    const sync = (reread = true) => {
+      if (reread) {
+        points = read();
+        selected = Math.min(selected, points.length - 1);
+      }
+      const p = points[selected];
+      showNumber(xField, p.x);
+      showNumber(yField, p.y);
+      remove.disabled = points.length <= 2;
+      info.textContent = `${item.options.curve === "linear" ? "직선 잇기" : "부드럽게"} · 점 ${points.length}개 · ${
+        selected + 1
+      }번 (${p.x}, ${p.y})`;
+      draw();
+    };
+    // 포인터: 가까운 점(10px 안)을 잡거나, 빈 곳이면 점을 더해 바로 끈다.
+    const pointerToValue = event => {
+      const box = pad.getBoundingClientRect(),
+        scale = box.width / (pad.clientWidth || box.width || 1),
+        inset = INSET * scale;
+      return {
+        x: (event.clientX - box.left - inset) / (box.width - inset * 2),
+        y: low + (1 - (event.clientY - box.top - inset) / (box.height - inset * 2)) * span,
+        box,
+      };
+    };
+    pad.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      pad.dataset.pointer = "";
+      pad.focus({ preventScroll: true });
+      const { x, y, box } = pointerToValue(event),
+        hit = points
+          .map((p, i) => ({
+            i,
+            d: Math.hypot((p.x - x) * (box.width - INSET * 2), ((p.y - y) / span) * (box.height - INSET * 2)),
+          }))
+          .sort((a, b) => a.d - b.d)[0];
+      if (hit && hit.d <= 10) selected = hit.i;
+      else if (points.length < RAMP_LIMIT) {
+        const at = points.findIndex(p => p.x > x);
+        selected = at < 0 ? points.length : at;
+        points.splice(selected, 0, { x, y });
+        place(selected, x, y);
+        apply(pad);
+      } else return;
+      sync(false);
+      pad.setPointerCapture?.(event.pointerId);
+      pad.classList.add("is-dragging");
+      const move = moveEvent => {
+        const next = pointerToValue(moveEvent);
+        place(selected, next.x, next.y);
+        apply(pad);
+      };
+      const end = () => {
+        pad.removeEventListener("pointermove", move);
+        pad.classList.remove("is-dragging");
+      };
+      pad.addEventListener("pointermove", move);
+      pad.addEventListener("pointerup", end, { once: true });
+      pad.addEventListener("pointercancel", end, { once: true });
+    });
+    pad.addEventListener("dblclick", event => {
+      const { x, y, box } = pointerToValue(event),
+        index = points.findIndex(
+          p => Math.hypot((p.x - x) * (box.width - INSET * 2), ((p.y - y) / span) * (box.height - INSET * 2)) <= 10
+        );
+      if (index < 0) return;
+      selected = index;
+      removePoint(pad);
+    });
+    pad.addEventListener("keydown", event => {
+      delete pad.dataset.pointer;
+      const big = event.shiftKey ? 10 : 1,
+        p = points[selected];
+      if (event.key === "[" || event.key === "]") {
+        selected = Math.min(points.length - 1, Math.max(0, selected + (event.key === "]" ? 1 : -1)));
+        event.preventDefault();
+        return sync(false);
+      }
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        return removePoint(pad);
+      }
+      const moves = {
+        ArrowLeft: [-0.01 * big, 0],
+        ArrowRight: [0.01 * big, 0],
+        ArrowDown: [0, (-span / 100) * big],
+        ArrowUp: [0, (span / 100) * big],
+      }[event.key];
+      if (!moves) return;
+      event.preventDefault();
+      place(selected, p.x + moves[0], p.y + moves[1]);
+      apply(pad);
+    });
+    xField.addEventListener("change", () => {
+      const x = Number(xField.value);
+      if (xField.value.trim() && Number.isFinite(x)) place(selected, x, points[selected].y);
+      apply(xField);
+    });
+    yField.addEventListener("change", () => {
+      const y = Number(yField.value);
+      if (yField.value.trim() && Number.isFinite(y)) place(selected, points[selected].x, y);
+      apply(yField);
+    });
+    directionRedraws.push(draw);
+    sync();
+    return wrap;
+  };
   listen(document, "theme-changed", () => directionRedraws.forEach(draw => draw()));
   const validNumber = (kind, value) =>
     Number.isFinite(value) &&
@@ -955,6 +1420,11 @@ const mount = (renderer, input, settings) => {
         });
         label.append(input, text);
         row.append(label);
+      } else if (item.type === "sampler2D") {
+        const current = () => [...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value)];
+        row.append(
+          item.options?.gradient ? gradientControl(item, commit, current) : curveControl(item, commit, current)
+        );
       } else if (item.options?.color) {
         // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
         const wrap = element("div");
@@ -1420,6 +1890,18 @@ const mount = (renderer, input, settings) => {
       types: ["int", "uint"],
       help: "이름 순서대로 0, 1, 2…가 됩니다. 슬라이더 범위는 이름 수로 정해집니다. @enum과 같습니다.",
     },
+    {
+      value: "gradient",
+      label: "그라데이션 (색 램프)",
+      types: ["sampler2D"],
+      help: "셰이더에서 texture(이름, vec2(t, 0.5))로 0~1 위치의 색을 읽습니다. @gradient와 같습니다.",
+    },
+    {
+      value: "curve",
+      label: "곡선 (값 램프)",
+      types: ["sampler2D"],
+      help: "셰이더에서 texture(이름, vec2(x, 0.5)).r로 곡선의 y를 읽습니다. @curve와 같습니다.",
+    },
   ];
   const updateDisplayFields = () => {
     const display = $("uniformDisplay").value,
@@ -1435,32 +1917,36 @@ const mount = (renderer, input, settings) => {
   const updateTypeFields = () => {
     const t = $("uniformType").value,
       bool = t === "bool",
+      ramp = t === "sampler2D",
       { components: size, kind } = typeInfo(t);
-    $("uniformValue").hidden = bool;
-    $("uniformValue").required = !bool;
+    $("uniformValue").hidden = bool || ramp;
+    $("uniformValue").required = !bool && !ramp;
     $("uniformBoolValue").hidden = !bool;
-    $("uniformValueHelp").textContent = bool
-      ? "선택한 상태가 GLSL의 true/false로 전달됩니다."
-      : kind === "m"
-        ? `${size}개 숫자를 column-major 순서로 입력하세요. 기본값은 단위 행렬입니다.`
-        : kind === "b"
-          ? `${size}개의 true/false를 쉼표로 구분하세요.`
-          : size > 1
-            ? `${size}개 ${kind === "f" ? "숫자" : kind === "u" ? "0 이상 정수" : "정수"}를 쉼표로 구분하세요. 예: ${defaultValue(t)}`
-            : "숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.";
+    $("uniformValueHelp").textContent = ramp
+      ? "그라데이션(검정 → 흰색)이나 직선 곡선으로 시작합니다. 만든 뒤 패널에서 정지점·점을 고치세요."
+      : bool
+        ? "선택한 상태가 GLSL의 true/false로 전달됩니다."
+        : kind === "m"
+          ? `${size}개 숫자를 column-major 순서로 입력하세요. 기본값은 단위 행렬입니다.`
+          : kind === "b"
+            ? `${size}개의 true/false를 쉼표로 구분하세요.`
+            : size > 1
+              ? `${size}개 ${kind === "f" ? "숫자" : kind === "u" ? "0 이상 정수" : "정수"}를 쉼표로 구분하세요. 예: ${defaultValue(t)}`
+              : "숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.";
     // 표시 방식: 타입에 맞는 것만 고를 수 있게 목록을 다시 만든다. 고를 것이 없으면(기본뿐) 칸을 숨긴다.
     const select = $("uniformDisplay"),
       previous = select.value,
       choices = DISPLAY_CHOICES.filter(choice => choice.types.includes(t));
+    // sampler2D는 그라데이션·곡선 중 하나여야 하므로 "기본"이 없다.
     select.replaceChildren(
-      ...[{ value: "", label: "기본 (숫자·슬라이더)" }, ...choices].map(choice => {
+      ...[...(ramp ? [] : [{ value: "", label: "기본 (숫자·슬라이더)" }]), ...choices].map(choice => {
         const option = element("option");
         option.value = choice.value;
         option.textContent = choice.label;
         return option;
       })
     );
-    select.value = choices.some(choice => choice.value === previous) ? previous : "";
+    select.value = choices.some(choice => choice.value === previous) ? previous : ramp ? choices[0].value : "";
     $("uniformDisplayField").hidden = !choices.length;
     updateDisplayFields();
     $("uniformValue").value = defaultValue(t);
@@ -1480,6 +1966,23 @@ const mount = (renderer, input, settings) => {
     event.preventDefault();
     attempt(() => {
       const type = $("uniformType").value;
+      if (type === "sampler2D") {
+        // 램프는 기본 모양으로 만들고 패널 편집기에서 다듬는다.
+        const curve = $("uniformDisplay").value === "curve";
+        renderer.defineUniform(
+          $("uniformName").value.trim(),
+          type,
+          curve ? [0, 0, 1, 1] : [0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+          curve ? { curve: "smooth" } : { gradient: "linear" }
+        );
+        clearDeleted();
+        $("uniformSearch").value = "";
+        renderUniforms();
+        $("uniformName").value = "";
+        $("uniformEditor").open = false;
+        $("uniformEditor").querySelector("summary").focus();
+        return;
+      }
       const value = parseValue(type, type === "bool" ? $("uniformBoolValue").value : $("uniformValue").value);
       const min = $("uniformMin").value.trim(),
         max = $("uniformMax").value.trim(),

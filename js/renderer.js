@@ -4,6 +4,7 @@ import * as PassManager from "./pass-manager.js";
 import * as TextureInput from "./texture-input.js";
 import * as Diagnostics from "./gpu-diagnostics.js";
 import * as Keyboard from "./keyboard-input.js";
+import * as Ramp from "./ramp.js";
 
 // 사용자 Uniform 타입 표. n: 성분 수, kind: f(float) i(int) u(uint) b(bool) m(행렬, column-major), fn: 배열 업로드 함수.
 // 새 타입은 이 표에 추가하면 검증·GLSL 자동 선언·업로드·UI가 함께 따라간다.
@@ -27,7 +28,13 @@ const UNIFORM_TYPES = Object.freeze({
   mat2: { n: 4, kind: "m", fn: "uniformMatrix2fv" },
   mat3: { n: 9, kind: "m", fn: "uniformMatrix3fv" },
   mat4: { n: 16, kind: "m", fn: "uniformMatrix4fv" },
+  // 램프 텍스처: @gradient(색 정지점 [t r g b a]…) · @curve(점 [x y]…)를 256×1 텍스처로 구워 넘긴다. n은 가변(0).
+  sampler2D: { n: 0, kind: "t" },
 });
+// 램프(@gradient · @curve) 동시에 쓸 수 있는 개수. 텍스처 유닛은 iChannel 0~3 다음인 4번부터 쓴다. 굽기는 ramp.js.
+const RAMP_MAX_COUNT = 8,
+  RAMP_FIRST_UNIT = 4,
+  { RAMP_MAX_POINTS, RAMP_SIZE, bakeRamp, sampleRamp } = Ramp;
 // 리플렉션을 사용할 수 없는 환경에서의 내장 Uniform 기본 타입(기존 동작).
 const DEFAULT_BUILTIN_TYPES = Object.freeze({
   resolution: "vec2",
@@ -201,6 +208,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
                 : spec.kind === "u"
                   ? Number.isInteger(v) && v >= 0 && v <= 4294967295
                   : true);
+    if (spec?.kind === "t" && (Array.isArray(value) || ArrayBuffer.isView(value))) {
+      const array = Array.from(value);
+      if (
+        array.length >= 4 &&
+        array.length <= RAMP_MAX_POINTS * 5 &&
+        array.every(v => typeof v === "number" && Number.isFinite(v))
+      )
+        return array;
+    }
     if (spec?.n === 1 && valid(value)) return value;
     if (spec?.n > 1 && (Array.isArray(value) || ArrayBuffer.isView(value))) {
       const array = Array.from(value);
@@ -216,9 +232,30 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!(length > 1e-9)) throw new Error("방향 벡터는 0 벡터일 수 없습니다.");
     return v.map(x => x / length);
   };
+  // 램프 값 정리: 정지점 단위로 묶어 위치(0~1) 순으로 정렬한다. gradient 색은 0~1, curve y는 그대로(범위는 편집기 표시용).
+  const normalizeRamp = (value, options) => {
+    const stride = options.gradient ? 5 : 2;
+    if (value.length % stride || value.length / stride < 2 || value.length / stride > RAMP_MAX_POINTS)
+      throw new Error(
+        options.gradient
+          ? `그라데이션은 정지점 [위치 r g b a] 2~${RAMP_MAX_POINTS}개여야 합니다.`
+          : `곡선은 점 [x y] 2~${RAMP_MAX_POINTS}개여야 합니다.`
+      );
+    const points = [];
+    for (let i = 0; i < value.length; i += stride) {
+      const point = value.slice(i, i + stride);
+      point[0] = Math.min(1, Math.max(0, point[0]));
+      if (options.gradient) for (let k = 1; k < 5; k++) point[k] = Math.min(1, Math.max(0, point[k]));
+      points.push(point);
+    }
+    points.sort((a, b) => a[0] - b[0]);
+    return points.flat();
+  };
   // 벡터/행렬은 등록·변경 시점에 Typed Array로 한 번 변환해 두어 매 프레임 할당 없이 업로드한다.
-  const makeData = type => {
+  // 램프는 256×1 텍스처 자료(gradient RGBA8 · curve R16F용 Float32)를 미리 구워 둔다.
+  const makeData = (type, options = {}) => {
     const spec = UNIFORM_TYPES[type];
+    if (spec.kind === "t") return options.gradient ? new Uint8Array(RAMP_SIZE * 4) : new Float32Array(RAMP_SIZE);
     if (spec.n === 1) return null;
     return spec.kind === "u"
       ? new Uint32Array(spec.n)
@@ -226,20 +263,71 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         ? new Int32Array(spec.n)
         : new Float32Array(spec.n);
   };
+  let rampSerial = 0;
   const writeData = item => {
     if (!item.data) return item;
+    if (UNIFORM_TYPES[item.type].kind === "t") {
+      bakeRamp(item.options, item.value, item.data);
+      item.serial = ++rampSerial;
+      return item;
+    }
     const bool = UNIFORM_TYPES[item.type].kind === "b";
     for (let i = 0; i < item.data.length; i++) item.data[i] = bool ? (item.value[i] ? 1 : 0) : item.value[i];
     return item;
   };
+  // 램프 텍스처 캐시(이름별). 값이 바뀐 것(serial)만 다시 올린다. 등록이 바뀌면 pruneRamps가, 컨텍스트 손실 때는 참조만 버린다.
+  const rampTextures = new Map();
+  const bindRamp = (name, item, unit) => {
+    const kind = item.options.gradient ? `gradient-${item.options.gradient}` : "curve";
+    let entry = rampTextures.get(name);
+    if (entry && entry.kind !== kind) {
+      gl.deleteTexture(entry.texture);
+      entry = null;
+    }
+    if (!entry) {
+      entry = { texture: gl.createTexture(), serial: -1, kind };
+      rampTextures.set(name, entry);
+    }
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+    if (entry.serial !== item.serial) {
+      if (item.options.gradient)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RAMP_SIZE, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, item.data);
+      else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, RAMP_SIZE, 1, 0, gl.RED, gl.FLOAT, item.data);
+      const filter = item.options.gradient === "step" ? gl.NEAREST : gl.LINEAR;
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      entry.serial = item.serial;
+    }
+    gl.activeTexture(gl.TEXTURE0);
+  };
+  const pruneRamps = () => {
+    for (const [name, entry] of rampTextures)
+      if (UNIFORM_TYPES[userUniforms.get(name)?.type]?.kind !== "t") {
+        if (!lost) gl.deleteTexture(entry.texture);
+        rampTextures.delete(name);
+      }
+  };
   const uploadCustomUniforms = target => {
     if (!target.custom) target.custom = new Map();
+    let rampUnit = RAMP_FIRST_UNIT;
     for (const [name, item] of userUniforms) {
       if (!target.custom.has(name)) target.custom.set(name, gl.getUniformLocation(target.program, name));
       const location = target.custom.get(name);
-      if (location === null || location === undefined) continue;
       const spec = UNIFORM_TYPES[item.type],
         v = item.value;
+      // 램프는 쓰지 않는 패스에서도 유닛 번호를 차지해 패스마다 같은 유닛을 쓴다.
+      if (spec.kind === "t") {
+        const unit = rampUnit++;
+        if (location !== null && location !== undefined) {
+          bindRamp(name, item, unit);
+          gl.uniform1i(location, unit);
+        }
+        continue;
+      }
+      if (location === null || location === undefined) continue;
       if (spec.n === 1) {
         if (spec.kind === "f") gl.uniform1f(location, v);
         else if (spec.kind === "u") gl.uniform1ui(location, v);
@@ -465,6 +553,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     uniforms = nextUniforms;
     fragmentSource = source;
     if (previous) gl.deleteProgram(previous);
+    pruneRamps();
     // 셰이더가 바뀌면 누적 프레임을 리셋한다. 시간(time)은 이어서 진행한다.
     if (passManager.getPasses().length === 0) frameCount = 0;
     lastTime = fpsStart = null;
@@ -997,6 +1086,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     passManager.onLost();
     textureInput.onLost();
     gpuTimer.onLost();
+    rampTextures.clear(); // 잃은 컨텍스트의 텍스처: 참조만 버리고, 다음 그리기에서 다시 굽는다
     capabilities = null;
     onStatus("WebGL 컨텍스트 손실: 복구 대기 중");
   };
@@ -1046,7 +1136,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       keyboard.dispose();
       if (program) gl.deleteProgram(program);
       if (vao) gl.deleteVertexArray(vao);
+      for (const entry of rampTextures.values()) gl.deleteTexture(entry.texture);
     }
+    rampTextures.clear();
     if (lost) textureInput.dispose();
     program = vao = uniforms = null;
   };
@@ -1157,6 +1249,33 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       { min, max, step, color, dir, angle, pos, log, hdr, seed, anim } = options,
       labels = options.enum,
       spec = UNIFORM_TYPES[type];
+    // sampler2D는 램프 전용: gradient(linear|smooth|step) 또는 curve(smooth|linear, 편집기 y 범위 min·max)만 받는다.
+    if (spec.kind === "t") {
+      const { gradient, curve } = options,
+        extra = Object.keys(options).filter(key => !["gradient", "curve", "min", "max", "step"].includes(key));
+      if (
+        (gradient === undefined) === (curve === undefined) ||
+        extra.length ||
+        (gradient !== undefined && (!["linear", "smooth", "step"].includes(gradient) || min !== undefined)) ||
+        (curve !== undefined && !["smooth", "linear"].includes(curve))
+      )
+        throw new Error(
+          "sampler2D 파라미터는 gradient(linear·smooth·step) 또는 curve(smooth·linear) 하나로만 쓸 수 있습니다."
+        );
+      if (
+        curve !== undefined &&
+        min !== undefined &&
+        !([min, max, step].every(Number.isFinite) && min < max && step > 0)
+      )
+        throw new Error("곡선 범위(min·max·step)가 올바르지 않습니다.");
+      const nextOptions = gradient ? { gradient } : min === undefined ? { curve } : { min, max, step, curve };
+      return writeData({
+        type,
+        value: normalizeRamp(normalized, nextOptions),
+        data: makeData(type, nextOptions),
+        options: nextOptions,
+      });
+    }
     const ranged = spec.kind === "f" || spec.kind === "i" || spec.kind === "u",
       integer = spec.kind === "i" || spec.kind === "u";
     if (
@@ -1229,7 +1348,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed || lost) throw new Error("현재 Uniform을 등록할 수 없습니다.");
     if (userUniforms.has(name)) throw new Error(`${name}은 이미 등록됐습니다.`);
     if (userUniforms.size >= 64) throw new Error("사용자 Uniform은 최대 64개입니다.");
-    userUniforms.set(name, normalizeEntry(name, type, value, options));
+    const entry = normalizeEntry(name, type, value, options);
+    if (entry.type === "sampler2D") checkRampCount([...userUniforms.values(), entry]);
+    userUniforms.set(name, entry);
     try {
       replacePrograms(fragmentSource, passManager.refreshPrograms);
     } catch (error) {
@@ -1243,7 +1364,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     const item = userUniforms.get(name);
     if (!item) throw new Error(`등록되지 않은 Uniform: ${name}`);
     const normalized = normalizeUniform(item.type, value);
-    item.value = item.options?.dir ? unitDirection(normalized, item.options.dir) : normalized;
+    item.value = item.options?.dir
+      ? unitDirection(normalized, item.options.dir)
+      : item.type === "sampler2D"
+        ? normalizeRamp(normalized, item.options)
+        : normalized;
     writeData(item);
     return true;
   };
@@ -1269,6 +1394,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     }));
   const getUniforms = getUserUniforms;
   // Pack 복원: 사용자 Uniform을 새 GLSL과 함께 사전 컴파일하고, 통과한 경우에만 교체한다.
+  const checkRampCount = items => {
+    if (items.filter(item => item.type === "sampler2D").length > RAMP_MAX_COUNT)
+      throw new Error(`그라데이션·곡선 파라미터는 최대 ${RAMP_MAX_COUNT}개입니다.`);
+  };
   const prepareUsers = items => {
     if (!Array.isArray(items) || items.length > 64) throw new Error("사용자 Uniform은 최대 64개입니다.");
     const next = new Map();
@@ -1279,6 +1408,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         normalizeEntry(item.name, item.type, item.value, item.options === undefined ? {} : item.options)
       );
     }
+    checkRampCount([...next.values()]);
     return next;
   };
   const swapUsers = next => {
@@ -1531,6 +1661,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     applyProject,
     setUserUniforms,
     validateUniformValue: normalizeUniform,
+    sampleRamp,
     setPasses,
     setPassFragment,
     setPassChannels,

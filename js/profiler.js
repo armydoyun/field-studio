@@ -192,13 +192,14 @@ const mount = renderer => {
       const dim = Math.round(Math.sqrt(n));
       return Array.from({ length: n }, (_, i) => (i % (dim + 1) === 0 ? 1 : 0));
     }
+    if (spec.kind === "t") return [0, 0, 0, 0, 1, 1, 1, 1, 1, 1]; // sampler2D: 검정 → 흰색 그라데이션
     if (spec.kind === "b") return n === 1 ? false : Array(n).fill(false);
     return n === 1 ? 0 : Array(n).fill(0);
   };
   const promote = (name, type) => {
     const status = $("profileUniformStatus");
     try {
-      renderer.defineUniform(name, type, initialValue(type), {});
+      renderer.defineUniform(name, type, initialValue(type), type === "sampler2D" ? { gradient: "linear" } : {});
       document.dispatchEvent(new Event("shader-settings-applied"));
       status.textContent = `${name} (${type})를 파라미터로 등록했습니다. 파라미터 탭에서 값을 조절하세요.`;
       status.dataset.state = "ok";
