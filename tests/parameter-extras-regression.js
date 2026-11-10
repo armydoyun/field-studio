@@ -106,9 +106,12 @@ uniform float uSpin; // @angle @anim 8`,async(f,n,list)=>{
   const number=rowOf(n('uniformList'),'uWave').children[1].children[1];assert.equal(number.value,'0');
   await button(rowOf(n('uniformList'),'uSpin'),'play-uniform').click();await step(f,0);await step(f,2000);close(value(f,'uSpin'),Math.PI/2);
   await step(f,8000);close(value(f,'uSpin'),2*Math.PI,1e-9);
+  const angleSide=rowOf(n('uniformList'),'uSpin').children[1].children[1];
+  assert.equal(angleSide.children[0].children[2].value,'0');assert.equal(angleSide.children[3].textContent,'누적 1회전');
   // 숫자 칸으로 직접 바꾸면 그 파라미터만 멈춘다
   number.value='1';await number.dispatchEvent({type:'change'});await step(f,9000);assert.equal(value(f,'uWave'),1);assert.equal(play.attrs['aria-pressed'],'false');
   assert(value(f,'uSpin')>2*Math.PI);
+  assert.equal(angleSide.children[0].children[2].value,'45');assert.equal(angleSide.children[3].textContent,'누적 1회전');
   await button(rowOf(n('uniformList'),'uSpin'),'play-uniform').click();assert.equal(await step(f,10000),1);assert.equal(f.frames.filter(fr=>fr.name==='playStep').length,0,'모두 멈추면 프레임을 더 잡지 않는다');
 });
 await ui('@anim: float은 @step 단위로 맞춰 재생하고, 보이는 값 = 들어간 값',`uniform float uSeg; // @range 1 24 @step 1 @default 8 @anim 4
