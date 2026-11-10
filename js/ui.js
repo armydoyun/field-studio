@@ -1217,9 +1217,19 @@ const mount = (renderer, input, settings) => {
         const u = turns + play.phase,
           wave = 1 - Math.abs(1 - 2 * (u - Math.floor(u)));
         value = opts.min + Math.round(wave * (opts.max - opts.min));
-      } else value = opts.min + (opts.max - opts.min) * (0.5 - 0.5 * Math.cos(turns * 2 * Math.PI + play.phase));
-      // 정수는 칸이 바뀔 때만 쓴다.
-      if (integer && value === item.value) continue;
+      } else {
+        value = opts.min + (opts.max - opts.min) * (0.5 - 0.5 * Math.cos(turns * 2 * Math.PI + play.phase));
+        // @step은 이 파라미터가 가질 수 있는 값의 간격이다. 재생도 슬라이더처럼 step 단위로 맞춰
+        // 패널에 보이는 값과 셰이더에 들어가는 값이 같게 한다(부드럽게 움직이려면 step을 잘게 둔다).
+        if (opts.step > 0) {
+          const decimals = Math.min(10, Math.max(0, Math.ceil(-Math.log10(opts.step)) + 1));
+          value = Number(
+            Math.min(opts.max, opts.min + Math.round((value - opts.min) / opts.step) * opts.step).toFixed(decimals)
+          );
+        }
+      }
+      // 값이 칸(step·정수)을 넘어가지 않았으면 다시 쓰지 않는다.
+      if (!opts.angle && value === item.value) continue;
       try {
         renderer.setUniform(name, value);
       } catch {
@@ -1798,12 +1808,9 @@ const mount = (renderer, input, settings) => {
             }
           },
         });
-        // 재생 중 숫자 칸은 step 자릿수만큼만 보여 준다(칸 폭을 넘지 않게).
-        const playDecimals = Number.isFinite(opts.step)
-          ? Math.min(6, Math.max(0, Math.ceil(-Math.log10(opts.step))))
-          : 4;
+        // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
         playViews.set(item.name, value => {
-          showNumber(number, Number(value.toFixed(playDecimals)));
+          showNumber(number, value);
           if (range) range.value = String(toSlider(value));
         });
       }

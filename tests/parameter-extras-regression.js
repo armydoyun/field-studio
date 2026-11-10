@@ -111,6 +111,15 @@ uniform float uSpin; // @angle @anim 8`,async(f,n,list)=>{
   assert(value(f,'uSpin')>2*Math.PI);
   await button(rowOf(n('uniformList'),'uSpin'),'play-uniform').click();assert.equal(await step(f,10000),1);assert.equal(f.frames.filter(fr=>fr.name==='playStep').length,0,'모두 멈추면 프레임을 더 잡지 않는다');
 });
+await ui('@anim: float은 @step 단위로 맞춰 재생하고, 보이는 값 = 들어간 값',`uniform float uSeg; // @range 1 24 @step 1 @default 8 @anim 4
+uniform float uQuarter; // @range 0 1 @step 0.25 @default 0 @anim 4`,async(f,n,list)=>{
+  await button(rowOf(list,'uSeg'),'play-uniform').click();await button(rowOf(n('uniformList'),'uQuarter'),'play-uniform').click();
+  const seen=[],quarters=[];
+  for(let t=0;t<=4000;t+=137){await step(f,t);seen.push(value(f,'uSeg'));quarters.push(value(f,'uQuarter'));}
+  assert(seen.every(Number.isInteger),`step 1이면 정수만: ${seen}`);assert(seen.some(v=>v>20)&&seen.includes(24),'범위 끝까지 간다');
+  assert(quarters.every(v=>[0,0.25,0.5,0.75,1].includes(v)),`step 0.25 단위: ${quarters}`);
+  const number=rowOf(n('uniformList'),'uQuarter').children[1].children[1];assert.equal(Number(number.value),value(f,'uQuarter'),'숫자 칸 = 실제 값');
+});
 await ui('@anim: int는 한 칸씩 왕복, @enum은 선택지를 차례로 돈다',`uniform int uCount; // @range 0 4 @anim 4 @default 0
 uniform int uView; // @enum 결과 밀도 법선 @anim 1 @default 1`,async(f,n,list)=>{
   const count=button(rowOf(list,'uCount'),'play-uniform');assert.match(count.title,/한 칸씩 왕복/);
