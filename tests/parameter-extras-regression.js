@@ -120,6 +120,18 @@ uniform float uQuarter; // @range 0 1 @step 0.25 @default 0 @anim 4`,async(f,n,l
   assert(quarters.every(v=>[0,0.25,0.5,0.75,1].includes(v)),`step 0.25 단위: ${quarters}`);
   const number=rowOf(n('uniformList'),'uQuarter').children[1].children[1];assert.equal(Number(number.value),value(f,'uQuarter'),'숫자 칸 = 실제 값');
 });
+await ui('@anim: 재생으로 값이 기본값과 달라지면 ↺가 켜지고, 되돌리면 멈추고 꺼진다',`uniform float uWave; // @range 0 2 @anim 4 @default 0
+uniform int uView; // @enum a b c @anim 1 @default 0`,async(f,n,list)=>{
+  const reset=name=>button(rowOf(n('uniformList'),name),'reset-uniform');
+  assert.equal(reset('uWave').disabled,true);assert.equal(reset('uView').disabled,true);
+  await button(rowOf(list,'uWave'),'play-uniform').click();await button(rowOf(n('uniformList'),'uView'),'play-uniform').click();
+  await step(f,0);await step(f,1000);
+  assert(value(f,'uWave')>0);assert.equal(reset('uWave').disabled,false,'float 재생 중 ↺ 켜짐');
+  assert.equal(value(f,'uView'),1);assert.equal(reset('uView').disabled,false,'enum 재생 중 ↺ 켜짐');
+  await step(f,3000);assert.equal(value(f,'uView'),0,'한 바퀴 돌아 기본값');assert.equal(reset('uView').disabled,true,'기본값으로 돌아오면 다시 꺼짐');
+  await reset('uWave').click();assert.equal(value(f,'uWave'),0);assert.equal(reset('uWave').disabled,true);
+  await step(f,3500);assert.equal(value(f,'uWave'),0,'되돌리면 재생이 멈춘다');
+});
 await ui('@anim: int는 한 칸씩 왕복, @enum은 선택지를 차례로 돈다',`uniform int uCount; // @range 0 4 @anim 4 @default 0
 uniform int uView; // @enum 결과 밀도 법선 @anim 1 @default 1`,async(f,n,list)=>{
   const count=button(rowOf(list,'uCount'),'play-uniform');assert.match(count.title,/한 칸씩 왕복/);

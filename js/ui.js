@@ -1194,7 +1194,9 @@ const mount = (renderer, input, settings) => {
   // 값은 렌더러에 바로 쓰고, 화면은 행이 등록한 refresh로 맞춘다. 사용자가 값을 직접 바꾸면 그 파라미터는 멈춘다.
   const playing = new Map(),
     playViews = new Map(),
-    playButtons = new Map();
+    playButtons = new Map(),
+    // 행의 ↺(기본값으로 되돌리기) 버튼 상태 갱신. 재생은 commit을 거치지 않으므로 여기로 직접 알린다.
+    resetSyncs = new Map();
   let playFrame = 0;
   const playStep = now => {
     playFrame = 0;
@@ -1237,6 +1239,7 @@ const mount = (renderer, input, settings) => {
         continue;
       }
       playViews.get(name)?.(value);
+      resetSyncs.get(name)?.(value);
     }
     // 재생으로 바뀐 값 때문에 목록을 다시 그리지 않게 기준을 맞춘다.
     uniformSnapshot = JSON.stringify(renderer.getUserUniforms());
@@ -1293,6 +1296,7 @@ const mount = (renderer, input, settings) => {
     const defaults = annotatedDefaults();
     directionRedraws = [];
     playViews.clear();
+    resetSyncs.clear();
     playButtons.clear();
     userList.replaceChildren();
     // @group: 묶음 없는 파라미터가 먼저, 묶음은 처음 나온 순서대로. 검색 중에는 접힌 묶음도 펼쳐 보여 준다.
@@ -1358,10 +1362,11 @@ const mount = (renderer, input, settings) => {
         reset.type = "button";
         reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
         reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
-        syncReset = () => {
-          reset.disabled = sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback);
+        syncReset = (value = renderer.getUserUniforms().find(u => u.name === item.name)?.value) => {
+          reset.disabled = sameValue(value, fallback);
         };
         syncReset();
+        resetSyncs.set(item.name, syncReset);
         const restore = () => {
           if (sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback)) return;
           if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
