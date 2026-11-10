@@ -73,8 +73,8 @@ svg { display:block;flex-shrink:0; }
 [hidden] { display:none !important; }
 kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:23px;padding:3px 6px;border:1px solid var(--line-strong);border-radius:5px;font:10px/1.3 var(--mono);white-space:nowrap; }
 /* 설정 패널: 헤더·검색·본문·푸터의 좌우 기준선은 20px. */
-#workspace { display:grid;grid-template-columns:var(--panel-width) minmax(0,1fr);grid-template-rows:minmax(0,1fr);width:100%;height:100dvh; }
-#panel { position:relative;z-index:5;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;border-right:1px solid var(--line); }
+#workspace { display:grid;grid-template-columns:var(--panel-width) 0 minmax(0,1fr);grid-template-areas:"panel resize stage";grid-template-rows:minmax(0,1fr);width:100%;height:100dvh; }
+#panel { grid-area:panel;position:relative;z-index:5;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;border-right:1px solid var(--line); }
 .panel-header { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;border-bottom:1px solid var(--line); }
 .brand-lockup { display:flex;align-items:center;gap:12px;min-width:0; }
 .brand-mark { display:grid;place-items:center;flex:0 0 40px; }
@@ -218,7 +218,7 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .storage-indicator:has(.unavailable) .storage-dot { background:var(--danger); }
 .footer-version { flex-shrink:0;font:9px/1.5 var(--mono);letter-spacing:.5px; }
 /* 뷰포트: HUD는 같은 footer 안에서 정렬하여 서로 겹치지 않게 한다. */
-#stage { position:relative;isolation:isolate;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;outline:none; }
+#stage { grid-area:stage;position:relative;isolation:isolate;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;outline:none; }
 #stage:focus-visible { outline:2px solid var(--accent);outline-offset:-2px; }
 #stage:fullscreen { width:100vw;height:100dvh; }
 .render-viewport { position:relative;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden;container:preview / size; }
@@ -457,7 +457,7 @@ body:has(#videoRenderDialog[data-state="running"]) #screen { object-fit:contain;
 .help-body { flex:1;min-height:0;padding:20px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;font-size:12px;line-height:1.75; }
 .help-body h3 { margin:24px 0 8px;font-size:12px;font-weight:700; }.help-body h3:first-child { margin-top:0; }
 .help-body p { margin:0 0 12px; }
-.panel-backdrop { display:none; }.panel-hidden #panel { display:none; }.panel-hidden #workspace { grid-template-columns:minmax(0,1fr); }
+.panel-backdrop { display:none; }.panel-hidden #panel { display:none; }.panel-hidden #workspace { grid-template-columns:minmax(0,1fr);grid-template-areas:"stage"; }
 /* 반응형 변경은 기본 스타일 뒤에서만 적용한다. */
 @media (max-width:1100px) {
  /* 패스 탭과 창 도구는 들어갈 자리가 있으면 한 줄에 두고, 모자랄 때만 두 줄로 나눈다. */
@@ -927,23 +927,56 @@ dialog::backdrop,.studio-prompt-dialog::backdrop { background:var(--overlay); }
 .help-body p { color:var(--muted); }
 .help-body h3 { color:var(--accent-strong); }
 
-/* 편집기 배치: 캔버스 오른쪽 분할(넓은 화면). 도구 패널은 코드 위로 열리는 서랍이 된다. */
+/* 편집기 배치: 미리보기의 오른쪽·왼쪽(옆 분할) 또는 위·아래. DOM 순서(미리보기 → 리사이저 → 편집기)는 그대로 두고
+   flex 방향만 바꾼다(왼쪽 = row-reverse, 위 = column-reverse). 좁은 화면(≤820px)에서는 언제나 아래 배치. */
 #studioLayout { width:32px;min-height:32px;padding:0; }
 @media (min-width:821px) {
  #stage.studio-layout-right { flex-direction:row; }
- .studio-layout-right .studio-resizer { flex:0 0 6px;border-block:0;border-inline:1px solid var(--line);cursor:col-resize; }
- .studio-layout-right .studio-resizer span { width:2px;height:44px; }
- .studio-layout-right .studio-dock { flex:0 0 var(--studio-width,46%);min-width:0;border-top:0; }
+ #stage.studio-layout-left { flex-direction:row-reverse; }
+ #stage.studio-layout-top { flex-direction:column-reverse; }
+ .studio-layout-top .studio-dock { border-top:0;border-bottom:1px solid var(--line-strong); }
+ :is(.studio-layout-right,.studio-layout-left) .studio-resizer { flex:0 0 6px;border-block:0;border-inline:1px solid var(--line);cursor:col-resize; }
+ :is(.studio-layout-right,.studio-layout-left) .studio-resizer span { width:2px;height:44px; }
+ :is(.studio-layout-right,.studio-layout-left) .studio-dock { flex:0 0 var(--studio-width,46%);min-width:0;border-top:0; }
  /* 좁은 분할 폭: 탭 전체와 창 도구가 한 줄에 들어가면 한 줄, 아니면 도구가 다음 줄로(탭 너비는 내용 기준이라 버퍼가 늘면 탭이 잘리지 않고 줄이 나뉜다) */
- .studio-layout-right .studio-top { display:flex;flex-wrap:wrap;gap:6px; }.studio-layout-right .studio-tabs { flex:1 1 auto; }
+ :is(.studio-layout-right,.studio-layout-left) .studio-top { display:flex;flex-wrap:wrap;gap:6px; }:is(.studio-layout-right,.studio-layout-left) .studio-tabs { flex:1 1 auto; }
  /* 좁은 분할 폭에서는 창 도구를 한 줄로 두고 가로로 넘기며, 닫기 버튼은 오른쪽 끝에 고정한다. */
- .studio-layout-right .studio-window-tools { justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none; }
- .studio-layout-right .studio-window-tools>* { flex-shrink:0; }
- .studio-layout-right #studioHide { position:sticky;right:0;margin-left:auto;background:var(--panel); }
+ :is(.studio-layout-right,.studio-layout-left) .studio-window-tools { justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none; }
+ :is(.studio-layout-right,.studio-layout-left) .studio-window-tools>* { flex-shrink:0; }
+ :is(.studio-layout-right,.studio-layout-left) #studioHide { position:sticky;right:0;margin-left:auto;background:var(--panel); }
  /* 집중 모드: 옆 배치의 고정 폭보다 우선해 편집기가 화면 전체를 쓴다. */
- .studio-layout-right.studio-maximized .studio-dock { flex:1 1 100%; }
+ :is(.studio-layout-right,.studio-layout-left).studio-maximized .studio-dock { flex:1 1 100%; }
 }
 @media (max-width:820px) { #studioLayout { display:none; } }
+
+/* 설정 패널 배치: 왼쪽(기본) · 오른쪽, 너비 조절. 리사이저는 폭 0인 열(#workspace의 resize 칸)에 놓여 경계 위에 겹친다. */
+.panel-right #workspace { grid-template-columns:minmax(0,1fr) 0 var(--panel-width);grid-template-areas:"stage resize panel"; }
+@media (min-width:821px) { .panel-right #panel { border-right:0;border-left:1px solid var(--line); } }
+html.panel-right body.panel-hidden #workspace { grid-template-columns:minmax(0,1fr);grid-template-areas:"stage"; }
+.panel-resizer { grid-area:resize;position:relative;z-index:6;justify-self:center;width:9px;height:100%;cursor:col-resize;touch-action:none;outline:none; }
+.panel-resizer::after { content:"";position:absolute;inset:0 3px;border-radius:2px;background:transparent;transition:background .12s; }
+.panel-resizer:hover::after,.panel-resizer:focus-visible::after,.panel-resizing .panel-resizer::after { background:var(--accent); }
+.panel-hidden .panel-resizer { display:none; }
+body.panel-resizing { cursor:col-resize;user-select:none; }
+body.panel-resizing iframe,body.panel-resizing canvas { pointer-events:none; }
+
+/* 위치 손잡이(⠿): 끌어서 자리를 옮긴다. */
+.dock-grip { display:inline-grid;place-items:center;flex:0 0 28px;width:28px;min-height:32px;height:32px;padding:0;border:0;background:transparent;color:var(--faint);cursor:grab;touch-action:none; }
+.dock-grip svg { width:16px;height:16px; }
+.dock-grip:hover,.dock-grip:focus-visible,.dock-grip.is-dragging { color:var(--accent); }
+.dock-grip.is-dragging { cursor:grabbing; }
+.panel-header .dock-grip { margin-left:auto; }
+body.dock-dragging,body.dock-dragging * { cursor:grabbing !important;user-select:none; }
+/* 끄는 동안 대상 영역 위에 놓을 자리를 보여 준다. */
+.dock-overlay { position:fixed;z-index:1000;pointer-events:none;border-radius:4px;outline:1px dashed var(--accent);outline-offset:-1px; }
+.dock-zone { position:absolute;display:grid;place-items:center;color:var(--muted);font:600 11px var(--sans); }
+.dock-zone span { padding:4px 8px;border:1px solid var(--line-strong);border-radius:4px;background:var(--panel); }
+.dock-zone[data-side="left"] { inset:0 auto 0 0;width:22%; }.dock-zone[data-side="right"] { inset:0 0 0 auto;width:22%; }
+.dock-zone[data-side="top"] { inset:0 22% auto;height:22%; }.dock-zone[data-side="bottom"] { inset:auto 22% 0;height:22%; }
+.dock-zone.is-active span { background:var(--accent);color:var(--accent-ink); }
+.dock-zone[data-current="true"]:not(.is-active) span { opacity:.6; }
+.dock-preview { position:absolute;border:2px solid var(--accent);border-radius:4px;background:var(--accent-soft);transition:all .1s; }
+@media (max-width:820px) { .dock-grip,.panel-resizer { display:none; } }
 /* 휴대폰: 보조 행을 숨기고 도구 줄은 가로 스크롤 한 줄로 접어 코드 영역 높이를 확보한다. */
 @media (max-width:600px) {
  .studio-preview-target,.studio-preview-pin,#studioComplete { display:none; }

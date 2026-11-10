@@ -788,8 +788,9 @@ const mount = ({ studio, Shader, preview = null }) => {
     finishOnboarding();
     const project = item.project || { image: item.image, passes: [], imageChannels: {} };
     const ok = await (item.action ? studio[item.action]() : studio.loadExample(project, params(sourcesOf(item))));
+    // 예제를 열어도 편집기 열림 상태는 그대로 둔다(보기만 하려는 사람이 예제를 바꿀 때마다 편집기를 닫지 않게).
+    // 코드를 보려면 편집기 버튼(E)으로 연다.
     if (ok) {
-      studio.open();
       // 설정 패널이 실제 FPS를 보고 무거우면 해상도를 낮추자고 제안한다(ui.js).
       document.dispatchEvent(
         new CustomEvent("gallery-example-loaded", {
@@ -1127,7 +1128,8 @@ const mount = ({ studio, Shader, preview = null }) => {
   $("galleryToggle").addEventListener("click", () => open(false), { signal });
   $("galleryClose").addEventListener("click", close, { signal });
   $("galleryBlank").addEventListener("click", close, { signal });
-  // 첫 실행의 세 가지 시작: 기본 예제(지금 장면의 코드 열기) · 빈 프로젝트 · 프로젝트 파일 열기
+  // 첫 실행의 세 가지 시작: 기본 예제(지금 장면의 코드 열기) · 빈 프로젝트(편집기를 열고 새로 작성) · 프로젝트 파일 열기
+  // 두 시작 카드는 버튼 설명에 '편집기·코드를 연다'고 적혀 있어 편집기를 연다. 그 밖의 예제 열기는 편집기를 열지 않는다.
   $("galleryStartDefault")?.addEventListener(
     "click",
     () => {

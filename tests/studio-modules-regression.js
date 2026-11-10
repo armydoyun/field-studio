@@ -116,5 +116,15 @@ const pass=(name,channels={})=>({name,fragment:SRC,format:'rgba8',scale:1,channe
     size(1440,900,false);check(L.responsiveHeight()===55,'responsiveHeight: 보통 창은 55%');
     size(500,600,true);check(L.responsiveHeight()===75,'responsiveHeight: 좁거나 낮은 창은 75%');
   }finally{if(hadWindow)globalThis.window=oldWindow;else delete globalThis.window;}
+  // ---- dock-drag (끌어 놓을 자리 고르기) ----
+  const D=await load('dock-drag'),R={left:100,top:50,width:400,height:200};
+  check(D.pickSide(R,110,150)==='left'&&D.pickSide(R,495,150)==='right'&&D.pickSide(R,300,55)==='top'&&D.pickSide(R,300,245)==='bottom','pickSide: 가장 가까운 가장자리');
+  check(D.pickSide(R,90,150)===null&&D.pickSide(R,300,260)===null&&D.pickSide({left:0,top:0,width:0,height:0},0,0)===null,'pickSide: 영역 밖·빈 영역이면 null(놓아도 바꾸지 않음)');
+  check(D.pickSide(R,300,55,['left','right'])==='left'&&D.pickSide(R,320,55,['left','right'])==='right','pickSide: 허용한 자리(패널은 왼쪽·오른쪽) 중에서만 고른다');
+  // ---- workspace-layout (설정 패널 너비 한계) ----
+  const W=await load('workspace-layout');
+  check(W.clampWidth(100,1440)===240&&W.clampWidth(420,1440)===420&&W.clampWidth(900,1440)===560,'패널 너비: 240px–560px');
+  check(W.clampWidth(500,900)===405&&W.maxWidth(900)===405,'패널 너비: 창 너비의 45%를 넘지 않는다(미리보기 자리 확보)');
+  check(W.clampWidth(500,400)===240,'패널 너비: 아주 좁은 창에서도 최소 240px');
   console.log(`studio modules: ${passed} checks passed`);
 })().catch(error=>{console.error(error);process.exit(1);});
