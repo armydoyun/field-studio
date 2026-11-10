@@ -253,6 +253,10 @@ vec2 p = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y / zoom;`,
         code: `uniform float uSpeed;  // @range 0 4 @step 0.01 @default 1.5
 uniform vec3  uTint;   // @color @default 0.9 0.3 0.6
 uniform vec3  uSun;    // @dir @default 0.4 0.8 0.45
+uniform float uSpin;   // @angle @default 45deg
+uniform vec2  uCenter; // @pos @range 0 1 @default 0.5
+uniform float uScale;  // @log @range 0.01 100 @default 1
+uniform int   uView;   // @enum 결과 밀도 법선 @default 0
 uniform vec2  uOffset; // @range -1 1 @default 0
 uniform int   uCount;  // @min 1 @max 32 @default 8`,
         title: "어노테이션 예시",
@@ -270,6 +274,14 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
               "@dir [hemi]",
               "vec2/vec3를 단위 방향으로 표시. vec2는 다이얼, vec3는 빛 받은 구 패드 + 방위각·고도. 값은 늘 길이 1. hemi는 +Y 쪽 반구만",
             ],
+            ["@angle", "float 각도를 다이얼로. 화면은 도(°), 셰이더에는 라디안. 360°를 넘겨 계속 돌릴 수 있음"],
+            [
+              "@pos · @xy",
+              "vec2 위치를 2D 패드로. 범위는 @range(없으면 -1~1), 화면 위쪽이 +Y. Shift로 1/8 격자에 맞춤",
+            ],
+            ["@log", "float를 로그 눈금 슬라이더로. 0보다 큰 @range 필요(예: 0.01~100)"],
+            ["@enum 이름…", "int/uint를 이름 붙은 버튼(많으면 드롭다운)으로. 0부터 차례로, 이름의 _는 빈칸"],
+            ["값 끝 deg", "@default 45deg처럼 쓰면 도를 라디안으로 바꿔 읽음"],
           ],
         },
       },
@@ -595,7 +607,7 @@ const TOUR = [
   {
     target: "#view-uniforms",
     title: "파라미터",
-    text: "슬라이더·색상·방향으로 Uniform 값을 실시간 조절합니다. GLSL 주석에 @range, @color, @dir를 달면 자동으로 여기에 생겨요.",
+    text: "슬라이더·색상·방향·패드로 Uniform 값을 실시간 조절합니다. GLSL 주석에 @range, @color, @dir, @enum 등을 달면 자동으로 여기에 생겨요.",
     prepare: "panel:uniforms",
   },
   {

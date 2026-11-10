@@ -14,7 +14,7 @@ const ui=async(name,fn)=>run(name,async()=>{const f=fixture();let mounted;try{
   const Node=f.canvas.constructor;Node.prototype.querySelector=()=>new Node();Node.prototype.querySelectorAll=()=>[];
   Node.prototype.setAttribute=function(k,v){(this.attrs??={})[k]=v;};Node.prototype.removeAttribute=function(k){delete this.attrs?.[k];};
   f.document.querySelectorAll=()=>[];
-  for(const id of ['uniformType','uniformValue','uniformMin','uniformMax','uniformStep','uniformName','uniformSearch','uniformColor','uniformDir','uniformDirField'])f.document.getElementById(id);
+  for(const id of ['uniformType','uniformValue','uniformMin','uniformMax','uniformStep','uniformName','uniformSearch','uniformDisplay','uniformDisplayField','uniformEnumLabels','rangeFields'])f.document.getElementById(id);
   mounted=f.load('ui').mount(f.renderer,{getCamera:()=>null,resetCamera(){}},f.settings);
   const n=id=>f.nodes.get(id),row=()=>n('uniformList').children[0];
   await fn(f,n,row);
@@ -35,7 +35,7 @@ await run('@dir 오류: 다른 타입 · 0 벡터 · @color/@range와 함께',()
   assert.match(parse('uniform vec4 uQ; // @dir').error,/vec2\/vec3/);
   assert.match(parse('uniform float uA; // @dir').error,/vec2\/vec3/);
   assert.match(parse('uniform vec3 uZ; // @dir @default 0 0 0').error,/0이 아닌/);
-  assert.match(parse('uniform vec3 uC; // @dir @color').error,/함께/);
+  assert.match(parse('uniform vec3 uC; // @dir @color').error,/하나만/);
   assert.match(parse('uniform vec2 uR; // @dir @range 0 1').error,/함께/);
 });
 await run('sameOptions·clampValue가 dir를 안다',()=>{
@@ -74,14 +74,15 @@ await ui('vec3 구 패드: 방위각·고도 · 앞뒤 전환 · hemi는 아래�
   await chip(p,'+X').click();el.children[2].value='90';await el.children[2].dispatchEvent({type:'change'});
   el.children[2].value='0';await el.children[2].dispatchEvent({type:'change'});near(value(f),[1,0,0]);
 });
-await ui('Uniform 추가 폼: 방향 체크박스는 vec2/vec3에만 보이고 색상과 함께 켜지지 않는다',async(f,n)=>{
-  n('uniformType').value='vec3';await n('uniformType').dispatchEvent({type:'change'});assert.equal(n('uniformDirField').hidden,false);
-  n('uniformColor').checked=true;await n('uniformColor').dispatchEvent({type:'change'});
-  n('uniformDir').checked=true;await n('uniformDir').dispatchEvent({type:'change'});assert.equal(n('uniformColor').checked,false);
+await ui('Uniform 추가 폼: 표시 방식 "단위 방향"은 vec2/vec3에만 있고 범위 칸은 무시한다',async(f,n)=>{
+  n('uniformType').value='vec3';await n('uniformType').dispatchEvent({type:'change'});
+  assert.equal(n('uniformDisplayField').hidden,false);assert.deepEqual(n('uniformDisplay').children.map(o=>o.value),['','color','dir']);
+  n('uniformDisplay').value='dir';await n('uniformDisplay').dispatchEvent({type:'change'});assert.equal(n('rangeFields').hidden,true);
   n('uniformName').value='uLight';n('uniformValue').value='1, 1, 0';n('uniformMin').value='0';
   await n('uniformForm').dispatchEvent({type:'submit'});
-  const item=f.renderer.getUserUniforms()[0];assert.equal(item.options.dir,'full');assert.equal(item.options.min,undefined);near([...item.value],[Math.SQRT1_2,Math.SQRT1_2,0]);
-  n('uniformType').value='vec4';await n('uniformType').dispatchEvent({type:'change'});assert.equal(n('uniformDirField').hidden,true);assert.equal(n('uniformDir').checked,false);
+  const item=f.renderer.getUserUniforms()[0];assert.equal(item.options.dir,'full');assert.equal(item.options.min,undefined);assert.equal(item.options.color,undefined);near([...item.value],[Math.SQRT1_2,Math.SQRT1_2,0]);
+  n('uniformType').value='vec4';await n('uniformType').dispatchEvent({type:'change'});assert.deepEqual(n('uniformDisplay').children.map(o=>o.value),['','color']);assert.equal(n('uniformDisplay').value,'');
+  n('uniformType').value='mat2';await n('uniformType').dispatchEvent({type:'change'});assert.equal(n('uniformDisplayField').hidden,true);
 });
 console.log(`\n${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
 })();

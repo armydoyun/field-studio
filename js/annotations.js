@@ -1,6 +1,9 @@
 // GLSL 주석 어노테이션 → 파라미터 정의. DOM·GPU에 의존하지 않는 순수 파서다.
-// 형식: uniform <type> <name>; // @range <min> <max> [step] @min <v> @max <v> @step <v> @default <v...> @color @dir [hemi]
+// 형식: uniform <type> <name>; // @range <min> <max> [step] @min <v> @max <v> @step <v> @default <v...> + 표시 방식 태그
 // @dir: vec2/vec3 단위 방향 벡터. 값은 항상 길이 1로 정규화한다. hemi면 +Y 반구(반원)로 제한한다.
+// 표시 방식 태그(하나만): @color · @dir [hemi] · @angle(float, 라디안을 다이얼로) · @pos/@xy(vec2, 2D 패드, 범위 없으면 -1~1)
+//  · @log(float, 0보다 큰 @range를 로그 눈금 슬라이더로) · @enum 이름…(int/uint, 0부터 차례로 선택지. 이름의 _는 빈칸)
+// @default 값 끝에 deg(또는 °)를 붙이면 도 단위로 읽어 라디안으로 바꾼다: @angle @default 45deg
 // 같은 줄의 단일 선언만 인식한다. 값 검증(타입·범위)은 Renderer.normalizeEntry가 최종 판단한다.
 const DECLARATION = /^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*;\s*\/\/(.*)$/;
 const SIZES = {
@@ -43,6 +46,12 @@ const normalizeDirection = (value, mode = "full") => {
   if (!(length > 1e-9)) return null;
   return v.map(x => x / length);
 };
+const WIDGETS = ["color", "dir", "angle", "pos", "log", "enum"];
+// 숫자 하나. 45deg·45°는 라디안으로 바꾼다.
+const parseNumber = text => {
+  const degrees = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)(?:deg|°)$/i.exec(text);
+  return degrees ? (Number(degrees[1]) * Math.PI) / 180 : Number(text);
+};
 const parseLine = line => {
   const match = DECLARATION.exec(line);
   if (!match || !match[3].includes("@")) return null;
@@ -60,7 +69,7 @@ const parseLine = line => {
   }
   const n = SIZES[type],
     kind = kindOf(type),
-    num = value => Number(value),
+    num = parseNumber,
     options = {};
   if (tags.range) {
     [options.min, options.max] = tags.range.map(num);
@@ -80,6 +89,32 @@ const parseLine = line => {
     if (type !== "vec2" && type !== "vec3") error = "@dir은 vec2/vec3에만 쓸 수 있습니다.";
     else if (options.color || options.min !== undefined) error = "@dir은 @color·@range와 함께 쓸 수 없습니다.";
   }
+  if (tags.angle !== undefined) {
+    options.angle = true;
+    if (type !== "float") error = "@angle은 float에만 쓸 수 있습니다.";
+    else if (options.min !== undefined) error = "@angle은 @range와 함께 쓸 수 없습니다(값은 라디안, 다이얼은 한 바퀴).";
+  }
+  if (tags.pos !== undefined || tags.xy !== undefined) {
+    options.pos = true;
+    if (type !== "vec2") error = "@pos(@xy)는 vec2에만 쓸 수 있습니다.";
+    else if (options.min === undefined) Object.assign(options, { min: -1, max: 1, step: 0.002 });
+  }
+  if (tags.log !== undefined) {
+    options.log = true;
+    if (type !== "float") error = "@log는 float에만 쓸 수 있습니다.";
+    else if (!(options.min > 0 && options.max > options.min))
+      error = "@log에는 0보다 큰 @range min max가 필요합니다. 예: @log @range 0.01 100";
+  }
+  if (tags.enum !== undefined) {
+    const labels = tags.enum.map(label => label.replace(/_/g, " "));
+    options.enum = labels;
+    if (type !== "int" && type !== "uint") error = "@enum은 int/uint에만 쓸 수 있습니다.";
+    else if (labels.length < 2 || labels.length > 32) error = "@enum에는 선택지 이름이 2~32개 필요합니다.";
+    else if (options.min !== undefined) error = "@enum은 @range와 함께 쓸 수 없습니다(선택지 수로 범위가 정해집니다).";
+    else Object.assign(options, { min: 0, max: labels.length - 1, step: 1 });
+  }
+  const shown = WIDGETS.filter(key => options[key] !== undefined);
+  if (shown.length > 1) error = `표시 방식 태그는 하나만 쓸 수 있습니다: ${shown.map(key => `@${key}`).join(" ")}`;
   let value;
   if (tags.default) {
     const raw = tags.default.slice(0, n);
@@ -120,5 +155,7 @@ const clampValue = (value, options) => {
   const clamp = v => (typeof v === "number" ? Math.min(options.max, Math.max(options.min, v)) : v);
   return Array.isArray(value) ? value.map(clamp) : clamp(value);
 };
-const sameOptions = (a = {}, b = {}) => ["min", "max", "step", "color", "dir"].every(key => a[key] === b[key]);
+const sameOptions = (a = {}, b = {}) =>
+  ["min", "max", "step", "color", "dir", "angle", "pos", "log"].every(key => a[key] === b[key]) &&
+  JSON.stringify(a.enum) === JSON.stringify(b.enum);
 export { collect, clampValue, sameOptions, normalizeDirection };

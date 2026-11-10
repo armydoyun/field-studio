@@ -1154,7 +1154,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       throw new Error("Uniform 슬라이더 설정이 올바르지 않습니다.");
     // 범위(min/max/step)는 float·int·uint 스칼라와 벡터(성분마다 같은 범위)에, color는 vec3/vec4에만 허용한다.
     const normalized = normalizeUniform(type, value),
-      { min, max, step, color, dir } = options,
+      { min, max, step, color, dir, angle, pos, log } = options,
+      labels = options.enum,
       spec = UNIFORM_TYPES[type];
     const ranged = spec.kind === "f" || spec.kind === "i" || spec.kind === "u",
       integer = spec.kind === "i" || spec.kind === "u";
@@ -1177,9 +1178,35 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       if (color || min !== undefined) throw new Error("방향(dir) 표시는 색상·슬라이더 범위와 함께 쓸 수 없습니다.");
       direction = unitDirection(normalized, dir);
     }
+    // 표시 방식: angle(float 라디안 다이얼) · pos(vec2 2D 패드) · log(양수 범위 float 로그 슬라이더) · enum(int/uint 선택지 이름).
+    // color·dir와 함께 표시 방식은 하나만 고를 수 있다.
+    const widgets = [color, dir, angle, pos, log, labels].filter(x => x !== undefined).length;
+    if (widgets > 1) throw new Error("표시 방식(color·dir·angle·pos·log·enum)은 하나만 고를 수 있습니다.");
+    if (angle !== undefined && (angle !== true || type !== "float" || min !== undefined))
+      throw new Error("각도(angle) 표시는 범위 없는 float에만 사용할 수 있습니다.");
+    if (pos !== undefined && (pos !== true || type !== "vec2" || min === undefined))
+      throw new Error("2D 패드(pos) 표시는 범위가 있는 vec2에만 사용할 수 있습니다.");
+    if (log !== undefined && (log !== true || type !== "float" || !(min > 0)))
+      throw new Error("로그 슬라이더(log)는 0보다 큰 범위의 float에만 사용할 수 있습니다.");
+    if (
+      labels !== undefined &&
+      (!Array.isArray(labels) ||
+        labels.length < 2 ||
+        labels.length > 32 ||
+        !labels.every(label => typeof label === "string" && label.length > 0 && label.length <= 40) ||
+        !["int", "uint"].includes(type) ||
+        min !== 0 ||
+        max !== labels.length - 1 ||
+        step !== 1)
+    )
+      throw new Error("선택지(enum)는 int/uint에 이름 2~32개, 범위 0~(개수-1)로만 사용할 수 있습니다.");
     const nextOptions = min === undefined ? {} : { min, max, step };
     if (color) nextOptions.color = true;
     if (dir) nextOptions.dir = dir;
+    if (angle) nextOptions.angle = true;
+    if (pos) nextOptions.pos = true;
+    if (log) nextOptions.log = true;
+    if (labels) nextOptions.enum = [...labels];
     return writeData({ type, value: direction, data: makeData(type), options: nextOptions });
   };
   const defineUniform = (name, type, value, options = {}) => {
@@ -1222,7 +1249,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       name,
       type: item.type,
       value: Array.isArray(item.value) ? [...item.value] : item.value,
-      options: { ...item.options },
+      options: item.options.enum ? { ...item.options, enum: [...item.options.enum] } : { ...item.options },
     }));
   const getUniforms = getUserUniforms;
   // Pack 복원: 사용자 Uniform을 새 GLSL과 함께 사전 컴파일하고, 통과한 경우에만 교체한다.

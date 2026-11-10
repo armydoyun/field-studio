@@ -36,7 +36,7 @@ uniform float uMetallic;  // 금속성(격자 보기가 꺼졌을 때) · @range
 uniform float uLight;     // 빛 세기 · @range 0 10 @step 0.1 @default 4
 uniform float uAmbient;   // 하늘빛 세기 · @range 0 2 @step 0.01 @default 0.6
 uniform bool uGrid;       // 거칠기 × 금속성 격자로 보기 · @default true
-uniform int uView;        // 0 결과, 1 D, 2 G, 3 F, 4 난반사만, 5 정반사만 · @min 0 @max 5 @default 0
+uniform int uView;        // 보기 · @enum 결과 D G F 난반사만 정반사만 @default 0
 out vec4 fragColor;
 
 const float PI = 3.14159265;
@@ -152,7 +152,7 @@ uniform float uWind;       // 바람 · @range 0 2 @step 0.01 @default 0.4
 uniform vec3 uSunCol;      // 햇빛 · @color @default 1 0.92 0.8
 uniform vec3 uSkyCol;      // 하늘빛(그늘을 채움) · @color @default 0.45 0.6 0.85
 uniform vec3 uSunDir;      // 해 방향 · @dir hemi @default 0.6 0.35 0.7
-uniform int uView;         // 0 결과, 1 밀도, 2 투과율, 3 받은 해빛 · @min 0 @max 3 @default 0
+uniform int uView;         // 보기 · @enum 결과 밀도 투과율 받은_해빛 @default 0
 out vec4 fragColor;
 
 const float BOTTOM = 1.5, TOP = 4.0;                           // 구름층 높이
@@ -386,7 +386,7 @@ uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
-uniform int uView;            // 0 물감, 1 속도(방향 = 색상), 2 압력(빨강 +, 파랑 -), 3 발산 · @min 0 @max 3 @default 0
+uniform int uView;            // 보기(속도: 방향 = 색상, 압력: 빨강 +, 파랑 -) · @enum 물감 속도 압력 발산 @default 0
 out vec4 fragColor;
 void main() {
     vec2 uv = gl_FragCoord.xy / uResolution;
