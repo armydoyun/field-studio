@@ -212,6 +212,16 @@ const create = ctx => {
       body: "uniform float ${1:uAmount}; // @range ${2:0} ${3:1} @anim ${4:4} @default ${5:0.5}",
     },
     {
+      label: "uniform-gradient",
+      detail: "그라데이션 램프 · @gradient (texture(이름, vec2(t, 0.5)))",
+      body: "uniform sampler2D ${1:uRamp}; // @gradient ${2:smooth} @default ${3:0 #000000 0.5 #ff6a00 1 #ffffff}",
+    },
+    {
+      label: "uniform-curve",
+      detail: "곡선 램프 · @curve (texture(이름, vec2(x, 0.5)).r)",
+      body: "uniform sampler2D ${1:uCurve}; // @curve @default ${2:0 0 0.5 0.8 1 1}",
+    },
+    {
       label: "uv-center",
       detail: "중심 원점 · 종횡비 보정 좌표",
       body: "vec2 ${1:uv} = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;",

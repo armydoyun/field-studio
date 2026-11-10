@@ -45,7 +45,11 @@ await run('파서 오류: hdr · seed · anim 조건',()=>{
   assert.match(parse('uniform int uS; // @seed @enum a b').error,/@enum/);
   assert.match(parse('uniform float uA; // @anim').error,/@range/);
   assert.match(parse('uniform float uA; // @log @range 1 10 @anim').error,/@range/);
-  assert.match(parse('uniform int uA; // @range 0 9 @anim').error,/float/);
+  assert.match(parse('uniform bool uA; // @anim').error,/float\/int\/uint/);
+  assert.match(parse('uniform int uA; // @anim').error,/@enum/,'범위 없는 int는 안 된다');
+  assert.equal(parse('uniform int uA; // @range 0 9 @anim').error,null);
+  assert.equal(parse('uniform uint uA; // @enum a b c @anim 1').error,null);
+  assert.equal(parse('uniform int uA; // @enum a b @anim 2').options.anim,2);
   assert.match(parse('uniform float uA; // @range 0 1 @anim 0').error,/0.1~600/);
   assert(!Annotations.sameOptions({min:0,max:1,step:1},{min:0,max:1,step:1,anim:4}));
   assert(!Annotations.sameOptions({color:true},{color:true,hdr:10}));
@@ -55,7 +59,7 @@ await run('렌더러: hdr · seed · anim 검증',()=>{
     f.renderer.defineUniform('uG','vec3',[3,1,0],{color:true,hdr:10});f.renderer.defineUniform('uS','int',3,{seed:true});f.renderer.defineUniform('uA','float',0,{angle:true,anim:5});
     const [g,s,a]=f.renderer.getUserUniforms();assert.equal(g.options.hdr,10);assert.deepEqual([...g.value],[3,1,0]);assert.equal(s.options.seed,true);assert.equal(a.options.anim,5);
     for(const [type,v,opts,re] of [['vec3',[1,1,1],{hdr:10},/hdr/],['vec3',[1,1,1],{color:true,hdr:-1},/hdr/],['vec2',[0,0],{seed:true},/seed/],
-      ['float',0,{anim:4},/anim/],['float',0,{min:0,max:1,step:0.1,anim:999},/anim/],['float',1,{min:1,max:10,step:0.1,log:true,anim:4},/anim/]])
+      ['float',0,{anim:4},/anim/],['int',0,{anim:4},/anim/],['bool',false,{anim:4},/anim/],['float',0,{min:0,max:1,step:0.1,anim:999},/anim/],['float',1,{min:1,max:10,step:0.1,log:true,anim:4},/anim/]])
       assert.throws(()=>f.renderer.defineUniform('uBad',type,v,opts),re,JSON.stringify(opts));
   }finally{f.dispose();}
 });
@@ -106,6 +110,24 @@ uniform float uSpin; // @angle @anim 8`,async(f,n,list)=>{
   number.value='1';await number.dispatchEvent({type:'change'});await step(f,9000);assert.equal(value(f,'uWave'),1);assert.equal(play.attrs['aria-pressed'],'false');
   assert(value(f,'uSpin')>2*Math.PI);
   await button(rowOf(n('uniformList'),'uSpin'),'play-uniform').click();assert.equal(await step(f,10000),1);assert.equal(f.frames.filter(fr=>fr.name==='playStep').length,0,'모두 멈추면 프레임을 더 잡지 않는다');
+});
+await ui('@anim: int는 한 칸씩 왕복, @enum은 선택지를 차례로 돈다',`uniform int uCount; // @range 0 4 @anim 4 @default 0
+uniform int uView; // @enum 결과 밀도 법선 @anim 1 @default 1`,async(f,n,list)=>{
+  const count=button(rowOf(list,'uCount'),'play-uniform');assert.match(count.title,/한 칸씩 왕복/);
+  await count.click();const seen=[];
+  for(const t of [0,1000,2000,3000,4000,4500])
+    {await step(f,t);seen.push(value(f,'uCount'));}
+  assert.deepEqual(seen,[0,2,4,2,0,1],'0 → 4 → 0을 4초에, 일정한 속도로');
+  const number=rowOf(n('uniformList'),'uCount').children[1].children[1];assert.equal(number.value,'1');
+  await count.click();
+  const view=button(rowOf(n('uniformList'),'uView'),'play-uniform');assert.match(view.title,/선택지마다 1초씩/);
+  await view.click();const order=[];
+  for(const t of [10000,10500,11000,12000,13000])
+    {await step(f,t);order.push(value(f,'uView'));}
+  assert.deepEqual(order,[1,1,2,0,1],'지금 선택지에서 출발해 1초마다 다음으로, 끝나면 처음으로');
+  const buttons=rowOf(n('uniformList'),'uView').children[1].children;
+  assert.deepEqual(buttons.map(b=>b.attrs['aria-pressed']),['false','true','false'],'선택지 버튼 강조가 따라간다');
+  await buttons[2].click();await step(f,14000);assert.equal(value(f,'uView'),2,'직접 고르면 멈춘다');
 });
 await ui('추가 폼: HDR 색상',``,async(f,n)=>{
   n('uniformType').value='vec3';await n('uniformType').dispatchEvent({type:'change'});assert.deepEqual(n('uniformDisplay').children.map(o=>o.value),['','color','hdr','dir']);

@@ -5,8 +5,12 @@
 //  · @log(float, 0보다 큰 @range를 로그 눈금 슬라이더로) · @enum 이름…(int/uint, 0부터 차례로 선택지. 이름의 _는 빈칸)
 // @default 값 끝에 deg(또는 °)를 붙이면 도 단위로 읽어 라디안으로 바꾼다: @angle @default 45deg
 // 덧붙이는 태그: @color hdr [최대 밝기](색 + 밝기 배율, 값이 1을 넘을 수 있다) · @seed(🎲 무작위 버튼, float/int/uint)
-//  · @anim [초](▶ 버튼: 범위를 왕복, @angle이면 한 바퀴씩 돈다. 기본 4초) · @group 이름(패널에서 접히는 묶음)
+//  · @anim [초](▶ 버튼: 범위를 왕복, @angle이면 한 바퀴씩 돈다, int/uint는 한 칸씩 왕복, @enum은 선택지마다 [초]씩 머물며 순환.
+//    기본 4초) · @group 이름(패널에서 접히는 묶음)
 // 첫 @ 앞의 주석 글은 설명(description)으로 이름 아래에 보여 준다: // 햇빛 · @color
+// 램프(uniform sampler2D, 셰이더에서 texture(u, vec2(t, 0.5))로 읽는다):
+//  · @gradient [linear|smooth|step] @default 0 #000000 0.5 #ff8000 1 #ffffff(위치 + #RRGGBB[AA], 또는 위치 r g b a 다섯 개씩)
+//  · @curve [smooth|linear] [@range ymin ymax] @default 0 0 0.5 0.8 1 1(x y 쌍) — 값은 .r에 들어간다
 // 같은 줄의 단일 선언만 인식한다. 값 검증(타입·범위)은 Renderer.normalizeEntry가 최종 판단한다.
 const DECLARATION = /^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*;\s*\/\/(.*)$/;
 const SIZES = {
@@ -55,11 +59,73 @@ const parseNumber = text => {
   const degrees = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)(?:deg|°)$/i.exec(text);
   return degrees ? (Number(degrees[1]) * Math.PI) / 180 : Number(text);
 };
+// 램프 기본값: gradient는 검정 → 흰색, curve는 (0, 아래) → (1, 위) 직선.
+const RAMP_MODES = { gradient: ["linear", "smooth", "step"], curve: ["smooth", "linear"] };
+const hexColor = text => {
+  const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(text);
+  return match ? [...match[1].match(/../g), match[2] || "ff"].map(h => parseInt(h, 16) / 255) : null;
+};
+const parseRamp = (name, tags, description, group) => {
+  const kind = tags.gradient !== undefined ? "gradient" : tags.curve !== undefined ? "curve" : null;
+  if (!kind) return null; // 램프가 아닌 sampler2D(예: 직접 넣는 텍스처)는 어노테이션 대상이 아니다
+  const type = "sampler2D",
+    options = {},
+    mode = tags[kind][0]?.toLowerCase();
+  let error = null,
+    value;
+  if (tags.gradient !== undefined && tags.curve !== undefined) error = "@gradient와 @curve는 함께 쓸 수 없습니다.";
+  if (mode && !RAMP_MODES[kind].includes(mode))
+    error = `@${kind} 모드는 ${RAMP_MODES[kind].join(" · ")} 중 하나입니다.`;
+  options[kind] = RAMP_MODES[kind].includes(mode) ? mode : RAMP_MODES[kind][0];
+  const raw = tags.default || [];
+  if (kind === "gradient") {
+    if (tags.range || tags.min || tags.max) error = "@gradient에는 범위를 쓰지 않습니다.";
+    if (!raw.length) value = [0, 0, 0, 0, 1, 1, 1, 1, 1, 1];
+    else if (raw.some(token => token.startsWith("#"))) {
+      value = [];
+      for (let i = 0; i < raw.length; i += 2) {
+        const color = hexColor(raw[i + 1] || "");
+        if (!color || !Number.isFinite(parseNumber(raw[i]))) {
+          error = "@gradient @default는 '위치 #RRGGBB' 쌍이어야 합니다. 예: 0 #000000 1 #ffffff";
+          break;
+        }
+        value.push(parseNumber(raw[i]), ...color);
+      }
+    } else {
+      value = raw.map(parseNumber);
+      if (value.length % 5) error = "@gradient @default를 숫자로 쓸 때는 '위치 r g b a' 다섯 개씩이어야 합니다.";
+    }
+  } else {
+    if (tags.range) [options.min, options.max] = tags.range.map(parseNumber);
+    if (tags.min) options.min = parseNumber(tags.min[0]);
+    if (tags.max) options.max = parseNumber(tags.max[0]);
+    if (options.min !== undefined || options.max !== undefined) {
+      if (!(options.min < options.max)) error = "@curve의 @range는 ymin < ymax여야 합니다.";
+      options.step = Number(((options.max - options.min) / 1000).toPrecision(2)) || 0.001;
+    }
+    const low = options.min ?? 0,
+      high = options.max ?? 1;
+    value = raw.length ? raw.map(parseNumber) : [0, low, 1, high];
+    if (value.length % 2) error = "@curve @default는 'x y' 쌍이어야 합니다.";
+  }
+  const stride = kind === "gradient" ? 5 : 2;
+  if (!error && !value.every(Number.isFinite)) error = `@${kind} @default에 숫자가 아닌 값이 있습니다.`;
+  else if (!error && (value.length / stride < 2 || value.length / stride > 16))
+    error = `@${kind}에는 점이 2~16개 필요합니다.`;
+  else if (!error && value.some((v, i) => i % stride === 0 && (v < 0 || v > 1)))
+    error = `@${kind}의 위치(x)는 0~1이어야 합니다.`;
+  if (!error) {
+    const points = [];
+    for (let i = 0; i < value.length; i += stride) points.push(value.slice(i, i + stride));
+    value = points.sort((a, b) => a[0] - b[0]).flat();
+  }
+  return { name, type, value, options, error, description, group };
+};
 const parseLine = line => {
   const match = DECLARATION.exec(line);
   if (!match || !match[3].includes("@")) return null;
   const [, type, name, comment] = match;
-  if (!Object.hasOwn(SIZES, type)) return null;
+  if (!Object.hasOwn(SIZES, type) && type !== "sampler2D") return null;
   const tags = {};
   let error = null;
   for (const part of comment.split("@").slice(1)) {
@@ -77,6 +143,7 @@ const parseLine = line => {
     .replace(/\s*[·:|\-–—]+$/, "")
     .trim();
   const group = tags.group ? tags.group.join(" ").replace(/_/g, " ").trim() : "";
+  if (type === "sampler2D") return parseRamp(name, tags, description, group);
   const n = SIZES[type],
     kind = kindOf(type),
     num = parseNumber,
@@ -138,9 +205,9 @@ const parseLine = line => {
   if (tags.anim !== undefined) {
     options.anim = tags.anim[0] === undefined ? 4 : num(tags.anim[0]);
     if (!(options.anim >= 0.1 && options.anim <= 600)) error = "@anim의 주기는 0.1~600초여야 합니다.";
-    else if (type !== "float") error = "@anim은 float에만 쓸 수 있습니다.";
+    else if (!["float", "int", "uint"].includes(type)) error = "@anim은 float/int/uint에만 쓸 수 있습니다.";
     else if (!options.angle && (options.min === undefined || options.log))
-      error = "@anim에는 @range(로그 눈금 제외)나 @angle이 필요합니다.";
+      error = "@anim에는 @range(로그 눈금 제외)·@enum이나 @angle이 필요합니다.";
   }
   const shown = WIDGETS.filter(key => options[key] !== undefined);
   if (shown.length > 1) error = `표시 방식 태그는 하나만 쓸 수 있습니다: ${shown.map(key => `@${key}`).join(" ")}`;
@@ -176,6 +243,7 @@ const collect = sources => {
 };
 // 범위가 바뀌었을 때 기존 값을 새 범위 안으로 끌어들인다.
 const clampValue = (value, options) => {
+  if (options.gradient || options.curve) return value; // 램프의 범위는 편집기 표시용이다
   if (options.dir)
     return Array.isArray(value)
       ? normalizeDirection(value, options.dir) || (value.length === 2 ? [1, 0] : [0, 1, 0])
@@ -185,7 +253,7 @@ const clampValue = (value, options) => {
   return Array.isArray(value) ? value.map(clamp) : clamp(value);
 };
 const sameOptions = (a = {}, b = {}) =>
-  ["min", "max", "step", "color", "dir", "angle", "pos", "log", "hdr", "seed", "anim"].every(
+  ["min", "max", "step", "color", "dir", "angle", "pos", "log", "hdr", "seed", "anim", "gradient", "curve"].every(
     key => a[key] === b[key]
   ) && JSON.stringify(a.enum) === JSON.stringify(b.enum);
 export { collect, clampValue, sameOptions, normalizeDirection };
