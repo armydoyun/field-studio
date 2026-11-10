@@ -1194,7 +1194,9 @@ const mount = (renderer, input, settings) => {
   // 값은 렌더러에 바로 쓰고, 화면은 행이 등록한 refresh로 맞춘다. 사용자가 값을 직접 바꾸면 그 파라미터는 멈춘다.
   const playing = new Map(),
     playViews = new Map(),
-    playButtons = new Map();
+    playButtons = new Map(),
+    // 행의 ↺(기본값으로 되돌리기) 버튼 상태 갱신. 재생은 commit을 거치지 않으므로 여기로 직접 알린다.
+    resetSyncs = new Map();
   let playFrame = 0;
   const playStep = now => {
     playFrame = 0;
@@ -1217,9 +1219,19 @@ const mount = (renderer, input, settings) => {
         const u = turns + play.phase,
           wave = 1 - Math.abs(1 - 2 * (u - Math.floor(u)));
         value = opts.min + Math.round(wave * (opts.max - opts.min));
-      } else value = opts.min + (opts.max - opts.min) * (0.5 - 0.5 * Math.cos(turns * 2 * Math.PI + play.phase));
-      // 정수는 칸이 바뀔 때만 쓴다.
-      if (integer && value === item.value) continue;
+      } else {
+        value = opts.min + (opts.max - opts.min) * (0.5 - 0.5 * Math.cos(turns * 2 * Math.PI + play.phase));
+        // @step은 이 파라미터가 가질 수 있는 값의 간격이다. 재생도 슬라이더처럼 step 단위로 맞춰
+        // 패널에 보이는 값과 셰이더에 들어가는 값이 같게 한다(부드럽게 움직이려면 step을 잘게 둔다).
+        if (opts.step > 0) {
+          const decimals = Math.min(10, Math.max(0, Math.ceil(-Math.log10(opts.step)) + 1));
+          value = Number(
+            Math.min(opts.max, opts.min + Math.round((value - opts.min) / opts.step) * opts.step).toFixed(decimals)
+          );
+        }
+      }
+      // 값이 칸(step·정수)을 넘어가지 않았으면 다시 쓰지 않는다.
+      if (!opts.angle && value === item.value) continue;
       try {
         renderer.setUniform(name, value);
       } catch {
@@ -1227,6 +1239,7 @@ const mount = (renderer, input, settings) => {
         continue;
       }
       playViews.get(name)?.(value);
+      resetSyncs.get(name)?.(value);
     }
     // 재생으로 바뀐 값 때문에 목록을 다시 그리지 않게 기준을 맞춘다.
     uniformSnapshot = JSON.stringify(renderer.getUserUniforms());
@@ -1283,6 +1296,7 @@ const mount = (renderer, input, settings) => {
     const defaults = annotatedDefaults();
     directionRedraws = [];
     playViews.clear();
+    resetSyncs.clear();
     playButtons.clear();
     userList.replaceChildren();
     // @group: 묶음 없는 파라미터가 먼저, 묶음은 처음 나온 순서대로. 검색 중에는 접힌 묶음도 펼쳐 보여 준다.
@@ -1348,10 +1362,11 @@ const mount = (renderer, input, settings) => {
         reset.type = "button";
         reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
         reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
-        syncReset = () => {
-          reset.disabled = sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback);
+        syncReset = (value = renderer.getUserUniforms().find(u => u.name === item.name)?.value) => {
+          reset.disabled = sameValue(value, fallback);
         };
         syncReset();
+        resetSyncs.set(item.name, syncReset);
         const restore = () => {
           if (sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback)) return;
           if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
@@ -1798,12 +1813,9 @@ const mount = (renderer, input, settings) => {
             }
           },
         });
-        // 재생 중 숫자 칸은 step 자릿수만큼만 보여 준다(칸 폭을 넘지 않게).
-        const playDecimals = Number.isFinite(opts.step)
-          ? Math.min(6, Math.max(0, Math.ceil(-Math.log10(opts.step))))
-          : 4;
+        // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
         playViews.set(item.name, value => {
-          showNumber(number, Number(value.toFixed(playDecimals)));
+          showNumber(number, value);
           if (range) range.value = String(toSlider(value));
         });
       }

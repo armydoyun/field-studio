@@ -73,7 +73,7 @@ void main() {
 }`;
 const kaleido =
   head(
-    "uniform float uSegments; // 조각 수(재생하면 조각이 녹아 바뀐다) · @range 1 24 @step 1 @default 8 @anim 16 @group 모양\nuniform float uZoom; // 확대 · @log @range 0.2 4 @default 1.2 @group 모양\nuniform float uTwist; // 돌리기 · @angle @anim 20 @default 0 @group 모양\nuniform float uFlow; // 무늬 흐름 속도 · @range 0 3 @step 0.01 @default 1 @group 모양\nuniform sampler2D uPalette; // 빛깔(끝 색 = 처음 색이라 이어서 돈다) · @gradient @default 0 #ff4242 0.125 #da05a3 0.25 #8010ef 0.375 #255cfa 0.5 #00bdbd 0.625 #25fa5c 0.75 #7fef10 0.875 #daa305 1 #ff4242 @group 색\nuniform float uGlow; // 빛 세기 · @range 0.2 3 @step 0.01 @default 1 @group 색\n"
+    "uniform float uSegments; // 조각 수(step이 잘아 재생하면 조각이 녹아 바뀐다) · @range 1 24 @step 0.01 @default 8 @anim 16 @group 모양\nuniform float uZoom; // 확대 · @log @range 0.2 4 @default 1.2 @group 모양\nuniform float uTwist; // 돌리기 · @angle @anim 20 @default 0 @group 모양\nuniform float uFlow; // 무늬 흐름 속도 · @range 0 3 @step 0.01 @default 1 @group 모양\nuniform sampler2D uPalette; // 빛깔(끝 색 = 처음 색이라 이어서 돈다) · @gradient @default 0 #ff4242 0.125 #da05a3 0.25 #8010ef 0.375 #255cfa 0.5 #00bdbd 0.625 #25fa5c 0.75 #7fef10 0.875 #daa305 1 #ff4242 @group 색\nuniform float uGlow; // 빛 세기 · @range 0.2 3 @step 0.01 @default 1 @group 색\n"
   ) +
   `
 // 극좌표를 uSegments 조각으로 접어 만든 만화경. 마우스를 움직이면 중심이 따라간다.
