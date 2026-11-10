@@ -17,7 +17,7 @@
         testProject.imageChannels = {...testProject.imageChannels, 3:{texture:added.id}};
         assert(studio.setProject(testProject), "테스트 이미지 채널 연결");
         r.defineUniform("uPackFreezeTest", "float", .75, {min:0,max:1,step:.05});
-        r.setFpsLimit(37);r.setRaymarchSettings({maxSteps:192});
+        r.setFpsLimit(37);
         URL.createObjectURL = blob => {output=blob;return "blob:test";};
         HTMLAnchorElement.prototype.click = function() {};
         try { await studio.exportPack(); } finally {
@@ -25,11 +25,11 @@
         }
         const pack = JSON.parse(await output.text());
         assert(pack.version===3 && pack.settings?.user && pack.textures.some(x=>x.id===added.id),"Pack v3 이미지/전역 설정 동시 포함");
-        assert(pack.settings.user.some(x=>x.name==="uPackFreezeTest") && pack.settings.rendering.fpsLimit===37 && pack.settings.raymarch.maxSteps===192,"사용자 Uniform/FPS/Ray Marching 설정 저장");
+        assert(pack.settings.user.some(x=>x.name==="uPackFreezeTest") && pack.settings.rendering.fpsLimit===37 && !("raymarch" in pack.settings),"사용자 Uniform/FPS 설정 저장 (레이마칭 전용 설정은 없음)");
         assert(pack.textures.find(x=>x.id===added.id).sampling.wrapS==="repeat","샘플링 설정 포함");
-        r.removeUniform("uPackFreezeTest");r.setFpsLimit(60);r.setRaymarchSettings({maxSteps:64});
+        r.removeUniform("uPackFreezeTest");r.setFpsLimit(60);
         assert(await studio.importPack(new File([JSON.stringify(pack)],"test-pack.json")),"Pack 다시 불러오기");
-        assert(r.getUserUniforms().some(x=>x.name==="uPackFreezeTest"&&x.value===.75) && r.getStats().fpsLimit===37 && r.getRaymarchSettings().maxSteps===192,"사용자 Uniform/전역 설정 복원");
+        assert(r.getUserUniforms().some(x=>x.name==="uPackFreezeTest"&&x.value===.75) && r.getStats().fpsLimit===37,"사용자 Uniform/전역 설정 복원");
         const current=studio.getProject(),newId=current.imageChannels[3].texture;
         assert(newId!==added.id && !!r.getTextureFile(newId),"Texture ID 재매핑");
         assert(r.getTextures().find(x=>x.id===newId).sampling.filter==="nearest","설정 복원");

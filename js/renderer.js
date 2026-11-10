@@ -43,11 +43,6 @@ const DEFAULT_BUILTIN_TYPES = Object.freeze({
   frame: "int",
   mouse: "vec2",
   wheel: "float",
-  debug: "bool",
-  maxSteps: "int",
-  maxDistance: "float",
-  surfaceEpsilon: "float",
-  normalEpsilon: "float",
 });
 
 const createRenderer = (canvas, sources, onStatus = () => {}) => {
@@ -97,16 +92,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 0은 FPS/픽셀 수 제한 없음. 시간 제한은 rAF를 유지하며 실제 드로우만 생략한다.
   let fpsLimit = 0,
     maxPixels = 0,
-    nextFrameAt = 0,
-    debugHeatmap = false;
-  // CPU 쪽에서 소유하는 Ray Marching 설정. GPU에는 매 프레임 Uniform으로 전달한다.
-  const raymarchDefaults = Object.freeze({
-    maxSteps: 128,
-    maxDistance: 100,
-    surfaceEpsilon: 0.001,
-    normalEpsilon: 0.001,
-  });
-  let raymarchSettings = { ...raymarchDefaults };
+    nextFrameAt = 0;
   const userUniforms = new Map();
   // 마우스는 0~1 상대 좌표로 보관하고 Uniform 전송 시 버퍼 픽셀 좌표로 환산한다.
   // uMouse를 vec4로 선언하면 zw에 클릭 위치를 전달한다: z>0 버튼 누름 중, w>0 누른 직후 첫 프레임.
@@ -362,14 +348,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       } else gl.uniform2f(target.mouse, x, y);
     }
     if (target.wheel != null) gl.uniform1f(target.wheel, wheel);
-    if (target.debug != null) gl.uniform1i(target.debug, debugHeatmap ? 1 : 0);
-    if (target.maxSteps != null) {
-      if (types.maxSteps === "float") gl.uniform1f(target.maxSteps, raymarchSettings.maxSteps);
-      else gl.uniform1i(target.maxSteps, raymarchSettings.maxSteps);
-    }
-    if (target.maxDistance != null) gl.uniform1f(target.maxDistance, raymarchSettings.maxDistance);
-    if (target.surfaceEpsilon != null) gl.uniform1f(target.surfaceEpsilon, raymarchSettings.surfaceEpsilon);
-    if (target.normalEpsilon != null) gl.uniform1f(target.normalEpsilon, raymarchSettings.normalEpsilon);
     uploadCustomUniforms(target);
   };
   const buildFragment = source => {
@@ -1179,42 +1157,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     maxPixels = value;
     return maxPixels;
   };
-  const setDebugHeatmap = value => {
-    if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
-    if (typeof value !== "boolean") throw new TypeError("히트맵 값은 boolean이어야 합니다.");
-    if (debugHeatmap !== value) {
-      debugHeatmap = value;
-      frameCount = 0;
-    }
-    return debugHeatmap;
-  };
-  const setRaymarchSettings = changes => {
-    if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
-    if (!changes || typeof changes !== "object" || Array.isArray(changes))
-      throw new TypeError("설정은 객체여야 합니다.");
-    const limits = {
-      maxSteps: [1, 512],
-      maxDistance: [0.01, 10000],
-      surfaceEpsilon: [0.000001, 0.1],
-      normalEpsilon: [0.000001, 0.1],
-    };
-    for (const [key, value] of Object.entries(changes)) {
-      if (!Object.prototype.hasOwnProperty.call(limits, key)) throw new Error(`알 수 없는 Ray Marching 설정: ${key}`);
-      const [min, max] = limits[key];
-      if (
-        typeof value !== "number" ||
-        !Number.isFinite(value) ||
-        value < min ||
-        value > max ||
-        (key === "maxSteps" && !Number.isInteger(value))
-      )
-        throw new RangeError(`${key}은 ${min}~${max} 범위${key === "maxSteps" ? "의 정수" : "의 숫자"}여야 합니다.`);
-    }
-    if (Object.keys(changes).some(key => raymarchSettings[key] !== changes[key])) frameCount = 0;
-    raymarchSettings = { ...raymarchSettings, ...changes };
-    return getRaymarchSettings();
-  };
-  const getRaymarchSettings = () => ({ ...raymarchSettings });
   const reservedUniforms = new Set([
     "uResolution",
     "uTime",
@@ -1222,11 +1164,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     "uFrame",
     "uMouse",
     "uWheel",
-    "uDebugRaySteps",
-    "uMaxSteps",
-    "uMaxDistance",
-    "uSurfaceEpsilon",
-    "uNormalEpsilon",
     "iChannel0",
     "iChannel1",
     "iChannel2",
@@ -1564,7 +1501,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     resolutionScale,
     fpsLimit,
     maxPixels,
-    debugHeatmap,
     running: running && !lost && !document.hidden,
     offline: !!offline,
     previewPass: passManager.getPreview(),
@@ -1645,9 +1581,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     setResolutionScale,
     setMaxPixels,
     setFpsLimit,
-    setDebugHeatmap,
-    setRaymarchSettings,
-    getRaymarchSettings,
     defineUniform,
     setUniform,
     removeUniform,

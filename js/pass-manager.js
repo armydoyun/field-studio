@@ -12,11 +12,6 @@ const BUILTINS = {
   frame: ["uFrame", ["int", "float", "uint"]],
   mouse: ["uMouse", ["vec2", "vec4"]],
   wheel: ["uWheel", ["float"]],
-  debug: ["uDebugRaySteps", ["bool", "int"]],
-  maxSteps: ["uMaxSteps", ["int", "float"]],
-  maxDistance: ["uMaxDistance", ["float"]],
-  surfaceEpsilon: ["uSurfaceEpsilon", ["float"]],
-  normalEpsilon: ["uNormalEpsilon", ["float"]],
 };
 // 출력 형식별 GPU 저장 방식. float 계열은 EXT_color_buffer_float가 있어야 FBO로 렌더링할 수 있다.
 const FORMATS = {

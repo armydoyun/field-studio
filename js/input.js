@@ -31,10 +31,19 @@ const mount = (canvas, renderer) => {
   // 캔버스가 별도 창으로 분리돼 있으면(popout.js) 그 창에서 캔버스에 초점이 있을 때가 '뷰포트 선택'이다.
   const canvasDocument = () => canvas.ownerDocument || document,
     popped = () => canvasDocument() !== document;
-  const isStageActive = () =>
-    popped()
-      ? canvasDocument().activeElement === canvas
-      : document.activeElement === stage || document.activeElement === canvas;
+  // 분리 창은 다른 창(메인 편집기 등)으로 옮겨 가도 그 창 안의 초점(activeElement)이 캔버스에 남는다.
+  // 그래서 분리 창 자체가 초점을 가진 경우만 뷰포트 선택으로 본다.
+  const isStageActive = () => {
+    if (!popped()) return document.activeElement === stage || document.activeElement === canvas;
+    const doc = canvasDocument();
+    return doc.activeElement === canvas && (typeof doc.hasFocus !== "function" || doc.hasFocus());
+  };
+  // 키 이벤트가 일어난 문서. 분리 창이 열려 있으면 메인 창에서 누른 키는 셰이더 키가 아니다.
+  const fromViewportDocument = event => {
+    if (!popped()) return true;
+    const target = event.target;
+    return (target?.ownerDocument || target?.document || target) === canvasDocument();
+  };
   const onKeyDown = event => {
     if (
       disposed ||
@@ -44,6 +53,7 @@ const mount = (canvas, renderer) => {
       event.altKey ||
       event.metaKey ||
       isTyping(event.target) ||
+      !fromViewportDocument(event) ||
       !isStageActive() ||
       keys.has(event.code)
     )
@@ -62,7 +72,7 @@ const mount = (canvas, renderer) => {
   };
   const releaseShaderKeys = () => renderer.releaseKeys?.();
   const onShaderKeyDown = event => {
-    if (event.isComposing || !shaderKeys()) return;
+    if (event.isComposing || !fromViewportDocument(event) || !shaderKeys()) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -80,7 +90,8 @@ const mount = (canvas, renderer) => {
   const onShaderKeyUp = event => {
     // 뗀 키는 포커스와 관계없이 항상 뗀다(눌린 채 남지 않게).
     renderer.setKey?.(event.keyCode, false);
-    if (shaderKeys() && !event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation();
+    if (fromViewportDocument(event) && shaderKeys() && !event.ctrlKey && !event.metaKey && !event.altKey)
+      event.stopPropagation();
   };
   const onKeyUp = event => {
     if (!keys.delete(event.code)) return;
@@ -171,6 +182,16 @@ const mount = (canvas, renderer) => {
   });
   listen(document, "visibilitychange", onVisibilityChange);
   listen(stage, "focusout", onFocusOut);
+  // 분리 창을 쓰는 동안 메인 창(편집기 등)으로 돌아오면 '키보드 입력 중' 안내를 내리고 눌린 키를 놓는다.
+  listen(window, "focus", () => {
+    if (!popped()) return;
+    releaseShaderKeys();
+    stopKeyboard();
+    syncHint();
+  });
+  listen(document, "focusin", () => {
+    if (popped()) syncHint();
+  });
   // ---- 분리 창 ----
   // 캔버스를 별도 창으로 옮기면 키 이벤트는 그 창에서 일어나므로, 같은 처리기를 그 창에도 단다.
   // 캔버스는 그 창에서 초점을 받을 수 있게(tabindex=-1) 하고, 창을 열면 바로 키 입력을 받도록 초점을 준다.
