@@ -728,12 +728,10 @@ const mount = ({ studio, gallery }) => {
     }
   };
   // 과정 예제 불러오기: 현재 프로젝트를 교체한다(미적용 편집이 있으면 확인, Ctrl+Z로 복원 가능).
-  // 가이드는 닫고, 다시 열면(? 키) 같은 단계로 돌아온다.
+  // 가이드는 닫고, 다시 열면(? 키) 같은 단계로 돌아온다. 편집기 열림 상태는 바꾸지 않는다(코드는 E로 연다).
   const loadProject = async project => {
     dialog.close();
-    const ok = await studio.loadExample(project, []);
-    if (ok) studio.open();
-    return ok;
+    return studio.loadExample(project, []);
   };
   // ---- 코드 조각 라이브러리 (범주 탭 + 검색 필터 + 의존성 포함 삽입) ----
   let snippetCategory = Snippets.CATEGORIES[0].id;
