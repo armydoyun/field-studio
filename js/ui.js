@@ -119,26 +119,80 @@ const mount = (renderer, input, settings) => {
   const DEG = 180 / Math.PI,
     DIR_PAD = 88;
   let directionRedraws = [];
-  const directionControl = (item, commit, current) => {
+  const PAD_SIZE = DIR_PAD;
+  // 패드 색은 테마 토큰에서 고른다. 어두운 테마: 그늘 --sunken → 빛 --text-soft, 밝은 테마: 그늘 --faint → 빛 --surface.
+  // 점·선은 CSS border-color(액센트)와 color(보조 선)로 넘겨받는다.
+  const padColors = pad => {
+    const style = window.getComputedStyle?.(pad),
+      token = name => {
+        const hex = /#([0-9a-f]{3}|[0-9a-f]{6})\b/i.exec(style?.getPropertyValue?.(name) || "")?.[1];
+        if (!hex) return null;
+        return (hex.length === 3 ? [...hex].map(h => h + h) : hex.match(/../g)).map(h => parseInt(h, 16));
+      },
+      luma = rgb => (rgb ? rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11 : 0),
+      dark = luma(token("--text")) >= luma(token("--bg"));
+    return {
+      lit: token(dark ? "--text-soft" : "--surface") || [200, 200, 205],
+      shadow: token(dark ? "--sunken" : "--faint") || [20, 20, 22],
+      sunken: token("--sunken") || [18, 19, 21],
+      accent: style?.borderTopColor || "#4d8dff",
+      line: style?.color || "#888",
+    };
+  };
+  const padCanvas = (className, label, title) => {
+    const pad = element("canvas");
+    pad.className = `uniform-dir-pad ${className}`;
+    pad.ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    pad.width = pad.height = Math.round(PAD_SIZE * pad.ratio);
+    pad.tabIndex = 0;
+    pad.setAttribute("role", "application");
+    pad.setAttribute("aria-label", label);
+    pad.title = title;
+    return pad;
+  };
+  // 패드 끌기. 포커스가 목록 안에 있어야 주기적인 목록 다시 그리기가 끄는 도중의 패드를 바꿔치지 않는다.
+  // 마우스로 잡은 포커스는 링을 숨기고(data-pointer), 키보드를 쓰면 다시 보인다.
+  const padDrag = (pad, onMove) => {
+    pad.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      pad.dataset.pointer = "";
+      pad.focus({ preventScroll: true });
+      pad.setPointerCapture?.(event.pointerId);
+      pad.classList.add("is-dragging");
+      const end = () => {
+        pad.removeEventListener("pointermove", onMove);
+        pad.classList.remove("is-dragging");
+      };
+      onMove(event);
+      pad.addEventListener("pointermove", onMove);
+      pad.addEventListener("pointerup", end, { once: true });
+      pad.addEventListener("pointercancel", end, { once: true });
+    });
+    pad.addEventListener("keydown", () => delete pad.dataset.pointer);
+  };
+  // @angle(float 라디안)도 같은 다이얼을 쓴다. 이때 값은 도로 보여 주고, 몇 바퀴째인지(360° 넘는 값)를 잃지 않게 끈다.
+  const directionControl = (item, commit, currentValue) => {
+    const angleMode = item.options.angle === true,
+      current = () => {
+        const value = currentValue();
+        return angleMode ? [Math.cos(value), Math.sin(value)] : value;
+      };
     const hemi = item.options.dir === "hemi",
       sphere = item.type === "vec3",
       round = value => Math.round(value * 10) / 10,
       clamp = (value, low, high) => Math.min(high, Math.max(low, value));
     const wrap = element("div");
-    wrap.className = `uniform-dir ${sphere ? "is-sphere" : "is-dial"}`;
-    const pad = element("canvas");
-    pad.className = "uniform-dir-pad";
-    const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
-    pad.width = pad.height = Math.round(DIR_PAD * ratio);
-    pad.tabIndex = 0;
-    pad.setAttribute("role", "application");
-    pad.setAttribute(
-      "aria-label",
+    wrap.className = `uniform-dir ${sphere ? "is-sphere" : angleMode ? "is-dial is-angle" : "is-dial"}`;
+    const what = angleMode ? "각도" : "방향";
+    const pad = padCanvas(
+      "is-round",
       sphere
         ? `${item.name} 방향 · 끌어서 지정 · 화살표 키: 좌우 방위각, 위아래 고도 · Shift 15°`
-        : `${item.name} 방향 · 끌어서 지정 · 화살표 키로 회전 · Shift 15°`
+        : `${item.name} ${what} · 끌어서 지정 · 화살표 키로 회전 · Shift 15°`,
+      `끌어서 ${what} 지정 · Shift 15° 단위${sphere ? " · 속 빈 점은 뒤쪽(-Z) 반구" : ""}`
     );
-    pad.title = `끌어서 방향 지정 · Shift 15° 단위${sphere ? " · 속 빈 점은 뒤쪽(-Z) 반구" : ""}`;
+    const ratio = pad.ratio;
     const side = element("div");
     side.className = "uniform-dir-side";
     const code = element("code");
@@ -146,7 +200,8 @@ const mount = (renderer, input, settings) => {
     // 각도 상태. 극점(고도 ±90°)에서는 방위각이 정해지지 않으므로 마지막 값을 기억한다.
     const state = { angle: 0, az: 0, el: 0, back: false };
     const fromVector = v => {
-      if (!sphere) state.angle = Math.atan2(v[1], v[0]) * DEG;
+      if (angleMode) state.angle = currentValue() * DEG;
+      else if (!sphere) state.angle = Math.atan2(v[1], v[0]) * DEG;
       else {
         state.el = Math.asin(clamp(v[1], -1, 1)) * DEG;
         if (Math.hypot(v[0], v[2]) > 1e-6) state.az = Math.atan2(v[0], v[2]) * DEG;
@@ -176,13 +231,17 @@ const mount = (renderer, input, settings) => {
       slider.setAttribute("aria-label", `${item.name} ${title}(°)`);
       const number = element("input");
       number.type = "number";
-      number.min = String(low);
-      number.max = String(high);
+      if (!angleMode) {
+        number.min = String(low);
+        number.max = String(high);
+      }
       number.step = "any";
       number.setAttribute("aria-label", `${item.name} ${title} 값(°)`);
       const set = (field, value) => {
         if (!Number.isFinite(value)) return sync(current());
-        state[key] = clamp(value, low, high);
+        // @angle 슬라이더는 -180~180만 보여 주므로 지금 바퀴 수를 유지해 이어 붙인다. 숫자 칸은 720° 같은 값도 그대로 받는다.
+        if (angleMode && field === slider) value += 360 * Math.round((state[key] - value) / 360);
+        state[key] = angleMode ? value : clamp(value, low, high);
         apply(field, toVector());
       };
       slider.addEventListener("input", () => set(slider, Number(slider.value)));
@@ -191,8 +250,8 @@ const mount = (renderer, input, settings) => {
         kind: "f",
         read: () => round(state[key]),
         write: value => set(label, value),
-        min: low,
-        max: high,
+        min: angleMode ? undefined : low,
+        max: angleMode ? undefined : high,
         step: 1,
       });
       line.append(label, slider, number);
@@ -220,14 +279,18 @@ const mount = (renderer, input, settings) => {
           ["+Y", [0, 1]],
           ["−Y", [0, -1]],
         ];
-    for (const [text, vector] of axes) {
-      if (hemi && vector[1] < 0) continue;
+    const presets = angleMode ? [0, 90, 180, -90].map(deg => [`${deg < 0 ? "−" : ""}${Math.abs(deg)}°`, deg]) : axes;
+    for (const [text, target] of presets) {
+      if (hemi && target[1] < 0) continue;
       const chip = element("button");
       chip.type = "button";
       chip.className = "uniform-dir-chip";
       chip.textContent = text;
-      chip.setAttribute("aria-label", `${item.name}을 ${text} 방향으로`);
-      chip.addEventListener("click", () => apply(chip, vector));
+      chip.setAttribute("aria-label", angleMode ? `${item.name}을 ${text}로` : `${item.name}을 ${text} 방향으로`);
+      chip.addEventListener("click", () => {
+        if (angleMode) state.angle = target;
+        apply(chip, angleMode ? toVector() : target);
+      });
       chips.append(chip);
     }
     let flip = null;
@@ -248,23 +311,6 @@ const mount = (renderer, input, settings) => {
     }
     side.append(chips, code);
     wrap.append(pad, side);
-    // 음영 색은 테마 토큰에서 고른다. 어두운 테마: 그늘 --sunken → 빛 --text-soft, 밝은 테마: 그늘 --faint → 빛 --surface.
-    const colors = () => {
-      const style = window.getComputedStyle?.(pad),
-        token = name => {
-          const hex = /#([0-9a-f]{3}|[0-9a-f]{6})\b/i.exec(style?.getPropertyValue?.(name) || "")?.[1];
-          if (!hex) return null;
-          return (hex.length === 3 ? [...hex].map(h => h + h) : hex.match(/../g)).map(h => parseInt(h, 16));
-        },
-        luma = rgb => (rgb ? rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11 : 0),
-        dark = luma(token("--text")) >= luma(token("--bg"));
-      return {
-        lit: token(dark ? "--text-soft" : "--surface") || [200, 200, 205],
-        shadow: token(dark ? "--sunken" : "--faint") || [20, 20, 22],
-        accent: style?.borderTopColor || "#4d8dff",
-        line: style?.color || "#888",
-      };
-    };
     const draw = () => {
       const ctx = pad.getContext?.("2d");
       if (typeof ctx?.arc !== "function") return;
@@ -272,7 +318,7 @@ const mount = (renderer, input, settings) => {
         c = size / 2,
         r = c - 6 * ratio,
         v = current(),
-        { lit, shadow, accent, line } = colors();
+        { lit, shadow, accent, line } = padColors(pad);
       ctx.clearRect(0, 0, size, size);
       if (sphere && ctx.createImageData) {
         // 램버트 음영: 이 방향에서 오는 빛을 받은 구. 가장자리는 1px 안티에일리어싱.
@@ -330,12 +376,18 @@ const mount = (renderer, input, settings) => {
     const sync = v => {
       fromVector(v);
       for (const { key, slider, number } of angleLines) {
-        slider.value = String(round(state[key]));
+        slider.value = String(round(angleMode ? ((((state[key] + 180) % 360) + 360) % 360) - 180 : state[key]));
         showNumber(number, round(state[key]));
         number.removeAttribute("aria-invalid");
       }
-      code.textContent = v.map(x => (Math.abs(x) < 5e-5 ? 0 : x).toFixed(3)).join(" ");
-      code.title = `${item.type}(${v.map(x => +x.toFixed(6)).join(", ")})`;
+      if (angleMode) {
+        const radians = currentValue();
+        code.textContent = `${(Math.abs(radians) < 5e-5 ? 0 : radians).toFixed(4)} rad`;
+        code.title = `float ${+radians.toFixed(6)} (라디안)`;
+      } else {
+        code.textContent = v.map(x => (Math.abs(x) < 5e-5 ? 0 : x).toFixed(3)).join(" ");
+        code.title = `${item.type}(${v.map(x => +x.toFixed(6)).join(", ")})`;
+      }
       if (flip) {
         flip.setAttribute("aria-pressed", String(state.back));
         flip.classList.toggle("is-active", state.back);
@@ -344,7 +396,7 @@ const mount = (renderer, input, settings) => {
     };
     // 렌더러가 길이 1(hemi면 +Y 반구)로 맞춘 값을 다시 읽어 화면을 맞춘다. 실패해도 이전 값으로 되돌려 보여 준다.
     const apply = (field, vector) => {
-      commit(field, vector);
+      commit(field, angleMode ? state.angle / DEG : vector);
       sync(current());
     };
     // 패드 위치 → 방향. 원 밖이면 가장자리(z=0)로 붙인다.
@@ -356,7 +408,10 @@ const mount = (renderer, input, settings) => {
       if (hemi) y = Math.max(0, y);
       if (!sphere) {
         if (Math.hypot(x, y) < 1e-6) return null;
+        const previous = state.angle;
         state.angle = Math.atan2(y, x) * DEG;
+        // @angle: 지금 값과 가장 가까운 바퀴로 이어 붙여 360°를 넘어 계속 돌릴 수 있게 한다.
+        if (angleMode) state.angle += 360 * Math.round((previous - state.angle) / 360);
         if (event.shiftKey) state.angle = Math.round(state.angle / 15) * 15;
         return toVector();
       }
@@ -375,26 +430,9 @@ const mount = (renderer, input, settings) => {
       }
       return v;
     };
-    pad.addEventListener("pointerdown", event => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      // 포커스가 목록 안에 있어야 주기적인 목록 다시 그리기가 끄는 도중의 패드를 바꿔치지 않는다. 마우스로 잡은 포커스는 링을 숨긴다.
-      pad.dataset.pointer = "";
-      pad.focus({ preventScroll: true });
-      pad.setPointerCapture?.(event.pointerId);
-      pad.classList.add("is-dragging");
-      const move = moveEvent => {
-        const v = fromPointer(moveEvent);
-        if (v) apply(pad, v);
-      };
-      const end = () => {
-        pad.removeEventListener("pointermove", move);
-        pad.classList.remove("is-dragging");
-      };
-      move(event);
-      pad.addEventListener("pointermove", move);
-      pad.addEventListener("pointerup", end, { once: true });
-      pad.addEventListener("pointercancel", end, { once: true });
+    padDrag(pad, moveEvent => {
+      const v = fromPointer(moveEvent);
+      if (v) apply(pad, v);
     });
     pad.addEventListener("keydown", event => {
       const step = event.shiftKey ? 15 : 1,
@@ -407,20 +445,222 @@ const mount = (renderer, input, settings) => {
               ArrowDown: ["angle", -step],
             };
       const move = keys[event.key];
-      delete pad.dataset.pointer;
       if (!move) return;
       event.preventDefault();
       const [key, delta] = move;
       if (key === "az" || key === "angle") {
         let next = state[key] + delta;
         if (key === "angle" && hemi) next = clamp(next, 0, 180);
-        else next = ((((next + 180) % 360) + 360) % 360) - 180;
+        else if (!angleMode) next = ((((next + 180) % 360) + 360) % 360) - 180;
         state[key] = next;
       } else state.el = clamp(state.el + delta, hemi ? 0 : -90, 90);
       apply(pad, toVector());
     });
     directionRedraws.push(draw);
     sync(current());
+    return wrap;
+  };
+  // @pos/@xy: vec2 위치를 정사각형 패드에서 끈다. 두 성분이 같은 범위(@range, 없으면 -1~1)를 쓴다. 화면 위쪽이 +Y.
+  // 끌면 step 단위로, Shift를 누르면 범위의 1/8 격자에 맞춘다. 화살표 키는 step만큼(Shift 10배) 옮긴다.
+  const positionControl = (item, commit, current) => {
+    const { min, max, step } = item.options,
+      span = max - min,
+      decimals = Math.min(10, Math.max(0, -Math.floor(Math.log10(step)) + 1)),
+      clamp = value => Math.min(max, Math.max(min, value)),
+      snap = (value, grid) => Number(clamp(min + Math.round((value - min) / grid) * grid).toFixed(decimals));
+    const wrap = element("div");
+    wrap.className = "uniform-dir is-pos";
+    const pad = padCanvas(
+      "is-square",
+      `${item.name} 위치 · 끌어서 지정 · 화살표 키로 이동 · Shift 크게`,
+      `끌어서 위치 지정 · Shift: 범위의 1/8 격자에 맞춤 · 범위 ${displayNumber(min)} ~ ${displayNumber(max)}`
+    );
+    const ratio = pad.ratio;
+    const side = element("div");
+    side.className = "uniform-dir-side";
+    const code = element("code");
+    code.className = "uniform-dir-value";
+    const lines = ["X", "Y"].map((axis, index) => {
+      const line = element("div");
+      line.className = "uniform-axis is-ranged";
+      const label = element("label");
+      label.className = "uniform-axis-label";
+      label.textContent = axis;
+      const slider = element("input");
+      slider.type = "range";
+      slider.min = String(min);
+      slider.max = String(max);
+      slider.step = String(step);
+      slider.setAttribute("aria-label", `${item.name} ${axis} 슬라이더`);
+      const number = element("input");
+      number.type = "number";
+      number.step = "any";
+      number.setAttribute("aria-label", `${item.name} ${axis}`);
+      const set = (field, value) => {
+        if (!Number.isFinite(value)) return sync();
+        const values = current();
+        values[index] = clamp(value);
+        apply(field, values);
+      };
+      slider.addEventListener("input", () => set(slider, Number(slider.value)));
+      number.addEventListener("change", () => set(number, number.value.trim() ? Number(number.value) : NaN));
+      scrubbable(label, { kind: "f", min, max, step, read: () => current()[index], write: value => set(label, value) });
+      line.append(label, slider, number);
+      side.append(line);
+      return { slider, number };
+    });
+    const chips = element("div");
+    chips.className = "uniform-dir-chips";
+    const middle = Number(((min + max) / 2).toFixed(decimals));
+    const presets = [["가운데", [middle, middle]], ...(min < 0 && max > 0 && middle !== 0 ? [["원점", [0, 0]]] : [])];
+    for (const [text, target] of presets) {
+      const chip = element("button");
+      chip.type = "button";
+      chip.className = "uniform-dir-chip";
+      chip.textContent = text;
+      chip.title = `(${target.join(", ")})`;
+      chip.setAttribute("aria-label", `${item.name}을 ${text}(${target.join(", ")})로`);
+      chip.addEventListener("click", () => apply(chip, target));
+      chips.append(chip);
+    }
+    side.append(chips, code);
+    wrap.append(pad, side);
+    const draw = () => {
+      const ctx = pad.getContext?.("2d");
+      if (typeof ctx?.arc !== "function") return;
+      const size = pad.width,
+        inset = 4 * ratio,
+        inner = size - inset * 2,
+        at = value => (value - min) / span,
+        [x, y] = current(),
+        { sunken, accent, line } = padColors(pad);
+      ctx.clearRect(0, 0, size, size);
+      ctx.fillStyle = `rgb(${sunken.join(",")})`;
+      ctx.fillRect(inset, inset, inner, inner);
+      // 1/8 격자, 0 축(범위 안에 있을 때)은 더 진하게.
+      ctx.strokeStyle = line;
+      ctx.lineWidth = ratio;
+      ctx.globalAlpha = 0.18;
+      ctx.beginPath();
+      for (let k = 1; k < 8; k++) {
+        const p = inset + (inner * k) / 8;
+        ctx.moveTo(p, inset);
+        ctx.lineTo(p, inset + inner);
+        ctx.moveTo(inset, p);
+        ctx.lineTo(inset + inner, p);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeRect(inset, inset, inner, inner);
+      if (min < 0 && max > 0) {
+        const zero = inset + at(0) * inner,
+          zeroY = inset + (1 - at(0)) * inner;
+        ctx.beginPath();
+        ctx.moveTo(zero, inset);
+        ctx.lineTo(zero, inset + inner);
+        ctx.moveTo(inset, zeroY);
+        ctx.lineTo(inset + inner, zeroY);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      const px = inset + Math.min(1, Math.max(0, at(x))) * inner,
+        py = inset + (1 - Math.min(1, Math.max(0, at(y)))) * inner;
+      ctx.strokeStyle = ctx.fillStyle = accent;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(px, inset);
+      ctx.lineTo(px, inset + inner);
+      ctx.moveTo(inset, py);
+      ctx.lineTo(inset + inner, py);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(px, py, 4.5 * ratio, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    const sync = () => {
+      const values = current();
+      lines.forEach(({ slider, number }, index) => {
+        slider.value = String(values[index]);
+        showNumber(number, values[index]);
+        number.removeAttribute("aria-invalid");
+      });
+      code.textContent = values.map(v => v.toFixed(Math.min(3, decimals))).join(" ");
+      code.title = `vec2(${values.join(", ")})`;
+      draw();
+    };
+    const apply = (field, values) => {
+      commit(field, values);
+      sync();
+    };
+    padDrag(pad, event => {
+      const box = pad.getBoundingClientRect(),
+        inset = (box.width * 4) / PAD_SIZE,
+        grid = event.shiftKey ? span / 8 : step;
+      const x = min + ((event.clientX - box.left - inset) / (box.width - inset * 2)) * span,
+        y = min + (1 - (event.clientY - box.top - inset) / (box.height - inset * 2)) * span;
+      apply(pad, [snap(x, grid), snap(y, grid)]);
+    });
+    pad.addEventListener("keydown", event => {
+      const moves = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowDown: [1, -1], ArrowUp: [1, 1] },
+        move = moves[event.key];
+      if (!move) return;
+      event.preventDefault();
+      const values = current();
+      values[move[0]] = Number(clamp(values[move[0]] + move[1] * step * (event.shiftKey ? 10 : 1)).toFixed(decimals));
+      apply(pad, values);
+    });
+    directionRedraws.push(draw);
+    sync();
+    return wrap;
+  };
+  // @enum: int/uint를 이름 붙은 선택지로. 짧은 목록은 버튼 묶음(세그먼트), 길면 드롭다운. 값은 0부터의 순번.
+  const enumControl = (item, commit) => {
+    const labels = item.options.enum,
+      current = () => renderer.getUserUniforms().find(u => u.name === item.name)?.value ?? item.value,
+      segmented = labels.length <= 6 && labels.join("").length <= 24;
+    const wrap = element("div");
+    if (segmented) {
+      wrap.className = "uniform-enum";
+      wrap.setAttribute("role", "group");
+      wrap.setAttribute("aria-label", `${item.name} 선택`);
+      const buttons = labels.map((label, index) => {
+        const button = element("button");
+        button.type = "button";
+        button.className = "uniform-enum-option";
+        button.textContent = label;
+        button.title = `${item.name} = ${index}`;
+        button.addEventListener("click", () => {
+          commit(button, index);
+          sync();
+        });
+        wrap.append(button);
+        return button;
+      });
+      const sync = () => {
+        const value = current();
+        buttons.forEach((button, index) => {
+          button.setAttribute("aria-pressed", String(index === value));
+          button.classList.toggle("is-active", index === value);
+        });
+      };
+      sync();
+    } else {
+      wrap.className = "uniform-enum is-select";
+      const select = element("select");
+      select.setAttribute("aria-label", `${item.name} 선택`);
+      labels.forEach((label, index) => {
+        const option = element("option");
+        option.value = String(index);
+        option.textContent = `${index} · ${label}`;
+        select.append(option);
+      });
+      select.value = String(current());
+      select.addEventListener("change", () => {
+        if (!commit(select, Number(select.value))) select.value = String(current());
+      });
+      wrap.append(select);
+    }
     return wrap;
   };
   listen(document, "theme-changed", () => directionRedraws.forEach(draw => draw()));
@@ -692,6 +932,21 @@ const mount = (renderer, input, settings) => {
           row.append(line);
         }
         show(item.value);
+      } else if (item.options?.enum) {
+        row.append(enumControl(item, commit));
+      } else if (item.options?.pos) {
+        row.append(
+          positionControl(item, commit, () => [
+            ...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value),
+          ])
+        );
+      } else if (item.options?.angle) {
+        row.append(
+          directionControl(item, commit, () => {
+            const value = renderer.getUserUniforms().find(u => u.name === item.name)?.value;
+            return typeof value === "number" ? value : item.value;
+          })
+        );
       } else if (item.options?.dir) {
         row.append(
           directionControl(item, commit, () => [
@@ -803,6 +1058,12 @@ const mount = (renderer, input, settings) => {
         number.setAttribute("aria-label", item.name);
         const opts = item.options || {},
           ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
+        // @log: 슬라이더는 0~1 위치를 쓰고 값은 min·(max/min)^t로 바꾼다. 0.001~100처럼 넓은 범위의 아래쪽도 고르게 다룬다.
+        const logScale = ranged && opts.log === true && opts.min > 0,
+          logSpan = logScale ? Math.log(opts.max / opts.min) : 1,
+          toSlider = value =>
+            logScale ? Math.min(1, Math.max(0, Math.log(Math.max(value, opts.min) / opts.min) / logSpan)) : value,
+          fromSlider = t => (logScale ? Number((opts.min * Math.exp(t * logSpan)).toPrecision(4)) : t);
         let range;
         pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
         const changeNumber = () => {
@@ -816,7 +1077,7 @@ const mount = (renderer, input, settings) => {
             return;
           }
           if (commit(number, value)) {
-            if (range) range.value = String(value);
+            if (range) range.value = String(toSlider(value));
             showNumber(number, value);
           } else showNumber(number, item.value);
         };
@@ -824,13 +1085,17 @@ const mount = (renderer, input, settings) => {
         if (ranged) {
           range = element("input");
           range.type = "range";
-          range.min = String(opts.min);
-          range.max = String(opts.max);
-          range.step = String(opts.step);
-          range.setAttribute("aria-label", `${item.name} 슬라이더`);
-          range.value = String(item.value);
+          range.min = String(logScale ? 0 : opts.min);
+          range.max = String(logScale ? 1 : opts.max);
+          range.step = logScale ? "0.001" : String(opts.step);
+          range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
+          if (logScale) {
+            range.classList.add("is-log");
+            range.title = "로그 눈금 · 같은 거리를 움직이면 같은 배율로 바뀐다";
+          }
+          range.value = String(toSlider(item.value));
           range.addEventListener("input", () => {
-            if (commit(range, Number(range.value))) showNumber(number, item.value);
+            if (commit(range, fromSlider(Number(range.value)))) showNumber(number, item.value);
           });
           pair.append(range);
         }
@@ -840,16 +1105,19 @@ const mount = (renderer, input, settings) => {
           row.style.setProperty("--number-width", rangedWidth(opts));
           row.append(rangeEnds(opts, false));
         }
+        const readValue = () => renderer.getUserUniforms().find(u => u.name === item.name)?.value;
         scrubbable(name, {
           kind,
-          min: opts.min,
-          max: opts.max,
-          step: opts.step,
-          read: () => renderer.getUserUniforms().find(u => u.name === item.name)?.value,
+          // 로그 눈금이면 이름 끌기도 슬라이더 위치(0~1)로 움직여 배율 단위로 바뀌게 한다.
+          min: logScale ? 0 : opts.min,
+          max: logScale ? 1 : opts.max,
+          step: logScale ? 0.005 : opts.step,
+          read: () => (logScale ? Number(toSlider(readValue()).toFixed(3)) : readValue()),
           write: next => {
-            if (commit(number, next)) {
-              showNumber(number, next);
-              if (range) range.value = String(next);
+            const value = fromSlider(next);
+            if (commit(number, value)) {
+              showNumber(number, value);
+              if (range) range.value = String(toSlider(value));
             }
           },
         });
@@ -880,6 +1148,55 @@ const mount = (renderer, input, settings) => {
       focusSearch();
     })
   );
+  // Uniform 추가 폼의 표시 방식. 주석 어노테이션(@color·@dir·@angle·@pos·@log·@enum)과 같은 옵션을 만든다.
+  const DISPLAY_CHOICES = [
+    {
+      value: "color",
+      label: "색상 선택기 (값 0~1)",
+      types: ["vec3", "vec4"],
+      help: "견본·HEX로 고릅니다. @color와 같습니다.",
+    },
+    {
+      value: "dir",
+      label: "단위 방향 (다이얼·구 패드)",
+      types: ["vec2", "vec3"],
+      help: "값은 늘 길이 1로 맞춰집니다. @dir와 같습니다.",
+    },
+    {
+      value: "angle",
+      label: "각도 다이얼 (라디안)",
+      types: ["float"],
+      help: "도(°)로 보여 주고 라디안으로 넘깁니다. 슬라이더 범위는 쓰지 않습니다. @angle과 같습니다.",
+    },
+    {
+      value: "pos",
+      label: "2D 패드 (위치)",
+      types: ["vec2"],
+      help: "슬라이더 범위를 패드의 가로·세로로 씁니다. 비우면 -1~1. @pos와 같습니다.",
+    },
+    {
+      value: "log",
+      label: "로그 눈금 슬라이더",
+      types: ["float"],
+      help: "0보다 큰 Min·Max가 필요합니다. 0.01~100처럼 넓은 범위에 좋습니다. @log와 같습니다.",
+    },
+    {
+      value: "enum",
+      label: "선택지 (이름 붙은 버튼)",
+      types: ["int", "uint"],
+      help: "이름 순서대로 0, 1, 2…가 됩니다. 슬라이더 범위는 이름 수로 정해집니다. @enum과 같습니다.",
+    },
+  ];
+  const updateDisplayFields = () => {
+    const display = $("uniformDisplay").value,
+      choice = DISPLAY_CHOICES.find(item => item.value === display);
+    $("uniformEnumLabels").hidden = display !== "enum";
+    $("uniformEnumLabels").required = display === "enum";
+    $("uniformDisplayHelp").textContent = choice?.help || "";
+    // 범위를 쓰지 않는 표시 방식이면 범위 칸을 숨긴다.
+    const kind = typeInfo($("uniformType").value).kind;
+    $("rangeFields").hidden = !["f", "i", "u"].includes(kind) || ["color", "dir", "angle", "enum"].includes(display);
+  };
   const updateTypeFields = () => {
     const t = $("uniformType").value,
       bool = t === "bool",
@@ -896,21 +1213,25 @@ const mount = (renderer, input, settings) => {
           : size > 1
             ? `${size}개 ${kind === "f" ? "숫자" : kind === "u" ? "0 이상 정수" : "정수"}를 쉼표로 구분하세요. 예: ${defaultValue(t)}`
             : "숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.";
-    $("rangeFields").hidden = !["f", "i", "u"].includes(kind);
-    $("uniformColorField").hidden = !["vec3", "vec4"].includes(t);
-    if ($("uniformColorField").hidden) $("uniformColor").checked = false;
-    $("uniformDirField").hidden = !["vec2", "vec3"].includes(t);
-    if ($("uniformDirField").hidden) $("uniformDir").checked = false;
+    // 표시 방식: 타입에 맞는 것만 고를 수 있게 목록을 다시 만든다. 고를 것이 없으면(기본뿐) 칸을 숨긴다.
+    const select = $("uniformDisplay"),
+      previous = select.value,
+      choices = DISPLAY_CHOICES.filter(choice => choice.types.includes(t));
+    select.replaceChildren(
+      ...[{ value: "", label: "기본 (숫자·슬라이더)" }, ...choices].map(choice => {
+        const option = element("option");
+        option.value = choice.value;
+        option.textContent = choice.label;
+        return option;
+      })
+    );
+    select.value = choices.some(choice => choice.value === previous) ? previous : "";
+    $("uniformDisplayField").hidden = !choices.length;
+    updateDisplayFields();
     $("uniformValue").value = defaultValue(t);
   };
   listen($("uniformType"), "change", updateTypeFields);
-  // 색상과 방향은 함께 쓸 수 없다: 하나를 켜면 다른 하나를 끈다.
-  listen($("uniformColor"), "change", () => {
-    if ($("uniformColor").checked) $("uniformDir").checked = false;
-  });
-  listen($("uniformDir"), "change", () => {
-    if ($("uniformDir").checked) $("uniformColor").checked = false;
-  });
+  listen($("uniformDisplay"), "change", updateDisplayFields);
   listen($("uniformSearch"), "input", renderUniforms);
   listen($("uniformEditor"), "toggle", () => {
     if ($("uniformEditor").open) $("uniformName").focus();
@@ -928,19 +1249,43 @@ const mount = (renderer, input, settings) => {
       const min = $("uniformMin").value.trim(),
         max = $("uniformMax").value.trim(),
         step = $("uniformStep").value.trim();
-      const direction = $("uniformDir").checked && ["vec2", "vec3"].includes(type);
-      const hasBounds = !direction && ["f", "i", "u"].includes(typeInfo(type).kind) && [min, max, step].some(Boolean);
+      const display = DISPLAY_CHOICES.find(
+        choice => choice.value === $("uniformDisplay").value && choice.types.includes(type)
+      )?.value;
+      const hasBounds =
+        !["color", "dir", "angle", "enum"].includes(display) &&
+        ["f", "i", "u"].includes(typeInfo(type).kind) &&
+        [min, max, step].some(Boolean);
       if (hasBounds && ![min, max, step].every(Boolean))
         throw new Error("슬라이더의 Min, Max, Step을 모두 입력하세요.");
       const opts = hasBounds ? { min: Number(min), max: Number(max), step: Number(step) } : {};
-      if (direction) opts.dir = "full";
-      else if ($("uniformColor").checked && ["vec3", "vec4"].includes(type)) opts.color = true;
+      if (display === "color") opts.color = true;
+      else if (display === "dir") opts.dir = "full";
+      else if (display === "angle") opts.angle = true;
+      else if (display === "pos") {
+        opts.pos = true;
+        if (!hasBounds) Object.assign(opts, { min: -1, max: 1, step: 0.002 });
+      } else if (display === "log") {
+        if (!hasBounds || !(opts.min > 0))
+          throw new Error("로그 눈금 슬라이더에는 0보다 큰 Min·Max·Step이 필요합니다.");
+        opts.log = true;
+      } else if (display === "enum") {
+        const labels = $("uniformEnumLabels")
+          .value.split(/[\s,]+/)
+          .filter(Boolean)
+          .map(label => label.replace(/_/g, " "));
+        if (labels.length < 2) throw new Error("선택지 이름을 2개 이상 입력하세요. 예: 결과 밀도 투과율");
+        Object.assign(opts, { min: 0, max: labels.length - 1, step: 1, enum: labels });
+      }
       renderer.defineUniform($("uniformName").value.trim(), type, value, opts);
       clearDeleted();
       $("uniformSearch").value = "";
       renderUniforms();
       $("uniformName").value = "";
       $("uniformMin").value = $("uniformMax").value = $("uniformStep").value = "";
+      $("uniformEnumLabels").value = "";
+      $("uniformDisplay").value = "";
+      updateDisplayFields();
       $("uniformEditor").open = false;
       $("uniformEditor").querySelector("summary").focus();
     });

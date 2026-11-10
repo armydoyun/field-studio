@@ -177,6 +177,26 @@ const create = ctx => {
       body: "uniform vec3 ${1:uLightDir}; // @dir @default ${2:0.4 0.8 0.45}",
     },
     {
+      label: "uniform-angle",
+      detail: "각도 파라미터(라디안) · @angle",
+      body: "uniform float ${1:uAngle}; // @angle @default ${2:45deg}",
+    },
+    {
+      label: "uniform-pos",
+      detail: "2D 위치 패드 · @pos",
+      body: "uniform vec2 ${1:uCenter}; // @pos @range ${2:0} ${3:1} @default ${4:0.5}",
+    },
+    {
+      label: "uniform-log",
+      detail: "로그 눈금 슬라이더 · @log",
+      body: "uniform float ${1:uScale}; // @log @range ${2:0.01} ${3:100} @default ${4:1}",
+    },
+    {
+      label: "uniform-enum",
+      detail: "선택지 파라미터 · @enum",
+      body: "uniform int ${1:uMode}; // @enum ${2:결과 밀도 법선} @default ${3:0}",
+    },
+    {
       label: "uv-center",
       detail: "중심 원점 · 종횡비 보정 좌표",
       body: "vec2 ${1:uv} = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;",

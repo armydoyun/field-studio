@@ -509,7 +509,7 @@ uniform sampler2D iChannel1;
 uniform float uIntensity; // 블룸 세기 · @range 0 3 @step 0.01 @default 0.8
 uniform float uRadius;    // 겹칠 밉 레벨 수(클수록 넓게 번짐) · @range 1 7 @step 0.1 @default 6
 uniform float uExposure;  // 노출 · @range 0 4 @step 0.01 @default 1
-uniform int uToneMap;     // 0 = 자르기, 1 = Reinhard, 2 = ACES · @min 0 @max 2 @default 2
+uniform int uToneMap;     // 톤 매핑 · @enum 자르기 Reinhard ACES @default 2
 uniform bool uCompare;    // 왼쪽 절반은 블룸 없이 보여 준다 · @default false
 out vec4 fragColor;
 vec3 blurLevel(vec2 uv, int lod) {
