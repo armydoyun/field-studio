@@ -30,7 +30,7 @@ uniform sampler2D iChannel1;
 uniform vec3 iChannelResolution[4];
 '''
 # 조각이 '사용자가 만든다'고 약속하는 이름: 쓰는데 정의하지 않은 경우에만 대신 넣는다(레이마칭 장면 함수 등).
-CONTRACT={'map':'float map(vec3 p) { return length(p) - 1.0; }\n','mapMat':'vec2 mapMat(vec3 p) { return vec2(length(p) - 1.0, 0.0); }\n'}
+CONTRACT={'map':'float map(vec3 p) { return length(p) - 1.0; }\n','mapMat':'vec2 mapMat(vec3 p) { return vec2(length(p) - 1.0, 0.0); }\n','render':'vec3 render(vec2 c) { return vec3(c, 0.0); }\n'}
 OLD_HASH=re.compile(r'0\.1031|fract\(\s*sin\s*\(')
 with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,
