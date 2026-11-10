@@ -30,11 +30,11 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-uniform vec3 uBaseColor;  // 바탕색(albedo) · @color @default 0.95 0.55 0.25
-uniform float uRoughness; // 거칠기(격자 보기가 꺼졌을 때) · @range 0.02 1 @step 0.01 @default 0.35
-uniform float uMetallic;  // 금속성(격자 보기가 꺼졌을 때) · @range 0 1 @step 0.01 @default 0
-uniform float uLight;     // 빛 세기 · @range 0 10 @step 0.1 @default 4
-uniform float uAmbient;   // 하늘빛 세기 · @range 0 2 @step 0.01 @default 0.6
+uniform vec3 uBaseColor;  // 바탕색(albedo) · @color @default 0.95 0.55 0.25 @group 재질
+uniform float uRoughness; // 거칠기(격자 보기가 꺼졌을 때) · @range 0.02 1 @step 0.01 @default 0.35 @anim 6 @group 재질
+uniform float uMetallic;  // 금속성(격자 보기가 꺼졌을 때) · @range 0 1 @step 0.01 @default 0 @group 재질
+uniform float uLight;     // 빛 세기 · @range 0 10 @step 0.1 @default 4 @group 빛
+uniform float uAmbient;   // 하늘빛 세기 · @range 0 2 @step 0.01 @default 0.6 @group 빛
 uniform bool uGrid;       // 거칠기 × 금속성 격자로 보기 · @default true
 uniform int uView;        // 보기 · @enum 결과 D G F 난반사만 정반사만 @default 0
 out vec4 fragColor;
@@ -143,15 +143,15 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-uniform float uCoverage;   // 덮인 정도 · @range 0 1 @step 0.01 @default 0.45
-uniform float uDensity;    // 밀도(흡수) · @range 0.1 4 @step 0.01 @default 1.4
-uniform float uAnisotropy; // 앞쪽 산란(g) · @range -0.5 0.9 @step 0.01 @default 0.6
-uniform int uSteps;        // 행진 걸음 수 · @min 8 @max 96 @default 48
-uniform int uLightSteps;   // 해 쪽 걸음 수 · @min 0 @max 12 @default 6
-uniform float uWind;       // 바람 · @range 0 2 @step 0.01 @default 0.4
-uniform vec3 uSunCol;      // 햇빛 · @color @default 1 0.92 0.8
-uniform vec3 uSkyCol;      // 하늘빛(그늘을 채움) · @color @default 0.45 0.6 0.85
-uniform vec3 uSunDir;      // 해 방향 · @dir hemi @default 0.6 0.35 0.7
+uniform float uCoverage;   // 덮인 정도 · @range 0 1 @step 0.01 @default 0.45 @anim 8 @group 구름
+uniform float uDensity;    // 밀도(흡수) · @range 0.1 4 @step 0.01 @default 1.4 @group 구름
+uniform float uAnisotropy; // 앞쪽 산란(g) · @range -0.5 0.9 @step 0.01 @default 0.6 @group 구름
+uniform int uSteps;        // 행진 걸음 수 · @min 8 @max 96 @default 48 @group 품질
+uniform int uLightSteps;   // 해 쪽 걸음 수 · @min 0 @max 12 @default 6 @group 품질
+uniform float uWind;       // 바람 · @range 0 2 @step 0.01 @default 0.4 @group 구름
+uniform vec3 uSunCol;      // 햇빛 · @color @default 1 0.92 0.8 @group 빛
+uniform vec3 uSkyCol;      // 하늘빛(그늘을 채움) · @color @default 0.45 0.6 0.85 @group 빛
+uniform vec3 uSunDir;      // 해 방향 · @dir hemi @default 0.6 0.35 0.7 @group 빛
 uniform int uView;         // 보기 · @enum 결과 밀도 투과율 받은_해빛 @default 0
 out vec4 fragColor;
 

@@ -1154,7 +1154,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       throw new Error("Uniform 슬라이더 설정이 올바르지 않습니다.");
     // 범위(min/max/step)는 float·int·uint 스칼라와 벡터(성분마다 같은 범위)에, color는 vec3/vec4에만 허용한다.
     const normalized = normalizeUniform(type, value),
-      { min, max, step, color, dir, angle, pos, log } = options,
+      { min, max, step, color, dir, angle, pos, log, hdr, seed, anim } = options,
       labels = options.enum,
       spec = UNIFORM_TYPES[type];
     const ranged = spec.kind === "f" || spec.kind === "i" || spec.kind === "u",
@@ -1200,8 +1200,24 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         step !== 1)
     )
       throw new Error("선택지(enum)는 int/uint에 이름 2~32개, 범위 0~(개수-1)로만 사용할 수 있습니다.");
+    // 덧붙이는 옵션: hdr(color의 최대 밝기) · seed(무작위 버튼) · anim(재생 주기, 초).
+    if (hdr !== undefined && (!color || typeof hdr !== "number" || !(hdr > 0 && hdr <= 1000)))
+      throw new Error("HDR 색(hdr)은 color와 함께, 최대 밝기 0~1000으로만 사용할 수 있습니다.");
+    if (seed !== undefined && (seed !== true || !["float", "int", "uint"].includes(type) || labels || angle))
+      throw new Error("무작위 버튼(seed)은 float/int/uint에만, enum·angle 없이 사용할 수 있습니다.");
+    if (
+      anim !== undefined &&
+      (typeof anim !== "number" ||
+        !(anim >= 0.1 && anim <= 600) ||
+        type !== "float" ||
+        !(angle || (min !== undefined && !log)))
+    )
+      throw new Error("재생(anim)은 범위가 있는 float나 angle에만, 주기 0.1~600초로 사용할 수 있습니다.");
     const nextOptions = min === undefined ? {} : { min, max, step };
     if (color) nextOptions.color = true;
+    if (hdr) nextOptions.hdr = hdr;
+    if (seed) nextOptions.seed = true;
+    if (anim) nextOptions.anim = anim;
     if (dir) nextOptions.dir = dir;
     if (angle) nextOptions.angle = true;
     if (pos) nextOptions.pos = true;
