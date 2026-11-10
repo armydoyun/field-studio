@@ -257,6 +257,9 @@ uniform float uSpin;   // @angle @default 45deg
 uniform vec2  uCenter; // @pos @range 0 1 @default 0.5
 uniform float uScale;  // @log @range 0.01 100 @default 1
 uniform int   uView;   // @enum 결과 밀도 법선 @default 0
+uniform vec3  uGlow;   // 발광 · @color hdr 20 @default 2 1 0.4 @group 빛
+uniform float uSeed;   // 무늬 고르기 · @seed @range 0 100 @step 1 @group 무늬
+uniform float uWave;   // 물결 · @range 0 2 @anim 3 @group 무늬
 uniform vec2  uOffset; // @range -1 1 @default 0
 uniform int   uCount;  // @min 1 @max 32 @default 8`,
         title: "어노테이션 예시",
@@ -282,6 +285,14 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
             ["@log", "float를 로그 눈금 슬라이더로. 0보다 큰 @range 필요(예: 0.01~100)"],
             ["@enum 이름…", "int/uint를 이름 붙은 버튼(많으면 드롭다운)으로. 0부터 차례로, 이름의 _는 빈칸"],
             ["값 끝 deg", "@default 45deg처럼 쓰면 도를 라디안으로 바꿔 읽음"],
+            ["@color hdr [최대]", "색 + 밝기 배율(I) 슬라이더. 값이 1을 넘는 발광·조명 색. 최대 밝기 기본 10"],
+            ["@seed", "🎲 버튼으로 무작위 값(범위 안, step 단위). 범위가 없으면 int 0~99999 · float 0~1000"],
+            [
+              "@anim [초]",
+              "▶ 버튼으로 범위를 왕복 재생(기본 4초). @angle에 붙이면 그 시간에 한 바퀴씩 돈다. 값을 직접 바꾸면 멈춤",
+            ],
+            ["@group 이름", "패널에서 접히는 묶음으로 모은다. 묶음 없는 파라미터가 먼저 나온다"],
+            ["설명", "주석에서 첫 @ 앞의 글(`// 햇빛 · @color`)은 이름 아래 설명으로 보인다"],
           ],
         },
       },

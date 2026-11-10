@@ -197,6 +197,21 @@ const create = ctx => {
       body: "uniform int ${1:uMode}; // @enum ${2:결과 밀도 법선} @default ${3:0}",
     },
     {
+      label: "uniform-hdr",
+      detail: "HDR 색(색 + 밝기 배율) · @color hdr",
+      body: "uniform vec3 ${1:uGlow}; // ${2:발광} · @color hdr ${3:10} @default ${4:2 1 0.4}",
+    },
+    {
+      label: "uniform-seed",
+      detail: "무작위 버튼 파라미터 · @seed",
+      body: "uniform float ${1:uSeed}; // ${2:무늬 고르기} · @seed @range 0 100 @step 1 @default ${3:0}",
+    },
+    {
+      label: "uniform-anim",
+      detail: "재생 버튼 파라미터 · @anim",
+      body: "uniform float ${1:uAmount}; // @range ${2:0} ${3:1} @anim ${4:4} @default ${5:0.5}",
+    },
+    {
       label: "uv-center",
       detail: "중심 원점 · 종횡비 보정 좌표",
       body: "vec2 ${1:uv} = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;",

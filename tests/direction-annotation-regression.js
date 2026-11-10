@@ -76,12 +76,12 @@ await ui('vec3 구 패드: 방위각·고도 · 앞뒤 전환 · hemi는 아래�
 });
 await ui('Uniform 추가 폼: 표시 방식 "단위 방향"은 vec2/vec3에만 있고 범위 칸은 무시한다',async(f,n)=>{
   n('uniformType').value='vec3';await n('uniformType').dispatchEvent({type:'change'});
-  assert.equal(n('uniformDisplayField').hidden,false);assert.deepEqual(n('uniformDisplay').children.map(o=>o.value),['','color','dir']);
+  assert.equal(n('uniformDisplayField').hidden,false);assert.deepEqual(n('uniformDisplay').children.map(o=>o.value),['','color','hdr','dir']);
   n('uniformDisplay').value='dir';await n('uniformDisplay').dispatchEvent({type:'change'});assert.equal(n('rangeFields').hidden,true);
   n('uniformName').value='uLight';n('uniformValue').value='1, 1, 0';n('uniformMin').value='0';
   await n('uniformForm').dispatchEvent({type:'submit'});
   const item=f.renderer.getUserUniforms()[0];assert.equal(item.options.dir,'full');assert.equal(item.options.min,undefined);assert.equal(item.options.color,undefined);near([...item.value],[Math.SQRT1_2,Math.SQRT1_2,0]);
-  n('uniformType').value='vec4';await n('uniformType').dispatchEvent({type:'change'});assert.deepEqual(n('uniformDisplay').children.map(o=>o.value),['','color']);assert.equal(n('uniformDisplay').value,'');
+  n('uniformType').value='vec4';await n('uniformType').dispatchEvent({type:'change'});assert.deepEqual(n('uniformDisplay').children.map(o=>o.value),['','color','hdr']);assert.equal(n('uniformDisplay').value,'');
   n('uniformType').value='mat2';await n('uniformType').dispatchEvent({type:'change'});assert.equal(n('uniformDisplayField').hidden,true);
 });
 console.log(`\n${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;

@@ -4,6 +4,9 @@
 // 표시 방식 태그(하나만): @color · @dir [hemi] · @angle(float, 라디안을 다이얼로) · @pos/@xy(vec2, 2D 패드, 범위 없으면 -1~1)
 //  · @log(float, 0보다 큰 @range를 로그 눈금 슬라이더로) · @enum 이름…(int/uint, 0부터 차례로 선택지. 이름의 _는 빈칸)
 // @default 값 끝에 deg(또는 °)를 붙이면 도 단위로 읽어 라디안으로 바꾼다: @angle @default 45deg
+// 덧붙이는 태그: @color hdr [최대 밝기](색 + 밝기 배율, 값이 1을 넘을 수 있다) · @seed(🎲 무작위 버튼, float/int/uint)
+//  · @anim [초](▶ 버튼: 범위를 왕복, @angle이면 한 바퀴씩 돈다. 기본 4초) · @group 이름(패널에서 접히는 묶음)
+// 첫 @ 앞의 주석 글은 설명(description)으로 이름 아래에 보여 준다: // 햇빛 · @color
 // 같은 줄의 단일 선언만 인식한다. 값 검증(타입·범위)은 Renderer.normalizeEntry가 최종 판단한다.
 const DECLARATION = /^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*;\s*\/\/(.*)$/;
 const SIZES = {
@@ -67,6 +70,13 @@ const parseLine = line => {
     if (!key) continue;
     tags[key.toLowerCase()] = args;
   }
+  // 설명: 첫 태그 앞의 주석 글. 끝의 구분 기호(· : - |)는 뗀다.
+  const description = comment
+    .split("@")[0]
+    .trim()
+    .replace(/\s*[·:|\-–—]+$/, "")
+    .trim();
+  const group = tags.group ? tags.group.join(" ").replace(/_/g, " ").trim() : "";
   const n = SIZES[type],
     kind = kindOf(type),
     num = parseNumber,
@@ -83,7 +93,14 @@ const parseLine = line => {
       error = "@range에는 min과 max 숫자가 모두 필요합니다.";
     options.step ??= kind === "f" ? Number(((options.max - options.min) / 1000).toPrecision(2)) || 0.001 : 1;
   }
-  if (tags.color !== undefined) options.color = true;
+  if (tags.color !== undefined) {
+    options.color = true;
+    if (tags.color[0]?.toLowerCase() === "hdr") {
+      options.hdr = tags.color[1] === undefined ? 10 : num(tags.color[1]);
+      if (!(options.hdr > 0 && options.hdr <= 1000))
+        error = "@color hdr의 최대 밝기는 0보다 크고 1000 이하여야 합니다.";
+    }
+  }
   if (tags.dir !== undefined) {
     options.dir = tags.dir[0]?.toLowerCase() === "hemi" ? "hemi" : "full";
     if (type !== "vec2" && type !== "vec3") error = "@dir은 vec2/vec3에만 쓸 수 있습니다.";
@@ -113,6 +130,18 @@ const parseLine = line => {
     else if (options.min !== undefined) error = "@enum은 @range와 함께 쓸 수 없습니다(선택지 수로 범위가 정해집니다).";
     else Object.assign(options, { min: 0, max: labels.length - 1, step: 1 });
   }
+  if (tags.seed !== undefined) {
+    options.seed = true;
+    if (!["float", "int", "uint"].includes(type)) error = "@seed는 float/int/uint에만 쓸 수 있습니다.";
+    else if (options.enum || options.angle) error = "@seed는 @enum·@angle과 함께 쓸 수 없습니다.";
+  }
+  if (tags.anim !== undefined) {
+    options.anim = tags.anim[0] === undefined ? 4 : num(tags.anim[0]);
+    if (!(options.anim >= 0.1 && options.anim <= 600)) error = "@anim의 주기는 0.1~600초여야 합니다.";
+    else if (type !== "float") error = "@anim은 float에만 쓸 수 있습니다.";
+    else if (!options.angle && (options.min === undefined || options.log))
+      error = "@anim에는 @range(로그 눈금 제외)나 @angle이 필요합니다.";
+  }
   const shown = WIDGETS.filter(key => options[key] !== undefined);
   if (shown.length > 1) error = `표시 방식 태그는 하나만 쓸 수 있습니다: ${shown.map(key => `@${key}`).join(" ")}`;
   let value;
@@ -132,7 +161,7 @@ const parseLine = line => {
     value = normalizeDirection(value, options.dir);
     if (!value) error = "@dir의 @default는 0이 아닌 벡터여야 합니다.";
   }
-  return { name, type, value: n === 1 ? value[0] : value, options, error };
+  return { name, type, value: n === 1 ? value[0] : value, options, error, description, group };
 };
 // 여러 패스의 소스를 받아 이름별 첫 정의만 남긴다(Image가 앞에 오도록 호출한다).
 const collect = sources => {
@@ -156,6 +185,7 @@ const clampValue = (value, options) => {
   return Array.isArray(value) ? value.map(clamp) : clamp(value);
 };
 const sameOptions = (a = {}, b = {}) =>
-  ["min", "max", "step", "color", "dir", "angle", "pos", "log"].every(key => a[key] === b[key]) &&
-  JSON.stringify(a.enum) === JSON.stringify(b.enum);
+  ["min", "max", "step", "color", "dir", "angle", "pos", "log", "hdr", "seed", "anim"].every(
+    key => a[key] === b[key]
+  ) && JSON.stringify(a.enum) === JSON.stringify(b.enum);
 export { collect, clampValue, sameOptions, normalizeDirection };

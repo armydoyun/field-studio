@@ -497,15 +497,15 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-uniform float uHeight;   // 산 높이(원본 H) · @range 4 30 @step 0.1 @default 16
-uniform float uSnow;     // 눈이 쌓이기 시작하는 높이 · @range 0 1 @step 0.01 @default 0.55
-uniform float uExposure; // 노출(원본 uExp) · @range 0.2 2 @step 0.01 @default 1
-uniform float uSeed;     // 지형 고르기 · @range 0 100 @step 1 @default 0
-uniform vec3 uSunCol;    // 햇빛 · @color @default 1 0.92 0.7
-uniform vec3 uSky1;      // 지평선 쪽 하늘 · @color @default 0.34 0.56 0.9
-uniform vec3 uSky2;      // 천정 쪽 하늘 · @color @default 0.06 0.18 0.46
-uniform vec3 uFogC;      // 안개 · @color @default 0.55 0.66 0.82
-uniform vec3 uSunDir;    // 해 방향 · @dir hemi @default -0.95 0.28 0.2
+uniform float uHeight;   // 산 높이(원본 H) · @range 4 30 @step 0.1 @default 16 @group 지형
+uniform float uSnow;     // 눈이 쌓이기 시작하는 높이 · @range 0 1 @step 0.01 @default 0.55 @group 지형
+uniform float uExposure; // 노출(원본 uExp) · @range 0.2 2 @step 0.01 @default 1 @group 빛과 하늘
+uniform float uSeed;     // 지형 고르기 · @seed @range 0 100 @step 1 @default 0 @group 지형
+uniform vec3 uSunCol;    // 햇빛 · @color @default 1 0.92 0.7 @group 빛과 하늘
+uniform vec3 uSky1;      // 지평선 쪽 하늘 · @color @default 0.34 0.56 0.9 @group 빛과 하늘
+uniform vec3 uSky2;      // 천정 쪽 하늘 · @color @default 0.06 0.18 0.46 @group 빛과 하늘
+uniform vec3 uFogC;      // 안개 · @color @default 0.55 0.66 0.82 @group 빛과 하늘
+uniform vec3 uSunDir;    // 해 방향 · @dir hemi @default -0.95 0.28 0.2 @group 빛과 하늘
 out vec4 fragColor;
 #define H uHeight
 #define uExp uExposure

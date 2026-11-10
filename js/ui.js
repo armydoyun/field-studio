@@ -458,6 +458,7 @@ const mount = (renderer, input, settings) => {
     });
     directionRedraws.push(draw);
     sync(current());
+    wrap.refresh = () => sync(current());
     return wrap;
   };
   // @pos/@xy: vec2 위치를 정사각형 패드에서 끈다. 두 성분이 같은 범위(@range, 없으면 -1~1)를 쓴다. 화면 위쪽이 +Y.
@@ -721,6 +722,80 @@ const mount = (renderer, input, settings) => {
         : a === b;
   const formatDefault = value =>
     (Array.isArray(value) ? value : [value]).map(v => (typeof v === "number" ? +v.toFixed(4) : String(v))).join(", ");
+  // @anim 재생: 범위를 코사인으로 왕복(@angle이면 한 바퀴씩 계속 돈다). 지금 값에서 위쪽으로 출발한다.
+  // 값은 렌더러에 바로 쓰고, 화면은 행이 등록한 refresh로 맞춘다. 사용자가 값을 직접 바꾸면 그 파라미터는 멈춘다.
+  const playing = new Map(),
+    playViews = new Map(),
+    playButtons = new Map();
+  let playFrame = 0;
+  const playStep = now => {
+    playFrame = 0;
+    const items = renderer.getUserUniforms();
+    for (const [name, play] of playing) {
+      const item = items.find(u => u.name === name),
+        opts = item?.options || {};
+      if (!item || !opts.anim || item.type !== "float") {
+        playing.delete(name);
+        continue;
+      }
+      play.origin ??= now;
+      const turns = (now - play.origin) / 1000 / opts.anim,
+        value = opts.angle
+          ? play.start + turns * 2 * Math.PI
+          : opts.min + (opts.max - opts.min) * (0.5 - 0.5 * Math.cos(turns * 2 * Math.PI + play.phase));
+      try {
+        renderer.setUniform(name, value);
+      } catch {
+        playing.delete(name);
+        continue;
+      }
+      playViews.get(name)?.(value);
+    }
+    // 재생으로 바뀐 값 때문에 목록을 다시 그리지 않게 기준을 맞춘다.
+    uniformSnapshot = JSON.stringify(renderer.getUserUniforms());
+    if (playing.size) playFrame = requestAnimationFrame(playStep);
+    else syncPlayButtons();
+  };
+  const syncPlayButtons = () => {
+    for (const [name, button] of playButtons) {
+      const on = playing.has(name);
+      button.classList.toggle("icon-play", !on);
+      button.classList.toggle("icon-pause", on);
+      button.setAttribute("aria-pressed", String(on));
+    }
+  };
+  const togglePlay = item => {
+    const current = renderer.getUserUniforms().find(u => u.name === item.name);
+    if (!current) return;
+    if (playing.has(item.name)) playing.delete(item.name);
+    else {
+      const { min, max } = current.options,
+        ratio = current.options.angle ? 0 : Math.min(1, Math.max(0, (current.value - min) / (max - min)));
+      playing.set(item.name, { start: current.value, phase: Math.acos(1 - 2 * ratio), origin: null });
+      if (!playFrame) playFrame = requestAnimationFrame(playStep);
+    }
+  };
+  signal.addEventListener("abort", () => {
+    if (playFrame) cancelAnimationFrame(playFrame);
+    playing.clear();
+  });
+  // @seed: 범위가 있으면 그 안(step 단위, 로그 눈금이면 배율로), 없으면 int/uint 0~99999 · float 0~1000.
+  const randomValue = item => {
+    const { kind } = typeInfo(item.type),
+      opts = item.options || {},
+      ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max),
+      r = Math.random();
+    if (kind === "i" || kind === "u")
+      return ranged ? Math.min(opts.max, opts.min + Math.floor(r * (opts.max - opts.min + 1))) : Math.floor(r * 100000);
+    if (!ranged) return Number((r * 1000).toFixed(3));
+    if (opts.log) return Number((opts.min * Math.pow(opts.max / opts.min, r)).toPrecision(4));
+    const decimals = Math.min(10, Math.max(0, -Math.floor(Math.log10(opts.step)) + 1));
+    return Number(
+      Math.min(opts.max, opts.min + Math.round((r * (opts.max - opts.min)) / opts.step) * opts.step).toFixed(decimals)
+    );
+  };
+  // @group 접힘 상태(이 화면에서만 기억).
+  const collapsedGroups = new Set();
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
@@ -728,7 +803,18 @@ const mount = (renderer, input, settings) => {
     uniformSnapshot = JSON.stringify(items);
     const defaults = annotatedDefaults();
     directionRedraws = [];
+    playViews.clear();
+    playButtons.clear();
     userList.replaceChildren();
+    // @group: 묶음 없는 파라미터가 먼저, 묶음은 처음 나온 순서대로. 검색 중에는 접힌 묶음도 펼쳐 보여 준다.
+    const groups = new Map();
+    let shown = 0;
+    const place = (row, group) => {
+      shown++;
+      if (!group) return userList.append(row);
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group).push(row);
+    };
     $("uniformCount").textContent = `${items.length} / 64`;
     $("uniformCreate").disabled = items.length >= 64;
     for (const item of items) {
@@ -747,6 +833,15 @@ const mount = (renderer, input, settings) => {
       type.className = "uniform-type";
       type.textContent = item.type;
       title.append(name, type);
+      const spec = defaults.get(item.name),
+        annotated = spec && spec.type === item.type;
+      // 설명: 주석에서 첫 태그 앞에 쓴 글.
+      if (annotated && spec.description) {
+        const description = element("span");
+        description.className = "uniform-desc";
+        description.textContent = spec.description;
+        title.append(description);
+      }
       const remove = element("button");
       remove.className = "remove-uniform glyph-icon icon-close";
       remove.type = "button";
@@ -764,10 +859,9 @@ const mount = (renderer, input, settings) => {
           $("undoUniform").focus();
         })
       );
-      const spec = defaults.get(item.name);
       let reset = null,
         syncReset = null;
-      if (spec && spec.type === item.type) {
+      if (annotated) {
         // 기본값으로 되돌리기: 버튼 또는 슬라이더 더블클릭. 이미 기본값이면 버튼을 비활성화한다.
         const fallback = Annotations.clampValue(spec.value, item.options || {});
         reset = element("button");
@@ -794,8 +888,43 @@ const mount = (renderer, input, settings) => {
           if (event.target instanceof HTMLInputElement && event.target.type === "range") restore();
         });
       }
-      top.append(title, ...(reset ? [reset] : []), remove);
+      // 덧붙이는 버튼: 🎲 무작위(@seed) · ▶ 재생(@anim).
+      const extras = [];
+      if (item.options?.seed) {
+        const dice = element("button");
+        dice.className = "seed-uniform glyph-icon icon-dice";
+        dice.type = "button";
+        dice.title = "무작위 값";
+        dice.setAttribute("aria-label", `${item.name} 무작위 값`);
+        dice.addEventListener("click", () => {
+          if (!commit(dice, randomValue(item))) return;
+          renderUniforms();
+          $("uniformNotice").textContent = `${item.name} = ${formatDefault(item.value)}`;
+          userList.querySelector?.(`.seed-uniform[data-name="${item.name}"]`)?.focus();
+        });
+        dice.dataset.name = item.name;
+        extras.push(dice);
+      }
+      if (item.options?.anim) {
+        const play = element("button");
+        play.className = `play-uniform glyph-icon ${playing.has(item.name) ? "icon-pause" : "icon-play"}`;
+        play.type = "button";
+        play.title = item.options.angle
+          ? `재생: ${displayNumber(item.options.anim)}초에 한 바퀴`
+          : `재생: ${displayNumber(item.options.anim)}초 주기로 범위 왕복`;
+        play.setAttribute("aria-label", `${item.name} 재생`);
+        play.setAttribute("aria-pressed", String(playing.has(item.name)));
+        play.addEventListener("click", () => {
+          togglePlay(item);
+          syncPlayButtons();
+        });
+        playButtons.set(item.name, play);
+        extras.push(play);
+      }
+      top.append(title, ...extras, ...(reset ? [reset] : []), remove);
       const commit = (field, value) => {
+        // 사용자가 직접 바꾸면 그 파라미터의 재생을 멈춘다.
+        if (playing.delete(item.name)) syncPlayButtons();
         try {
           renderer.setUniform(item.name, value);
           item.value = value;
@@ -851,10 +980,25 @@ const mount = (renderer, input, settings) => {
             )
             .join("");
         const channels = item.type === "vec4" ? "RGBA" : "RGB";
+        // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
+        const hdr = item.options.hdr;
         let alpha = null,
-          alphaNumber = null;
+          alphaNumber = null,
+          intensity = null,
+          intensityNumber = null,
+          lastBase = [1, 1, 1];
+        const split = values => {
+          const level = Math.max(0, ...values.slice(0, 3));
+          if (level > 1e-6) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
+          return { level, base: lastBase };
+        };
         const show = values => {
-          picker.value = hex(values);
+          if (hdr) {
+            const { level, base } = split(values);
+            picker.value = hex(base);
+            intensity.value = String(level);
+            showNumber(intensityNumber, Number(level.toFixed(4)));
+          } else picker.value = hex(values);
           hexField.value = picker.value;
           hexField.removeAttribute("aria-invalid");
           code.textContent = values
@@ -875,8 +1019,11 @@ const mount = (renderer, input, settings) => {
             showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`);
             return;
           }
-          const values = current();
-          values.splice(0, 3, ...match[1].match(/../g).map(h => parseInt(h, 16) / 255));
+          const values = current(),
+            picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
+          // HDR: 고른 색에 지금 밝기 배율을 곱한다(배율이 0이면 1로 되살린다).
+          const level = hdr ? split(values).level || 1 : 1;
+          values.splice(0, 3, ...picked.map(v => Number((v * level).toFixed(6))));
           if (commit(field, values)) show(values);
         };
         picker.addEventListener("input", () => setRGB(picker, picker.value));
@@ -892,6 +1039,46 @@ const mount = (renderer, input, settings) => {
         });
         wrap.append(picker, hexField, code);
         row.append(wrap);
+        if (hdr) {
+          const line = element("div");
+          line.className = "uniform-axis is-ranged uniform-alpha uniform-intensity";
+          const label = element("label");
+          label.className = "uniform-axis-label";
+          label.textContent = "I";
+          label.title = "밝기 배율";
+          intensity = element("input");
+          intensity.type = "range";
+          intensity.min = "0";
+          intensity.max = String(hdr);
+          intensity.step = String(Number((hdr / 1000).toPrecision(2)));
+          intensity.setAttribute("aria-label", `${item.name} 밝기 배율`);
+          intensityNumber = element("input");
+          intensityNumber.type = "number";
+          intensityNumber.min = "0";
+          intensityNumber.step = "any";
+          intensityNumber.setAttribute("aria-label", `${item.name} 밝기 배율 값`);
+          const setLevel = (field, level) => {
+            if (!Number.isFinite(level)) return show(current());
+            const values = current(),
+              { base } = split(values);
+            values.splice(0, 3, ...base.map(v => Number((v * Math.max(0, level)).toFixed(6))));
+            if (commit(field, values)) show(values);
+            else show(current());
+          };
+          intensity.addEventListener("input", () => setLevel(intensity, Number(intensity.value)));
+          intensityNumber.addEventListener("change", () =>
+            setLevel(intensityNumber, intensityNumber.value.trim() ? Number(intensityNumber.value) : NaN)
+          );
+          scrubbable(label, {
+            kind: "f",
+            read: () => Number(split(current()).level.toFixed(3)),
+            write: value => setLevel(intensity, value),
+            min: 0,
+            step: hdr / 200,
+          });
+          line.append(label, intensity, intensityNumber);
+          row.append(line);
+        }
         if (item.type === "vec4") {
           const line = element("div");
           line.className = "uniform-axis is-ranged uniform-alpha";
@@ -941,12 +1128,12 @@ const mount = (renderer, input, settings) => {
           ])
         );
       } else if (item.options?.angle) {
-        row.append(
-          directionControl(item, commit, () => {
-            const value = renderer.getUserUniforms().find(u => u.name === item.name)?.value;
-            return typeof value === "number" ? value : item.value;
-          })
-        );
+        const dial = directionControl(item, commit, () => {
+          const value = renderer.getUserUniforms().find(u => u.name === item.name)?.value;
+          return typeof value === "number" ? value : item.value;
+        });
+        playViews.set(item.name, dial.refresh);
+        row.append(dial);
       } else if (item.options?.dir) {
         row.append(
           directionControl(item, commit, () => [
@@ -1121,12 +1308,53 @@ const mount = (renderer, input, settings) => {
             }
           },
         });
+        // 재생 중 숫자 칸은 step 자릿수만큼만 보여 준다(칸 폭을 넘지 않게).
+        const playDecimals = Number.isFinite(opts.step)
+          ? Math.min(6, Math.max(0, Math.ceil(-Math.log10(opts.step))))
+          : 4;
+        playViews.set(item.name, value => {
+          showNumber(number, Number(value.toFixed(playDecimals)));
+          if (range) range.value = String(toSlider(value));
+        });
       }
-      userList.append(row);
+      place(row, annotated ? spec.group : "");
+    }
+    // 묶음 순서는 코드에 처음 나온 순서(다른 프로젝트에서 남은 파라미터의 등록 순서가 아니라).
+    const codeOrder = [...new Set([...defaults.values()].map(spec => spec.group).filter(Boolean))];
+    const rank = group => (codeOrder.includes(group) ? codeOrder.indexOf(group) : codeOrder.length);
+    for (const [group, rows] of [...groups].sort((a, b) => rank(a[0]) - rank(b[0]))) {
+      const section = element("section"),
+        open = Boolean(search) || !collapsedGroups.has(group);
+      section.className = open ? "uniform-group" : "uniform-group is-collapsed";
+      const head = element("button");
+      head.type = "button";
+      head.className = "uniform-group-head glyph-icon icon-chevron";
+      head.setAttribute("aria-expanded", String(open));
+      const label = element("span");
+      label.className = "uniform-group-name";
+      label.textContent = group;
+      const count = element("span");
+      count.className = "uniform-group-count";
+      count.textContent = String(rows.length);
+      head.append(label, count);
+      head.addEventListener("click", () => {
+        if (collapsedGroups.has(group)) collapsedGroups.delete(group);
+        else collapsedGroups.add(group);
+        renderUniforms();
+        [...userList.querySelectorAll(".uniform-group-name")]
+          .find(n => n.textContent === group)
+          ?.parentElement?.focus();
+      });
+      const body = element("div");
+      body.className = "uniform-group-body";
+      body.hidden = !open;
+      body.append(...rows);
+      section.append(head, body);
+      userList.append(section);
     }
     // 방향 패드는 문서에 붙은 뒤에야 테마 색을 읽을 수 있으므로 한 번 더 그린다.
     for (const draw of directionRedraws) draw();
-    const count = userList.children.length;
+    const count = shown;
     $("uniformResults").textContent = search ? `${items.length}개 중 ${count}개 표시` : "";
     if (!count) {
       const hint = element("div");
@@ -1155,6 +1383,12 @@ const mount = (renderer, input, settings) => {
       label: "색상 선택기 (값 0~1)",
       types: ["vec3", "vec4"],
       help: "견본·HEX로 고릅니다. @color와 같습니다.",
+    },
+    {
+      value: "hdr",
+      label: "HDR 색상 (색 + 밝기 배율)",
+      types: ["vec3", "vec4"],
+      help: "견본 색에 밝기 배율(0~10)을 곱해 1보다 밝은 발광·조명 색을 만듭니다. @color hdr와 같습니다.",
     },
     {
       value: "dir",
@@ -1195,7 +1429,8 @@ const mount = (renderer, input, settings) => {
     $("uniformDisplayHelp").textContent = choice?.help || "";
     // 범위를 쓰지 않는 표시 방식이면 범위 칸을 숨긴다.
     const kind = typeInfo($("uniformType").value).kind;
-    $("rangeFields").hidden = !["f", "i", "u"].includes(kind) || ["color", "dir", "angle", "enum"].includes(display);
+    $("rangeFields").hidden =
+      !["f", "i", "u"].includes(kind) || ["color", "hdr", "dir", "angle", "enum"].includes(display);
   };
   const updateTypeFields = () => {
     const t = $("uniformType").value,
@@ -1253,13 +1488,14 @@ const mount = (renderer, input, settings) => {
         choice => choice.value === $("uniformDisplay").value && choice.types.includes(type)
       )?.value;
       const hasBounds =
-        !["color", "dir", "angle", "enum"].includes(display) &&
+        !["color", "hdr", "dir", "angle", "enum"].includes(display) &&
         ["f", "i", "u"].includes(typeInfo(type).kind) &&
         [min, max, step].some(Boolean);
       if (hasBounds && ![min, max, step].every(Boolean))
         throw new Error("슬라이더의 Min, Max, Step을 모두 입력하세요.");
       const opts = hasBounds ? { min: Number(min), max: Number(max), step: Number(step) } : {};
       if (display === "color") opts.color = true;
+      else if (display === "hdr") Object.assign(opts, { color: true, hdr: 10 });
       else if (display === "dir") opts.dir = "full";
       else if (display === "angle") opts.angle = true;
       else if (display === "pos") {
