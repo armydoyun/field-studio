@@ -1226,6 +1226,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       return true;
     });
   const open = () => {
+    // 이미 열려 있으면 초점만 준다. 예제 선택·코드 조각 삽입처럼 열린 편집기에서 다시 부르는 경우,
+    // 사용자가 그 사이 다시 연 설정 패널을 또 접지 않는다(패널 자동 접기는 편집기를 '여는 순간'에만).
+    if (openState) {
+      $("studioCode").focus({ preventScroll: true });
+      return;
+    }
     openState = true;
     $("studioDock").hidden = false;
     $("studioResize").hidden = expanded;
