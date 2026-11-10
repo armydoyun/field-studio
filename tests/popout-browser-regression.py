@@ -179,6 +179,28 @@ try:
             popup.close()
             page.wait_for_function("!shaderPopout.isOpen && !document.getElementById('studioProjectSave').disabled")
             expect(page.locator("#studioPromptDialog")).to_be_hidden()
+
+            # 키보드 채널 셰이더: 분리 창 캔버스에서 누른 키는 셰이더로 가고, 메인 창 편집기로 돌아오면 Esc 없이 바로 입력된다.
+            # (분리 창 안의 초점은 캔버스에 남아 있으므로, 메인 창의 키까지 셰이더가 가로채면 안 된다.)
+            page.keyboard.press("x")
+            page.locator("#gallery").get_by_text("Keyboard Control").first.click()
+            page.wait_for_function("!document.querySelector('dialog[open]')")
+            page.evaluate("shaderStudio.open()")
+            popup = open_preview()
+            popup.evaluate("window.__kd = []; addEventListener('keydown', e => setTimeout(() => __kd.push(e.defaultPrevented)), true)")
+            popup.click("#screen")
+            popup.keyboard.press("d")
+            popup.wait_for_function("__kd.length > 0")
+            assert popup.evaluate("__kd[0] === true"), "분리 창 캔버스에서 누른 키는 셰이더가 받는다"
+            page.bring_to_front()
+            page.click(".cm-content")
+            page.keyboard.press("Control+End")
+            before = page.evaluate("document.getElementById('studioCode').value.length")
+            page.keyboard.type("zq")
+            after = page.evaluate("document.getElementById('studioCode').value.length")
+            assert after == before + 2, f"분리 창 캔버스에 초점이 남아 있어도 메인 편집기 입력은 막히지 않는다 ({before} → {after})"
+            popup.close()
+            page.wait_for_function("!shaderPopout.isOpen")
             assert not errors, errors
             print("PASS", "일반 팝업" if fallback else "PiP/지원 브라우저 기본 창", "상단 도구·저장·녹화·복귀", flush=True)
             context.close()
