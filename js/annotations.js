@@ -5,7 +5,8 @@
 //  · @log(float, 0보다 큰 @range를 로그 눈금 슬라이더로) · @enum 이름…(int/uint, 0부터 차례로 선택지. 이름의 _는 빈칸)
 // @default 값 끝에 deg(또는 °)를 붙이면 도 단위로 읽어 라디안으로 바꾼다: @angle @default 45deg
 // 덧붙이는 태그: @color hdr [최대 밝기](색 + 밝기 배율, 값이 1을 넘을 수 있다) · @seed(🎲 무작위 버튼, float/int/uint)
-//  · @anim [초](▶ 버튼: 범위를 왕복, @angle이면 한 바퀴씩 돈다. 기본 4초) · @group 이름(패널에서 접히는 묶음)
+//  · @anim [초](▶ 버튼: 범위를 왕복, @angle이면 한 바퀴씩 돈다, int/uint는 한 칸씩 왕복, @enum은 선택지마다 [초]씩 머물며 순환.
+//    기본 4초) · @group 이름(패널에서 접히는 묶음)
 // 첫 @ 앞의 주석 글은 설명(description)으로 이름 아래에 보여 준다: // 햇빛 · @color
 // 램프(uniform sampler2D, 셰이더에서 texture(u, vec2(t, 0.5))로 읽는다):
 //  · @gradient [linear|smooth|step] @default 0 #000000 0.5 #ff8000 1 #ffffff(위치 + #RRGGBB[AA], 또는 위치 r g b a 다섯 개씩)
@@ -204,9 +205,9 @@ const parseLine = line => {
   if (tags.anim !== undefined) {
     options.anim = tags.anim[0] === undefined ? 4 : num(tags.anim[0]);
     if (!(options.anim >= 0.1 && options.anim <= 600)) error = "@anim의 주기는 0.1~600초여야 합니다.";
-    else if (type !== "float") error = "@anim은 float에만 쓸 수 있습니다.";
+    else if (!["float", "int", "uint"].includes(type)) error = "@anim은 float/int/uint에만 쓸 수 있습니다.";
     else if (!options.angle && (options.min === undefined || options.log))
-      error = "@anim에는 @range(로그 눈금 제외)나 @angle이 필요합니다.";
+      error = "@anim에는 @range(로그 눈금 제외)·@enum이나 @angle이 필요합니다.";
   }
   const shown = WIDGETS.filter(key => options[key] !== undefined);
   if (shown.length > 1) error = `표시 방식 태그는 하나만 쓸 수 있습니다: ${shown.map(key => `@${key}`).join(" ")}`;

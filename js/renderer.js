@@ -1328,10 +1328,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       anim !== undefined &&
       (typeof anim !== "number" ||
         !(anim >= 0.1 && anim <= 600) ||
-        type !== "float" ||
+        !["float", "int", "uint"].includes(type) ||
         !(angle || (min !== undefined && !log)))
     )
-      throw new Error("재생(anim)은 범위가 있는 float나 angle에만, 주기 0.1~600초로 사용할 수 있습니다.");
+      throw new Error(
+        "재생(anim)은 범위가 있는 float/int/uint(enum 포함)나 angle에만, 주기 0.1~600초로 사용할 수 있습니다."
+      );
     const nextOptions = min === undefined ? {} : { min, max, step };
     if (color) nextOptions.color = true;
     if (hdr) nextOptions.hdr = hdr;

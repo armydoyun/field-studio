@@ -646,6 +646,7 @@ const mount = (renderer, input, settings) => {
         });
       };
       sync();
+      wrap.refresh = sync;
     } else {
       wrap.className = "uniform-enum is-select";
       const select = element("select");
@@ -661,6 +662,7 @@ const mount = (renderer, input, settings) => {
         if (!commit(select, Number(select.value))) select.value = String(current());
       });
       wrap.append(select);
+      wrap.refresh = () => (select.value = String(current()));
     }
     return wrap;
   };
@@ -1188,6 +1190,7 @@ const mount = (renderer, input, settings) => {
   const formatDefault = value =>
     (Array.isArray(value) ? value : [value]).map(v => (typeof v === "number" ? +v.toFixed(4) : String(v))).join(", ");
   // @anim 재생: 범위를 코사인으로 왕복(@angle이면 한 바퀴씩 계속 돈다). 지금 값에서 위쪽으로 출발한다.
+  // int/uint는 한 칸씩 일정한 속도로 왕복(끝에 오래 머물지 않게 삼각파), @enum은 선택지마다 주기만큼 머물며 다음으로 넘어간다.
   // 값은 렌더러에 바로 쓰고, 화면은 행이 등록한 refresh로 맞춘다. 사용자가 값을 직접 바꾸면 그 파라미터는 멈춘다.
   const playing = new Map(),
     playViews = new Map(),
@@ -1199,15 +1202,24 @@ const mount = (renderer, input, settings) => {
     for (const [name, play] of playing) {
       const item = items.find(u => u.name === name),
         opts = item?.options || {};
-      if (!item || !opts.anim || item.type !== "float") {
+      if (!item || !opts.anim || !["float", "int", "uint"].includes(item.type)) {
         playing.delete(name);
         continue;
       }
       play.origin ??= now;
       const turns = (now - play.origin) / 1000 / opts.anim,
-        value = opts.angle
-          ? play.start + turns * 2 * Math.PI
-          : opts.min + (opts.max - opts.min) * (0.5 - 0.5 * Math.cos(turns * 2 * Math.PI + play.phase));
+        integer = item.type !== "float";
+      let value;
+      if (opts.angle) value = play.start + turns * 2 * Math.PI;
+      else if (opts.enum) value = (play.start + Math.floor(turns)) % opts.enum.length;
+      else if (integer) {
+        // 삼각파: 주기 동안 min → max → min. 출발 위치는 지금 값.
+        const u = turns + play.phase,
+          wave = 1 - Math.abs(1 - 2 * (u - Math.floor(u)));
+        value = opts.min + Math.round(wave * (opts.max - opts.min));
+      } else value = opts.min + (opts.max - opts.min) * (0.5 - 0.5 * Math.cos(turns * 2 * Math.PI + play.phase));
+      // 정수는 칸이 바뀔 때만 쓴다.
+      if (integer && value === item.value) continue;
       try {
         renderer.setUniform(name, value);
       } catch {
@@ -1235,8 +1247,10 @@ const mount = (renderer, input, settings) => {
     if (playing.has(item.name)) playing.delete(item.name);
     else {
       const { min, max } = current.options,
-        ratio = current.options.angle ? 0 : Math.min(1, Math.max(0, (current.value - min) / (max - min)));
-      playing.set(item.name, { start: current.value, phase: Math.acos(1 - 2 * ratio), origin: null });
+        ratio = current.options.angle ? 0 : Math.min(1, Math.max(0, (current.value - min) / (max - min))),
+        // 삼각파(정수)는 위상 ratio/2에서 값이 ratio, 코사인(실수)은 acos로 맞춘다.
+        phase = current.type === "float" ? Math.acos(1 - 2 * ratio) : ratio / 2;
+      playing.set(item.name, { start: current.value, phase, origin: null });
       if (!playFrame) playFrame = requestAnimationFrame(playStep);
     }
   };
@@ -1376,7 +1390,11 @@ const mount = (renderer, input, settings) => {
         play.type = "button";
         play.title = item.options.angle
           ? `재생: ${displayNumber(item.options.anim)}초에 한 바퀴`
-          : `재생: ${displayNumber(item.options.anim)}초 주기로 범위 왕복`;
+          : item.options.enum
+            ? `재생: 선택지마다 ${displayNumber(item.options.anim)}초씩 차례로`
+            : item.type === "float"
+              ? `재생: ${displayNumber(item.options.anim)}초 주기로 범위 왕복`
+              : `재생: ${displayNumber(item.options.anim)}초 주기로 한 칸씩 왕복`;
         play.setAttribute("aria-label", `${item.name} 재생`);
         play.setAttribute("aria-pressed", String(playing.has(item.name)));
         play.addEventListener("click", () => {
@@ -1590,7 +1608,9 @@ const mount = (renderer, input, settings) => {
         }
         show(item.value);
       } else if (item.options?.enum) {
-        row.append(enumControl(item, commit));
+        const choices = enumControl(item, commit);
+        playViews.set(item.name, choices.refresh);
+        row.append(choices);
       } else if (item.options?.pos) {
         row.append(
           positionControl(item, commit, () => [
