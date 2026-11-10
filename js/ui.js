@@ -1357,11 +1357,11 @@ const mount = (renderer, input, settings) => {
       const spec = defaults.get(item.name),
         annotated = spec && spec.type === item.type;
       // 설명: 주석에서 첫 태그 앞에 쓴 글.
+      let description = null;
       if (annotated && spec.description) {
-        const description = element("span");
+        description = element("span");
         description.className = "uniform-desc";
         description.textContent = spec.description;
-        title.append(description);
       }
       const remove = element("button");
       remove.className = "remove-uniform glyph-icon icon-close";
@@ -1448,6 +1448,7 @@ const mount = (renderer, input, settings) => {
         extras.push(play);
       }
       top.append(title, ...extras, ...(reset ? [reset] : []), remove);
+      if (description) top.append(description);
       const commit = (field, value) => {
         // 사용자가 직접 바꾸면 그 파라미터의 재생을 멈춘다.
         if (playing.delete(item.name)) syncPlayButtons();

@@ -70,7 +70,7 @@ uniform float uC; // 그림자 · @range 0 1 @group 빛
 uniform float uD; // @range 0 1 @group 무늬
 `,async(f,n,list)=>{
   assert.equal(list.children[0].className,'uniform-row','묶음 없는 파라미터가 먼저');
-  const title=list.children[0].children[0].children[0];assert.equal(title.children[2].className,'uniform-desc');assert.equal(title.children[2].textContent,'바탕 밝기');
+  const top=list.children[0].children[0],description=top.children.find(c=>c.className==='uniform-desc');assert(description);assert.equal(description.textContent,'바탕 밝기');
   assert.equal(rowOf(list,'uB').children[0].children[0].children.length,2,'설명이 없으면 줄도 없다');
   const [light,pattern]=list.children.slice(1);assert.equal(light.className,'uniform-group');
   const head=light.children[0];assert.equal(head.children[0].textContent,'빛');assert.equal(head.children[1].textContent,'2');assert.equal(head.attrs['aria-expanded'],'true');
