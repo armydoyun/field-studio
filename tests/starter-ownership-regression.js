@@ -46,20 +46,8 @@ const tick=()=>new Promise(setImmediate);
   await test('Generic key subscriptions still work without any camera Uniform',async()=>{
     const f=fixture(),i=input(f),events=[];try{const off=i.onKey(({code,down})=>{if(code==='KeyQ')events.push(down);});f.nodes.get('stage').focus();await f.document.dispatchEvent({type:'keydown',code:'KeyQ',key:'q'});await f.document.dispatchEvent({type:'keyup',code:'KeyQ',key:'q'});equal(events,[true,false]);assert.equal(f.renderer.getUserUniforms().length,0);off();}finally{i.dispose();f.dispose();}
   });
-  await test('Legacy saved Required camera migrates to Custom with its value',()=>{
-    const f=fixture();try{const data=f.settings.snapshot();data.required={};data.required.uCameraOrbit=[.3,.4,8];f.storage.set('webgl.raymarch-template.settings.v1',JSON.stringify(data));assert(f.settings.load());assert.equal(typeof f.renderer.getRequiredUniforms,"undefined");equal(f.renderer.getUserUniforms()[0].value,[.3,.4,8]);assert(!Object.hasOwn(JSON.parse(f.storage.get('webgl.raymarch-template.settings.v1')),'required'));}finally{f.dispose();}
-  });
-  await test('Legacy Pack camera migrates before atomic shader/Uniform application',async()=>{
-    const f=fixture();try{const data={version:3,project:scene(f.shader.raymarch),selected:'Image',textures:[],settings:f.settings.snapshot()};data.settings.required={};data.settings.required.uCameraOrbit=[.2,.3,9];data.settings.user=f.shader.rayUniforms.filter(([name])=>name!=='uCameraOrbit').map(([name,type,value,options])=>({name,type,value,options:options||{}}));assert(await f.studio.importPack(new File([JSON.stringify(data)],'legacy.json')));equal(f.renderer.getUserUniforms().find(u=>u.name==='uCameraOrbit').value,[.2,.3,9]);assert.equal(typeof f.renderer.getRequiredUniforms,"undefined");}finally{f.dispose();}
-  });
-  await test('Existing Custom camera takes precedence over a legacy Required copy',()=>{
-    const f=fixture();try{const data=f.settings.snapshot();data.required={};data.required.uCameraOrbit=[0,0,8];data.user=[{name:'uCameraOrbit',type:'vec3',value:[1,.5,6]}];const next=f.settings.validatePack(data);assert.equal(next.user.length,1);equal(next.user[0].value,[1,.5,6]);}finally{f.dispose();}
-  });
-  await test('Legacy migration at the Custom limit preserves original settings instead of dropping data',()=>{
-    const f=fixture();try{const data=f.settings.snapshot();data.required={};data.required.uCameraOrbit=[0,0,8];data.user=Array.from({length:64},(_,n)=>({name:'u'+n,type:'float',value:0}));const raw=JSON.stringify(data);f.storage.set('webgl.raymarch-template.settings.v1',raw);assert.equal(f.settings.load(),false);f.settings.save();assert.equal(f.storage.get('webgl.raymarch-template.settings.v1'),raw);}finally{f.dispose();}
-  });
-  await test('Explicit new Starter can replace settings after a blocked legacy migration',()=>{
-    const f=fixture();try{const data=f.settings.snapshot();data.required={};data.required.uCameraOrbit=[0,0,8];data.user=Array.from({length:64},(_,n)=>({name:'u'+n,type:'float',value:0}));f.storage.set('webgl.raymarch-template.settings.v1',JSON.stringify(data));assert.equal(f.settings.load(),false);assert(f.studio.exampleFeedback());const saved=JSON.parse(f.storage.get('webgl.raymarch-template.settings.v1'));assert.equal(saved.user.length,0);assert.equal(f.settings.status().available,true);}finally{f.dispose();}
+  await test('Old saved settings with the removed Required field still load (the field is ignored)',()=>{
+    const f=fixture();try{const data=f.settings.snapshot();data.required={uCameraOrbit:[.3,.4,8]};data.user=[{name:'uGain',type:'float',value:.4}];f.storage.set('webgl.raymarch-template.settings.v1',JSON.stringify(data));assert(f.settings.load());assert.equal(f.renderer.getUserUniforms().map(u=>u.name).join(),'uGain');assert(!Object.hasOwn(JSON.parse(f.storage.get('webgl.raymarch-template.settings.v1')),'required'));assert.equal(f.settings.status().available,true);}finally{f.dispose();}
   });
   console.log(`Starter ownership: ${passed} passed, ${failed} failed`);if(failed)process.exitCode=1;
 })();

@@ -10,7 +10,6 @@ const r={
   getUserUniforms:()=>user.map(x=>({...x})),
   setFpsLimit:v=>assign('fpsLimit',v),setResolutionScale:v=>assign('resolutionScale',v),
   setMaxPixels:v=>assign('maxPixels',v),setTimeScale:v=>assign('timeScale',v),
-  validateUniformValue:(type,value)=>{assert(Array.isArray(value)&&value.length===3&&value.every(Number.isFinite));},
   setUserUniforms:items=>{user=items;},
   removeUniform:k=>{user=user.filter(x=>x.name!==k);},defineUniform:(name,type,value,options)=>{user.push({name,type,value,options});}
 };
