@@ -472,7 +472,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     recordEdit(typing);
     dirty = true;
     clearError(true);
-    setStatus($("studioLive").checked ? "수정됨 · 자동 적용 대기 (0.9초)" : "수정됨 · Run으로 적용", "is-dirty");
+    setStatus(
+      $("studioLive").checked ? "수정됨 · 자동 적용 대기 (0.9초)" : "수정됨 · 실행(Alt+Enter)으로 적용",
+      "is-dirty"
+    );
     scheduleDraft();
     if (timer) clearTimeout(timer);
     if ($("studioLive").checked) timer = setTimeout(apply, 900);
@@ -1508,7 +1511,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         dirty = true;
         $("studioDraft").hidden = true;
         scheduleDraft();
-        setStatus("미적용 편집본 복원됨 · Run으로 컴파일", "is-dirty");
+        setStatus("미적용 편집본 복원됨 · 실행(Alt+Enter)으로 컴파일", "is-dirty");
       });
       on($("studioDraftDiscard"), "click", clearDraft);
     } catch (error) {
@@ -1555,7 +1558,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     rememberEditor();
     schedule();
     open();
-    setStatus(`${file.name} 불러옴 · Run으로 적용`, "is-dirty");
+    setStatus(`${file.name} 불러옴 · 실행(Alt+Enter)으로 적용`, "is-dirty");
   };
   const saveGLSL = () => download(`${selected}.frag`, $("studioCode").value, "text/plain;charset=utf-8");
   const insertSample = text => {

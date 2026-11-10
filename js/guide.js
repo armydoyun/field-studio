@@ -537,7 +537,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           ["줄 위/아래 이동", "Alt+↑ / Alt+↓"],
           ["줄 위/아래로 복사", "Shift+Alt+↑ / Shift+Alt+↓ (예전 키 Ctrl+Shift+D)"],
           ["줄 삭제", "Ctrl+Shift+K"],
-          ["위에 줄 삽입 (아래 삽입은 명령 팔레트)", "Ctrl+Shift+Enter"],
+          ["아래에 줄 삽입 / 위에 줄 삽입", "Ctrl+Enter / Ctrl+Shift+Enter"],
           ["들여쓰기 / 내어쓰기", "Tab / Shift+Tab · Ctrl+] / Ctrl+["],
           ["짝 괄호로 이동", "Ctrl+Shift+\\"],
           ["블록 접기 / 펴기", "Ctrl+Shift+[ / Ctrl+Shift+]"],
