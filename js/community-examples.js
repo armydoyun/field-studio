@@ -14,29 +14,33 @@ precision highp float;
 // FIELD Studio로 옮기며 바꾼 점:
 //  · mainImage/iResolution/iTime/iMouse → main/uResolution/uTime/uMouse
 //  · 마우스를 누르지 않아도 커서 위치로 방향을 돌린다(커서가 뷰포트 밖이면 원본의 기본 방향)
-//  · speed · brightness · darkmatter · saturation을 파라미터 패널 슬라이더로 꺼냈다
+//  · speed · brightness · darkmatter · saturation · formuparam · zoom · tile · distfading을 파라미터로 꺼냈다(기본값 = 원본)
 //
 // 원리(kaliset): 공간을 접어(tile) 반복한 뒤 p = abs(p)/dot(p,p) - c 를 여러 번 되풀이하면
 // 값이 요동치는 정도(a)가 자리마다 크게 달라진다. 광선을 따라 그 값을 더해 가면 별과 성운이 된다.
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-uniform float uSpeed;      // 원본 speed · @range 0 0.05 @step 0.0005 @default 0.01
-uniform float uBrightness; // 원본 brightness · @range 0.0002 0.004 @step 0.0001 @default 0.0015
-uniform float uDarkMatter; // 원본 darkmatter · @range 0 1 @step 0.01 @default 0.3
-uniform float uSaturation; // 원본 saturation · @range 0 1 @step 0.01 @default 0.85
+uniform float uSpeed;      // 날아가는 속도(원본 speed) · @range 0 0.05 @step 0.0005 @default 0.01 @group 비행
+uniform float uZoom;       // 시야(원본 zoom, 클수록 넓게) · @log @range 0.2 3 @default 0.8 @group 비행
+uniform float uFormula;    // 무늬를 정하는 상수(원본 formuparam, ▶로 훑기) · @range 0.4 0.6 @step 0.001 @default 0.53 @anim 30 @group 성운
+uniform float uTile;       // 공간을 접는 크기(원본 tile) · @range 0.5 1.2 @step 0.005 @default 0.85 @group 성운
+uniform float uDarkMatter; // 암흑 물질(원본 darkmatter) · @range 0 1 @step 0.01 @default 0.3 @group 성운
+uniform float uFade;       // 멀수록 흐려지는 정도(원본 distfading) · @range 0.5 0.9 @step 0.005 @default 0.73 @group 빛
+uniform float uBrightness; // 밝기(원본 brightness) · @log @range 0.0002 0.004 @default 0.0015 @group 빛
+uniform float uSaturation; // 채도(원본 saturation) · @range 0 1 @step 0.01 @default 0.85 @group 빛
 out vec4 fragColor;
 
 #define iterations 17
-#define formuparam 0.53
+#define formuparam uFormula
 
 #define volsteps 20
 #define stepsize 0.1
 
-#define zoom   0.800
-#define tile   0.850
+#define zoom   uZoom
+#define tile   uTile
 
-#define distfading 0.730
+#define distfading uFade
 
 void main() {
 	vec2 fragCoord = gl_FragCoord.xy;
@@ -4464,7 +4468,7 @@ const READING = {
     },
     {
       at: "p=abs(p)/dot(p,p)-formuparam",
-      text: "핵심: kaliset 반복. 17번 되풀이하며 값이 요동친 양(a)을 모으면 그 자리가 별·성운처럼 밝아진다. formuparam을 0.4~0.6 사이로 바꿔 보자.",
+      text: "핵심: kaliset 반복. 17번 되풀이하며 값이 요동친 양(a)을 모으면 그 자리가 별·성운처럼 밝아진다. 파라미터 패널의 uFormula(formuparam, 0.4~0.6)를 움직이거나 ▶로 훑어 보자.",
     },
     {
       at: "v+=vec3(s,s*s,s*s*s*s)*a*uBrightness*fade",

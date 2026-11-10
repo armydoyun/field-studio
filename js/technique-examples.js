@@ -35,8 +35,10 @@ uniform float uRoughness; // 거칠기(격자 보기가 꺼졌을 때) · @range
 uniform float uMetallic;  // 금속성(격자 보기가 꺼졌을 때) · @range 0 1 @step 0.01 @default 0 @group 재질
 uniform float uLight;     // 빛 세기 · @range 0 10 @step 0.1 @default 4 @group 빛
 uniform float uAmbient;   // 하늘빛 세기 · @range 0 2 @step 0.01 @default 0.6 @group 빛
+uniform vec3 uLightColor; // 빛 색 · @color @default 1 1 1 @group 빛
+uniform float uSwing;     // 빛이 좌우로 흔들리는 폭(마우스를 쓰지 않을 때) · @range 0 1.5 @step 0.01 @default 0.6 @group 빛
 uniform bool uGrid;       // 거칠기 × 금속성 격자로 보기 · @default true
-uniform int uView;        // 보기 · @enum 결과 D G F 난반사만 정반사만 @default 0
+uniform int uView;        // 보기(▶: 항 하나씩 차례로) · @enum 결과 D G F 난반사만 정반사만 @default 0 @anim 2
 out vec4 fragColor;
 
 const float PI = 3.14159265;
@@ -108,14 +110,14 @@ void main() {
     float r2 = dot(q, q);
     if (r2 < 1.0 && all(lessThan(abs(p), 0.5 * grid * cellSize))) {
         vec3 n = vec3(q.x, q.y, sqrt(1.0 - r2)), v = vec3(0.0, 0.0, 1.0);
-        float angle = uMouse.x >= 0.0 ? (uMouse.x / uResolution.x - 0.5) * 4.0 : 0.6 * sin(uTime * 0.4);
+        float angle = uMouse.x >= 0.0 ? (uMouse.x / uResolution.x - 0.5) * 4.0 : uSwing * sin(uTime * 0.4);
         vec3 l = normalize(vec3(sin(angle), 0.6, cos(angle) * 0.8 + 0.2));
         vec3 d1, s1, d2, s2;
         vec3 direct = shade(n, v, l, uBaseColor, roughness, metallic, d1, s1);
         if (uView >= 1 && uView <= 3) col = direct;
         else {
             ambient(n, v, uBaseColor, roughness, metallic, d2, s2);
-            vec3 lit = uLight * (uView == 5 ? s1 : uView == 4 ? d1 : direct) + uAmbient * (uView == 5 ? s2 : uView == 4 ? d2 : d2 + s2);
+            vec3 lit = uLight * uLightColor * (uView == 5 ? s1 : uView == 4 ? d1 : direct) + uAmbient * (uView == 5 ? s2 : uView == 4 ? d2 : d2 + s2);
             lit = clamp(lit * (2.51 * lit + 0.03) / (lit * (2.43 * lit + 0.59) + 0.14), 0.0, 1.0);   // ACES 톤 매핑
             col = pow(lit, vec3(1.0 / 2.2));                                                         // 감마
         }
@@ -152,7 +154,7 @@ uniform float uWind;       // 바람 · @range 0 2 @step 0.01 @default 0.4 @grou
 uniform vec3 uSunCol;      // 햇빛 · @color @default 1 0.92 0.8 @group 빛
 uniform vec3 uSkyCol;      // 하늘빛(그늘을 채움) · @color @default 0.45 0.6 0.85 @group 빛
 uniform vec3 uSunDir;      // 해 방향 · @dir hemi @default 0.6 0.35 0.7 @group 빛
-uniform int uView;         // 보기 · @enum 결과 밀도 투과율 받은_해빛 @default 0
+uniform int uView;         // 보기(▶: 차례로) · @enum 결과 밀도 투과율 받은_해빛 @default 0 @anim 3
 out vec4 fragColor;
 
 const float BOTTOM = 1.5, TOP = 4.0;                           // 구름층 높이
@@ -269,8 +271,8 @@ uniform int uFrame;
 uniform vec4 uMouse;          // xy = 커서(이 버퍼의 픽셀 좌표), z > 0 = 누르는 중
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-uniform float uForce;         // 분사구 힘 · @range 0 2 @step 0.01 @default 0.6
-uniform float uDissipation;   // 속도 유지율(1 = 줄지 않음) · @range 0.95 1 @step 0.001 @default 0.995
+uniform float uForce;         // 분사구 힘 · @range 0 2 @step 0.01 @default 0.6 @group 속도
+uniform float uDissipation;   // 속도 유지율(1 = 줄지 않음) · @range 0.95 1 @step 0.001 @default 0.995 @group 속도
 out vec4 fragColor;
 ${FLUID_COMMON}
 // 분사구 i의 위치와 방향: 화면을 천천히 돌며 안쪽을 향해 뿜는다.
@@ -350,7 +352,7 @@ uniform int uFrame;
 uniform vec4 uMouse;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-uniform float uDyeFade;       // 물감 유지율 · @range 0.95 1 @step 0.001 @default 0.992
+uniform float uDyeFade;       // 물감 유지율 · @range 0.95 1 @step 0.001 @default 0.992 @group 물감
 out vec4 fragColor;
 ${FLUID_COMMON}
 void jet(int i, out vec2 pos, out vec2 dir) {   // Buffer A와 같은 분사구
@@ -386,7 +388,7 @@ uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
-uniform int uView;            // 보기(속도: 방향 = 색상, 압력: 빨강 +, 파랑 -) · @enum 물감 속도 압력 발산 @default 0
+uniform int uView;            // 보기(속도: 방향 = 색상, 압력: 빨강 +, 파랑 -, ▶: 차례로) · @enum 물감 속도 압력 발산 @default 0 @anim 3
 out vec4 fragColor;
 void main() {
     vec2 uv = gl_FragCoord.xy / uResolution;
