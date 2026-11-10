@@ -12,11 +12,14 @@ import * as Reference from "./glsl-reference.js";
 import * as Snippets from "./snippets.js";
 import * as Theme from "./theme.js";
 import * as Popout from "./popout.js";
+import * as WorkspaceLayout from "./workspace-layout.js";
 
 // 테마는 WebGL 초기화와 무관하게 먼저 연결한다(렌더러가 실패해도 화면 테마 전환은 동작해야 한다).
 window.shaderTheme = Theme.mount();
 // 미리보기 분리 창(캔버스·상단 도구의 원본을 옮기므로 렌더러보다 먼저 연결해도 된다).
 window.shaderPopout = Popout.mount();
+// 설정 패널 자리·너비(렌더러와 무관하게 먼저 적용해 첫 화면부터 저장한 배치로 그린다).
+window.shaderWorkspace = WorkspaceLayout.mount();
 
 // 편집기 시그니처 힌트용 사전: "sin · cos · tan", "atan (2인수)"처럼 묶인 항목을 함수 이름별로 펼치고 같은 이름은 합친다.
 const builtinDocs = new Map();

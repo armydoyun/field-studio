@@ -1,6 +1,9 @@
-// 편집기 화면 배치: 높이·너비 리사이저, 옆(right)·아래(bottom) 배치, 편집기 메뉴 열림 상태 저장.
-// 사용자가 직접 정한 높이·배치만 저장한다. 정하기 전에는 창 크기(반·4분할 창 포함)에 맞는 기본값을 따른다.
+// 편집기 화면 배치: 높이·너비 리사이저, 미리보기의 왼쪽·오른쪽·위·아래 배치, 편집기 메뉴 열림 상태 저장.
+// 사용자가 직접 정한 높이·배치만 저장한다. 정하기 전에는 창 크기(반·4분할 창 포함)에 맞는 기본값(right·bottom)을 따른다.
+// 배치는 DOM 순서를 바꾸지 않고 #stage의 클래스(studio-layout-<자리>)와 CSS flex 방향으로만 정한다.
+// 좁은 화면(≤820px)에서는 CSS가 언제나 아래 배치로 되돌린다.
 import * as Store from "./storage.js";
+import * as DockDrag from "./dock-drag.js";
 
 const HEIGHT_KEY = "webgl.shader-studio.height.v2",
   LAYOUT_KEY = "webgl.shader-studio.layout.v1",
@@ -9,6 +12,10 @@ const GROUPS = ["studioCodeTools"];
 const HEIGHT = { min: 25, max: 85 },
   WIDTH = { min: 30, max: 75, initial: 46 };
 const clamp = (value, { min, max }) => Math.max(min, Math.min(max, value));
+const SIDES = ["right", "left", "bottom", "top"];
+const HORIZONTAL = new Set(["right", "left"]);
+// 메뉴 버튼·Ctrl+\: 옆 ↔ 위아래를 오간다(오른쪽 ↔ 아래, 왼쪽 ↔ 위).
+const SWAP = { right: "bottom", bottom: "right", left: "top", top: "left" };
 
 // 좁거나 낮은 창은 편집기를 더 높게 연다.
 const responsiveHeight = () => (window.matchMedia("(max-width:600px), (max-height:650px)").matches ? 75 : 55);
@@ -34,7 +41,7 @@ const create = ({ $, on, editor, editorOpen }) => {
   }
   {
     const saved = Store.readJSON(LAYOUT_KEY, {}) || {};
-    if (["right", "bottom"].includes(saved.layout)) {
+    if (SIDES.includes(saved.layout)) {
       layout = saved.layout;
       layoutChosen = true;
     }
@@ -42,7 +49,11 @@ const create = ({ $, on, editor, editorOpen }) => {
   }
 
   // 좁은 화면(≤820px)에서는 CSS가 아래 배치로 되돌리므로 리사이저도 세로 방향으로 동작한다.
-  const splitRight = () => layout === "right" && !window.matchMedia("(max-width:820px)").matches;
+  const narrow = () => window.matchMedia("(max-width:820px)").matches;
+  // 실제로 보이는 자리(좁은 화면이면 아래)
+  const side = () => (narrow() ? "bottom" : layout);
+  // 편집기가 미리보기 옆에 있어 너비로 조절하는지
+  const splitRight = () => HORIZONTAL.has(side());
   const saveLayout = () => {
     layoutChosen = true;
     Store.writeJSON(LAYOUT_KEY, { layout, width: dockWidth });
@@ -68,10 +79,11 @@ const create = ({ $, on, editor, editorOpen }) => {
     if (splitRight()) $("studioResize").setAttribute("aria-valuenow", String(Math.round(dockWidth)));
     if (persist) saveLayout();
   };
-  // 리사이저의 ARIA 방향·값은 실제로 움직이는 방향을 따른다: 오른쪽 배치라도 좁은 화면(≤820px)에서는 CSS가 아래 배치로
+  // 리사이저의 ARIA 방향·값은 실제로 움직이는 방향을 따른다: 옆 배치라도 좁은 화면(≤820px)에서는 CSS가 아래 배치로
   // 되돌리므로 위아래(높이)로 움직인다.
   const applyLayout = () => {
-    $("stage").classList.toggle("studio-layout-right", layout === "right");
+    for (const each of SIDES)
+      $("stage").classList.toggle(`studio-layout-${each}`, layout === each && each !== "bottom");
     const right = splitRight();
     const handle = $("studioResize");
     handle.setAttribute("aria-orientation", right ? "vertical" : "horizontal");
@@ -81,15 +93,35 @@ const create = ({ $, on, editor, editorOpen }) => {
     handle.title = right
       ? "드래그 또는 ←→로 너비 조절 · 두 번 클릭해 기본 너비 복원"
       : "드래그 또는 ↑↓로 높이 조절 · Home/End · 두 번 클릭해 기본 높이 복원";
-    const chosenRight = layout === "right";
-    $("studioLayout").setAttribute("aria-pressed", String(chosenRight));
-    $("studioLayout").title = chosenRight ? "편집기를 캔버스 아래로 배치" : "편집기를 캔버스 오른쪽에 나란히 배치";
-    $("studioLayout").textContent = chosenRight ? "편집기를 아래에 배치" : "편집기를 오른쪽에 배치";
+    const next = SWAP[layout];
+    $("studioLayout").setAttribute("aria-pressed", String(HORIZONTAL.has(layout)));
+    $("studioLayout").title =
+      `편집기를 미리보기 ${DockDrag.LABEL[next]}에 배치 · 편집기 머리의 손잡이를 끌면 네 방향 어디로든 옮깁니다`;
+    $("studioLayout").textContent = `편집기를 ${DockDrag.LABEL[next]}에 배치`;
+    const grip = $("studioDockGrip");
+    if (grip) {
+      grip.title = `끌어서 편집기를 미리보기의 왼쪽·오른쪽·위·아래로 옮기기 · 방향키로도 옮김 (지금 ${DockDrag.LABEL[layout]})`;
+      grip.setAttribute("aria-label", `편집기 위치 옮기기 (지금 ${DockDrag.LABEL[layout]})`);
+    }
     editor.update();
   };
-  const toggleLayout = () => {
-    layout = layout === "right" ? "bottom" : "right";
+  const setLayout = next => {
+    if (!SIDES.includes(next)) return;
+    layout = next;
     saveLayout();
+    applyLayout();
+  };
+  const toggleLayout = () => setLayout(SWAP[layout]);
+  // 화면 배치 초기화(설정 패널 · 작업공간 탭): 저장한 배치·높이·너비를 지우고 창 크기 기본값으로 돌아간다.
+  const resetLayout = () => {
+    layoutChosen = false;
+    heightChosen = false;
+    Store.remove(LAYOUT_KEY);
+    Store.remove(HEIGHT_KEY);
+    layout = fitLayout();
+    dockWidth = WIDTH.initial;
+    setDockHeight(responsiveHeight(), false);
+    setDockWidth(dockWidth, false);
     applyLayout();
   };
 
@@ -113,34 +145,48 @@ const create = ({ $, on, editor, editorOpen }) => {
   });
   on(resizer, "pointermove", e => {
     if (!sizing) return;
-    const rect = $("stage").getBoundingClientRect();
-    if (splitRight()) {
-      if (rect.width > 0) setDockWidth(((rect.right - e.clientX) / rect.width) * 100);
-    } else if (rect.height > 0) setDockHeight(((rect.bottom - e.clientY) / rect.height) * 100);
+    const rect = $("stage").getBoundingClientRect(),
+      at = side();
+    if (at === "right" && rect.width > 0) setDockWidth(((rect.right - e.clientX) / rect.width) * 100);
+    else if (at === "left" && rect.width > 0) setDockWidth(((e.clientX - rect.left) / rect.width) * 100);
+    else if (at === "top" && rect.height > 0) setDockHeight(((e.clientY - rect.top) / rect.height) * 100);
+    else if (at === "bottom" && rect.height > 0) setDockHeight(((rect.bottom - e.clientY) / rect.height) * 100);
   });
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
     on(resizer, type, () => {
       sizing = false;
     });
   on(resizer, "dblclick", () => (splitRight() ? setDockWidth(WIDTH.initial) : resetDockHeight()));
+  // 방향키는 경계를 그 방향으로 민다: 오른쪽 배치에서 ←는 편집기를 넓히고, 왼쪽 배치에서는 →가 넓힌다.
   on(resizer, "keydown", e => {
+    const at = side();
     if (splitRight()) {
       if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
         e.preventDefault();
-        setDockWidth(
-          e.key === "Home" ? WIDTH.min : e.key === "End" ? WIDTH.max : dockWidth + (e.key === "ArrowLeft" ? 3 : -3)
-        );
+        const grow = e.key === (at === "right" ? "ArrowLeft" : "ArrowRight");
+        setDockWidth(e.key === "Home" ? WIDTH.min : e.key === "End" ? WIDTH.max : dockWidth + (grow ? 3 : -3));
       }
       return;
     }
     if (["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) {
       e.preventDefault();
-      setDockHeight(
-        e.key === "Home" ? HEIGHT.min : e.key === "End" ? HEIGHT.max : dockHeight + (e.key === "ArrowUp" ? 3 : -3)
-      );
+      const grow = e.key === (at === "top" ? "ArrowDown" : "ArrowUp");
+      setDockHeight(e.key === "Home" ? HEIGHT.min : e.key === "End" ? HEIGHT.max : dockHeight + (grow ? 3 : -3));
     }
   });
   on($("studioLayout"), "click", toggleLayout);
+  // 편집기 머리의 손잡이: 끌어서 미리보기의 네 가장자리 중 하나에 놓는다.
+  const dockDrag = DockDrag.create({
+    grip: $("studioDockGrip"),
+    target: () => $("stage"),
+    sides: SIDES,
+    current: () => layout,
+    onDrop: setLayout,
+    name: "편집기",
+    enabled: () => !narrow(),
+    size: at => (HORIZONTAL.has(at) ? dockWidth : dockHeight) / 100,
+  });
+  on(document, "workspace-layout-reset", resetLayout);
 
   setDockHeight(dockHeight, false);
   setDockWidth(dockWidth, false);
@@ -163,6 +209,10 @@ const create = ({ $, on, editor, editorOpen }) => {
 
   return {
     splitRight,
+    side,
+    setLayout,
+    resetLayout,
+    dispose: () => dockDrag.dispose(),
     saveWorkspace,
     // 지난번에 편집기를 연 채로 떠났는지
     reopenEditor: state?.editor === true,
@@ -173,4 +223,4 @@ const create = ({ $, on, editor, editorOpen }) => {
   };
 };
 
-export { create, responsiveHeight, fitLayout, HEIGHT_KEY, LAYOUT_KEY, WORKSPACE_KEY };
+export { create, responsiveHeight, fitLayout, SIDES, HEIGHT_KEY, LAYOUT_KEY, WORKSPACE_KEY };

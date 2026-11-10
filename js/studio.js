@@ -2091,7 +2091,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press("시간·프레임 초기화", "studioResetFrames"),
     press("프로젝트 메뉴 열기", "projectMenuToggle", "Ctrl+O"),
     press("집중 모드 전환", "studioMaximize", "Ctrl+K Z", ["Mod-k z", "Mod-k Z"]),
-    press("편집기 배치 바꾸기 (오른쪽 ↔ 아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
+    press("편집기 배치 바꾸기 (옆 ↔ 위아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
     press("편집기 닫기", "studioHide", "E"),
     press("코드 조각 모음 열기", "studioSnippets"),
     press("파라미터 패널 열기", "studioParameters"),
@@ -2156,6 +2156,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       }
       dialogs.close();
       editor.dispose();
+      workspace.dispose();
       controller.abort();
     },
   };

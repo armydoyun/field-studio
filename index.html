@@ -8,6 +8,8 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%231b1c1f' fill-rule='evenodd' d='M8 1h16a7 7 0 0 1 7 7v16a7 7 0 0 1-7 7H8a7 7 0 0 1-7-7V8a7 7 0 0 1 7-7Zm8 8.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Z'/%3E%3C/svg%3E">
     <!-- 테마: 저장된 선택(light/dark)을 첫 그리기 전에 적용해 깜빡임을 막는다. 없으면 시스템 설정을 따른다. -->
     <script>try{var t=localStorage.getItem("field.theme.v1");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}</script>
+    <!-- 설정 패널 자리·너비(workspace-layout.js와 같은 규칙): 첫 그리기 전에 적용해 기본 배치가 잠깐 보였다 바뀌지 않게 한다. -->
+    <script>try{var p=JSON.parse(localStorage.getItem("field.panel.layout.v1")||"{}")||{},r=document.documentElement;if(p.side==="right")r.classList.add("panel-right");if(isFinite(p.width))r.style.setProperty("--panel-width",Math.round(Math.max(240,Math.min(Math.max(240,Math.min(560,Math.round(innerWidth*.45))),p.width)))+"px");}catch(e){}</script>
     <title>FIELD Studio — WebGL2 Shader Workspace</title>
     <link rel="stylesheet" href="./style.css">
 </head>
@@ -22,6 +24,7 @@
                     </div>
                     <div class="brand-text"><strong>FIELD<span>studio</span></strong><small>SHADER WORKSPACE / WEBGL 2</small></div>
                 </div>
+                <button id="panelGrip" class="dock-grip" type="button" aria-label="설정 패널 위치 옮기기" title="끌어서 설정 패널을 화면 왼쪽·오른쪽으로 옮기기 · ←→로도 옮김"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
                 <button id="panelClose" class="icon-button close-panel glyph-icon icon-close" type="button" aria-label="설정 패널 숨기기" title="패널 숨기기 (H)"></button>
             </header>
 
@@ -162,6 +165,12 @@
                         </div>
                         <p class="help">시스템을 고르면 운영체제의 밝기 설정을 따릅니다. 미리보기 위 도구 막대의 해·달 버튼으로도 바꿀 수 있습니다.</p>
                     </section>
+                    <section class="control-section">
+                        <div class="section-heading"><h2>화면 배치</h2><span class="section-note">LAYOUT</span></div>
+                        <p class="help">패널과 미리보기 사이 경계를 끌면 패널 너비가 바뀝니다. 패널 머리와 편집기 머리의 손잡이(⠿)를 끌어 원하는 자리에 놓으면 패널은 화면 왼쪽·오른쪽, 편집기는 미리보기의 왼쪽·오른쪽·위·아래로 옮겨집니다. 손잡이에 초점을 두고 방향키를 눌러도 됩니다.</p>
+                        <button id="layoutReset" class="secondary-action" type="button">화면 배치 초기화</button>
+                        <p class="help">패널 자리·너비와 편집기 자리·크기를 기본값으로 되돌립니다. 좁은 화면에서는 패널이 서랍으로, 편집기가 아래로 고정됩니다.</p>
+                    </section>
                     <section class="control-section settings-section">
                         <div class="section-heading"><h2>브라우저 설정</h2></div>
                         <p class="help">렌더링 품질과 Uniform 설정은 이 브라우저에 자동으로 저장됩니다.</p>
@@ -174,6 +183,7 @@
             <footer class="panel-footer"><div class="storage-indicator"><span class="storage-dot" aria-hidden="true"></span><span id="storageStatus" role="status">설정 저장소 확인 중</span></div><span class="footer-version">FIELD / LOCAL</span></footer>
         </aside>
 
+        <div id="panelResize" class="panel-resizer" role="separator" aria-label="설정 패널 너비 조절" aria-orientation="vertical" aria-controls="panel" tabindex="0" aria-valuemin="240" aria-valuemax="560" aria-valuenow="300" title="드래그 또는 ←→로 설정 패널 너비 조절 · Home/End · 두 번 클릭해 기본 너비 복원"></div>
         <button id="panelBackdrop" class="panel-backdrop" type="button" aria-label="설정 패널 닫기"></button>
         <main id="stage" tabindex="0" aria-label="셰이더 뷰포트">
             <div id="renderViewport" class="render-viewport">
@@ -274,6 +284,7 @@
                         <span class="studio-tool-sep" aria-hidden="true"></span>
                         <button id="studioPause" type="button" class="glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
                         <button id="studioResetFrames" type="button" class="glyph-icon icon-reset" aria-label="시간 초기화" title="시간·프레임 카운터와 피드백 버퍼 데이터 초기화"></button>
+                        <button id="studioDockGrip" class="dock-grip" type="button" aria-label="편집기 위치 옮기기" title="끌어서 편집기를 미리보기의 왼쪽·오른쪽·위·아래로 옮기기 · 방향키로도 옮김"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
                         <button id="studioMaximize" type="button" aria-pressed="false" aria-label="집중 모드 전환" title="집중 모드 · 미리보기를 일시정지하고 코드 영역 확대" class="glyph-icon icon-expand"></button>
                         <button id="studioHide" type="button" title="셰이더 편집기 닫기 (E)" aria-label="편집기 닫기" class="glyph-icon icon-close"></button>
                     </div>
