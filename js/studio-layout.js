@@ -2,6 +2,8 @@
 // 사용자가 직접 정한 높이·배치만 저장한다. 정하기 전에는 창 크기(반·4분할 창 포함)에 맞는 기본값(right·bottom)을 따른다.
 // 배치는 DOM 순서를 바꾸지 않고 #stage의 클래스(studio-layout-<자리>)와 CSS flex 방향으로만 정한다.
 // 좁은 화면(≤820px)에서는 CSS가 언제나 아래 배치로 되돌린다.
+// 리사이저를 최소 크기의 절반보다 작게 끌면 편집기에 '놓으면 숨김'이 뜨고, 그대로 놓으면 편집기를 닫는다(onCollapse).
+// 닫을 때는 끌기 전 크기로 되돌려 두어 다시 열면 원래 크기로 열린다.
 import * as Store from "./storage.js";
 import * as DockDrag from "./dock-drag.js";
 
@@ -27,7 +29,8 @@ const fitLayout = () => {
 };
 
 // editor: 배치가 바뀌면 다시 재도록 update()를 부른다. editorOpen(): 저장할 편집기 열림 상태.
-const create = ({ $, on, editor, editorOpen }) => {
+// onCollapse(): 리사이저를 끝까지 줄여 놓았을 때 편집기를 닫는다.
+const create = ({ $, on, editor, editorOpen, onCollapse = () => {} }) => {
   let heightChosen = false,
     layoutChosen = false,
     workspaceReady = false;
@@ -91,8 +94,8 @@ const create = ({ $, on, editor, editorOpen }) => {
     handle.setAttribute("aria-valuemax", right ? "75" : "85");
     handle.setAttribute("aria-valuenow", String(Math.round(right ? dockWidth : dockHeight)));
     handle.title = right
-      ? "드래그 또는 ←→로 너비 조절 · 두 번 클릭해 기본 너비 복원"
-      : "드래그 또는 ↑↓로 높이 조절 · Home/End · 두 번 클릭해 기본 높이 복원";
+      ? "드래그 또는 ←→로 너비 조절 · 끝까지 줄여 놓으면 편집기 닫기 · 두 번 클릭해 기본 너비 복원"
+      : "드래그 또는 ↑↓로 높이 조절 · 끝까지 줄여 놓으면 편집기 닫기 · Home/End · 두 번 클릭해 기본 높이 복원";
     const next = SWAP[layout];
     $("studioLayout").setAttribute("aria-pressed", String(HORIZONTAL.has(layout)));
     $("studioLayout").title =
@@ -136,10 +139,20 @@ const create = ({ $, on, editor, editorOpen }) => {
 
   $("studioDock").style.setProperty("--studio-height", `${dockHeight}%`);
   const resizer = $("studioResize");
-  let sizing = false;
+  let sizing = false,
+    start = null,
+    collapsing = false;
+  const setCollapsing = value => {
+    if (collapsing === value) return;
+    collapsing = value;
+    $("stage").classList.toggle("studio-collapsing", value);
+    resizer.setAttribute("aria-valuetext", value ? "놓으면 편집기를 닫습니다" : "");
+    if (!value) resizer.removeAttribute("aria-valuetext");
+  };
   on(resizer, "pointerdown", e => {
     if (e.button !== 0) return;
     sizing = true;
+    start = { height: dockHeight, width: dockWidth, heightChosen, layoutChosen };
     resizer.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
@@ -147,14 +160,41 @@ const create = ({ $, on, editor, editorOpen }) => {
     if (!sizing) return;
     const rect = $("stage").getBoundingClientRect(),
       at = side();
-    if (at === "right" && rect.width > 0) setDockWidth(((rect.right - e.clientX) / rect.width) * 100);
-    else if (at === "left" && rect.width > 0) setDockWidth(((e.clientX - rect.left) / rect.width) * 100);
-    else if (at === "top" && rect.height > 0) setDockHeight(((e.clientY - rect.top) / rect.height) * 100);
-    else if (at === "bottom" && rect.height > 0) setDockHeight(((rect.bottom - e.clientY) / rect.height) * 100);
+    // 원하는 크기(%)가 최소의 절반보다 작으면 놓을 때 닫는다. 그동안 편집기는 최소 크기에 머문다.
+    const wanted =
+      at === "right" && rect.width > 0
+        ? ((rect.right - e.clientX) / rect.width) * 100
+        : at === "left" && rect.width > 0
+          ? ((e.clientX - rect.left) / rect.width) * 100
+          : at === "top" && rect.height > 0
+            ? ((e.clientY - rect.top) / rect.height) * 100
+            : at === "bottom" && rect.height > 0
+              ? ((rect.bottom - e.clientY) / rect.height) * 100
+              : null;
+    if (wanted === null) return;
+    const horizontal = at === "right" || at === "left";
+    setCollapsing(wanted < (horizontal ? WIDTH.min : HEIGHT.min) / 2);
+    if (horizontal) setDockWidth(wanted);
+    else setDockHeight(wanted);
   });
+  // 끌기 전 크기·저장 상태로 되돌린다(최소 크기가 저장되지 않게).
+  const restoreStart = () => {
+    if (start.heightChosen) setDockHeight(start.height);
+    else resetDockHeight();
+    setDockWidth(start.width, start.layoutChosen);
+    if (!start.layoutChosen) {
+      layoutChosen = false;
+      Store.remove(LAYOUT_KEY);
+    }
+  };
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
-    on(resizer, type, () => {
+    on(resizer, type, e => {
+      if (!sizing) return;
       sizing = false;
+      if (!collapsing) return;
+      setCollapsing(false);
+      restoreStart();
+      if (e.type === "pointerup") onCollapse();
     });
   on(resizer, "dblclick", () => (splitRight() ? setDockWidth(WIDTH.initial) : resetDockHeight()));
   // 방향키는 경계를 그 방향으로 민다: 오른쪽 배치에서 ←는 편집기를 넓히고, 왼쪽 배치에서는 →가 넓힌다.

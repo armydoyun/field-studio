@@ -1963,7 +1963,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   let afterFullscreen = null;
   // 화면 배치·리사이저·편집기 메뉴(studio-layout.js). 편집기 열림 상태는 전체화면 중이면 전체화면 전 상태를 남긴다.
-  const workspace = Layout.create({ $, on, editor, editorOpen: () => (afterFullscreen ? true : openState) });
+  const workspace = Layout.create({
+    $,
+    on,
+    editor,
+    editorOpen: () => (afterFullscreen ? true : openState),
+    onCollapse: () => close(),
+  });
   projects = Projects.create({
     onCurrent: current => {
       titleName = current ? current.name : "저장 안 한 작업";
