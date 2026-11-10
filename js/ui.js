@@ -119,6 +119,18 @@ const mount = (renderer, input, settings) => {
   const DEG = 180 / Math.PI,
     DIR_PAD = 88;
   let directionRedraws = [];
+  // CSS 너비만 바뀌면 곡선의 기존 비트맵이 늘어나므로, 표시 크기에 맞춰 프레임을 그리기 전에 다시 그린다.
+  const curveRedraws = new Map(),
+    curveResizeObserver = window.ResizeObserver
+      ? new window.ResizeObserver(entries => {
+          for (const { target, contentRect } of entries)
+            if (contentRect.width > 0 && contentRect.height > 0) curveRedraws.get(target)?.();
+        })
+      : null;
+  signal.addEventListener("abort", () => {
+    curveResizeObserver?.disconnect();
+    curveRedraws.clear();
+  });
   const PAD_SIZE = DIR_PAD;
   // 패드 색은 테마 토큰에서 고른다. 어두운 테마: 그늘 --sunken → 빛 --text-soft, 밝은 테마: 그늘 --faint → 빛 --surface.
   // 점·선은 CSS border-color(액센트)와 color(보조 선)로 넘겨받는다.
@@ -1140,6 +1152,8 @@ const mount = (renderer, input, settings) => {
       apply(yField);
     });
     directionRedraws.push(draw);
+    curveRedraws.set(pad, draw);
+    curveResizeObserver?.observe(pad);
     sync();
     return wrap;
   };
@@ -1307,6 +1321,8 @@ const mount = (renderer, input, settings) => {
     uniformSnapshot = JSON.stringify(items);
     const defaults = annotatedDefaults();
     directionRedraws = [];
+    curveResizeObserver?.disconnect();
+    curveRedraws.clear();
     playViews.clear();
     resetSyncs.clear();
     playButtons.clear();
