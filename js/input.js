@@ -26,13 +26,19 @@ const mount = (canvas, renderer) => {
     return () => dragListeners.delete(callback);
   };
   const stopKeyboard = () => keys.clear();
-  const isTyping = target =>
-    target instanceof Element && !!target.closest("input, textarea, select, [contenteditable]");
-  const isStageActive = () => document.activeElement === stage || document.activeElement === canvas;
+  // 분리 창(popout.js)의 요소는 그 창의 Element라 instanceof로 가리지 않는다.
+  const isTyping = target => !!target?.closest?.("input, textarea, select, [contenteditable]");
+  // 캔버스가 별도 창으로 분리돼 있으면(popout.js) 그 창에서 캔버스에 초점이 있을 때가 '뷰포트 선택'이다.
+  const canvasDocument = () => canvas.ownerDocument || document,
+    popped = () => canvasDocument() !== document;
+  const isStageActive = () =>
+    popped()
+      ? canvasDocument().activeElement === canvas
+      : document.activeElement === stage || document.activeElement === canvas;
   const onKeyDown = event => {
     if (
       disposed ||
-      document.hidden ||
+      canvasDocument().hidden ||
       event.isComposing ||
       event.ctrlKey ||
       event.altKey ||
@@ -61,7 +67,7 @@ const mount = (canvas, renderer) => {
       event.preventDefault();
       event.stopPropagation();
       releaseShaderKeys();
-      stage.blur?.();
+      (popped() ? canvas : stage).blur?.();
       syncHint();
       return;
     }
@@ -88,8 +94,10 @@ const mount = (canvas, renderer) => {
     if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
   };
   // 캔버스가 별도 창으로 분리돼 있으면(popout.js) 메인 stage에 초점을 주지 않는다. 주면 분리 창의 키 입력(Space·Esc)을 메인이 가져간다.
+  // 분리 창에서는 캔버스 자체에 초점을 준다(그 창의 키 입력을 셰이더로 넘기는 기준).
   const focusStage = () => {
-    if (stage.contains?.(canvas) !== false) stage.focus({ preventScroll: true });
+    if (popped()) canvas.focus?.({ preventScroll: true });
+    else if (stage.contains?.(canvas) !== false) stage.focus({ preventScroll: true });
   };
   const onPointerDown = event => {
     if (disposed || event.button !== 0 || pointerId !== null) return;
@@ -163,9 +171,60 @@ const mount = (canvas, renderer) => {
   });
   listen(document, "visibilitychange", onVisibilityChange);
   listen(stage, "focusout", onFocusOut);
+  // ---- 분리 창 ----
+  // 캔버스를 별도 창으로 옮기면 키 이벤트는 그 창에서 일어나므로, 같은 처리기를 그 창에도 단다.
+  // 캔버스는 그 창에서 초점을 받을 수 있게(tabindex=-1) 하고, 창을 열면 바로 키 입력을 받도록 초점을 준다.
+  let popoutListeners = null;
+  const detachPopout = () => {
+    popoutListeners?.abort();
+    popoutListeners = null;
+    canvas.removeAttribute?.("tabindex");
+  };
+  const attachPopout = () => {
+    detachPopout();
+    const doc = canvasDocument(),
+      win = doc.defaultView;
+    if (!win || doc === document) return;
+    popoutListeners = new AbortController();
+    const opts = (capture = false) => ({ capture, signal: popoutListeners.signal });
+    canvas.tabIndex = -1;
+    win.addEventListener("keydown", onShaderKeyDown, opts(true));
+    win.addEventListener("keyup", onShaderKeyUp, opts(true));
+    doc.addEventListener("keydown", onKeyDown, opts());
+    doc.addEventListener("keyup", onKeyUp, opts());
+    win.addEventListener(
+      "blur",
+      () => {
+        releaseShaderKeys();
+        syncHint();
+        stopKeyboard();
+        stopDrag();
+      },
+      opts()
+    );
+    canvas.addEventListener(
+      "focusout",
+      () => {
+        stopKeyboard();
+        releaseShaderKeys();
+        queueMicrotask(syncHint);
+      },
+      opts()
+    );
+    canvas.addEventListener("focusin", syncHint, opts());
+    canvas.focus?.({ preventScroll: true });
+  };
+  listen(document, "preview-popout-changed", event => {
+    releaseShaderKeys();
+    stopKeyboard();
+    if (event.detail?.open && popped()) attachPopout();
+    else detachPopout();
+    syncHint();
+  });
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    detachPopout();
     stopKeyboard();
     stopDrag();
     controller.abort();

@@ -124,8 +124,10 @@ await test('Empty FPS input is rejected rather than silently changing limit to z
  f.renderer.setFpsLimit(60);n('fpsLimit').value='';await n('fpsLimit').dispatchEvent({type:'change'});assert.equal(f.renderer.getStats().fpsLimit,60);assert.match(n('uiError').textContent,/입력/);
  await n('uiDismiss').click();assert.equal(n('uiError').textContent,'');assert.equal(n('uiToast').hidden,true);
 });
-await test('Mobile drawer blocks the stage, and editor opening releases the stage again',async(f,n)=>{
- assert.equal(n('stage').inert,true);f.studio.open();assert.equal(f.document.body.classList.contains('panel-hidden'),true);assert.equal(n('stage').inert,false);assert.equal(f.document.activeElement,n('studioCode'));
+await test('Mobile drawer blocks the stage; opening the editor leaves the user-opened drawer alone',async(f,n)=>{
+ assert.equal(n('stage').inert,true);f.studio.open();assert.equal(n('studioDock').hidden,false);
+ assert.equal(f.document.body.classList.contains('panel-hidden'),false,'editor opening must not close the drawer');assert.equal(n('stage').inert,true);
+ await n('panelBackdrop').click();assert.equal(n('stage').inert,false);assert.equal(n('studioDock').hidden,false,'closing the drawer reveals the editor');
  await n('panelToggle').click();assert.equal(n('stage').inert,true);await n('panelBackdrop').click();assert.equal(n('stage').inert,false);
 },true);
 await test('Compact layout resets the editor height to 75%',async(f,n)=>{

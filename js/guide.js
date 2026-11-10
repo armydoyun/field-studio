@@ -1269,8 +1269,11 @@ const mount = ({ studio, gallery }) => {
   const prepareStep = action => {
     if (!action) return;
     if (action.startsWith("panel:")) openPanel(action.slice(6));
-    else if (action === "open-editor") studio.open();
-    else if (action === "stage") closeOverlayPanel();
+    else if (action === "open-editor") {
+      // 편집기를 열어도 패널은 그대로이므로, 좁은 화면에서 편집기를 덮는 서랍은 투어가 직접 닫는다(끝나면 되돌린다).
+      closeOverlayPanel();
+      studio.open();
+    } else if (action === "stage") closeOverlayPanel();
     else if (action === "close-editor") {
       if (!$("studioDock").hidden) studio.close();
       closeOverlayPanel();

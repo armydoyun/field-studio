@@ -24,9 +24,6 @@ const STORAGE_KEY = "webgl.shader-studio.project.v1",
   JSON_LIMIT = Pack.LIMITS.json,
   PACK_LIMIT = Pack.LIMITS.pack;
 const { copy, same, validateProject } = Model;
-// 이 폭보다 좁은 창에서는 편집기를 열 때 설정 패널을 자동으로 접는다(1/2·1/4 분할 창, 1440·1536 노트북).
-const PANEL_AUTO_WIDTH = 1600,
-  PANEL_AUTO_KEY = "field.panelAutoHidden.v1";
 // options.lookup(name): 내장 함수 설명 {sig, desc} 또는 null — 편집기 시그니처 힌트에 쓴다(main.js가 레퍼런스에서 만들어 넘긴다).
 const mount = (renderer, Shader, settings = null, options = {}) => {
   const $ = PreviewDOM.createLookup();
@@ -1226,24 +1223,17 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       return true;
     });
   const open = () => {
+    // 설정 패널은 사용자가 직접 열고 닫는다. 편집기를 열거나 예제를 고르거나 코드 조각을 넣어도
+    // 패널 표시를 바꾸지 않는다(사용자가 하지 않은 일로 화면 구조가 바뀌지 않게).
+    if (openState) {
+      $("studioCode").focus({ preventScroll: true });
+      return;
+    }
     openState = true;
     $("studioDock").hidden = false;
     $("studioResize").hidden = expanded;
     $("studioToggle").setAttribute("aria-label", "셰이더 편집기 닫기");
     $("studioToggle").setAttribute("aria-expanded", "true");
-    if (window.matchMedia("(max-width:820px)").matches) {
-      document.body.classList.add("panel-hidden");
-      document.dispatchEvent(new Event("shader-panel-changed"));
-    } else if (
-      window.matchMedia(`(max-width:${PANEL_AUTO_WIDTH - 1}px)`).matches &&
-      !document.body.classList.contains("panel-hidden")
-    ) {
-      // 반·4분할 창이나 노트북 화면에서는 편집기를 열 때 렌더링 설정 패널을 접어 미리보기와 코드에 자리를 준다.
-      // 편집기를 닫으면 다시 편다. 파라미터는 편집기 메뉴의 '파라미터 패널 열기'나 패널 버튼으로 언제든 연다.
-      document.body.classList.add("panel-hidden");
-      Store.write(PANEL_AUTO_KEY, "1");
-      document.dispatchEvent(new Event("shader-panel-changed"));
-    }
     $("studioCode").focus({ preventScroll: true });
     workspace.saveWorkspace();
   }; // 재생 버튼은 아이콘(정지 중이면 ▶)과 접근 가능한 이름으로 상태를 알린다. 집중 모드에서는 복귀 후 재생 여부를 고른다.
@@ -1272,15 +1262,6 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   const close = () => {
     if (expanded) maximize();
-    // 편집기를 열 때 자동으로 접은 패널은 닫을 때 되돌린다(사용자가 그 사이 직접 열고 닫았으면 그대로 둔다).
-    // 전체화면으로 들어가며 닫을 때는 그대로 두었다가 전체화면을 마치고 다시 열 때 이어 간다.
-    if (Store.read(PANEL_AUTO_KEY) === "1" && !document.fullscreenElement) {
-      Store.remove(PANEL_AUTO_KEY);
-      if (document.body.classList.contains("panel-hidden") && !window.matchMedia("(max-width:820px)").matches) {
-        document.body.classList.remove("panel-hidden");
-        document.dispatchEvent(new Event("shader-panel-changed"));
-      }
-    }
     openState = false;
     $("studioDock").hidden = true;
     $("studioResize").hidden = true;
@@ -1291,9 +1272,6 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     workspace.saveWorkspace();
   };
   const toggle = () => (openState ? close() : open());
-  // 사용자가 패널을 직접 열거나 닫으면 그 선택을 따른다(편집기를 닫을 때 자동으로 되돌리지 않는다).
-  for (const id of ["panelToggle", "panelClose", "panelBackdrop", "studioParameters"])
-    if ($(id)) on($(id), "click", () => Store.remove(PANEL_AUTO_KEY));
   const download = (name, text, type, limit = Infinity) => {
     const blob = new Blob([text], { type });
     if (blob.size > limit) throw new Error(`내보내기 파일은 최대 ${limit / 1048576}MiB입니다.`);
