@@ -41,9 +41,47 @@ test("색으로 쓰는 vec3/vec4에는 @color가 있다",()=>{
   const missing=found.filter(d=>/^vec[34]$/.test(d.type)&&COLOR_NAME.test(d.name)&&!/@(color|dir)\b/.test(d.line)).map(d=>`${d.where}: ${d.line.trim()}`);
   assert.deepEqual(missing,[]);
 });
-test("@color가 붙은 값은 0~1 안이다",()=>{
-  for(const d of found.filter(d=>/@color\b/.test(d.line))){const [item]=Annotations.collect([d.line]);
-    assert(item.value.every(v=>v>=0&&v<=1),`${d.where}: ${d.name} = ${item.value}`);}
+test("@color가 붙은 값은 0~1 안이다(@color hdr는 0~최대 밝기)",()=>{
+  for(const d of found.filter(d=>/@color\b/.test(d.line))){const [item]=Annotations.collect([d.line]),top=item.options.hdr||1;
+    assert(item.value.every(v=>v>=0&&v<=top),`${d.where}: ${d.name} = ${item.value}`);}
+});
+// 갤러리에 있는 예제(셰이더 아트 · 레슨 · 커뮤니티 · 기법 · Ray Marching)는 파라미터마다 설명(첫 @ 앞의 글)을 단다.
+// 패널에서 이름만 보고는 무엇을 바꾸는지 알기 어렵기 때문이다.
+const GALLERY=new Set(["gallery.js","community-examples.js","technique-examples.js","shader.js raymarch"]);
+test("갤러리 예제 파라미터에는 설명이 있다",()=>{
+  const missing=found.filter(d=>GALLERY.has(d.where)).filter(d=>{const [item]=Annotations.collect([d.line]);return !item?.description;}).map(d=>`${d.where}: ${d.name}`);
+  assert.deepEqual(missing,[]);
+  // 설명 안에 @를 쓰면 거기서 태그로 읽혀 설명이 잘린다(예: "중심(@xy와 같다)" → "중심("). 괄호 짝으로 잡는다.
+  const cut=found.map(d=>[d,Annotations.collect([d.line])[0]?.description||""]).filter(([,text])=>(text.match(/\(/g)||[]).length!==(text.match(/\)/g)||[]).length)
+    .map(([d,text])=>`${d.where}: ${d.name} "${text}"`);
+  assert.deepEqual(cut,[]);
+});
+// 갤러리 레슨 "Annotated Parameters"는 어노테이션을 알려 주는 예제라 지금 있는 태그와 모드를 모두 쓴다.
+// 새 태그를 만들면 이 예제에도 넣어야 이 검사가 통과한다.
+test("어노테이션 안내 예제는 모든 태그를 쓴다",()=>{
+  const text=fs.readFileSync(path.join(root,"js","gallery.js"),"utf8"),start=text.indexOf("const annotated = `");
+  const source=text.slice(start,text.indexOf("}`;",start)).replace(/\$\{\w+\}/g,"");
+  const specs=Annotations.collect([source]);
+  assert(specs.length>=20,`파라미터 ${specs.length}개`);
+  assert.deepEqual(specs.filter(s=>s.error).map(s=>`${s.name}: ${s.error}`),[]);
+  const lines=source.split("\n").filter(line=>/^uniform\s/.test(line));
+  const uses=re=>lines.some(line=>re.test(line));
+  for(const [label,re] of Object.entries({"@range min max step":/@range \S+ \S+ \d/,"@min":/@min\b/,"@max":/@max\b/,"@step":/@step\b/,"@default 값 하나(모든 성분)":/vec\d.*@default \S+( @|$)/,
+    "deg":/\d+deg\b/,"@color":/@color(?! hdr)/,"@color hdr":/@color hdr/,"@dir":/@dir(?! hemi)/,"@dir hemi":/@dir hemi/,"@angle":/@angle/,"@pos/@xy":/@(pos|xy)\b/,"@log":/@log/,
+    "@enum":/@enum/,"@seed":/@seed/,"@group":/@group/,"@gradient linear":/@gradient linear/,"@gradient smooth":/@gradient smooth/,"@gradient step":/@gradient step/,"@curve":/@curve/,"bool":/^uniform\s+bool\b/}))
+    assert(uses(re),`안내 예제에 ${label}이 없다`);
+  const byName=Object.fromEntries(specs.map(s=>[s.name,s]));
+  const anim=specs.filter(s=>s.options.anim);
+  assert(anim.some(s=>s.type==="float"&&!s.options.angle),"@anim: float 왕복");assert(anim.some(s=>s.options.angle),"@anim: angle 회전");
+  assert(anim.some(s=>s.type==="int"&&!s.options.enum),"@anim: int 한 칸씩");assert(anim.some(s=>s.options.enum),"@anim: enum 순환");
+  assert(specs.every(s=>s.description),"모든 파라미터에 설명");assert(new Set(specs.map(s=>s.group).filter(Boolean)).size>=3,"묶음 3개 이상");
+  assert(byName.uSpin&&Math.abs(byName.uSpin.value-Math.PI/6)<1e-9,"30deg는 라디안으로");
+});
+test("예제의 램프(@gradient · @curve)는 오류 없이 읽히고 설명이 있다",()=>{
+  const ramps=FILES.flatMap(file=>fs.readFileSync(path.join(root,"js",file),"utf8").split(/\n|\\n/).map(line=>line.replace(/^\s*["`]?/,"").replace(/["`].*$/,""))
+    .filter(line=>/^uniform\s+sampler2D\s+u\w+\s*;.*@(gradient|curve)\b/.test(line)).map(line=>({file,line})));
+  assert(ramps.length>=8,`램프 ${ramps.length}개`);
+  for(const {file,line} of ramps){const [item]=Annotations.collect([line]);assert(item&&!item.error&&item.description,`${file}: ${line} — ${item?.error}`);}
 });
 test("갤러리 예제는 JS에 따로 값 목록(users)을 두지 않는다",()=>{
   for(const file of ["gallery.js","community-examples.js","technique-examples.js"])assert(!/^\s*users:/m.test(fs.readFileSync(path.join(root,"js",file),"utf8")),file);

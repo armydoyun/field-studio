@@ -44,7 +44,7 @@ ${PCG}
 vec3 hash3(vec2 p) { return vec3(pcg3d(uvec3(floatBitsToUint(p), 0u)) >> 8u) * (1.0 / 16777216.0); }`;
 const aurora =
   head(
-    "uniform float uSpeed; // @range 0 3 @step 0.01 @default 0.6\nuniform float uWarp; // @range 0 10 @step 0.1 @default 4\nuniform vec3 uTint; // @color @default 0.2 0.75 0.9\n"
+    "uniform float uSpeed; // 흐름 속도 · @range 0 3 @step 0.01 @default 0.6 @group 흐름\nuniform float uWarp; // 비틀림 세기 · @range 0 10 @step 0.1 @default 4 @anim 20 @group 흐름\nuniform float uZoom; // 무늬 촘촘함 · @log @range 0.5 8 @default 2 @group 흐름\nuniform vec3 uTint; // 오로라 · @color @default 0.2 0.75 0.9 @group 색\nuniform vec3 uNight; // 밤하늘 · @color @default 0.02 0.03 0.08 @group 색\nuniform vec3 uAccent; // 소용돌이 강조 · @color @default 0.95 0.4 0.8 @group 색\nuniform vec3 uShine; // 가장자리 빛(1보다 밝게) · @color hdr 2 @default 0.1 0.225 0.25 @group 색\n"
   ) +
   `
 // Domain warping: fbm으로 좌표를 두 번 비틀어 오로라 같은 흐름을 만든다.
@@ -62,40 +62,42 @@ float fbm(vec2 p) {
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
     float t = uTime * uSpeed;
-    vec2 q = vec2(fbm(uv * 2.0 + t * 0.1), fbm(uv * 2.0 + vec2(5.2, 1.3) - t * 0.08));
-    vec2 r = vec2(fbm(uv * 2.0 + uWarp * q + vec2(1.7, 9.2) + t * 0.15), fbm(uv * 2.0 + uWarp * q + vec2(8.3, 2.8)));
-    float f = fbm(uv * 2.0 + uWarp * r);
-    vec3 col = mix(vec3(0.02, 0.03, 0.08), uTint, smoothstep(0.2, 0.9, f));
-    col = mix(col, vec3(0.95, 0.4, 0.8), smoothstep(0.6, 1.2, length(q) * f));
-    col += 0.25 * vec3(0.4, 0.9, 1.0) * pow(r.y, 4.0);
+    vec2 p = uv * uZoom;
+    vec2 q = vec2(fbm(p + t * 0.1), fbm(p + vec2(5.2, 1.3) - t * 0.08));
+    vec2 r = vec2(fbm(p + uWarp * q + vec2(1.7, 9.2) + t * 0.15), fbm(p + uWarp * q + vec2(8.3, 2.8)));
+    float f = fbm(p + uWarp * r);
+    vec3 col = mix(uNight, uTint, smoothstep(0.2, 0.9, f));
+    col = mix(col, uAccent, smoothstep(0.6, 1.2, length(q) * f));
+    col += uShine * pow(r.y, 4.0);
     fragColor = vec4(pow(col, vec3(0.9)), 1.0);
 }`;
 const kaleido =
   head(
-    "uniform float uSegments; // @range 1 24 @step 1 @default 8\nuniform float uZoom; // @range 0.2 4 @step 0.01 @default 1.2\n"
+    "uniform float uSegments; // 조각 수(재생하면 조각이 녹아 바뀐다) · @range 1 24 @step 1 @default 8 @anim 16 @group 모양\nuniform float uZoom; // 확대 · @log @range 0.2 4 @default 1.2 @group 모양\nuniform float uTwist; // 돌리기 · @angle @anim 20 @default 0 @group 모양\nuniform float uFlow; // 무늬 흐름 속도 · @range 0 3 @step 0.01 @default 1 @group 모양\nuniform sampler2D uPalette; // 빛깔(끝 색 = 처음 색이라 이어서 돈다) · @gradient @default 0 #ff4242 0.125 #da05a3 0.25 #8010ef 0.375 #255cfa 0.5 #00bdbd 0.625 #25fa5c 0.75 #7fef10 0.875 #daa305 1 #ff4242 @group 색\nuniform float uGlow; // 빛 세기 · @range 0.2 3 @step 0.01 @default 1 @group 색\n"
   ) +
   `
 // 극좌표를 uSegments 조각으로 접어 만든 만화경. 마우스를 움직이면 중심이 따라간다.
-vec3 palette(float t) { return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67))); }
+// 빛깔은 uPalette 그라데이션을 한 바퀴 돌며 읽는다(fract). 끝 색과 처음 색을 같게 두면 이음매가 없다.
+vec3 palette(float t) { return texture(uPalette, vec2(fract(t), 0.5)).rgb; }
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
     if (uMouse.x >= 0.0) uv -= 0.25 * (uMouse - 0.5 * uResolution) / uResolution.y;
-    float a = atan(uv.y, uv.x), r = length(uv);
+    float a = atan(uv.y, uv.x) + uTwist, r = length(uv), t = uTime * uFlow;
     float seg = 6.28318 / max(uSegments, 1.0);
     a = abs(mod(a, seg) - 0.5 * seg);
     vec2 p = r * vec2(cos(a), sin(a)) * uZoom;
     vec3 col = vec3(0.0);
     for (float i = 0.0; i < 4.0; i++) {
-        p = fract(p * 1.5 + 0.1 * uTime) - 0.5;
+        p = fract(p * 1.5 + 0.1 * t) - 0.5;
         float d = length(p) * exp(-r);
-        d = abs(sin(d * 8.0 + uTime) / 8.0);
-        col += palette(r + i * 0.4 + uTime * 0.2) * pow(0.012 / d, 1.2);
+        d = abs(sin(d * 8.0 + t) / 8.0);
+        col += palette(r + i * 0.4 + t * 0.2) * pow(0.012 * uGlow / d, 1.2);
     }
     fragColor = vec4(col * smoothstep(1.4, 0.2, r), 1.0);
 }`;
 const lava =
   head(
-    "uniform float uSoftness; // @range 0.01 0.6 @step 0.01 @default 0.18\nuniform vec3 uHot; // @color @default 1 0.35 0.1\nuniform vec3 uCool; // @color @default 0.5 0.1 0.6\n"
+    "uniform float uSoftness; // 녹아 붙는 정도 · @range 0.01 0.6 @step 0.01 @default 0.18 @anim 6 @group 덩어리\nuniform int uBlobs; // 덩어리 수 · @min 1 @max 12 @default 7 @group 덩어리\nuniform float uFlow; // 떠다니는 속도 · @range 0 3 @step 0.01 @default 1 @group 덩어리\nuniform vec3 uHot; // 뜨거운 겉 · @color @default 1 0.35 0.1 @group 색\nuniform vec3 uCore; // 가운데 · @color @default 1 0.95 0.8 @group 색\nuniform vec3 uCool; // 둘레 빛 · @color @default 0.5 0.1 0.6 @group 색\nuniform vec3 uBack; // 바탕 · @color @default 0.03 0.02 0.05 @group 색\nuniform sampler2D uFalloff; // 둘레 빛이 줄어드는 모양(거리 → 세기) · @curve @default 0 1 0.1 0.741 0.25 0.472 0.5 0.223 0.75 0.105 1 0.05 @group 색\n"
   ) +
   `
 // 2D 메타볼: 원 거리장을 smooth-min으로 합쳐 서로 녹아 붙는 덩어리를 만든다.
@@ -103,35 +105,40 @@ float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k,
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
     float d = 1e3;
-    for (int i = 0; i < 7; i++) {
+    float t = uTime * uFlow;
+    for (int i = 0; i < 12; i++) {
+        if (i >= uBlobs) break;
         float fi = float(i);
-        vec2 c = 0.55 * vec2(sin(uTime * (0.31 + 0.07 * fi) + fi * 1.7), cos(uTime * (0.23 + 0.05 * fi) + fi * 2.3));
-        d = smin(d, length(uv - c) - (0.12 + 0.04 * sin(fi + uTime)), uSoftness);
+        vec2 c = 0.55 * vec2(sin(t * (0.31 + 0.07 * fi) + fi * 1.7), cos(t * (0.23 + 0.05 * fi) + fi * 2.3));
+        d = smin(d, length(uv - c) - (0.12 + 0.04 * sin(fi + t)), uSoftness);
     }
     if (uMouse.x >= 0.0) d = smin(d, length(uv - (uMouse - 0.5 * uResolution) / uResolution.y) - 0.1, uSoftness);
     float edge = smoothstep(0.01, -0.01, d);
-    float glow = exp(-12.0 * max(d, 0.0));
-    vec3 col = mix(vec3(0.03, 0.02, 0.05), uCool, glow * 0.6);
-    col = mix(col, mix(uHot, vec3(1.0, 0.95, 0.8), smoothstep(0.0, -0.15, d)), edge);
+    // 둘레 빛: 겉에서 0.25만큼 떨어질 때까지를 곡선(uFalloff)으로 읽는다. 기본 곡선은 exp(-12·거리)와 같은 모양.
+    float glow = texture(uFalloff, vec2(clamp(max(d, 0.0) * 4.0, 0.0, 1.0), 0.5)).r;
+    vec3 col = mix(uBack, uCool, glow * 0.6);
+    col = mix(col, mix(uHot, uCore, smoothstep(0.0, -0.15, d)), edge);
     fragColor = vec4(col, 1.0);
 }`;
 const horizon =
   head(
-    "uniform float uGridSpeed; // @range 0 6 @step 0.01 @default 1.5\nuniform vec3 uGlow; // @color @default 0.2 0.9 1\n"
+    "uniform float uGridSpeed; // 격자 속도 · @range 0 6 @step 0.01 @default 1.5 @group 바닥\nuniform vec3 uGlow; // 격자 빛(1보다 밝게 하면 번쩍인다) · @color hdr 4 @default 0.2 0.9 1 @group 바닥\nuniform float uGridSize; // 격자 칸 크기 · @log @range 0.25 4 @default 1 @group 바닥\nuniform sampler2D uSky; // 하늘(지평선 → 위) · @gradient smooth @default 0 #991a73 1 #0d051f @group 하늘과 해\nuniform sampler2D uSun; // 해(아래 → 위) · @gradient smooth @default 0 #ff4080 1 #ffd94d @group 하늘과 해\nuniform float uSunSize; // 해 크기 · @range 0.1 0.5 @step 0.005 @default 0.3 @group 하늘과 해\nuniform float uStripes; // 해 줄무늬 촘촘함 · @log @range 10 200 @default 60 @group 하늘과 해\n"
   ) +
   `
 // 원근 격자와 줄무늬 태양: 화면 아래 절반을 바닥 평면으로 투영한다.
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
-    vec3 sky = mix(vec3(0.05, 0.02, 0.12), vec3(0.6, 0.1, 0.45), smoothstep(-0.1, 0.5, -uv.y + 0.3));
+    // 하늘·해 색은 그라데이션에서 읽는다. smooth 모드의 정지점 두 개 = 예전 mix(a, b, smoothstep(…))와 같다.
+    vec3 sky = texture(uSky, vec2(clamp((uv.y + 0.2) / 0.6, 0.0, 1.0), 0.5)).rgb;
     vec3 col = sky;
     vec2 sp = uv - vec2(0.0, 0.12);
-    float sun = smoothstep(0.30, 0.29, length(sp));
-    float stripes = step(0.0, sin(sp.y * 60.0 - uTime * 2.0)) + step(0.05, sp.y);
-    col = mix(col, mix(vec3(1.0, 0.25, 0.5), vec3(1.0, 0.85, 0.3), smoothstep(-0.3, 0.3, sp.y)), sun * min(stripes, 1.0));
+    float sun = smoothstep(uSunSize, uSunSize - 0.01, length(sp));
+    float stripes = step(0.0, sin(sp.y * uStripes - uTime * 2.0)) + step(0.05, sp.y);
+    vec3 sunCol = texture(uSun, vec2(clamp((sp.y + 0.3) / 0.6, 0.0, 1.0), 0.5)).rgb;
+    col = mix(col, sunCol, sun * min(stripes, 1.0));
     if (uv.y < -0.05) {
         float z = 0.35 / (-uv.y - 0.03);
-        vec2 g = vec2(uv.x * z, z + uTime * uGridSpeed);
+        vec2 g = vec2(uv.x * z, z + uTime * uGridSpeed) / uGridSize;
         vec2 w = fwidth(g);
         vec2 d = 0.5 - abs(fract(g) - 0.5); // 가장 가까운 격자선까지의 거리
         vec2 line = 1.0 - smoothstep(vec2(0.0), w * 1.5, d);
@@ -143,33 +150,35 @@ void main() {
 }`;
 const truchet =
   head(
-    "uniform float uScale; // @range 2 20 @step 0.1 @default 6\nuniform vec3 uInk; // @color @default 0.15 0.2 0.55\n"
+    "uniform float uScale; // 타일 수 · @log @range 2 20 @default 6 @group 무늬\nuniform float uSeed; // 미로 고르기 · @seed @range 0 999 @step 1 @default 0 @group 무늬\nuniform vec2 uFlow; // 흐르는 방향 · @dir @default 1 0 @group 무늬\nuniform float uFlowSpeed; // 흐르는 속도 · @range 0 2 @step 0.01 @default 0.25 @group 무늬\nuniform float uWidth; // 선 굵기 · @range 0.02 0.25 @step 0.005 @default 0.09 @group 무늬\nuniform vec3 uInk; // 잉크 · @color @default 0.15 0.2 0.55 @group 색\nuniform vec3 uPaper; // 종이 · @color @default 0.95 0.93 0.88 @group 색\n"
   ) +
   `
 // Truchet 타일: 셀마다 무작위로 회전한 사분원 두 개가 끊김 없는 미로를 만든다.
 ${HASH}
 void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y * uScale + vec2(uTime * 0.25, 0.0);
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y * uScale + uFlow * uTime * uFlowSpeed;
     vec2 id = floor(uv), f = fract(uv) - 0.5;
-    if (hash(id) > 0.5) f.x = -f.x;
+    float h = hash(id + vec2(uSeed * 101.0, 0.0));   // uSeed가 바뀌면 칸마다 다른 해시 → 다른 미로
+    if (h > 0.5) f.x = -f.x;
     vec2 c = f - sign(f.x + f.y + 1e-4) * 0.5;
     float d = abs(length(c) - 0.5);
-    float w = 0.09 + 0.04 * sin(uTime + hash(id) * 6.28);
+    float w = uWidth + 0.04 * sin(uTime + h * 6.28);
     float px = uScale / uResolution.y;
     float line = smoothstep(w + px, w - px, d);
     float shade = 0.5 + 0.5 * sin(atan(c.y, c.x) * 2.0 + uTime * 3.0);
-    vec3 col = mix(vec3(0.95, 0.93, 0.88), uInk * (0.6 + 0.4 * shade), line);
+    vec3 col = mix(uPaper, uInk * (0.6 + 0.4 * shade), line);
     fragColor = vec4(col * (1.0 - 0.25 * length((gl_FragCoord.xy / uResolution) - 0.5)), 1.0);
 }`;
 const voronoi =
   head(
-    "uniform float uScale; // @range 1 16 @step 0.1 @default 5\nuniform float uEdge; // @range 0.01 0.3 @step 0.005 @default 0.08\nuniform vec3 uLead; // @color @default 0.04 0.03 0.05\n"
+    "uniform float uScale; // 칸 수 · @log @range 1 16 @default 5 @group 무늬\nuniform float uSeed; // 칸 배치 고르기 · @seed @range 0 999 @step 1 @default 0 @group 무늬\nuniform float uWobble; // 점이 흔들리는 폭 · @range 0 0.5 @step 0.01 @default 0.38 @group 무늬\nuniform float uEdge; // 납 테두리 두께 · @range 0.01 0.3 @step 0.005 @default 0.08 @group 무늬\nuniform vec3 uLead; // 납 · @color @default 0.04 0.03 0.05 @group 색\nuniform sampler2D uGlass; // 유리 빛깔(끝 색 = 처음 색) · @gradient @default 0 #ff5555 0.125 #dd1eac 0.25 #8c28f1 0.375 #3b6cfa 0.5 #1ac4c4 0.625 #3bfa6c 0.75 #8cf128 0.875 #ddac1e 1 #ff5555 @group 색\nuniform float uShine; // 테두리에 번지는 빛 · @range 0 1 @step 0.01 @default 0.35 @group 색\n"
   ) +
   `
 // 보로노이(셀) 무늬: 칸마다 해시로 점 하나를 두고, 픽셀에서 가장 가까운 점과 두 번째로 가까운 점을 찾는다.
 // 점은 이웃 칸에도 있으므로 3×3 칸만 보면 된다. 두 거리의 차(d2 - d1)가 작을수록 경계에 가깝다.
 ${HASH3}
-vec3 palette(float t) { return 0.55 + 0.45 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67))); }
+// 유리 빛깔은 uGlass 그라데이션을 한 바퀴 돌며 읽는다(fract).
+vec3 palette(float t) { return texture(uGlass, vec2(fract(t), 0.5)).rgb; }
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
     vec2 p = uv * uScale + uTime * vec2(0.15, 0.05);   // 계속 흐르므로 칸 번호가 커진다 → 정수 해시
@@ -179,20 +188,20 @@ void main() {
     for (int y = -1; y <= 1; y++)
     for (int x = -1; x <= 1; x++) {
         vec2 o = vec2(x, y);
-        vec3 h = hash3(g + o);                                   // xy = 점의 움직임 위상, z = 칸 색
-        vec2 point = o + 0.5 + 0.38 * sin(uTime * 0.7 + 6.2831 * h.xy);
+        vec3 h = hash3(g + o + vec2(uSeed * 101.0, 0.0));         // xy = 점의 움직임 위상, z = 칸 색
+        vec2 point = o + 0.5 + uWobble * sin(uTime * 0.7 + 6.2831 * h.xy);
         float d = length(point - f);
         if (d < d1) { d2 = d1; d1 = d; cell = h; } else if (d < d2) d2 = d;
     }
     float edge = d2 - d1;
     vec3 glass = palette(cell.z + 0.05 * uTime) * (0.65 + 0.35 * smoothstep(0.7, 0.0, d1)); // 가운데가 밝은 유리
     vec3 col = mix(uLead, glass, smoothstep(uEdge * 0.5, uEdge, edge));                      // 납 테두리
-    col += glass * 0.35 * exp(-30.0 * edge);                                                  // 테두리에 번지는 빛
+    col += glass * uShine * exp(-30.0 * edge);                                                  // 테두리에 번지는 빛
     fragColor = vec4(pow(col, vec3(0.95)), 1.0);
 }`;
 const starfield =
   head(
-    "uniform float uSpeed; // @range 0 3 @step 0.01 @default 0.4\nuniform vec3 uTint; // @color @default 0.55 0.75 1\n"
+    "uniform float uSpeed; // 흐르는 속도 · @range 0 3 @step 0.01 @default 0.4 @group 별\nuniform vec2 uDrift; // 흐르는 방향 · @dir @default 1 0 @group 별\nuniform float uDensity; // 별이 있는 칸 비율 · @range 0.05 1 @step 0.01 @default 0.4 @group 별\nuniform int uLayers; // 겹 수(앞에서부터) · @min 1 @max 4 @default 4 @group 별\nuniform float uSeed; // 별 배치 고르기 · @seed @range 0 999 @step 1 @default 0 @group 별\nuniform vec3 uTint; // 먼 별 · @color @default 0.55 0.75 1 @group 색\nuniform vec3 uNear; // 가까운 별 · @color @default 1 0.9 0.8 @group 색\nuniform sampler2D uSky; // 밤하늘(아래 → 위) · @gradient smooth @default 0 #010205 1 #0a0514 @group 색\n"
   ) +
   `
 // 시차(parallax) 별밭: 별이 든 격자를 4겹 겹쳐 서로 다른 속도로 흘린다. 앞 겹일수록 별이 크고 빠르다.
@@ -200,22 +209,24 @@ const starfield =
 ${HASH3}
 float stars(vec2 p, float t) {
     vec2 id = floor(p), f = fract(p) - 0.5;
-    vec3 h = hash3(id);
-    if (h.z < 0.6) return 0.0;                          // 40% 칸에만 별
+    vec3 h = hash3(id + vec2(uSeed * 101.0, 0.0));
+    float cut = 1.0 - uDensity;
+    if (h.z < cut) return 0.0;                          // uDensity만큼의 칸에만 별
     vec2 pos = (h.xy - 0.5) * 0.6;                      // 칸 안 무작위 위치 (가장자리 여유를 남김)
     float d = length(f - pos);
     float twinkle = 0.6 + 0.4 * sin(t * (1.0 + 4.0 * h.x) + 6.2831 * h.y);
-    float core = smoothstep(0.035 + 0.06 * (h.z - 0.6), 0.0, d);
+    float core = smoothstep(0.035 + 0.06 * (h.z - cut), 0.0, d);
     float glow = 0.004 / (d * d + 0.004) * smoothstep(0.45, 0.1, d);   // 칸 경계 전에 0으로 줄인다
     return twinkle * (core + 0.35 * glow);
 }
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
-    vec3 col = mix(vec3(0.005, 0.006, 0.02), vec3(0.04, 0.02, 0.08), smoothstep(-0.6, 0.6, uv.y));
+    vec3 col = texture(uSky, vec2(clamp((uv.y + 0.6) / 1.2, 0.0, 1.0), 0.5)).rgb;
     for (int i = 0; i < 4; i++) {
+        if (i >= uLayers) break;
         float depth = 1.0 + float(i);                   // 1 = 가장 앞
-        vec2 p = uv * (5.0 * depth) + vec2(uTime * uSpeed * 3.0 / depth, 41.0 * float(i));
-        vec3 tint = mix(vec3(1.0, 0.9, 0.8), uTint, float(i) / 3.0);
+        vec2 p = uv * (5.0 * depth) + uDrift * (uTime * uSpeed * 3.0 / depth) + vec2(0.0, 41.0 * float(i));
+        vec3 tint = mix(uNear, uTint, float(i) / 3.0);
         col += tint * stars(p, uTime + 7.0 * float(i)) / depth;
     }
     fragColor = vec4(1.0 - exp(-1.6 * col), 1.0);      // 밝은 별이 하얗게 날아가지 않게 톤 매핑
@@ -272,35 +283,91 @@ const ART = [
   },
 ];
 // ---- 기법 배우기: 기능 하나씩을 보여주는 작은 프로젝트. 주석이 곧 설명서다. ----
+// 어노테이션 안내 예제: 지금 있는 태그를 모두 한 장면에 쓴다. 각 줄 주석이 "이 태그는 이렇게 쓴다"는 설명을 겸한다.
+// 장면: 빛을 받는 행성(툰 셰이딩) + 도는 위성 + 흐르는 별 + 빛 번짐. 보기(uView)로 명암·거리장·램프를 따로 볼 수 있다.
 const annotated = `#version 300 es
 precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
-// 아래 주석의 @태그가 파라미터 패널의 슬라이더·색상 선택기·그라데이션 편집기를 자동으로 만든다.
-// 태그 앞의 글은 설명으로, @group은 접히는 묶음으로 보인다.
-uniform float uRadius;   // 가운데 원 · @range 0.05 0.6 @step 0.005 @default 0.28 @group 모양
-uniform float uSoftness; // 가장자리 · @range 0.001 0.2 @step 0.001 @default 0.02 @group 모양
-uniform int   uCount;    // 위성 수 · @min 1 @max 12 @default 6 @group 모양
-uniform vec2  uCenter;   // 중심 · @pos @default 0 @group 모양
-uniform float uSpin;     // 회전 · @angle @anim 12 @default 0 @group 모양
-uniform vec3  uBack;     // 바탕 · @color @default 0.05 0.04 0.09 @group 색
-// 램프: sampler2D에 @gradient/@curve를 달면 256×1 텍스처가 되어 texture(이름, vec2(t, 0.5))로 읽는다.
-uniform sampler2D uRamp; // 중심에서 멀어질수록 · @gradient smooth @default 0 #fff1c1 0.35 #ff7a2e 0.7 #c2185b 1 #3b1060 @group 색
-uniform sampler2D uGlow; // 빛 번짐(거리 → 세기) · @curve @default 0 1 0.12 0.35 0.45 0.06 1 0 @group 색
+// ── 주석 어노테이션 안내 ─────────────────────────────────────────────────────────────
+// 선언 줄 끝 주석에 @태그를 달면 컴파일할 때 파라미터 패널에 맞는 조절기가 생긴다. 첫 @ 앞의 글은 설명이 된다.
+// 범위: @range min max [step] · @min/@max/@step · 기본값: @default(값 하나면 모든 성분, 45deg는 라디안으로)
+// 표시 방식(하나만): @color [hdr 최대] · @dir [hemi] · @angle · @pos(@xy) · @log · @enum 이름…
+// 덧붙이기: @seed(🎲) · @anim [초](▶) · @group 이름(접히는 묶음) · 램프: sampler2D에 @gradient / @curve
+// ── 모양 ──
+uniform float uRadius;   // 행성 크기 · @range 0.1 0.4 0.005 @default 0.24 @group 모양
+uniform int   uCount;    // 위성 수(▶: int는 한 칸씩 왕복) · @min 0 @max 9 @default 5 @anim 6 @group 모양
+uniform float uOrbit;    // 궤도 반지름 · @range 0.3 0.8 @step 0.01 @default 0.5 @group 모양
+uniform float uSpin;     // 위성 돌리기(▶: 한 바퀴씩) · @angle @default 30deg @anim 12 @group 모양
+uniform vec2  uCenter;   // 화면 중심(xy 태그도 같다) · @pos @range -1 1 @default 0 @group 모양
+uniform float uZoom;     // 확대(로그 눈금: 0.25~4를 고르게) · @log @range 0.25 4 @default 1 @group 모양
+// ── 빛 ──
+uniform vec3  uLightDir; // 빛 방향(위쪽 반구만) · @dir hemi @default 0.55 0.6 0.58 @group 빛
+uniform vec3  uLight;    // 빛 색(밝기 배율로 1보다 밝게) · @color hdr 4 @default 1.3 1.2 1 @group 빛
+uniform sampler2D uToon; // 명암 계단(빛 세기 → 색, step = 툰) · @gradient step @default 0 #141833 0.3 #33438a 0.65 #7c9cf0 0.92 #e8f0ff @group 빛
+uniform sampler2D uGlow; // 빛 번짐(거리 → 세기) · @curve @default 0 1 0.15 0.4 0.45 0.1 1 0 @group 빛
+uniform float uGlowSize; // 빛 번짐 범위 · @range 0.05 0.6 @step 0.01 @default 0.3 @group 빛
+// ── 배경 ──
+uniform vec3  uBack;     // 바탕 · @color @default 0.02 0.02 0.04 @group 배경
+uniform sampler2D uSky;  // 하늘(아래 → 위) · @gradient smooth @default 0 #120a2e 0.6 #05060f 1 #000000 @group 배경
+uniform sampler2D uMoons;// 위성 색(첫 위성 → 마지막) · @gradient linear @default 0 #ffb347 0.5 #ff5e7e 1 #8f7bff @group 배경
+uniform float uStars;    // 별 밀도 · @range 0 1 @step 0.01 @default 0.35 @group 배경
+uniform float uSeed;     // 별 배치(🎲) · @seed @range 0 999 @step 1 @default 0 @group 배경
+uniform vec2  uDrift;    // 별이 흐르는 방향 · @dir @default 1 0.25 @group 배경
+uniform float uTwinkle;  // 위성 깜빡임(▶: 범위를 왕복) · @range 0 1 @step 0.01 @default 0.4 @anim 3 @group 배경
+// ── 보기 ──
+uniform int   uView;     // 보기(▶: 차례로) · @enum 결과 명암만 거리장 램프 @default 0 @anim 2
+uniform bool  uOrbitLine;// 궤도선 · @default true
 out vec4 fragColor;
+${HASH}
+// 램프 읽기: 그라데이션은 .rgb(0~1 위치의 색), 곡선은 .r(x의 y). 0~1 밖은 끝 값으로 고정된다.
+vec3 ramp(sampler2D s, float t) { return texture(s, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb; }
+float curve(sampler2D s, float x) { return texture(s, vec2(clamp(x, 0.0, 1.0), 0.5)).r; }
 void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y - uCenter * 0.5;
-    float d = 1e3;
-    for (int i = 0; i < 12; i++) {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y / uZoom - uCenter * 0.5;
+    float px = 1.5 / uResolution.y / uZoom;
+    // 하늘 + 흐르는 별(uSeed가 배치를, uDrift가 방향을 정한다)
+    vec3 col = uBack + ramp(uSky, gl_FragCoord.y / uResolution.y);
+    vec2 sp = uv * 14.0 + uDrift * uTime * 0.5;
+    vec2 id = floor(sp), f = fract(sp) - 0.5;
+    float h = hash(id + vec2(uSeed * 101.0, 0.0));
+    vec2 at = vec2(hash(id + vec2(17.0, uSeed)), hash(id + vec2(uSeed, 29.0))) - 0.5;
+    col += step(1.0 - uStars * 0.3, h) * smoothstep(0.06, 0.0, length(f - at * 0.7)) * 0.9;
+    // 행성: 구의 법선으로 빛 세기를 구하고, 그 세기를 명암 계단(uToon)에서 색으로 바꾼다
+    float dPlanet = length(uv) - uRadius;
+    vec3 n = vec3(uv / uRadius, 0.0);
+    n.z = sqrt(max(0.0, 1.0 - dot(n.xy, n.xy)));
+    float light = max(dot(n, uLightDir), 0.0);
+    vec3 planet = ramp(uToon, light) * uLight;
+    // 위성: 개수(uCount)만큼 궤도에 늘어놓고, 위성 색 그라데이션에서 순서대로 색을 읽는다
+    float dMoon = 1e3;
+    vec3 moon = vec3(0.0);
+    for (int i = 0; i < 9; i++) {
         if (i >= uCount) break;
-        float a = 6.28318 * float(i) / float(uCount) + uTime * 0.4 + uSpin;
-        d = min(d, length(uv - 0.45 * vec2(cos(a), sin(a))) - uRadius * 0.4);
+        float k = float(i) / float(max(uCount, 1));
+        float a = uSpin + 6.28318 * k + uTime * 0.25;
+        float d = length(uv - uOrbit * vec2(cos(a), sin(a))) - uRadius * 0.2;
+        if (d < dMoon) {
+            dMoon = d;
+            moon = ramp(uMoons, float(i) / max(float(uCount - 1), 1.0)) * (1.0 - uTwinkle * 0.5 * (0.5 + 0.5 * sin(uTime * 4.0 + float(i))));
+        }
     }
-    d = min(d, length(uv) - uRadius);
-    float shape = 1.0 - smoothstep(-uSoftness, uSoftness, d);
-    vec3 tint = texture(uRamp, vec2(clamp(length(uv) / 0.75, 0.0, 1.0), 0.5)).rgb;
-    float glow = texture(uGlow, vec2(clamp(d * 2.5, 0.0, 1.0), 0.5)).r;
-    fragColor = vec4(mix(uBack + tint * glow * 0.6, tint, shape), 1.0);
+    float dScene = min(dPlanet, dMoon);
+    // 빛 번짐: 가장 가까운 물체까지의 거리를 곡선(uGlow)으로 세기로 바꾼다
+    col += uLight * 0.35 * curve(uGlow, max(dScene, 0.0) / uGlowSize);
+    if (uOrbitLine) col += vec3(0.35, 0.45, 0.9) * 0.3 * (1.0 - smoothstep(0.0, px * 2.0, abs(length(uv) - uOrbit)));
+    col = mix(col, moon, 1.0 - smoothstep(-px, px, dMoon));
+    col = mix(col, planet, 1.0 - smoothstep(-px, px, dPlanet));
+    // 보기: 1 명암만 · 2 거리장(등고선, 안쪽은 주황) · 3 램프 넷을 띠로(위부터 하늘·명암·위성·빛 번짐 곡선)
+    if (uView == 1) col = vec3(0.06 + 0.94 * light) * step(dPlanet, 0.0);   // 그림자 쪽도 옅게 남겨 윤곽이 보이게
+    else if (uView == 2) col = mix(vec3(0.25, 0.55, 1.0), vec3(1.0, 0.55, 0.2), step(dScene, 0.0)) * (0.55 + 0.45 * cos(dScene * 120.0));
+    else if (uView == 3) {
+        vec2 q = gl_FragCoord.xy / uResolution;
+        float band = floor(q.y * 4.0);
+        col = band == 3.0 ? ramp(uSky, q.x) : band == 2.0 ? ramp(uToon, q.x) : band == 1.0 ? ramp(uMoons, q.x) : vec3(0.06);
+        if (band == 0.0) col += vec3(1.0, 0.8, 0.3) * (1.0 - smoothstep(0.0, 0.012, abs(q.y * 4.0 - curve(uGlow, q.x))));
+    }
+    fragColor = vec4(col, 1.0);
 }`;
 const hashPrecision = `#version 300 es
 precision highp float;
@@ -308,9 +375,9 @@ uniform vec2 uResolution;
 // 해시와 큰 좌표: 같은 칸 번호를 두 해시에 넣어 비교한다. 왼쪽 = 실수 해시(예전 방식), 오른쪽 = 정수 해시.
 // 해시 값이 상위 4%인 칸만 점으로 찍으면 규칙성이 눈에 잘 띈다. 무작위라면 점이 어디에도 줄지어 서지 않는다.
 // uOffset을 0부터 올려 보세요. 실수 해시는 수십만부터 점이 행·열로 줄을 서고, 천만 근처에서는 격자가 됩니다.
-uniform float uOffset;  // @range 0 10000000 @step 1000 @default 10000000
-uniform float uCell;    // @range 1 8 @step 1 @default 2
-uniform int   uShowRaw; // @min 0 @max 1 @default 0
+uniform float uOffset;  // 칸 번호에 더할 값(▶로 0 ↔ 1천만을 오간다) · @range 0 10000000 @step 1000 @default 10000000 @anim 20
+uniform float uCell;    // 칸 크기(px) · @range 1 8 @step 1 @default 2
+uniform int   uShowRaw; // 보기 · @enum 상위_4%만_점으로 해시_값_그대로 @default 0
 out vec4 fragColor;
 // 예전 방식: fract로 소수부만 남겨 섞는다(Hoskins "Hash without Sine"). float의 유효숫자 24비트에 묶인다.
 float hashFloat(vec2 p) {
@@ -441,8 +508,8 @@ precision highp float;
 // Image: textureLod로 밉 레벨을 골라 읽는다. 위아래로 갈수록 높은 레벨 = 더 흐림 (틸트 시프트).
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
-uniform float uBlur;  // @range 0 8 @step 0.1 @default 5
-uniform float uFocus; // @range 0 1 @step 0.01 @default 0.5
+uniform float uBlur;  // 가장 흐린 곳의 밉 레벨 · @range 0 8 @step 0.1 @default 5
+uniform float uFocus; // 또렷한 줄의 높이(▶로 위아래로 훑는다) · @range 0 1 @step 0.01 @default 0.5 @anim 8
 out vec4 fragColor;
 void main() {
     vec2 uv = gl_FragCoord.xy / uResolution;
@@ -491,8 +558,8 @@ precision highp float;
 // Mip을 켜 두면 매 프레임 1/2, 1/4, 1/8 … 크기 사본(밉맵)이 저절로 생긴다 → Image가 이것을 흐린 사본으로 쓴다.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
-uniform float uThreshold; // 이 밝기부터 번진다 · @range 0 4 @step 0.01 @default 1
-uniform float uKnee;      // 경계를 부드럽게 하는 폭 · @range 0 1 @step 0.01 @default 0.5
+uniform float uThreshold; // 이 밝기부터 번진다 · @range 0 4 @step 0.01 @default 1 @group 밝은 부분 추출
+uniform float uKnee;      // 경계를 부드럽게 하는 폭 · @range 0 1 @step 0.01 @default 0.5 @group 밝은 부분 추출
 out vec4 fragColor;
 void main() {
     vec3 c = texture(iChannel0, gl_FragCoord.xy / uResolution).rgb;
@@ -513,11 +580,11 @@ precision highp float;
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-uniform float uIntensity; // 블룸 세기 · @range 0 3 @step 0.01 @default 0.8
-uniform float uRadius;    // 겹칠 밉 레벨 수(클수록 넓게 번짐) · @range 1 7 @step 0.1 @default 6
-uniform float uExposure;  // 노출 · @range 0 4 @step 0.01 @default 1
-uniform int uToneMap;     // 톤 매핑 · @enum 자르기 Reinhard ACES @default 2
-uniform bool uCompare;    // 왼쪽 절반은 블룸 없이 보여 준다 · @default false
+uniform float uIntensity; // 블룸 세기 · @range 0 3 @step 0.01 @default 0.8 @group 합성
+uniform float uRadius;    // 겹칠 밉 레벨 수(클수록 넓게 번짐) · @range 1 7 @step 0.1 @default 6 @group 합성
+uniform float uExposure;  // 노출(배율) · @log @range 0.05 8 @default 1 @group 화면에 담기
+uniform int uToneMap;     // 톤 매핑(▶로 차례로 비교) · @enum 자르기 Reinhard ACES @default 2 @anim 2 @group 화면에 담기
+uniform bool uCompare;    // 왼쪽 절반은 블룸 없이 보여 준다 · @default false @group 화면에 담기
 out vec4 fragColor;
 vec3 blurLevel(vec2 uv, int lod) {
     vec2 texel = 1.0 / vec2(textureSize(iChannel1, lod));
@@ -559,8 +626,8 @@ uniform vec2 uResolution;
 uniform int uFrame;
 uniform vec4 uMouse;          // 누르고 있는 동안 커서 주변에 V를 심는다
 uniform sampler2D iChannel0;
-uniform float uFeed;          // @range 0.01 0.09 @step 0.0005 @default 0.037
-uniform float uKill;          // @range 0.04 0.07 @step 0.0005 @default 0.06
+uniform float uFeed;          // 먹이 공급률 F(U를 채운다) · @range 0.01 0.09 @step 0.0005 @default 0.037 @group 반응
+uniform float uKill;          // 제거율 k(V를 없앤다) · @range 0.04 0.07 @step 0.0005 @default 0.06 @group 반응
 out vec4 fragColor;
 ${HASH}
 void main() {
@@ -588,15 +655,13 @@ precision highp float;
 // Image: iChannel0 = A current. 시뮬레이션 값(V)을 색으로 바꿔 보여준다. 화면을 누르고 끌어 보세요.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
-uniform vec3 uLow;   // @color @default 0.03 0.02 0.08
-uniform vec3 uHigh;  // @color @default 0.35 0.95 1.0
+// 농도 V(0~1)를 그라데이션에서 색으로 읽는다. 정지점 위치가 곧 "어느 농도부터 이 색"이다.
+uniform sampler2D uPalette; // 농도 V → 색 · @gradient smooth @default 0.12 #080514 0.4 #59f2ff 0.6 #d9ffff
 out vec4 fragColor;
 void main() {
     vec2 uv = gl_FragCoord.xy / uResolution;
     float v = texture(iChannel0, uv).g;
-    vec3 col = mix(uLow, uHigh, smoothstep(0.12, 0.4, v));
-    col += vec3(1.0, 0.4, 0.8) * smoothstep(0.4, 0.6, v) * 0.5;
-    fragColor = vec4(col, 1.0);
+    fragColor = vec4(texture(uPalette, vec2(v, 0.5)).rgb, 1.0);
 }`;
 // 기존 Studio 예제(멀티 패스·3D)는 Studio가 소유한 정의를 그대로 호출한다. project가 있는 항목은 갤러리가 직접 정의한다.
 // users 없이 열면 소스의 @어노테이션이 파라미터를 자동 등록한다(어노테이션 기능 자체를 보여주기 위함).
@@ -604,8 +669,8 @@ const LESSONS = [
   {
     id: "annotations",
     title: "Annotated Parameters",
-    tag: "@range · @color · @gradient · @curve",
-    description: "GLSL 주석만으로 슬라이더·색상·그라데이션·곡선 파라미터를 만드는 법.",
+    tag: "모든 @태그 한눈에",
+    description: "주석 태그만으로 만드는 모든 조절기: 색·방향·각도·패드·로그·선택지·🎲·▶·묶음·그라데이션·곡선.",
     image: annotated,
     thumb: "annotations",
     project: { image: annotated, passes: [], imageChannels: {} },

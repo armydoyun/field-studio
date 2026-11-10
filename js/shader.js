@@ -218,24 +218,45 @@ void main() {
     vec3 color = 0.5 + 0.5 * cos(uTime * 0.3 + wave + vec3(0.0, 2.1, 4.2));
     fragColor = vec4(color, 1.0);
 }`;
+// [이름, 타입, 기본값, 옵션, {설명, 묶음}]. 작은 값(엡실론)·넓은 범위(거리)는 로그 눈금이라 아래쪽도 고르게 고를 수 있다.
+const RAY_GROUP = "레이 마칭";
 const rayUniforms = [
-  ["uRMMaxSteps", "int", 128, { min: 1, max: 512, step: 1 }],
-  ["uRMMaxDistance", "float", 100, { min: 1, max: 1000, step: 1 }],
-  // 슬라이더는 실제로 쓰는 구간만 다룬다. 기본값이 트랙의 1% 근처에 붙으면 조절할 수 없다.
-  ["uRMSurfaceEpsilon", "float", 0.001, { min: 0.00001, max: 0.01, step: 0.00001 }],
-  ["uRMNormalEpsilon", "float", 0.001, { min: 0.00001, max: 0.01, step: 0.00001 }],
-  ["uRMHeatmap", "bool", false],
+  ["uRMMaxSteps", "int", 128, { min: 1, max: 512, step: 1 }, { description: "최대 걸음 수", group: RAY_GROUP }],
+  [
+    "uRMMaxDistance",
+    "float",
+    100,
+    { min: 1, max: 1000, step: 1, log: true },
+    { description: "이보다 멀면 하늘로 본다", group: RAY_GROUP },
+  ],
+  [
+    "uRMSurfaceEpsilon",
+    "float",
+    0.001,
+    { min: 0.00001, max: 0.01, step: 0.00001, log: true },
+    { description: "표면에 닿았다고 볼 거리", group: RAY_GROUP },
+  ],
+  [
+    "uRMNormalEpsilon",
+    "float",
+    0.001,
+    { min: 0.00001, max: 0.01, step: 0.00001, log: true },
+    { description: "법선을 구할 때 옆으로 비킬 거리", group: RAY_GROUP },
+  ],
+  ["uRMHeatmap", "bool", false, {}, { description: "걸음 수를 색으로 보기(빨갈수록 많이 걸음)", group: RAY_GROUP }],
 ];
 // 예제 소스의 선언 줄에 rayUniforms와 같은 어노테이션(@range·@step·@default)을 붙인다.
 // 코드를 복사해 다른 프로젝트에 붙여도 슬라이더 범위와 기본값이 따라간다. 값은 rayUniforms 한곳에서만 고친다.
 const annotate = (source, uniforms) =>
-  uniforms.reduce((code, [name, type, value, options = {}]) => {
+  uniforms.reduce((code, [name, type, value, options = {}, meta = {}]) => {
     const tags = [];
+    if (options.log) tags.push("@log");
     if (options.min !== undefined) tags.push(`@range ${options.min} ${options.max}`, `@step ${options.step}`);
     tags.push(`@default ${value}`);
+    if (meta.group) tags.push(`@group ${meta.group}`);
     const line = `uniform ${type} ${name};`;
     if (!code.includes(line)) throw new Error(`Ray Marching 예제에 ${line}이 없습니다.`);
-    return code.replace(line, `${line} // ${tags.join(" ")}`);
+    return code.replace(line, `${line} // ${meta.description ? `${meta.description} · ` : ""}${tags.join(" ")}`);
   }, source);
 export default {
   vertex,
