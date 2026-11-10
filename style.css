@@ -1020,6 +1020,11 @@ html.panel-right body.panel-hidden #workspace { grid-template-columns:minmax(0,1
 .panel-hidden .panel-resizer { display:none; }
 body.panel-resizing { cursor:col-resize;user-select:none; }
 body.panel-resizing iframe,body.panel-resizing canvas { pointer-events:none; }
+/* 리사이저를 최소 크기의 절반보다 작게 끌면: 놓으면 숨긴다는 표시(패널·편집기 위에 덮개 + 안내, 리사이저는 강조색) */
+body.panel-collapsing #panel::after,.studio-collapsing .studio-dock::after { content:"놓으면 숨김";position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--text-soft);font:600 13px/1.4 var(--sans);letter-spacing:.02em;pointer-events:none; }
+.studio-collapsing .studio-dock { position:relative; }
+body.panel-collapsing .panel-resizer,.studio-collapsing .studio-resizer { background:var(--accent-soft); }
+body.panel-collapsing .panel-resizer span,.studio-collapsing .studio-resizer span { background:var(--accent); }
 
 /* 위치 손잡이(⠿): 끌어서 자리를 옮긴다. */
 .dock-grip { display:inline-grid;place-items:center;flex:0 0 28px;width:28px;min-height:32px;height:32px;padding:0;border:0;background:transparent;color:var(--faint);cursor:grab;touch-action:none; }

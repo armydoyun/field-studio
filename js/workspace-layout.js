@@ -1,5 +1,7 @@
 // 설정 패널 배치: 너비 조절(리사이저)과 자리(왼쪽 · 오른쪽).
 // - 너비는 패널과 미리보기 사이의 경계를 끌거나, 경계에 초점을 두고 ←→ · Home/End로 바꾼다. 두 번 클릭하면 기본 너비.
+// - 경계를 최소 너비의 절반(COLLAPSE)보다 좁게 끌면 패널에 '놓으면 숨김'이 뜨고, 그대로 놓으면 패널을 숨긴다.
+//   다시 넓게 끌면 취소된다. 숨길 때는 끌기 전 너비로 되돌려 두어, 다시 열면 원래 너비로 열린다.
 // - 자리는 패널 머리의 손잡이를 끌어 화면 왼쪽·오른쪽 가장자리에 놓거나, 손잡이에서 ←→를 누른다.
 // - 사용자가 직접 정한 값만 저장한다. 좁은 화면(≤820px)에서는 패널이 왼쪽에서 열리는 서랍이라 이 설정을 쓰지 않는다.
 // - '화면 배치 초기화'(#layoutReset)는 패널을 기본값으로 되돌리고 workspace-layout-reset 이벤트로 편집기 배치도 되돌리게 한다.
@@ -9,13 +11,16 @@ import * as DockDrag from "./dock-drag.js";
 
 const KEY = "field.panel.layout.v1";
 const WIDTH = { min: 240, max: 560, initial: 300, step: 16 };
+// 이보다 좁게 끌면 놓을 때 패널을 숨긴다.
+const COLLAPSE = WIDTH.min / 2;
 const NARROW = "(max-width:820px)";
 // 미리보기가 너무 좁아지지 않게 패널은 창 너비의 45%를 넘지 않는다.
 const maxWidth = viewWidth =>
   Math.max(WIDTH.min, Math.min(WIDTH.max, Math.round((viewWidth || 0) * 0.45) || WIDTH.max));
 const clampWidth = (value, viewWidth) => Math.round(Math.max(WIDTH.min, Math.min(maxWidth(viewWidth), value)));
 
-const mount = ({ doc = document } = {}) => {
+// onCollapse: 패널 숨기기. 기본은 도구 막대의 패널 버튼(ui.js가 표시·포커스·저장을 맞춘다)을 누르는 것과 같다.
+const mount = ({ doc = document, onCollapse = null } = {}) => {
   const view = doc.defaultView || window,
     $ = id => doc.getElementById(id);
   const workspace = $("workspace"),
@@ -87,10 +92,25 @@ const mount = ({ doc = document } = {}) => {
   };
 
   // ---- 너비 리사이저 ----
-  let sizing = null;
+  let sizing = null,
+    start = null,
+    collapsing = false;
+  const setCollapsing = on => {
+    if (collapsing === on) return;
+    collapsing = on;
+    doc.body.classList.toggle("panel-collapsing", on);
+    handle?.setAttribute("aria-valuetext", on ? "놓으면 설정 패널을 숨깁니다" : `${shownWidth()}px`);
+  };
+  const hidePanel = () => {
+    if (onCollapse) return onCollapse();
+    if (doc.body.classList.contains("panel-hidden")) return;
+    $("panelToggle")?.click();
+    if (!doc.body.classList.contains("panel-hidden")) doc.body.classList.add("panel-hidden"); // 패널 버튼이 아직 연결되지 않았을 때
+  };
   listen(handle, "pointerdown", event => {
     if (event.button !== 0 || narrow()) return;
     sizing = event.pointerId;
+    start = { width, widthChosen };
     try {
       handle.setPointerCapture?.(sizing);
     } catch (_) {
@@ -104,12 +124,22 @@ const mount = ({ doc = document } = {}) => {
     const rect = workspace.getBoundingClientRect();
     // 포인터는 막대(6px) 가운데에 있으므로 막대 절반을 빼야 막대가 포인터를 그대로 따라간다.
     const half = (handle.offsetWidth || 0) / 2;
-    setWidth(side === "left" ? event.clientX - rect.left - half : rect.right - event.clientX - half);
+    const wanted = side === "left" ? event.clientX - rect.left - half : rect.right - event.clientX - half;
+    setCollapsing(wanted < COLLAPSE);
+    setWidth(wanted);
   });
   const stopSizing = event => {
     if (event.pointerId !== sizing) return;
     sizing = null;
     doc.body.classList.remove("panel-resizing");
+    if (!collapsing) return;
+    setCollapsing(false);
+    // 끌기 전 너비로 되돌린다(최소 너비가 저장되지 않게). 놓았을 때만 숨기고, 끌기가 취소되면 너비만 되돌린다.
+    width = start.width;
+    widthChosen = start.widthChosen;
+    save();
+    applyWidth();
+    if (event.type === "pointerup") hidePanel();
   };
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) listen(handle, type, stopSizing);
   listen(handle, "dblclick", resetWidth);
@@ -168,4 +198,4 @@ const mount = ({ doc = document } = {}) => {
   };
 };
 
-export { mount, clampWidth, maxWidth, KEY, WIDTH };
+export { mount, clampWidth, maxWidth, KEY, WIDTH, COLLAPSE };
