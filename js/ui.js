@@ -112,6 +112,318 @@ const mount = (renderer, input, settings) => {
       handle.addEventListener("pointercancel", end, { once: true });
     });
   };
+  // 단위 방향(@dir) 편집기. vec2는 원형 다이얼 + 각도 슬라이더, vec3는 빛 받은 구 패드 + 방위각·고도 슬라이더 + 앞/뒤 반구 전환.
+  // 성분을 따로 고치면 길이가 1에서 벗어나므로 자유도(vec2는 1, vec3는 2)에 맞는 손잡이만 준다.
+  // 좌표: 화면 오른쪽 +X, 위 +Y, 보는 쪽 +Z. 방위각은 +Z에서 +X 쪽으로 돈 각, 고도는 XZ 평면에서 +Y 쪽으로 든 각이다.
+  // hemi는 +Y 반구(vec2는 위쪽 반원)만 허용한다. 끌 때 Shift를 누르면 15° 단위로 맞춘다.
+  const DEG = 180 / Math.PI,
+    DIR_PAD = 88;
+  let directionRedraws = [];
+  const directionControl = (item, commit, current) => {
+    const hemi = item.options.dir === "hemi",
+      sphere = item.type === "vec3",
+      round = value => Math.round(value * 10) / 10,
+      clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+    const wrap = element("div");
+    wrap.className = `uniform-dir ${sphere ? "is-sphere" : "is-dial"}`;
+    const pad = element("canvas");
+    pad.className = "uniform-dir-pad";
+    const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    pad.width = pad.height = Math.round(DIR_PAD * ratio);
+    pad.tabIndex = 0;
+    pad.setAttribute("role", "application");
+    pad.setAttribute(
+      "aria-label",
+      sphere
+        ? `${item.name} 방향 · 끌어서 지정 · 화살표 키: 좌우 방위각, 위아래 고도 · Shift 15°`
+        : `${item.name} 방향 · 끌어서 지정 · 화살표 키로 회전 · Shift 15°`
+    );
+    pad.title = `끌어서 방향 지정 · Shift 15° 단위${sphere ? " · 속 빈 점은 뒤쪽(-Z) 반구" : ""}`;
+    const side = element("div");
+    side.className = "uniform-dir-side";
+    const code = element("code");
+    code.className = "uniform-dir-value";
+    // 각도 상태. 극점(고도 ±90°)에서는 방위각이 정해지지 않으므로 마지막 값을 기억한다.
+    const state = { angle: 0, az: 0, el: 0, back: false };
+    const fromVector = v => {
+      if (!sphere) state.angle = Math.atan2(v[1], v[0]) * DEG;
+      else {
+        state.el = Math.asin(clamp(v[1], -1, 1)) * DEG;
+        if (Math.hypot(v[0], v[2]) > 1e-6) state.az = Math.atan2(v[0], v[2]) * DEG;
+        if (Math.abs(v[2]) > 1e-6) state.back = v[2] < 0;
+      }
+    };
+    const toVector = () => {
+      if (!sphere) return [Math.cos(state.angle / DEG), Math.sin(state.angle / DEG)];
+      const az = state.az / DEG,
+        el = state.el / DEG;
+      return [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+    };
+    // 각도 줄: [글자 | 슬라이더 | 숫자(°)]. 슬라이더 더블클릭은 행 공통 처리로 기본값 되돌리기가 된다.
+    const angleLines = [];
+    const angleLine = (key, text, title, low, high) => {
+      const line = element("div");
+      line.className = "uniform-axis is-ranged uniform-dir-angle";
+      const label = element("label");
+      label.className = "uniform-axis-label";
+      label.textContent = text;
+      label.title = title;
+      const slider = element("input");
+      slider.type = "range";
+      slider.min = String(low);
+      slider.max = String(high);
+      slider.step = "0.1";
+      slider.setAttribute("aria-label", `${item.name} ${title}(°)`);
+      const number = element("input");
+      number.type = "number";
+      number.min = String(low);
+      number.max = String(high);
+      number.step = "any";
+      number.setAttribute("aria-label", `${item.name} ${title} 값(°)`);
+      const set = (field, value) => {
+        if (!Number.isFinite(value)) return sync(current());
+        state[key] = clamp(value, low, high);
+        apply(field, toVector());
+      };
+      slider.addEventListener("input", () => set(slider, Number(slider.value)));
+      number.addEventListener("change", () => set(number, number.value.trim() ? Number(number.value) : NaN));
+      scrubbable(label, {
+        kind: "f",
+        read: () => round(state[key]),
+        write: value => set(label, value),
+        min: low,
+        max: high,
+        step: 1,
+      });
+      line.append(label, slider, number);
+      angleLines.push({ key, slider, number });
+      return line;
+    };
+    if (sphere)
+      side.append(angleLine("az", "Az", "방위각", -180, 180), angleLine("el", "El", "고도", hemi ? 0 : -90, 90));
+    else side.append(angleLine("angle", "θ", "각도", hemi ? 0 : -180, 180));
+    // 축 버튼: 자주 쓰는 방향으로 바로 맞춘다.
+    const chips = element("div");
+    chips.className = "uniform-dir-chips";
+    const axes = sphere
+      ? [
+          ["+X", [1, 0, 0]],
+          ["−X", [-1, 0, 0]],
+          ["+Y", [0, 1, 0]],
+          ["−Y", [0, -1, 0]],
+          ["+Z", [0, 0, 1]],
+          ["−Z", [0, 0, -1]],
+        ]
+      : [
+          ["+X", [1, 0]],
+          ["−X", [-1, 0]],
+          ["+Y", [0, 1]],
+          ["−Y", [0, -1]],
+        ];
+    for (const [text, vector] of axes) {
+      if (hemi && vector[1] < 0) continue;
+      const chip = element("button");
+      chip.type = "button";
+      chip.className = "uniform-dir-chip";
+      chip.textContent = text;
+      chip.setAttribute("aria-label", `${item.name}을 ${text} 방향으로`);
+      chip.addEventListener("click", () => apply(chip, vector));
+      chips.append(chip);
+    }
+    let flip = null;
+    if (sphere) {
+      flip = element("button");
+      flip.type = "button";
+      flip.className = "uniform-dir-chip uniform-dir-flip";
+      flip.textContent = "뒤";
+      flip.title = "앞(+Z)/뒤(-Z) 반구 전환 · 패드에서 끌 때 어느 쪽 반구를 쓸지 정한다";
+      flip.setAttribute("aria-label", `${item.name} 뒤쪽(-Z) 반구`);
+      flip.addEventListener("click", () => {
+        const v = current();
+        state.back = !state.back;
+        if (Math.abs(v[2]) > 1e-6) apply(flip, [v[0], v[1], -v[2]]);
+        else sync(v);
+      });
+      chips.append(flip);
+    }
+    side.append(chips, code);
+    wrap.append(pad, side);
+    // 음영 색은 테마 토큰에서 고른다. 어두운 테마: 그늘 --sunken → 빛 --text-soft, 밝은 테마: 그늘 --faint → 빛 --surface.
+    const colors = () => {
+      const style = window.getComputedStyle?.(pad),
+        token = name => {
+          const hex = /#([0-9a-f]{3}|[0-9a-f]{6})\b/i.exec(style?.getPropertyValue?.(name) || "")?.[1];
+          if (!hex) return null;
+          return (hex.length === 3 ? [...hex].map(h => h + h) : hex.match(/../g)).map(h => parseInt(h, 16));
+        },
+        luma = rgb => (rgb ? rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11 : 0),
+        dark = luma(token("--text")) >= luma(token("--bg"));
+      return {
+        lit: token(dark ? "--text-soft" : "--surface") || [200, 200, 205],
+        shadow: token(dark ? "--sunken" : "--faint") || [20, 20, 22],
+        accent: style?.borderTopColor || "#4d8dff",
+        line: style?.color || "#888",
+      };
+    };
+    const draw = () => {
+      const ctx = pad.getContext?.("2d");
+      if (typeof ctx?.arc !== "function") return;
+      const size = pad.width,
+        c = size / 2,
+        r = c - 6 * ratio,
+        v = current(),
+        { lit, shadow, accent, line } = colors();
+      ctx.clearRect(0, 0, size, size);
+      if (sphere && ctx.createImageData) {
+        // 램버트 음영: 이 방향에서 오는 빛을 받은 구. 가장자리는 1px 안티에일리어싱.
+        const image = ctx.createImageData(size, size),
+          data = image.data;
+        for (let py = 0; py < size; py++)
+          for (let px = 0; px < size; px++) {
+            const x = (px + 0.5 - c) / r,
+              y = (c - py - 0.5) / r,
+              d2 = x * x + y * y;
+            if (d2 > 1 + 2 / r) continue;
+            const z = Math.sqrt(Math.max(0, 1 - d2)),
+              light = Math.max(0, x * v[0] + y * v[1] + z * v[2]),
+              shade = 0.06 + 0.94 * light,
+              i = (py * size + px) * 4;
+            for (let k = 0; k < 3; k++) data[i + k] = shadow[k] + (lit[k] - shadow[k]) * shade;
+            data[i + 3] = 255 * clamp((1 - Math.sqrt(d2)) * r + 0.5, 0, 1);
+          }
+        ctx.putImageData(image, 0, 0);
+      }
+      ctx.lineWidth = ratio;
+      ctx.strokeStyle = line;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.arc(c, c, r, 0, Math.PI * 2);
+      ctx.moveTo(c - r, c);
+      ctx.lineTo(c + r, c);
+      ctx.moveTo(c, c - r);
+      ctx.lineTo(c, c + r);
+      ctx.stroke();
+      if (hemi) {
+        // 허용되지 않는 아래쪽(-Y)은 흐리게 지워 패널 바탕이 비치게 한다.
+        ctx.globalAlpha = 0.6;
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillRect(0, c + ratio, size, size - c);
+        ctx.globalCompositeOperation = "source-over";
+      }
+      ctx.globalAlpha = 1;
+      const tx = c + v[0] * r,
+        ty = c - v[1] * r,
+        behind = sphere && v[2] < -1e-6;
+      ctx.strokeStyle = ctx.fillStyle = accent;
+      ctx.lineWidth = 2 * ratio;
+      ctx.setLineDash?.(behind ? [3 * ratio, 3 * ratio] : []);
+      ctx.beginPath();
+      ctx.moveTo(c, c);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.setLineDash?.([]);
+      ctx.beginPath();
+      ctx.arc(tx, ty, 4.5 * ratio, 0, Math.PI * 2);
+      if (behind) ctx.stroke();
+      else ctx.fill();
+    };
+    const sync = v => {
+      fromVector(v);
+      for (const { key, slider, number } of angleLines) {
+        slider.value = String(round(state[key]));
+        showNumber(number, round(state[key]));
+        number.removeAttribute("aria-invalid");
+      }
+      code.textContent = v.map(x => (Math.abs(x) < 5e-5 ? 0 : x).toFixed(3)).join(" ");
+      code.title = `${item.type}(${v.map(x => +x.toFixed(6)).join(", ")})`;
+      if (flip) {
+        flip.setAttribute("aria-pressed", String(state.back));
+        flip.classList.toggle("is-active", state.back);
+      }
+      draw();
+    };
+    // 렌더러가 길이 1(hemi면 +Y 반구)로 맞춘 값을 다시 읽어 화면을 맞춘다. 실패해도 이전 값으로 되돌려 보여 준다.
+    const apply = (field, vector) => {
+      commit(field, vector);
+      sync(current());
+    };
+    // 패드 위치 → 방향. 원 밖이면 가장자리(z=0)로 붙인다.
+    const fromPointer = event => {
+      const box = pad.getBoundingClientRect(),
+        rr = (box.width / 2) * ((DIR_PAD / 2 - 6) / (DIR_PAD / 2));
+      let x = (event.clientX - box.left - box.width / 2) / rr,
+        y = (box.top + box.height / 2 - event.clientY) / rr;
+      if (hemi) y = Math.max(0, y);
+      if (!sphere) {
+        if (Math.hypot(x, y) < 1e-6) return null;
+        state.angle = Math.atan2(y, x) * DEG;
+        if (event.shiftKey) state.angle = Math.round(state.angle / 15) * 15;
+        return toVector();
+      }
+      const length = Math.hypot(x, y);
+      if (length > 1) {
+        x /= length;
+        y /= length;
+      }
+      const z = Math.sqrt(Math.max(0, 1 - x * x - y * y)) * (state.back ? -1 : 1),
+        v = [x, y, z];
+      if (event.shiftKey) {
+        fromVector(v);
+        state.az = Math.round(state.az / 15) * 15;
+        state.el = Math.round(state.el / 15) * 15;
+        return toVector();
+      }
+      return v;
+    };
+    pad.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      // 포커스가 목록 안에 있어야 주기적인 목록 다시 그리기가 끄는 도중의 패드를 바꿔치지 않는다. 마우스로 잡은 포커스는 링을 숨긴다.
+      pad.dataset.pointer = "";
+      pad.focus({ preventScroll: true });
+      pad.setPointerCapture?.(event.pointerId);
+      pad.classList.add("is-dragging");
+      const move = moveEvent => {
+        const v = fromPointer(moveEvent);
+        if (v) apply(pad, v);
+      };
+      const end = () => {
+        pad.removeEventListener("pointermove", move);
+        pad.classList.remove("is-dragging");
+      };
+      move(event);
+      pad.addEventListener("pointermove", move);
+      pad.addEventListener("pointerup", end, { once: true });
+      pad.addEventListener("pointercancel", end, { once: true });
+    });
+    pad.addEventListener("keydown", event => {
+      const step = event.shiftKey ? 15 : 1,
+        keys = sphere
+          ? { ArrowLeft: ["az", -step], ArrowRight: ["az", step], ArrowDown: ["el", -step], ArrowUp: ["el", step] }
+          : {
+              ArrowLeft: ["angle", step],
+              ArrowUp: ["angle", step],
+              ArrowRight: ["angle", -step],
+              ArrowDown: ["angle", -step],
+            };
+      const move = keys[event.key];
+      delete pad.dataset.pointer;
+      if (!move) return;
+      event.preventDefault();
+      const [key, delta] = move;
+      if (key === "az" || key === "angle") {
+        let next = state[key] + delta;
+        if (key === "angle" && hemi) next = clamp(next, 0, 180);
+        else next = ((((next + 180) % 360) + 360) % 360) - 180;
+        state[key] = next;
+      } else state.el = clamp(state.el + delta, hemi ? 0 : -90, 90);
+      apply(pad, toVector());
+    });
+    directionRedraws.push(draw);
+    sync(current());
+    return wrap;
+  };
+  listen(document, "theme-changed", () => directionRedraws.forEach(draw => draw()));
   const validNumber = (kind, value) =>
     Number.isFinite(value) &&
     (kind === "f" || kind === "m" || (Number.isInteger(value) && (kind !== "u" || value >= 0)));
@@ -175,6 +487,7 @@ const mount = (renderer, input, settings) => {
     const search = $("uniformSearch").value.trim().toLowerCase();
     uniformSnapshot = JSON.stringify(items);
     const defaults = annotatedDefaults();
+    directionRedraws = [];
     userList.replaceChildren();
     $("uniformCount").textContent = `${items.length} / 64`;
     $("uniformCreate").disabled = items.length >= 64;
@@ -379,6 +692,12 @@ const mount = (renderer, input, settings) => {
           row.append(line);
         }
         show(item.value);
+      } else if (item.options?.dir) {
+        row.append(
+          directionControl(item, commit, () => [
+            ...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value),
+          ])
+        );
       } else if (typeInfo(item.type).components > 1) {
         // 벡터는 X/Y/Z/W, 행렬은 column-major 순서의 [열,행] 칸으로 편집한다. bvec 성분은 체크박스.
         // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
@@ -537,6 +856,8 @@ const mount = (renderer, input, settings) => {
       }
       userList.append(row);
     }
+    // 방향 패드는 문서에 붙은 뒤에야 테마 색을 읽을 수 있으므로 한 번 더 그린다.
+    for (const draw of directionRedraws) draw();
     const count = userList.children.length;
     $("uniformResults").textContent = search ? `${items.length}개 중 ${count}개 표시` : "";
     if (!count) {
@@ -578,9 +899,18 @@ const mount = (renderer, input, settings) => {
     $("rangeFields").hidden = !["f", "i", "u"].includes(kind);
     $("uniformColorField").hidden = !["vec3", "vec4"].includes(t);
     if ($("uniformColorField").hidden) $("uniformColor").checked = false;
+    $("uniformDirField").hidden = !["vec2", "vec3"].includes(t);
+    if ($("uniformDirField").hidden) $("uniformDir").checked = false;
     $("uniformValue").value = defaultValue(t);
   };
   listen($("uniformType"), "change", updateTypeFields);
+  // 색상과 방향은 함께 쓸 수 없다: 하나를 켜면 다른 하나를 끈다.
+  listen($("uniformColor"), "change", () => {
+    if ($("uniformColor").checked) $("uniformDir").checked = false;
+  });
+  listen($("uniformDir"), "change", () => {
+    if ($("uniformDir").checked) $("uniformColor").checked = false;
+  });
   listen($("uniformSearch"), "input", renderUniforms);
   listen($("uniformEditor"), "toggle", () => {
     if ($("uniformEditor").open) $("uniformName").focus();
@@ -598,11 +928,13 @@ const mount = (renderer, input, settings) => {
       const min = $("uniformMin").value.trim(),
         max = $("uniformMax").value.trim(),
         step = $("uniformStep").value.trim();
-      const hasBounds = ["f", "i", "u"].includes(typeInfo(type).kind) && [min, max, step].some(Boolean);
+      const direction = $("uniformDir").checked && ["vec2", "vec3"].includes(type);
+      const hasBounds = !direction && ["f", "i", "u"].includes(typeInfo(type).kind) && [min, max, step].some(Boolean);
       if (hasBounds && ![min, max, step].every(Boolean))
         throw new Error("슬라이더의 Min, Max, Step을 모두 입력하세요.");
       const opts = hasBounds ? { min: Number(min), max: Number(max), step: Number(step) } : {};
-      if ($("uniformColor").checked && ["vec3", "vec4"].includes(type)) opts.color = true;
+      if (direction) opts.dir = "full";
+      else if ($("uniformColor").checked && ["vec3", "vec4"].includes(type)) opts.color = true;
       renderer.defineUniform($("uniformName").value.trim(), type, value, opts);
       clearDeleted();
       $("uniformSearch").value = "";
