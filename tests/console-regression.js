@@ -20,19 +20,11 @@
     r.setUniform("uTestGain", 0.8);
     assert(r.getUserUniforms().some(u => u.name === "uTestGain" && u.value === 0.8), "사용자 Uniform 관리");
     assert(r.removeUniform("uTestGain"), "사용자 Uniform 삭제");
-    const baseRay = r.getRaymarchSettings();
-    assert(baseRay.maxSteps >= 1 && baseRay.surfaceEpsilon > 0, "Ray Marching 기본 설정");
-    r.setRaymarchSettings({maxSteps:256, maxDistance:180, surfaceEpsilon:0.0005, normalEpsilon:0.002});
-    assert(r.getRaymarchSettings().maxSteps === 256 && r.getRaymarchSettings().normalEpsilon === 0.002, "Ray Marching 설정 변경");
-    let invalid = false;
-    try { r.setRaymarchSettings({maxSteps:2048, surfaceEpsilon:0.005}); } catch(error) {invalid = true;}
-    assert(invalid && r.getRaymarchSettings().surfaceEpsilon === 0.0005, "잘못된 설정은 원자적으로 거부");
+    // 범용 편집기: 레이마칭 전용 내장 설정·Uniform은 없다. uSurfaceEpsilon 같은 이름도 평범한 사용자 파라미터로 등록된다.
+    assert(r.getRaymarchSettings === undefined && r.setDebugHeatmap === undefined && !("debugHeatmap" in r.getStats()), "레이마칭 전용 렌더러 설정 없음");
+    r.defineUniform("uSurfaceEpsilon", "float", 0.002, {min:0.0001, max:0.01, step:0.0001});
+    assert(r.getUserUniforms().some(u => u.name === "uSurfaceEpsilon" && u.value === 0.002) && r.removeUniform("uSurfaceEpsilon"), "uSurfaceEpsilon도 사용자 파라미터로 등록");
     assert(!document.getElementById("rayMaxSteps") && !document.getElementById("debugHeatmap"),"Render 패널 전용 옵션 제거");
     assert(!document.getElementById("studioExampleRaymarch") && !document.getElementById("studioStarters") && typeof window.shaderStudio.exampleRaymarch === "function","편집기 서랍의 옛 시작 예제는 제거 · Ray Marching은 갤러리/API로 계속 제공");
-    r.setRaymarchSettings(baseRay);
-    const stats = r.getStats();
-    r.setDebugHeatmap(!stats.debugHeatmap);
-    assert(r.getStats().debugHeatmap !== stats.debugHeatmap, "범용 Ray Steps Heatmap");
-    r.setDebugHeatmap(stats.debugHeatmap);
     console.log("Shader Art Workspace 회귀 테스트 통과");
 })();

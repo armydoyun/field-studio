@@ -16,5 +16,5 @@ for(const id of ['rayMaxSteps','rayStepsRange','rayMaxDistance','raySurfaceEpsil
 }
 // Ray Marching 예제가 이전 파라미터를 지우고 Ray 파라미터 6개로 바꾸는 동작은 starter-ownership-regression.js가 실제로 실행해 본다.
 assert(/\bexampleRaymarch\b/.test(studio)&&/\bShader\.raymarch\b/.test(studio)&&/\bShader\.rayUniforms\b/.test(studio),'Ray Marching 예제는 shader.js의 프리셋을 쓴다');
-assert(/\bsetRaymarchSettings\b/.test(read('js/renderer.js')),'legacy shader API retained');
+assert(!/setRaymarchSettings|uSurfaceEpsilon|uMaxSteps\b|uDebugRaySteps/.test(read('js/renderer.js')+read('js/pass-manager.js')),'렌더러에 레이마칭 전용 내장 Uniform·설정이 없다(범용 편집기)');
 console.log('PASS generic Shader Art default, optional Ray Starter, custom sliders, rollback, legacy compatibility');

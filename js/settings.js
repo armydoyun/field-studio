@@ -1,14 +1,13 @@
 // localStorage 저장은 렌더러와 분리한다. WebGL 상태 대신 복원 가능한 설정만 직렬화한다.
 // 브라우저 저장소가 제한될 수 있으므로 실패해도 렌더링을 중단하지 않는다.
+// 저장소 키 이름은 초기 버전에서 정해졌다. 바꾸면 사용자의 저장된 설정이 사라지므로 그대로 둔다.
 const KEY = "webgl.raymarch-template.settings.v1";
 const mount = renderer => {
   const defaults = {
     fpsLimit: 0,
     resolutionScale: 1,
     maxPixels: 0,
-    debugHeatmap: false,
     timeScale: 1,
-    raymarch: renderer.getRaymarchSettings(),
   };
   let available = true,
     migrationBlocked = false,
@@ -23,10 +22,8 @@ const mount = renderer => {
         fpsLimit: stats.fpsLimit,
         resolutionScale: stats.resolutionScale,
         maxPixels: stats.maxPixels,
-        debugHeatmap: stats.debugHeatmap,
         timeScale: stats.timeScale,
       },
-      raymarch: renderer.getRaymarchSettings(),
       user: renderer.getUserUniforms().map(({ name, type, value, options }) => ({ name, type, value, options })),
       panelHidden: document.body.classList.contains("panel-hidden"),
     };
@@ -106,7 +103,6 @@ const mount = renderer => {
       ["fpsLimit", "setFpsLimit"],
       ["resolutionScale", "setResolutionScale"],
       ["maxPixels", "setMaxPixels"],
-      ["debugHeatmap", "setDebugHeatmap"],
       ["timeScale", "setTimeScale"],
     ]) {
       if (Object.prototype.hasOwnProperty.call(rendering, key)) {
@@ -117,17 +113,7 @@ const mount = renderer => {
         }
       }
     }
-    // 구버전 저장 데이터에는 raymarch가 없어도 기본값을 사용한다.
-    if (data.raymarch && typeof data.raymarch === "object")
-      for (const key of ["maxSteps", "maxDistance", "surfaceEpsilon", "normalEpsilon"]) {
-        if (Object.prototype.hasOwnProperty.call(data.raymarch, key)) {
-          try {
-            renderer.setRaymarchSettings({ [key]: data.raymarch[key] });
-          } catch (error) {
-            console.warn(`저장된 ${key} 무시:`, error.message);
-          }
-        }
-      }
+    // 예전 저장 데이터의 raymarch(레이마칭 전용 설정)·rendering.debugHeatmap은 더 이상 쓰지 않으므로 무시한다.
     if (Array.isArray(data.user) && (data.user.length || renderer.getUserUniforms().length)) {
       const users = data.user.slice(0, 64);
       try {
@@ -155,7 +141,6 @@ const mount = renderer => {
       !data ||
       data.version !== 1 ||
       !data.rendering ||
-      !data.raymarch ||
       !Array.isArray(data.user) ||
       typeof data.panelHidden !== "boolean"
     )
@@ -165,15 +150,9 @@ const mount = renderer => {
       fpsLimit: [0, 240, 1],
       resolutionScale: [0.25, 1],
       maxPixels: [0, Number.MAX_SAFE_INTEGER, 1],
-      maxSteps: [1, 512, 1],
-      maxDistance: [0.01, 10000],
-      surfaceEpsilon: [0.000001, 0.1],
-      normalEpsilon: [0.000001, 0.1],
     };
     for (const [name, range] of Object.entries(limits)) {
-      const value = (["fpsLimit", "resolutionScale", "maxPixels"].includes(name) ? data.rendering : data.raymarch)[
-        name
-      ];
+      const value = data.rendering[name];
       if (
         typeof value !== "number" ||
         !Number.isFinite(value) ||
@@ -183,13 +162,7 @@ const mount = renderer => {
       )
         throw new Error(`Pack 설정 범위 오류: ${name}`);
     }
-    if (
-      Object.keys(data.raymarch).some(
-        key => !["maxSteps", "maxDistance", "surfaceEpsilon", "normalEpsilon"].includes(key)
-      )
-    )
-      throw new Error("Pack Ray Marching 설정 키 오류");
-    if (typeof data.rendering.debugHeatmap !== "boolean") throw new Error("Pack 히트맵 설정 오류");
+    // 예전 Pack의 raymarch(레이마칭 전용 설정)·rendering.debugHeatmap은 열 수 있게 받아 두되 쓰지 않는다.
     // 재생 배속은 나중에 더한 항목이라 예전 Pack에는 없다(없으면 1×).
     const scale = data.rendering.timeScale;
     if (scale !== undefined && (typeof scale !== "number" || !Number.isFinite(scale) || scale < 0.05 || scale > 8))
@@ -202,9 +175,7 @@ const mount = renderer => {
     renderer.setFpsLimit(s.fpsLimit);
     renderer.setResolutionScale(s.resolutionScale);
     renderer.setMaxPixels(s.maxPixels);
-    renderer.setDebugHeatmap(s.debugHeatmap);
     renderer.setTimeScale(s.timeScale ?? defaults.timeScale);
-    renderer.setRaymarchSettings(data.raymarch);
     // panelHidden은 Pack 형식 호환을 위해 검증·저장만 한다. 패널 표시는 이 기기의 화면 배치이므로 프로젝트를 열어도 바꾸지 않는다.
     document.dispatchEvent(new Event("shader-settings-applied"));
     save();
@@ -214,9 +185,7 @@ const mount = renderer => {
     renderer.setFpsLimit(defaults.fpsLimit);
     renderer.setResolutionScale(defaults.resolutionScale);
     renderer.setMaxPixels(defaults.maxPixels);
-    renderer.setDebugHeatmap(defaults.debugHeatmap);
     renderer.setTimeScale(defaults.timeScale);
-    renderer.setRaymarchSettings(defaults.raymarch);
     document.body.classList.remove("panel-hidden");
     savedText = null;
     save();

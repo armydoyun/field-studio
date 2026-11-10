@@ -17,7 +17,7 @@ uniform float uTime;
 uniform float uDeltaTime;
 uniform int uFrame;
 uniform vec2 uMouse;
-uniform bool uDebugRaySteps;
+uniform bool uRMHeatmap;
 // Buffer/Image 패스에서 동일하게 사용하는 입력 채널(최대 4개).
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
@@ -27,12 +27,12 @@ uniform vec3 iChannelResolution[4];
 
 out vec4 fragColor;
 
-// 고정 반복 상한: WebGL2 루프 최적화를 위한 안전 장치. 실제 반복 수는 uMaxSteps로 제한한다.
+// 고정 반복 상한: WebGL2 루프 최적화를 위한 안전 장치. 실제 반복 수는 uRMMaxSteps로 제한한다.
 const int MAX_STEPS_CAP = 512;
-uniform int uMaxSteps;
-uniform float uMaxDistance;
-uniform float uSurfaceEpsilon;
-uniform float uNormalEpsilon;
+uniform int uRMMaxSteps;
+uniform float uRMMaxDistance;
+uniform float uRMSurfaceEpsilon;
+uniform float uRMNormalEpsilon;
 
 // 재질 ID와 거리를 분리해 두면 장면이 커져도 raymarch 코드는 바꾸지 않아도 된다.
 struct SDFResult {
@@ -79,12 +79,12 @@ vec2 rayMarch(vec3 ro, vec3 rd, out int steps, out bool limitReached) {
     limitReached = false;
 
     for(int i = 0; i < MAX_STEPS_CAP; i++) {
-        if(i >= uMaxSteps) break;
+        if(i >= uRMMaxSteps) break;
         SDFResult result = map(ro + rd * t);
         steps = i + 1;
-        if(result.dist < uSurfaceEpsilon) return vec2(t, result.id);
+        if(result.dist < uRMSurfaceEpsilon) return vec2(t, result.id);
         t += result.dist;
-        if(t > uMaxDistance) return vec2(-1.0);
+        if(t > uRMMaxDistance) return vec2(-1.0);
     }
 
     limitReached = true;
@@ -93,7 +93,7 @@ vec2 rayMarch(vec3 ro, vec3 rd, out int steps, out bool limitReached) {
 
 // 정사면체 방향 4회 샘플링으로 표면 기울기(법선)를 근사한다.
 vec3 calcNormal(vec3 p) {
-    float h = uNormalEpsilon;
+    float h = uRMNormalEpsilon;
     const vec2 k = vec2(1.0, -1.0);
     return normalize(
         k.xyy * map(p + k.xyy * h).dist +
@@ -143,8 +143,8 @@ void main() {
     vec2 hit = rayMarch(ro, rd, steps, limitReached);
 
     // 관찰용 디버그 모드. 장면에 특화되지 않으며 실제 GPU 시간은 의미하지 않는다.
-    if(uDebugRaySteps) {
-        float cost = sqrt(float(steps) / float(uMaxSteps));
+    if(uRMHeatmap) {
+        float cost = sqrt(float(steps) / float(uRMMaxSteps));
         vec3 heat = mix(vec3(0.05, 0.20, 0.65), vec3(1.0, 0.25, 0.05), cost);
         if(limitReached) heat = vec3(1.0, 0.0, 1.0);
         fragColor = vec4(heat, 1.0);
@@ -261,15 +261,7 @@ const annotate = (source, uniforms) =>
 export default {
   vertex,
   fragment,
-  raymarch: annotate(
-    raymarch
-      .replace(/uMaxSteps/g, "uRMMaxSteps")
-      .replace(/uMaxDistance/g, "uRMMaxDistance")
-      .replace(/uSurfaceEpsilon/g, "uRMSurfaceEpsilon")
-      .replace(/uNormalEpsilon/g, "uRMNormalEpsilon")
-      .replace(/uDebugRaySteps/g, "uRMHeatmap"),
-    rayUniforms
-  ),
+  raymarch: annotate(raymarch, rayUniforms),
   rayUniforms,
   // Ray Marching 예제 프로젝트: Buffer A가 카메라 상태를 저장하고 Image가 그 값을 읽는다.
   raymarchPasses: [
