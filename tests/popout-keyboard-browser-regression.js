@@ -1,5 +1,5 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
-// 1) 좁은 창(설정 패널 자동 접기 폭)에서 편집기가 열려 있을 때 다시 연 설정 패널이, 예제 선택·코드 조각 삽입으로 다시 접히지 않는다.
+// 1) 설정 패널은 사용자가 직접 열고 닫는다: 편집기 열기·예제 선택·코드 조각 삽입·편집기 닫기로 패널 표시가 바뀌지 않는다.
 // 2) 미리보기를 별도 창으로 분리해도 키보드 채널 셰이더에 키가 전달된다(분리 창의 캔버스에 초점).
 (async () => {
   const r = window.shaderPlayground, studio = window.shaderStudio, $ = id => document.getElementById(id);
@@ -12,15 +12,12 @@
   try {
     if (!wasRunning) studio.togglePlayback();
     // ---- 1) 설정 패널 ----
-    test(window.innerWidth < 1600 && window.innerWidth > 820, `자동 접기 폭의 창 (${window.innerWidth}px)`);
+    test(window.innerWidth > 820, `패널이 옆에 놓이는 창 (${window.innerWidth}px)`);
     if (panelHidden()) $("panelToggle").click();
     if (!$("studioDock").hidden) $("studioHide").click();
     studio.open();
     await frames(1);
-    test(panelHidden(), "편집기를 열면 설정 패널을 접는다(기존 동작)");
-    $("panelToggle").click();
-    await frames(1);
-    test(!panelHidden(), "사용자가 설정 패널을 다시 연다");
+    test(!panelHidden(), "편집기를 열어도 설정 패널이 그대로 열려 있다");
     $("galleryToggle").click();
     await frames(2);
     const card = [...$("gallery").querySelectorAll("button")].find(b => /Keyboard Control/.test(b.textContent));
@@ -34,8 +31,19 @@
     await frames(1);
     test(!panelHidden(), "코드 조각 삽입 뒤에도 설정 패널이 그대로 열려 있다");
 
-    // ---- 2) 분리 창 키보드 ----
     $("studioHide").click();
+    await frames(1);
+    test(!panelHidden(), "편집기를 닫아도 설정 패널이 그대로");
+    $("panelToggle").click();
+    studio.open();
+    await frames(1);
+    test(panelHidden(), "사용자가 닫은 패널은 편집기를 열어도 닫힌 채");
+    $("studioHide").click();
+    await frames(1);
+    test(panelHidden(), "편집기를 닫아도 패널이 저절로 열리지 않는다");
+    $("panelToggle").click();
+
+    // ---- 2) 분리 창 키보드 ----
     // 헤드리스에서는 PiP 창을 사용자 동작 없이 못 만들므로 일반 팝업 경로로 연다.
     delete Window.prototype.documentPictureInPicture;
     delete window.documentPictureInPicture;
