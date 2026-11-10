@@ -62,7 +62,14 @@
     await frames(2);
     test(Math.abs(rect("panel").width - 400) <= 2, `경계를 끌어 너비 조절 (${Math.round(rect("panel").width)}px)`);
     test(JSON.parse(localStorage.getItem("field.panel.layout.v1")).width === 400, "직접 정한 너비는 저장");
-    test(Math.abs(rect("stage").left - rect("panel").right) <= 1, "미리보기가 패널 바로 옆에서 시작(빈틈 없음)");
+    test(Math.abs(rect("panelResize").left - rect("panel").right) <= 1 && Math.abs(rect("stage").left - rect("panelResize").right) <= 1, "패널 · 너비 막대 · 미리보기가 빈틈 없이 이어진다");
+    // 편집기 옆 배치 막대와 같은 모양(너비 · 배경 · 경계선 · 가운데 손잡이 선)
+    const look = el => { const cs = getComputedStyle(el), grip = getComputedStyle(el.querySelector("span")); return [Math.round(el.getBoundingClientRect().width), cs.backgroundColor, cs.borderLeftWidth, cs.borderRightWidth, cs.borderLeftColor, cs.cursor, grip.width, grip.height, grip.backgroundColor].join("|"); };
+    if (!$("stage").classList.contains("studio-layout-right")) key($("studioDockGrip"), "ArrowRight");
+    handle.blur();
+    $("studioResize").blur();
+    await frames(1);
+    test(look($("panelResize")) === look($("studioResize")), `설정 패널 막대와 편집기 막대의 모양이 같다 (${look($("panelResize"))})`);
 
     // ---- 2) 패널 자리 ----
     const panelGrip = $("panelGrip");

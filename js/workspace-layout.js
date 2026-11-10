@@ -102,7 +102,9 @@ const mount = ({ doc = document } = {}) => {
   listen(handle, "pointermove", event => {
     if (event.pointerId !== sizing || !workspace) return;
     const rect = workspace.getBoundingClientRect();
-    setWidth(side === "left" ? event.clientX - rect.left : rect.right - event.clientX);
+    // 포인터는 막대(6px) 가운데에 있으므로 막대 절반을 빼야 막대가 포인터를 그대로 따라간다.
+    const half = (handle.offsetWidth || 0) / 2;
+    setWidth(side === "left" ? event.clientX - rect.left - half : rect.right - event.clientX - half);
   });
   const stopSizing = event => {
     if (event.pointerId !== sizing) return;
