@@ -1,5 +1,6 @@
 // GLSL 주석 어노테이션 → 파라미터 정의. DOM·GPU에 의존하지 않는 순수 파서다.
-// 형식: uniform <type> <name>; // @range <min> <max> [step] @min <v> @max <v> @step <v> @default <v...> @color
+// 형식: uniform <type> <name>; // @range <min> <max> [step] @min <v> @max <v> @step <v> @default <v...> @color @dir [hemi]
+// @dir: vec2/vec3 단위 방향 벡터. 값은 항상 길이 1로 정규화한다. hemi면 +Y 반구(반원)로 제한한다.
 // 같은 줄의 단일 선언만 인식한다. 값 검증(타입·범위)은 Renderer.normalizeEntry가 최종 판단한다.
 const DECLARATION = /^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*;\s*\/\/(.*)$/;
 const SIZES = {
@@ -33,6 +34,15 @@ const kindOf = type =>
         : /^(uint|uvec)/.test(type)
           ? "u"
           : "f";
+// 방향 벡터를 길이 1로 만든다. hemi면 Y가 음수인 쪽을 +Y 반구로 뒤집는다. 0 벡터·비정상 값이면 null.
+const normalizeDirection = (value, mode = "full") => {
+  if (!Array.isArray(value) || !value.every(Number.isFinite)) return null;
+  const v = [...value];
+  if (mode === "hemi") v[1] = Math.abs(v[1]);
+  const length = Math.hypot(...v);
+  if (!(length > 1e-9)) return null;
+  return v.map(x => x / length);
+};
 const parseLine = line => {
   const match = DECLARATION.exec(line);
   if (!match || !match[3].includes("@")) return null;
@@ -65,6 +75,11 @@ const parseLine = line => {
     options.step ??= kind === "f" ? Number(((options.max - options.min) / 1000).toPrecision(2)) || 0.001 : 1;
   }
   if (tags.color !== undefined) options.color = true;
+  if (tags.dir !== undefined) {
+    options.dir = tags.dir[0]?.toLowerCase() === "hemi" ? "hemi" : "full";
+    if (type !== "vec2" && type !== "vec3") error = "@dir은 vec2/vec3에만 쓸 수 있습니다.";
+    else if (options.color || options.min !== undefined) error = "@dir은 @color·@range와 함께 쓸 수 없습니다.";
+  }
   let value;
   if (tags.default) {
     const raw = tags.default.slice(0, n);
@@ -76,7 +91,12 @@ const parseLine = line => {
     value = Array.from({ length: n }, (_, i) => (i % (dim + 1) === 0 ? 1 : 0));
   } else if (kind === "b") value = Array(n).fill(false);
   else if (options.color) value = Array(n).fill(1);
+  else if (options.dir) value = n === 2 ? [1, 0] : [0, 1, 0];
   else value = Array(n).fill(options.min !== undefined ? Math.min(Math.max(0, options.min), options.max) : 0);
+  if (options.dir && !error) {
+    value = normalizeDirection(value, options.dir);
+    if (!value) error = "@dir의 @default는 0이 아닌 벡터여야 합니다.";
+  }
   return { name, type, value: n === 1 ? value[0] : value, options, error };
 };
 // 여러 패스의 소스를 받아 이름별 첫 정의만 남긴다(Image가 앞에 오도록 호출한다).
@@ -92,9 +112,13 @@ const collect = sources => {
 };
 // 범위가 바뀌었을 때 기존 값을 새 범위 안으로 끌어들인다.
 const clampValue = (value, options) => {
+  if (options.dir)
+    return Array.isArray(value)
+      ? normalizeDirection(value, options.dir) || (value.length === 2 ? [1, 0] : [0, 1, 0])
+      : value;
   if (!Number.isFinite(options.min) || !Number.isFinite(options.max)) return value;
   const clamp = v => (typeof v === "number" ? Math.min(options.max, Math.max(options.min, v)) : v);
   return Array.isArray(value) ? value.map(clamp) : clamp(value);
 };
-const sameOptions = (a = {}, b = {}) => ["min", "max", "step", "color"].every(key => a[key] === b[key]);
-export { collect, clampValue, sameOptions };
+const sameOptions = (a = {}, b = {}) => ["min", "max", "step", "color", "dir"].every(key => a[key] === b[key]);
+export { collect, clampValue, sameOptions, normalizeDirection };

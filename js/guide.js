@@ -252,6 +252,7 @@ vec2 p = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y / zoom;`,
       {
         code: `uniform float uSpeed;  // @range 0 4 @step 0.01 @default 1.5
 uniform vec3  uTint;   // @color @default 0.9 0.3 0.6
+uniform vec3  uSun;    // @dir @default 0.4 0.8 0.45
 uniform vec2  uOffset; // @range -1 1 @default 0
 uniform int   uCount;  // @min 1 @max 32 @default 8`,
         title: "어노테이션 예시",
@@ -265,6 +266,10 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
             ["@min · @max · @step", "범위를 따로 지정"],
             ["@default v…", "처음 등록할 때의 값이자 ↺ 버튼으로 되돌아갈 값. 값 하나면 모든 성분에 적용"],
             ["@color", "vec3/vec4를 색상 선택기로 표시(값 0~1)"],
+            [
+              "@dir [hemi]",
+              "vec2/vec3를 단위 방향으로 표시. vec2는 다이얼, vec3는 빛 받은 구 패드 + 방위각·고도. 값은 늘 길이 1. hemi는 +Y 쪽 반구만",
+            ],
           ],
         },
       },
@@ -590,7 +595,7 @@ const TOUR = [
   {
     target: "#view-uniforms",
     title: "파라미터",
-    text: "슬라이더·색상으로 Uniform 값을 실시간 조절합니다. GLSL 주석에 @range, @color를 달면 자동으로 여기에 생겨요.",
+    text: "슬라이더·색상·방향으로 Uniform 값을 실시간 조절합니다. GLSL 주석에 @range, @color, @dir를 달면 자동으로 여기에 생겨요.",
     prepare: "panel:uniforms",
   },
   {

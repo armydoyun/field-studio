@@ -38,7 +38,7 @@ test("어노테이션이 오류 없이 읽히고 선언과 같은 이름·타입
   assert.deepEqual(problems,[]);
 });
 test("색으로 쓰는 vec3/vec4에는 @color가 있다",()=>{
-  const missing=found.filter(d=>/^vec[34]$/.test(d.type)&&COLOR_NAME.test(d.name)&&!/@color\b/.test(d.line)).map(d=>`${d.where}: ${d.line.trim()}`);
+  const missing=found.filter(d=>/^vec[34]$/.test(d.type)&&COLOR_NAME.test(d.name)&&!/@(color|dir)\b/.test(d.line)).map(d=>`${d.where}: ${d.line.trim()}`);
   assert.deepEqual(missing,[]);
 });
 test("@color가 붙은 값은 0~1 안이다",()=>{

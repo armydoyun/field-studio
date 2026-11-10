@@ -208,6 +208,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     }
     throw new TypeError(`Uniform 타입(${type})에 맞지 않는 값입니다.`);
   };
+  // dir 옵션 Uniform의 값: 길이 1. hemi면 Y를 +쪽으로 뒤집는다(annotations.normalizeDirection과 같은 규칙).
+  const unitDirection = (value, mode) => {
+    const v = [...value];
+    if (mode === "hemi") v[1] = Math.abs(v[1]);
+    const length = Math.hypot(...v);
+    if (!(length > 1e-9)) throw new Error("방향 벡터는 0 벡터일 수 없습니다.");
+    return v.map(x => x / length);
+  };
   // 벡터/행렬은 등록·변경 시점에 Typed Array로 한 번 변환해 두어 매 프레임 할당 없이 업로드한다.
   const makeData = type => {
     const spec = UNIFORM_TYPES[type];
@@ -1146,7 +1154,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       throw new Error("Uniform 슬라이더 설정이 올바르지 않습니다.");
     // 범위(min/max/step)는 float·int·uint 스칼라와 벡터(성분마다 같은 범위)에, color는 vec3/vec4에만 허용한다.
     const normalized = normalizeUniform(type, value),
-      { min, max, step, color } = options,
+      { min, max, step, color, dir } = options,
       spec = UNIFORM_TYPES[type];
     const ranged = spec.kind === "f" || spec.kind === "i" || spec.kind === "u",
       integer = spec.kind === "i" || spec.kind === "u";
@@ -1161,9 +1169,18 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       throw new Error("Uniform 슬라이더 범위가 올바르지 않습니다.");
     if (color !== undefined && (color !== true || !["vec3", "vec4"].includes(type)))
       throw new Error("color 표시는 vec3/vec4에만 사용할 수 있습니다.");
+    // dir("full"|"hemi")는 vec2/vec3 단위 방향에만. 값은 늘 길이 1로 저장한다.
+    let direction = normalized;
+    if (dir !== undefined) {
+      if (!["full", "hemi"].includes(dir) || !["vec2", "vec3"].includes(type))
+        throw new Error("방향(dir) 표시는 vec2/vec3에만 사용할 수 있습니다.");
+      if (color || min !== undefined) throw new Error("방향(dir) 표시는 색상·슬라이더 범위와 함께 쓸 수 없습니다.");
+      direction = unitDirection(normalized, dir);
+    }
     const nextOptions = min === undefined ? {} : { min, max, step };
     if (color) nextOptions.color = true;
-    return writeData({ type, value: normalized, data: makeData(type), options: nextOptions });
+    if (dir) nextOptions.dir = dir;
+    return writeData({ type, value: direction, data: makeData(type), options: nextOptions });
   };
   const defineUniform = (name, type, value, options = {}) => {
     if (disposed || lost) throw new Error("현재 Uniform을 등록할 수 없습니다.");
@@ -1182,7 +1199,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
     const item = userUniforms.get(name);
     if (!item) throw new Error(`등록되지 않은 Uniform: ${name}`);
-    item.value = normalizeUniform(item.type, value);
+    const normalized = normalizeUniform(item.type, value);
+    item.value = item.options?.dir ? unitDirection(normalized, item.options.dir) : normalized;
     writeData(item);
     return true;
   };

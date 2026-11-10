@@ -172,6 +172,11 @@ const create = ctx => {
       body: "uniform vec3 ${1:uColor}; // @color @default ${2:1.0 0.5 0.2}",
     },
     {
+      label: "uniform-dir",
+      detail: "방향(단위 벡터) 파라미터 · @dir",
+      body: "uniform vec3 ${1:uLightDir}; // @dir @default ${2:0.4 0.8 0.45}",
+    },
+    {
       label: "uv-center",
       detail: "중심 원점 · 종횡비 보정 좌표",
       body: "vec2 ${1:uv} = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;",

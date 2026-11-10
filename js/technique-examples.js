@@ -151,11 +151,12 @@ uniform int uLightSteps;   // 해 쪽 걸음 수 · @min 0 @max 12 @default 6
 uniform float uWind;       // 바람 · @range 0 2 @step 0.01 @default 0.4
 uniform vec3 uSunCol;      // 햇빛 · @color @default 1 0.92 0.8
 uniform vec3 uSkyCol;      // 하늘빛(그늘을 채움) · @color @default 0.45 0.6 0.85
+uniform vec3 uSunDir;      // 해 방향 · @dir hemi @default 0.6 0.35 0.7
 uniform int uView;         // 0 결과, 1 밀도, 2 투과율, 3 받은 해빛 · @min 0 @max 3 @default 0
 out vec4 fragColor;
 
 const float BOTTOM = 1.5, TOP = 4.0;                           // 구름층 높이
-const vec3 SUN = normalize(vec3(0.6, 0.35, 0.7));
+#define SUN uSunDir                                             // 해 방향(@dir라 늘 길이 1)
 
 ${PCG}
 float hash3(vec3 p) { return float(pcg3d(uvec3(ivec3(floor(p)) + 32768)).x >> 8u) * (1.0 / 16777216.0); }

@@ -505,10 +505,10 @@ uniform vec3 uSunCol;    // 햇빛 · @color @default 1 0.92 0.7
 uniform vec3 uSky1;      // 지평선 쪽 하늘 · @color @default 0.34 0.56 0.9
 uniform vec3 uSky2;      // 천정 쪽 하늘 · @color @default 0.06 0.18 0.46
 uniform vec3 uFogC;      // 안개 · @color @default 0.55 0.66 0.82
+uniform vec3 uSunDir;    // 해 방향 · @dir hemi @default -0.95 0.28 0.2
 out vec4 fragColor;
 #define H uHeight
 #define uExp uExposure
-const vec3 uSunDir = vec3(-0.95, 0.28, 0.20);
 
 // 원본 해시는 fract(p*상수) 계열이라 좌표가 커지면(멀리 날아갈수록) 정밀도가 떨어진다. 정수 해시(pcg3d)로 바꿨다.
 uvec3 pcg3d(uvec3 v) {
