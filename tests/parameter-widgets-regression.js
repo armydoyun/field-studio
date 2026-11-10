@@ -68,12 +68,36 @@ await ui('렌더러: 표시 방식 옵션을 검증하고 그대로 돌려준다
 });
 await ui('@angle 다이얼: 도로 보여 주고 라디안으로 넘기며 바퀴 수를 지킨다',async(f,n,row)=>{
   f.renderer.defineUniform('uSpin','float',Math.PI/6,{angle:true});await show(n);
-  const [line,chips,code]=side(row()).children,[,slider,number]=line.children;
+  const [line,chips,code,turns]=side(row()).children,[,slider,number]=line.children;
   assert.equal(number.value,'30');assert.equal(code.textContent,'0.5236 rad');
+  assert.equal(slider.min,'0');assert.equal(slider.max,'360');assert.equal(turns.textContent,'누적 0회전');
+  assert.deepEqual(chips.children.map(c=>c.textContent),['0°','90°','180°','270°']);
   await chip(chips,'90°').click();close(value(f),Math.PI/2);
-  number.value='720';await number.dispatchEvent({type:'change'});close(value(f),4*Math.PI);assert.equal(slider.value,'0');
+  number.value='720';await number.dispatchEvent({type:'change'});close(value(f),4*Math.PI);assert.equal(slider.value,'0');assert.equal(number.value,'0');
+  assert.equal(turns.textContent,'누적 2회전');assert.equal(code.textContent,'0.0000 rad');assert.match(code.title,/12\.566371/);
   slider.value='10';await slider.dispatchEvent({type:'input'});close(value(f),(730*Math.PI)/180,1e-9);
-  await row().children[1].children[0].dispatchEvent({type:'keydown',key:'ArrowUp',shiftKey:true});close(value(f),(745*Math.PI)/180,1e-9);
+  assert.equal(number.value,'10');assert.equal(turns.textContent,'누적 2회전');
+  number.value='20';await number.dispatchEvent({type:'change'});close(value(f),(740*Math.PI)/180,1e-9);
+  await row().children[1].children[0].dispatchEvent({type:'keydown',key:'ArrowUp',shiftKey:true});close(value(f),(755*Math.PI)/180,1e-9);
+  assert.equal(number.value,'35');
+  await chip(chips,'270°').click();close(value(f),(630*Math.PI)/180,1e-9);assert.equal(number.value,'270');assert.equal(turns.textContent,'누적 1회전');
+});
+await ui('@angle: 양방향 경계와 음수·소수 각도도 표시만 감싼다',async(f,n,row)=>{
+  f.renderer.defineUniform('uSpin','float',359*Math.PI/180,{angle:true});await show(n);
+  const [line,,code,turns]=side(row()).children,[,slider,number]=line.children,pad=row().children[1].children[0];
+  await pad.dispatchEvent({type:'keydown',key:'ArrowUp'});close(value(f),2*Math.PI,1e-9);
+  assert.equal(number.value,'0');assert.equal(slider.value,'0');assert.equal(turns.textContent,'누적 1회전');
+  await pad.dispatchEvent({type:'keydown',key:'ArrowUp'});close(value(f),361*Math.PI/180,1e-9);assert.equal(number.value,'1');
+  slider.value='359';await slider.dispatchEvent({type:'input'});close(value(f),359*Math.PI/180,1e-9);
+  slider.value='0';await slider.dispatchEvent({type:'input'});close(value(f),2*Math.PI,1e-9);
+  number.value='-10';await number.dispatchEvent({type:'change'});close(value(f),-Math.PI/18,1e-9);
+  assert.equal(number.value,'350');assert.equal(slider.value,'350');assert.equal(turns.textContent,'누적 -1회전');assert.match(code.title,/-0\.174533/);
+  number.value='0';await number.dispatchEvent({type:'change'});close(value(f),0,1e-9);
+  await pad.dispatchEvent({type:'keydown',key:'ArrowRight'});close(value(f),-Math.PI/180,1e-9);assert.equal(number.value,'359');
+  await pad.dispatchEvent({type:'keydown',key:'ArrowLeft'});close(value(f),0,1e-9);assert.equal(number.value,'0');assert.equal(turns.textContent,'누적 0회전');
+  number.value='719.96';await number.dispatchEvent({type:'change'});close(value(f),719.96*Math.PI/180,1e-9);
+  assert.equal(number.value,'0','표시 반올림이 360°이면 0°로');assert.equal(turns.textContent,'누적 2회전');assert.equal(code.textContent,'0.0000 rad');
+  number.value='';await number.dispatchEvent({type:'change'});close(value(f),719.96*Math.PI/180,1e-9);assert.equal(number.value,'0');
 });
 await ui('@pos 패드: X·Y 줄 · 범위 안으로 · 화살표 키 · 가운데 버튼',async(f,n,row)=>{
   f.renderer.defineUniform('uC','vec2',[0.2,0.4],{min:0,max:1,step:0.01,pos:true});await show(n);

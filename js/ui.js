@@ -119,6 +119,18 @@ const mount = (renderer, input, settings) => {
   const DEG = 180 / Math.PI,
     DIR_PAD = 88;
   let directionRedraws = [];
+  // CSS 너비만 바뀌면 곡선의 기존 비트맵이 늘어나므로, 표시 크기에 맞춰 프레임을 그리기 전에 다시 그린다.
+  const curveRedraws = new Map(),
+    curveResizeObserver = window.ResizeObserver
+      ? new window.ResizeObserver(entries => {
+          for (const { target, contentRect } of entries)
+            if (contentRect.width > 0 && contentRect.height > 0) curveRedraws.get(target)?.();
+        })
+      : null;
+  signal.addEventListener("abort", () => {
+    curveResizeObserver?.disconnect();
+    curveRedraws.clear();
+  });
   const PAD_SIZE = DIR_PAD;
   // 패드 색은 테마 토큰에서 고른다. 어두운 테마: 그늘 --sunken → 빛 --text-soft, 밝은 테마: 그늘 --faint → 빛 --surface.
   // 점·선은 CSS border-color(액센트)와 color(보조 선)로 넘겨받는다.
@@ -171,7 +183,7 @@ const mount = (renderer, input, settings) => {
     });
     pad.addEventListener("keydown", () => delete pad.dataset.pointer);
   };
-  // @angle(float 라디안)도 같은 다이얼을 쓴다. 이때 값은 도로 보여 주고, 몇 바퀴째인지(360° 넘는 값)를 잃지 않게 끈다.
+  // @angle(float 라디안)도 같은 다이얼을 쓴다. 표시는 0~360°로 감싸되 내부 값과 누적 바퀴 수는 유지한다.
   const directionControl = (item, commit, currentValue) => {
     const angleMode = item.options.angle === true,
       current = () => {
@@ -182,6 +194,8 @@ const mount = (renderer, input, settings) => {
       sphere = item.type === "vec3",
       round = value => Math.round(value * 10) / 10,
       clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+    const wrapAngle = value => ((value % 360) + 360) % 360,
+      nearestAngle = value => value + 360 * Math.round((state.angle - value) / 360);
     const wrap = element("div");
     wrap.className = `uniform-dir ${sphere ? "is-sphere" : angleMode ? "is-dial is-angle" : "is-dial"}`;
     const what = angleMode ? "각도" : "방향";
@@ -197,6 +211,8 @@ const mount = (renderer, input, settings) => {
     side.className = "uniform-dir-side";
     const code = element("code");
     code.className = "uniform-dir-value";
+    const turns = angleMode ? element("span") : null;
+    if (turns) turns.className = "uniform-dir-value uniform-angle-turns";
     // 각도 상태. 극점(고도 ±90°)에서는 방위각이 정해지지 않으므로 마지막 값을 기억한다.
     const state = { angle: 0, az: 0, el: 0, back: false };
     const fromVector = v => {
@@ -239,8 +255,10 @@ const mount = (renderer, input, settings) => {
       number.setAttribute("aria-label", `${item.name} ${title} 값(°)`);
       const set = (field, value) => {
         if (!Number.isFinite(value)) return sync(current());
-        // @angle 슬라이더는 -180~180만 보여 주므로 지금 바퀴 수를 유지해 이어 붙인다. 숫자 칸은 720° 같은 값도 그대로 받는다.
-        if (angleMode && field === slider) value += 360 * Math.round((state[key] - value) / 360);
+        // 한 바퀴 안의 입력은 현재 값과 가장 가까운 회전으로 연결한다. 범위 밖 숫자는 누적 각도로 직접 지정한다.
+        // 라벨 끌기는 누적값을 읽으므로 그대로 적용해 0° 경계에서도 연속으로 움직인다.
+        if (angleMode && (field === slider || (field === number && value >= 0 && value <= 360)))
+          value = nearestAngle(value);
         state[key] = angleMode ? value : clamp(value, low, high);
         apply(field, toVector());
       };
@@ -260,7 +278,7 @@ const mount = (renderer, input, settings) => {
     };
     if (sphere)
       side.append(angleLine("az", "Az", "방위각", -180, 180), angleLine("el", "El", "고도", hemi ? 0 : -90, 90));
-    else side.append(angleLine("angle", "θ", "각도", hemi ? 0 : -180, 180));
+    else side.append(angleLine("angle", "θ", "각도", angleMode || hemi ? 0 : -180, angleMode ? 360 : 180));
     // 축 버튼: 자주 쓰는 방향으로 바로 맞춘다.
     const chips = element("div");
     chips.className = "uniform-dir-chips";
@@ -279,7 +297,7 @@ const mount = (renderer, input, settings) => {
           ["+Y", [0, 1]],
           ["−Y", [0, -1]],
         ];
-    const presets = angleMode ? [0, 90, 180, -90].map(deg => [`${deg < 0 ? "−" : ""}${Math.abs(deg)}°`, deg]) : axes;
+    const presets = angleMode ? [0, 90, 180, 270].map(deg => [`${deg}°`, deg]) : axes;
     for (const [text, target] of presets) {
       if (hemi && target[1] < 0) continue;
       const chip = element("button");
@@ -288,7 +306,7 @@ const mount = (renderer, input, settings) => {
       chip.textContent = text;
       chip.setAttribute("aria-label", angleMode ? `${item.name}을 ${text}로` : `${item.name}을 ${text} 방향으로`);
       chip.addEventListener("click", () => {
-        if (angleMode) state.angle = target;
+        if (angleMode) state.angle = nearestAngle(target);
         apply(chip, angleMode ? toVector() : target);
       });
       chips.append(chip);
@@ -310,6 +328,7 @@ const mount = (renderer, input, settings) => {
       chips.append(flip);
     }
     side.append(chips, code);
+    if (turns) side.append(turns);
     wrap.append(pad, side);
     const draw = () => {
       const ctx = pad.getContext?.("2d");
@@ -376,14 +395,19 @@ const mount = (renderer, input, settings) => {
     const sync = v => {
       fromVector(v);
       for (const { key, slider, number } of angleLines) {
-        slider.value = String(round(angleMode ? ((((state[key] + 180) % 360) + 360) % 360) - 180 : state[key]));
-        showNumber(number, round(state[key]));
+        const degrees = angleMode ? wrapAngle(round(state[key])) : round(state[key]);
+        slider.value = String(degrees);
+        showNumber(number, degrees);
         number.removeAttribute("aria-invalid");
       }
       if (angleMode) {
-        const radians = currentValue();
-        code.textContent = `${(Math.abs(radians) < 5e-5 ? 0 : radians).toFixed(4)} rad`;
-        code.title = `float ${+radians.toFixed(6)} (라디안)`;
+        const radians = currentValue(),
+          degrees = round(state.angle),
+          count = Math.floor(degrees / 360);
+        code.textContent = `${(wrapAngle(degrees) / DEG).toFixed(4)} rad`;
+        code.title = `셰이더에 전달하는 누적값: float ${+radians.toFixed(6)} (라디안)`;
+        turns.textContent = `누적 ${count}회전`;
+        turns.title = `누적 ${+state.angle.toFixed(4)}° (표시: ${count} × 360° + ${wrapAngle(degrees)}°)`;
       } else {
         code.textContent = v.map(x => (Math.abs(x) < 5e-5 ? 0 : x).toFixed(3)).join(" ");
         code.title = `${item.type}(${v.map(x => +x.toFixed(6)).join(", ")})`;
@@ -1128,6 +1152,8 @@ const mount = (renderer, input, settings) => {
       apply(yField);
     });
     directionRedraws.push(draw);
+    curveRedraws.set(pad, draw);
+    curveResizeObserver?.observe(pad);
     sync();
     return wrap;
   };
@@ -1295,6 +1321,8 @@ const mount = (renderer, input, settings) => {
     uniformSnapshot = JSON.stringify(items);
     const defaults = annotatedDefaults();
     directionRedraws = [];
+    curveResizeObserver?.disconnect();
+    curveRedraws.clear();
     playViews.clear();
     resetSyncs.clear();
     playButtons.clear();
@@ -1902,7 +1930,7 @@ const mount = (renderer, input, settings) => {
       value: "angle",
       label: "각도 다이얼 (라디안)",
       types: ["float"],
-      help: "도(°)로 보여 주고 라디안으로 넘깁니다. 슬라이더 범위는 쓰지 않습니다. @angle과 같습니다.",
+      help: "0~360°로 보여 주며 누적 회전 수를 따로 표시합니다. 셰이더에는 누적 라디안을 넘깁니다. @angle과 같습니다.",
     },
     {
       value: "pos",
