@@ -279,7 +279,7 @@
                             <button id="studioUndo" type="button" class="glyph-icon icon-undo" aria-label="되돌리기" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled></button>
                             <button id="studioRedo" type="button" class="glyph-icon icon-redo" aria-label="다시 실행" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled></button>
                             <label class="studio-live" title="코드를 고치면 0.9초 뒤 자동으로 적용"><input id="studioLive" type="checkbox" checked> 자동</label>
-                            <button id="studioRun" type="button" class="studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Ctrl+Enter · Alt+Enter)">실행 <span>Ctrl+↵</span></button>
+                            <button id="studioRun" type="button" class="studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Alt+Enter)">실행 <span>Alt+↵</span></button>
                         </div>
                         <span class="studio-tool-sep" aria-hidden="true"></span>
                         <button id="studioPause" type="button" class="glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
@@ -348,7 +348,7 @@
                                         <div class="studio-menu-row"><span>글자 크기</span><span class="studio-stepper"><button id="studioZoomOut" type="button" aria-label="글자 작게" title="편집기 글씨 크기 -1">A−</button><span id="studioFontSize">12px</span><button id="studioZoomIn" type="button" aria-label="글자 크게" title="편집기 글씨 크기 +1">A+</button></span></div>
                                         <label class="studio-menu-row" title="Tab 키로 넣을 공백 수"><span>들여쓰기</span><select id="studioIndent" aria-label="들여쓰기 공백 수"><option value="4">공백 4</option><option value="2">공백 2</option></select></label>
                                         <button id="studioLineWrap" type="button" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
-                                        <button id="studioCtrlSRuns" type="button" aria-pressed="false" title="켜면 Ctrl+S가 프로젝트 저장 대신 셰이더 실행이 됩니다(이전 방식). 실행은 언제나 Ctrl+Enter · Alt+Enter로도 됩니다.">Ctrl+S로 실행 (이전 방식)</button>
+                                        <button id="studioCtrlSRuns" type="button" aria-pressed="false" title="켜면 Ctrl+S가 프로젝트 저장 대신 셰이더 실행이 됩니다(이전 방식). 실행은 언제나 Alt+Enter로도 됩니다.">Ctrl+S로 실행 (이전 방식)</button>
                                         <p class="studio-menu-title">창</p>
                                         <button id="studioLayout" type="button" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>
                                         <button id="studioParameters" type="button" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 패널 열기</button>
@@ -428,7 +428,7 @@
             </div>
             <details class="gallery-tips gallery-welcome-only"><summary>처음이라면 · 화면 구성과 단축키</summary>
             <ol class="gallery-steps">
-                <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Ctrl+Enter</kbd>로 즉시 실행, <kbd>Ctrl+S</kbd>로 프로젝트 저장</span></li>
+                <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Alt+Enter</kbd>로 즉시 실행, <kbd>Ctrl+S</kbd>로 프로젝트 저장</span></li>
                 <li><kbd>/</kbd><span><b>파라미터</b> — 슬라이더로 값을 조절하고 Uniform을 추가</span></li>
                 <li><kbd>성능</kbd><span><b>프로파일러</b> — 패스별 GPU 시간과 미등록 Uniform을 확인</span></li>
                 <li><kbd>?</kbd><span><b>가이드</b> — 모든 기능 설명·코드 예시, 처음이라면 아래 <b>UI 둘러보기</b></span></li>

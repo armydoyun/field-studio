@@ -1641,13 +1641,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         index = tabs.indexOf(selected);
       select(tabs[(index + passStep(event) + tabs.length) % tabs.length]);
       $("studioCode").focus();
-    } else if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      ((event.altKey && !event.ctrlKey && !event.metaKey) ||
-        (!event.altKey && (event.ctrlKey || event.metaKey) && !ctrlSRuns()))
-    ) {
-      // 실행: Ctrl+Enter · Alt+Enter. 'Ctrl+S로 실행(이전 방식)'을 켜면 Ctrl+Enter는 편집기의 '아래에 줄 삽입'으로 남는다.
+    } else if (event.key === "Enter" && !event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey) {
+      // 실행: Alt+Enter. Ctrl+Enter는 편집기의 '아래에 줄 삽입'으로 남겨 둔다.
       event.preventDefault();
       rememberEditor();
       apply();
@@ -1882,7 +1877,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       menu.querySelector?.("summary")?.focus();
     }
   });
-  // 저장 단축키. 기본은 Ctrl+S = 프로젝트 저장(이름 없는 작업은 이름을 묻는다), 실행은 Ctrl+Enter.
+  // 저장 단축키. 기본은 Ctrl+S = 프로젝트 저장(이름 없는 작업은 이름을 묻는다), 실행은 Alt+Enter.
   // 예전처럼 Ctrl+S로 실행하고 싶으면 편집기 메뉴(⋯)의 'Ctrl+S로 실행'을 켠다(이 브라우저에 기억).
   const CTRL_S_KEY = "field.ctrlSRuns.v1";
   const ctrlSRuns = () => Store.read(CTRL_S_KEY) === "1";
@@ -1890,15 +1885,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const runs = ctrlSRuns(),
       toggle = $("studioCtrlSRuns");
     if (toggle) toggle.setAttribute("aria-pressed", String(runs));
-    $("studioRun").title = `현재 GLSL/채널 설정을 적용 (${runs ? "Ctrl+S · " : "Ctrl+Enter · "}Alt+Enter)`;
+    $("studioRun").title = `현재 GLSL/채널 설정을 적용 (${runs ? "Ctrl+S · " : ""}Alt+Enter)`;
     const hint = $("studioRun").querySelector("span");
-    if (hint) hint.textContent = runs ? "Ctrl+S" : "Ctrl+↵";
+    if (hint) hint.textContent = runs ? "Ctrl+S" : "Alt+↵";
   };
   const setCtrlSRuns = runs => {
     Store.write(CTRL_S_KEY, runs ? "1" : "0");
     syncCtrlS();
     setStatus(
-      runs ? "Ctrl+S = 실행(이전 방식) · 프로젝트 저장은 프로젝트 메뉴" : "Ctrl+S = 프로젝트 저장 · 실행은 Ctrl+Enter"
+      runs ? "Ctrl+S = 실행(이전 방식) · 프로젝트 저장은 프로젝트 메뉴" : "Ctrl+S = 프로젝트 저장 · 실행은 Alt+Enter"
     );
   };
   const saveProject = () => {
@@ -2079,7 +2074,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on(document, "shader-preview-changed", syncPreviewControls);
   syncPreviewControls();
   editor.registerCommands?.([
-    press("셰이더 실행 (적용)", "studioRun", "Ctrl+Enter · Alt+Enter"),
+    press("셰이더 실행 (적용)", "studioRun", "Alt+Enter"),
     { label: "프로젝트 저장", key: "Ctrl+S", run: () => saveProject() },
     {
       label: "Ctrl+S로 실행 (이전 방식) 켜기/끄기",

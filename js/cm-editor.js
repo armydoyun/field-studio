@@ -535,7 +535,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       editorView.dispatch({ changes, scrollIntoView: true, userEvent: add ? "input.comment" : "delete.comment" });
     return true;
   };
-  // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(아래 줄 삽입 Ctrl+Enter는 'Ctrl+S로 실행' 이전 방식일 때만 — 기본은 Ctrl+Enter = 셰이더 실행).
+  // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(아래 줄 삽입은 Ctrl+Enter — 셰이더 실행은 Alt+Enter).
   const insertLineAbove = editorView => {
     const state = editorView.state;
     editorView.dispatch(
