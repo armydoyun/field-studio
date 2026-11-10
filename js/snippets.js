@@ -402,6 +402,32 @@ float simplexNoise(vec2 v) {
     return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), uhash21(id));
 }`,
       },
+      {
+        id: "voronoiEdge",
+        title: "voronoiEdge (정확한 경계 거리)",
+        desc: "x = 셀 경계까지 실제 거리(선 굵기가 어디서나 같음), y = 가까운 점까지 거리, z = 셀 고유값. voronoi의 F2-F1보다 조금 비싸지만 테두리·금 간 무늬가 고르다",
+        requires: ["uhash22", "uhash21"],
+        code: `vec3 voronoiEdge(vec2 p) {
+    vec2 n = floor(p), f = fract(p), mg = vec2(0.0), mr = vec2(0.0);
+    float md = 8.0;
+    // 1단계: 가장 가까운 점 찾기
+    for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+        vec2 g = vec2(i, j), r = g + uhash22(n + g) - f;
+        float d = dot(r, r);
+        if (d < md) { md = d; mr = r; mg = g; }
+    }
+    // 2단계: 그 점과 이웃 점들 사이 경계(수직 이등분선)까지의 거리
+    float edge = 8.0;
+    for (int j = -2; j <= 2; j++)
+    for (int i = -2; i <= 2; i++) {
+        vec2 g = mg + vec2(i, j), r = g + uhash22(n + g) - f;
+        if (dot(mr - r, mr - r) > 1e-5) edge = min(edge, dot(0.5 * (mr + r), normalize(r - mr)));
+    }
+    return vec3(edge, sqrt(md), uhash21(n + mg));
+}
+// 사용: vec3 v = voronoiEdge(uv * 5.0); col *= smoothstep(0.0, 0.03, v.x);   // 검은 테두리`,
+      },
     ],
   },
   {
@@ -1548,6 +1574,19 @@ vec3 paletteEarth(float t)   { return cosPalette(t, vec3(0.8, 0.5, 0.4), vec3(0.
 // 사용: vec3 rd = setCamera(ro, ta, 0.0) * normalize(vec3(uv, 1.8));`,
       },
       {
+        id: "orbitCamera",
+        title: "마우스로 카메라 돌리기 (orbit)",
+        desc: "목표 주위를 도는 카메라 위치. 뷰포트 위 마우스 가로 = 둘레, 세로 = 높이. 마우스가 뷰포트 밖이면 천천히 자동 회전 (uMouse·uTime·uResolution 선언 필요)",
+        requires: ["camera"],
+        code: `vec3 orbitCamera(vec3 target, float dist) {
+    vec2 m = uMouse.x < 0.0 ? vec2(0.03 * uTime, 0.35) : uMouse.xy / uResolution;
+    float yaw = 6.2831853 * m.x, pitch = mix(-0.1, 1.4, m.y);   // 높이: 바닥 근처 ~ 거의 꼭대기
+    return target + dist * vec3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch));
+}
+// 사용: vec3 ta = vec3(0.0), ro = orbitCamera(ta, 4.0);
+//       vec3 rd = setCamera(ro, ta, 0.0) * normalize(vec3(uv, 1.8));`,
+      },
+      {
         id: "march",
         title: "rayMarch 루프",
         desc: "광선을 따라 전진하며 표면 거리 찾기 (map 필요). 실패 시 -1",
@@ -1618,6 +1657,22 @@ vec2 iBox(vec3 ro, vec3 rd, vec3 halfSize) {   // 원점 중심 상자: (near, f
          + texture(tex, p.xz * scale).rgb * w.y
          + texture(tex, p.xy * scale).rgb * w.z;
 }`,
+      },
+      {
+        id: "renderAA",
+        title: "안티앨리어싱 (픽셀당 여러 번)",
+        desc: "가장자리 계단 현상 제거: 한 픽셀을 AA×AA 곳으로 나눠 그려 평균. 픽셀 하나의 색을 돌려주는 render(fragCoord)를 직접 만들고 그 아래에 넣는다. AA=2면 4배 느려짐",
+        code: `const int AA = 2;   // 1 = 끔, 2 = 4번, 3 = 9번
+vec3 renderAA(vec2 fragCoord) {
+    vec3 sum = vec3(0.0);
+    for (int j = 0; j < AA; j++)
+    for (int i = 0; i < AA; i++)
+        sum += render(fragCoord + (vec2(i, j) + 0.5) / float(AA) - 0.5);   // 픽셀 안 격자점
+    return sum / float(AA * AA);
+}
+// 사용: main()에서 계산하던 내용을 vec3 render(vec2 fragCoord)로 옮기고(gl_FragCoord.xy 대신 fragCoord)
+//       fragColor = vec4(renderAA(gl_FragCoord.xy), 1.0);
+// 감마 보정·톤매핑은 평균을 낸 뒤(renderAA 결과에) 한 번만 한다.`,
       },
       {
         id: "rmTemplate",
@@ -2101,6 +2156,101 @@ layout(location = 1) out vec4 outData;`,
     fragColor = vec4(0.0);   // 초기 상태
     return;
 }`,
+      },
+    ],
+  },
+  {
+    id: "debug",
+    title: "디버그 · 시각화",
+    desc: "셰이더에는 콘솔 출력이 없으니 값을 화면에 그려서 확인합니다. 숫자 찍기, 좌표 격자, 이상한 값(NaN·음수·1 초과) 표시, 레이마칭 비용 보기.",
+    items: [
+      {
+        id: "printValue",
+        title: "printValue (숫자 찍기)",
+        desc: "float 값을 화면에 숫자로 그린다. pos = 픽셀 좌표(gl_FragCoord.xy), at = 숫자 왼쪽 아래(픽셀), size = 글꼴 한 칸(픽셀), decimals = 소수 자릿수(0~6). 글자 위면 1",
+        code: `float printGlyph(int glyph, vec2 g) {   // 3×5 글꼴: 0~9, 10 = '-', 11 = '.'
+    const int FONT[12] = int[12](31599, 11415, 29671, 29391, 23497, 31183, 31215, 29330, 31727, 31695, 448, 2);
+    ivec2 c = ivec2(floor(g));
+    if (c.x < 0 || c.x > 2 || c.y < 0 || c.y > 4) return 0.0;   // 3열·5행 밖은 글자 사이 간격
+    return float((FONT[glyph] >> (14 - (4 - c.y) * 3 - c.x)) & 1);
+}
+float printValue(vec2 pos, vec2 at, float size, float value, int decimals) {
+    vec2 g = (pos - at) / size;   // 글꼴 픽셀 단위, 글자 하나 = 가로 4칸(간격 포함)
+    if (g.x < 0.0 || g.y < 0.0 || g.y >= 5.0) return 0.0;
+    int cell = int(g.x / 4.0);
+    g.x -= 4.0 * float(cell);
+    decimals = clamp(decimals, 0, 6);
+    float scale = 1.0;
+    for (int i = 0; i < decimals; i++) scale *= 10.0;
+    float a = floor(abs(value) * scale + 0.5);   // 반올림한 값 × 10^decimals (정수)
+    float whole = floor(a / scale), frac = a - whole * scale;
+    int digits = 1;
+    for (float t = 10.0; t <= whole && digits < 9; t *= 10.0) digits++;
+    if (value < 0.0 && a > 0.0) {
+        if (cell == 0) return printGlyph(10, g);
+        cell--;
+    }
+    if (cell < digits) {
+        float t = 1.0;
+        for (int i = 1; i < digits - cell; i++) t *= 10.0;
+        return printGlyph(int(mod(floor(whole / t), 10.0)), g);
+    }
+    cell -= digits;
+    if (decimals == 0 || cell > decimals) return 0.0;
+    if (cell == 0) return printGlyph(11, g);
+    float t = 1.0;
+    for (int i = 0; i < decimals - cell; i++) t *= 10.0;
+    return printGlyph(int(mod(floor(frac / t), 10.0)), g);
+}
+// 사용: col = mix(col, vec3(1.0), printValue(gl_FragCoord.xy, vec2(10.0), 4.0, uTime, 2));`,
+      },
+      {
+        id: "debugGrid",
+        title: "좌표 격자 · 축 겹치기",
+        desc: "좌표 p 위에 0.1 간격 가는 선, 1 간격 굵은 선, x축(빨강)·y축(초록)을 그린다. uv·중심 좌표·변환 결과가 어떻게 생겼는지 볼 때",
+        code: `vec3 debugGrid(vec3 col, vec2 p) {
+    vec2 w = fwidth(p);
+    vec2 fine = abs(fract(p * 10.0 + 0.5) - 0.5) / (10.0 * w), major = abs(fract(p + 0.5) - 0.5) / w;   // 선까지 픽셀 수
+    col = mix(col, vec3(0.6), 0.25 * (1.0 - smoothstep(0.0, 1.0, min(fine.x, fine.y))));
+    col = mix(col, vec3(0.9), 0.6 * (1.0 - smoothstep(0.0, 1.0, min(major.x, major.y))));
+    col = mix(col, vec3(1.0, 0.25, 0.25), 1.0 - smoothstep(0.5, 1.5, abs(p.y) / w.y));   // x축 (y = 0)
+    return mix(col, vec3(0.3, 1.0, 0.4), 1.0 - smoothstep(0.5, 1.5, abs(p.x) / w.x));     // y축 (x = 0)
+}
+// 사용: col = debugGrid(col, uv);`,
+      },
+      {
+        id: "debugValues",
+        title: "이상한 값 표시 (NaN · 음수 · 1 초과)",
+        desc: "출력 직전의 색에서 NaN = 자홍, 무한대 = 흰 바둑판, 음수 = 파란 줄무늬, 1 초과 = 빨간 줄무늬로 표시. 검은 점·번쩍임의 원인 찾기. 일부 GPU는 NaN 검사를 최적화로 없앨 수 있다",
+        code: `vec3 debugValues(vec3 c) {
+    vec2 q = floor(gl_FragCoord.xy / 4.0);
+    float stripe = step(0.5, fract((gl_FragCoord.x + gl_FragCoord.y) / 12.0));
+    if (any(isnan(c))) return vec3(1.0, 0.0, 1.0);
+    if (any(isinf(c))) return vec3(mod(q.x + q.y, 2.0));
+    if (any(lessThan(c, vec3(0.0)))) return mix(clamp(c, 0.0, 1.0), vec3(0.1, 0.3, 1.0), stripe);
+    if (any(greaterThan(c, vec3(1.0)))) return mix(clamp(c, 0.0, 1.0), vec3(1.0, 0.1, 0.1), stripe);
+    return c;
+}
+// 사용: fragColor = vec4(debugValues(col), 1.0);   // 톤매핑 뒤, 마지막 출력 바로 앞에`,
+      },
+      {
+        id: "marchCost",
+        title: "레이마칭 비용 히트맵",
+        desc: "rayMarch와 같은 루프인데 걸음 수를 센다(map 필요). x = 거리(실패 -1), y = 걸음 수 비율. costColor로 파랑(적음) → 빨강(많음), 한도에 닿은 픽셀은 자홍. 느린 곳·구멍 찾기",
+        code: `vec2 marchCost(vec3 ro, vec3 rd) {
+    float t = 0.0;
+    for (int i = 0; i < 128; i++) {
+        float d = map(ro + rd * t);
+        if (d < 0.001 * t) return vec2(t, float(i) / 128.0);
+        t += d;
+        if (t > 100.0) return vec2(-1.0, float(i) / 128.0);
+    }
+    return vec2(-1.0, 1.0);   // 걸음 한도에 닿음
+}
+vec3 costColor(float cost) {
+    return cost >= 1.0 ? vec3(1.0, 0.0, 1.0) : mix(vec3(0.05, 0.2, 0.65), vec3(1.0, 0.25, 0.05), sqrt(cost));
+}
+// 사용: col = costColor(marchCost(ro, rd).y);`,
       },
     ],
   },

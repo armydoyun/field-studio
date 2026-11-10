@@ -3,6 +3,7 @@
 // 미리보기 정의(PREVIEWS)는 조각 id → 그림 함수 본문이다. 본문은 vec3 previewColor(vec2 uv, vec2 p) 안에 들어간다.
 //   uv = 0~1 화면 좌표, p = 가운데가 (0,0)이고 세로 -1~1인 좌표(가로는 -2~2).
 //   {map:"..."}이 있으면 3D 조각: float pvMap(vec3 p) 본문이 되고, 그림은 기본 3D 렌더(pvRender)로 그린다.
+//   {map, body}처럼 body를 함께 주면 기본 3D 렌더 대신 그 본문으로 그린다(pvMarch·pvNormal·pvCamera 사용 가능).
 //   {self:true}는 패스 전체를 바꾸는 템플릿: 조각 소스 자체를 그대로 그린다.
 // 조각 코드가 쓰는 앱 Uniform(uTime·uResolution·iChannel0…)은 머리에 선언되며, iChannel0·1에는 시험용 그림이 연결된다.
 import * as Lazy from "./lazy-render.js";
@@ -134,6 +135,8 @@ const PREVIEWS = {
   fbm3Simplex: "return vec3(fbm3Simplex(vec3(p * 2.0, 0.5)) * 0.5 + 0.5);",
   ridged3: "return vec3(ridgedFbm3(vec3(p * 2.0, 0.5)));",
   turbulence3: "return vec3(smoothstep(0.0, 0.45, turbulence3(vec3(p * 2.0, 0.5))));",
+  voronoiEdge:
+    "vec3 v = voronoiEdge(p * 4.0); vec3 c = 0.5 + 0.4 * cos(6.2831 * (v.z + vec3(0.0, 0.33, 0.67))); return c * smoothstep(0.0, 0.04, v.x);",
   voronoi3:
     "vec3 v = voronoi3(vec3(p * 4.0, 0.5)); vec3 c = 0.5 + 0.4 * cos(6.2831 * (v.z + vec3(0.0, 0.33, 0.67))); return c * (0.55 + 0.45 * v.x) * smoothstep(0.0, 0.08, v.y);",
   domainWarp3: "return vec3(domainWarp3(vec3(p * 1.5, 0.0), 1.0));",
@@ -240,6 +243,10 @@ const PREVIEWS = {
     "vec3 ro = vec3(0.0, 0.3, 3.0), rd = normalize(vec3(p, -1.8)); float t = iSphere(ro, rd, vec3(0.0), 0.8); vec3 col = vec3(0.12, 0.13, 0.17); if (t > 0.0) { vec3 n = normalize(ro + rd * t); col = vec3(0.95, 0.72, 0.45) * (0.25 + 0.75 * max(dot(n, normalize(vec3(0.6, 0.8, 0.4))), 0.0)); } return col;",
   triplanar:
     "vec3 n, v; if (!pvSphere(p, n, v)) return vec3(0.1); return triplanar(iChannel0, n * 0.85, n, 1.0) * (0.35 + 0.65 * max(dot(n, normalize(vec3(0.5, 0.6, 0.6))), 0.0));",
+  orbitCamera: {
+    map: "return min(length(p - vec3(0.0, 0.5, 0.0)) - 0.5, p.y);",
+    body: "vec3 ta = vec3(0.0, 0.4, 0.0), ro = orbitCamera(ta, 3.0), rd = setCamera(ro, ta, 0.0) * normalize(vec3(p, 1.8)); float t = pvMarch(ro, rd); if (t < 0.0) return vec3(0.25, 0.3, 0.4); vec3 q = ro + rd * t, n = pvNormal(q); vec3 base = q.y < 0.01 ? vec3(0.3 + 0.4 * mod(floor(q.x * 2.0) + floor(q.z * 2.0), 2.0)) : vec3(0.95, 0.6, 0.35); return base * (0.25 + 0.75 * max(dot(n, normalize(vec3(0.6, 0.8, 0.4))), 0.0));   // 자동 회전 중인 시점",
+  },
   rmTemplate: { self: true },
   // ---- 조명 (가운데 구) ----
   fresnel:
@@ -286,6 +293,15 @@ const PREVIEWS = {
   laplacian: "return pvSplit(uv, pvImage(uv), abs(laplacian(iChannel0, uv, 1.0 / uResolution).rgb) * 6.0);",
   advect:
     "return pvSplit(uv, pvImage(uv), advect(iChannel0, gl_FragCoord.xy, 12.0 * vec2(sin(uv.y * 12.0), 0.0), uResolution).rgb);",
+  // ---- 디버그 ----
+  printValue:
+    "vec3 col = vec3(0.08, 0.09, 0.12); col = mix(col, vec3(1.0), printValue(gl_FragCoord.xy, vec2(20.0, 95.0), 6.0, 3.14159, 3)); return mix(col, vec3(1.0, 0.6, 0.3), printValue(gl_FragCoord.xy, vec2(20.0, 35.0), 6.0, -42.5, 1));",
+  debugGrid: "return debugGrid(vec3(0.08, 0.09, 0.12), p);",
+  debugValues: "return debugValues(vec3(mix(-0.5, 1.5, uv.x)));   // 왼쪽 음수 · 가운데 정상 · 오른쪽 1 초과",
+  marchCost: {
+    map: "return min(min(length(p - vec3(0.0, 0.5, 0.0)) - 0.5, p.y), pvBox3(p - vec3(0.9, 0.3, -0.4), vec3(0.3)));",
+    body: "vec3 ro, rd; pvCamera(p, ro, rd); return costColor(marchCost(ro, rd).y);   // 물체 가장자리를 스칠수록 걸음이 많다",
+  },
 };
 // 그림 함수 본문에서 쓰지만 조각이 정의하지 않는 이름: 도우미로 함께 넣는다.
 const EXTRA = {
@@ -301,7 +317,7 @@ const source = (item, plan) => {
     .globals.filter(entry => (entry.scope || "global") === "global")
     .map(entry => entry.code)
     .join("\n\n");
-  const body = typeof preview === "string" ? preview : "return pvRender(p);";
+  const body = typeof preview === "string" ? preview : preview.body || "return pvRender(p);";
   const map = typeof preview === "object" && preview.map ? preview.map : null;
   const usesMap = map !== null,
     contract = /\bmap\s*\(/.test(globals) && !/\bfloat\s+map\s*\(/.test(globals);

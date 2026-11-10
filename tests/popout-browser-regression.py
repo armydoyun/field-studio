@@ -26,7 +26,7 @@ try:
         )
         for fallback in (False, True):
             context = browser.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=True)
-            context.add_init_script("localStorage.setItem('field.onboarded.v1', '1')")
+            context.add_init_script("try { localStorage.setItem('field.onboarded.v1', '1') } catch (e) {}")  # PiP 창처럼 저장소가 막힌 문서에서도 테스트 자체가 오류를 내지 않게
             if fallback:
                 context.add_init_script("""Object.defineProperty(window, 'documentPictureInPicture', {
                     configurable: true, value: {requestWindow: async () => {

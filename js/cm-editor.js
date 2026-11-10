@@ -535,7 +535,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       editorView.dispatch({ changes, scrollIntoView: true, userEvent: add ? "input.comment" : "delete.comment" });
     return true;
   };
-  // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(아래 줄 삽입 Ctrl+Enter는 'Ctrl+S로 실행' 이전 방식일 때만 — 기본은 Ctrl+Enter = 셰이더 실행).
+  // Ctrl+Shift+Enter: 현재 줄 위에 같은 들여쓰기의 빈 줄을 넣고 그리로 간다(아래 줄 삽입은 Ctrl+Enter — 셰이더 실행은 Alt+Enter).
   const insertLineAbove = editorView => {
     const state = editorView.state;
     editorView.dispatch(
@@ -997,7 +997,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "모든 일치 항목 선택", key: "Ctrl+Shift+L · Ctrl+F2", run: () => selectAllOccurrences(view) },
     { label: "선택 영역 확장 / 축소", key: "Shift+Alt+→ / ←", run: () => expandSelection(view) },
     { label: "선택한 줄마다 줄 끝에 커서", key: "Shift+Alt+I", run: () => cursorsAtLineEnds(view) },
-    { label: "아래에 줄 삽입", run: () => CM.insertBlankLine(view) },
+    { label: "아래에 줄 삽입", key: "Ctrl+Enter", run: () => CM.insertBlankLine(view) },
     { label: "위에 줄 삽입", key: "Ctrl+Shift+Enter", run: () => insertLineAbove(view) },
     { label: "줄 삭제", key: "Ctrl+Shift+K", run: () => CM.deleteLine(view) },
     { label: "짝 괄호로 이동", key: "Ctrl+Shift+\\", run: () => CM.cursorMatchingBracket(view) },
