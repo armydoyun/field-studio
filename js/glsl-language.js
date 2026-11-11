@@ -113,10 +113,11 @@ const create = ctx => {
   };
 
   // 설명: 함수(내장·이 패스) / 변수·Uniform·구조체·#define — 시그니처 힌트와 마우스 설명이 함께 쓴다.
-  const describeFunction = name => {
+  // 이름 → {sig, desc}: 내장 함수(레퍼런스) 또는 이 패스의 함수. src를 주면 그 소스에서 찾는다(시그니처 도움말).
+  const describeFunction = (name, src = source()) => {
     const builtin = options.lookup?.(name);
     if (builtin) return { sig: builtin.sig, desc: builtin.desc };
-    const own = symbolsOf(source()).functions.find(entry => entry.name === name);
+    const own = symbolsOf(src).functions.find(entry => entry.name === name);
     return own
       ? { sig: `${own.ret} ${name}(${own.params})`, desc: `이 패스에 정의된 함수 · ${own.line}번째 줄` }
       : null;
@@ -289,19 +290,6 @@ const create = ctx => {
     snippet: 6,
     library: 7,
   };
-  const KIND_ICON = {
-    variable: "x",
-    field: "·",
-    function: "ƒ",
-    uniform: "u",
-    constant: "#",
-    builtin: "ƒ",
-    "builtin-var": "g",
-    type: "T",
-    keyword: "k",
-    snippet: "{}",
-    library: "+",
-  };
   const KIND_NAME = {
     variable: "변수",
     field: "필드",
@@ -454,20 +442,13 @@ const create = ctx => {
     BUILTIN_VARS,
     isIdent,
     escapeRe,
-    userUniforms,
-    cleanSource,
     cleanOf,
     symbolsOf,
-    typeOf,
     describeFunction,
     describeSymbol,
-    SNIPPETS,
-    boundaryAt,
     fuzzy,
     KIND_ORDER,
-    KIND_ICON,
     KIND_NAME,
-    swizzleItems,
     gatherItems,
     declaringName,
   };

@@ -952,7 +952,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     }
     return true;
   };
-  const isOffline = () => !!offline;
   // 일시정지 중에 한 프레임만 진행한다(시간·프레임 수·피드백 버퍼가 함께 나아간다). 재생 중이면 아무것도 하지 않는다.
   // 진행 시간은 배속과 관계없이 seconds(기본 1/60초)다.
   const stepFrame = (seconds = 1 / 60) => {
@@ -1331,7 +1330,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       value: Array.isArray(item.value) ? [...item.value] : item.value,
       options: item.options.enum ? { ...item.options, enum: [...item.options.enum] } : { ...item.options },
     }));
-  const getUniforms = getUserUniforms;
   // Pack 복원: 사용자 Uniform을 새 GLSL과 함께 사전 컴파일하고, 통과한 경우에만 교체한다.
   const checkRampCount = items => {
     if (items.filter(item => item.type === "sampler2D").length > RAMP_MAX_COUNT)
@@ -1570,7 +1568,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     renderOfflineFrameTiled,
     getOfflineTiling,
     endOffline,
-    isOffline,
     captureScreenshot,
     captureScreenshotAt,
     onFrame,
@@ -1585,7 +1582,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     setUniform,
     removeUniform,
     getUserUniforms,
-    getUniforms,
     getUniformTypes,
     getShaderReflection,
     getCapabilities,
@@ -1595,7 +1591,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     applyPortable,
     applyProject,
     setUserUniforms,
-    validateUniformValue: normalizeUniform,
     sampleRamp,
     setPasses,
     setPassFragment,

@@ -10,7 +10,6 @@ const mount = renderer => {
     timeScale: 1,
   };
   let available = true,
-    migrationBlocked = false,
     errorMessage = "",
     savedText = null,
     disposed = false;
@@ -32,30 +31,12 @@ const mount = renderer => {
     available = false;
     errorMessage = `브라우저 저장소 사용 불가: ${error.message}`;
   };
-  const migrateCamera = data => {
-    if (!data?.required || !Object.hasOwn(data.required, "uCameraOrbit") || !Array.isArray(data.user)) return data;
-    let user = data.user;
-    if (!user.some(u => u?.name === "uCameraOrbit")) {
-      renderer.validateUniformValue("vec3", data.required.uCameraOrbit);
-      if (user.length >= 64) throw new Error("이전 카메라를 Custom으로 옮기려면 Uniform 슬롯이 하나 필요합니다.");
-      user = [...user, { name: "uCameraOrbit", type: "vec3", value: data.required.uCameraOrbit, options: {} }];
-    }
-    return {
-      ...data,
-      user,
-      required: Object.fromEntries(Object.entries(data.required).filter(([name]) => name !== "uCameraOrbit")),
-    };
-  };
   const status = () => ({
-    available: available && !migrationBlocked,
-    message: available && !migrationBlocked ? "렌더링·파라미터 설정 자동 저장" : errorMessage,
+    available,
+    message: available ? "렌더링·파라미터 설정 자동 저장" : errorMessage,
   });
-  const save = (force = false) => {
-    if (force === true && migrationBlocked) {
-      migrationBlocked = false;
-      errorMessage = "";
-    }
-    if (disposed || !available || migrationBlocked) return false;
+  const save = () => {
+    if (disposed || !available) return false;
     const text = JSON.stringify(readState());
     if (text === savedText) return true;
     try {
@@ -90,13 +71,7 @@ const mount = renderer => {
       errorMessage = "지원하지 않는 저장 형식이므로 기본값으로 시작함";
       return false;
     }
-    try {
-      data = migrateCamera(data);
-    } catch (error) {
-      migrationBlocked = true;
-      errorMessage = `설정 복원 중단: ${error.message} · 원본 설정 보존`;
-      return false;
-    }
+    // 예전 저장 데이터의 required(초기 템플릿의 필수 Uniform)는 더 이상 쓰지 않으므로 무시한다.
     // 저장값은 외부 입력이다. 항목마다 검증해서 잘못된 값은 건너뛴다.
     const rendering = data.rendering || {};
     for (const [key, setter] of [
@@ -145,7 +120,6 @@ const mount = renderer => {
       typeof data.panelHidden !== "boolean"
     )
       throw new Error("Pack 설정 형식이 올바르지 않습니다.");
-    data = migrateCamera(data);
     const limits = {
       fpsLimit: [0, 240, 1],
       resolutionScale: [0.25, 1],
@@ -181,7 +155,7 @@ const mount = renderer => {
     save();
   };
   const reset = () => {
-    if (available && !migrationBlocked) errorMessage = "";
+    if (available) errorMessage = "";
     renderer.setFpsLimit(defaults.fpsLimit);
     renderer.setResolutionScale(defaults.resolutionScale);
     renderer.setMaxPixels(defaults.maxPixels);

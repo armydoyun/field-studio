@@ -1193,7 +1193,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
       syncAnnotations();
       const count = renderer.getUserUniforms().length;
-      settings?.save(true);
+      settings?.save();
       document.dispatchEvent(new Event("shader-settings-applied"));
       projects?.markClean();
       setStatus(`새 프로젝트 시작 · 파라미터 ${count}개 · Undo로 이전 작업 복원`);

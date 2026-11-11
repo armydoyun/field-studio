@@ -8,7 +8,17 @@
 import * as Scope from "./glsl-scope.js";
 
 const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = () => {} }) => {
-  const { cleanOf, symbolsOf, KEYWORDS, TYPES, isIdent, escapeRe, APP_UNIFORMS = [], BUILTIN_VARS = {} } = language;
+  const {
+    cleanOf,
+    symbolsOf,
+    describeFunction,
+    KEYWORDS,
+    TYPES,
+    isIdent,
+    escapeRe,
+    APP_UNIFORMS = [],
+    BUILTIN_VARS = {},
+  } = language;
   const appUniforms = new Set(APP_UNIFORMS.map(entry => entry[0]));
   const docText = state => state.doc.toString();
   const inCode = (src, pos) => cleanOf(src)[pos] === src[pos] || /\s/.test(src[pos] || ""); // 주석·문자열·전처리문 밖
@@ -19,15 +29,6 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     while (b < src.length && /\w/.test(src[b])) b++;
     const word = src.slice(a, b);
     return isIdent(word) ? { word, start: a, end: b } : null;
-  };
-  // 이름 → {sig, desc}: 내장 함수(레퍼런스) 또는 이 패스의 함수
-  const describeFunction = (src, name) => {
-    const builtin = options.lookup?.(name);
-    if (builtin) return { sig: builtin.sig, desc: builtin.desc };
-    const own = symbolsOf(src).functions.find(entry => entry.name === name);
-    return own
-      ? { sig: `${own.ret} ${name}(${own.params})`, desc: `이 패스에 정의된 함수 · ${own.line}번째 줄` }
-      : null;
   };
 
   // ==== 시그니처 도움말 ====
@@ -122,7 +123,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     const src = docText(state),
       call = callAt(src, main.head);
     if (!call) return null;
-    const info = describeFunction(src, call.name);
+    const info = describeFunction(call.name, src);
     if (!info) return null;
     return {
       pos: main.head,
