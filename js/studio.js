@@ -1618,7 +1618,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     channelPicker.syncUsage($("studioCode").value);
     schedule(
       (event.inputType === "insertText" && event.data?.length === 1) ||
-        /^(deleteContent|insertCompositionText|insertReplacementText)/.test(event.inputType || "")
+        /^(deleteContent|insertCompositionText|insertReplacementText|insertLineBreak)/.test(event.inputType || "")
     );
   });
   // 이전·다음 패스 단축키: Alt+PageUp/PageDown, 또는 Alt+, / Alt+. (PageUp/PageDown 키가 없는 노트북·
