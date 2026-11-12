@@ -562,7 +562,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!open) channelPicker.close();
     const toggle = $("studioInputsToggle");
     toggle.setAttribute("aria-expanded", String(open));
-    toggle.setAttribute("aria-label", open ? "입력 채널 숨기기" : "입력 채널 보이기");
+    toggle.setAttribute("aria-label", `입력 채널 ${open ? "접기" : "펼치기"}`);
   };
   const syncInputs = () => {
     const channels = activeChannels() || {},
@@ -584,7 +584,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       empty = [...ChannelPicker.usedChannels(source)].filter(i => !channels[i]),
       toggle = $("studioInputsToggle");
     toggle.dataset.warn = String(empty.length > 0);
-    toggle.title = `입력 채널(iChannel0–3) ${inputsOpen ? "숨기기" : "보이기"}${inputsCount ? ` · ${inputsCount}개 연결됨` : " · 연결 없음"}${empty.length ? ` · 코드가 읽는 iChannel${empty.join(", ")}이 비어 있음` : ""}`;
+    toggle.title = `이 패스의 입력 채널(iChannel0–3) ${inputsOpen ? "접기" : "펼치기"}${inputsCount ? ` · ${inputsCount}개 연결됨` : " · 연결 없음"}${empty.length ? ` · 코드가 읽는 iChannel${empty.join(", ")}이 비어 있음` : ""}`;
   };
   const renderChannels = () => {
     const channels = activeChannels(),
@@ -2162,11 +2162,6 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     showInputs(!inputsOpen);
     syncInputsWarning();
     if (inputsOpen) $("studioChannels").querySelector("button")?.focus();
-  });
-  on($("studioInputsCollapse"), "click", () => {
-    showInputs(false);
-    syncInputsWarning();
-    $("studioInputsToggle").focus();
   });
   // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
   on(document, "shader-preview-changed", syncPreviewControls);
