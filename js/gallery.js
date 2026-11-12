@@ -1,6 +1,7 @@
 // 예제 갤러리와 첫 실행 안내. 썸네일은 별도의 작은 WebGL2 컨텍스트에서 한 번만 그리고 즉시 해제한다.
 // 예제 적용은 Studio API(loadExample/example*)만 사용하므로 Undo·미적용 변경 확인이 그대로 동작한다.
 import * as Annotations from "./annotations.js";
+import * as Keys from "./keys.js";
 import * as Community from "./community-examples.js";
 import * as Perf from "./gallery-perf.js";
 import * as Ramp from "./ramp.js";
@@ -1277,7 +1278,7 @@ const mount = ({ studio, Shader, preview = null }) => {
     event => {
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
       if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
-      if (event.key.toLowerCase() === "x" && !document.querySelector("dialog[open]")) {
+      if (Keys.latinKey(event) === "x" && !document.querySelector("dialog[open]")) {
         event.preventDefault();
         open(false);
       }
