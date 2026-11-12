@@ -3,8 +3,6 @@
 // - 그 밖의 브라우저: 일반 팝업(window.open, 보조 모니터로 옮기거나 크기를 자유롭게 바꿀 수 있음)
 // 캔버스 요소 자체를 옮기므로 WebGL 컨텍스트·포인터 입력(uMouse·카메라 드래그)·픽셀 검사가 그대로 동작한다.
 // 렌더 루프는 메인 창의 requestAnimationFrame을 쓰므로 메인 창을 최소화하면 브라우저가 프레임을 늦출 수 있다.
-import * as Keys from "./keys.js";
-
 const POPUP_NAME = "field-preview";
 
 const mount = ({ doc = document } = {}) => {
@@ -199,7 +197,7 @@ const mount = ({ doc = document } = {}) => {
       if (event.target?.closest?.("input, textarea, select, [contenteditable], dialog[open]")) return;
       if (event.ctrlKey || event.metaKey || event.altKey) {
         if ((event.ctrlKey || event.metaKey) && !event.altKey) {
-          const key = Keys.latinKey(event);
+          const key = event.key.toLowerCase();
           if (key === "s" && event.shiftKey) {
             event.preventDefault();
             header?.querySelector("#studioProjectSave:not(:disabled)")?.click();
@@ -214,11 +212,11 @@ const mount = ({ doc = document } = {}) => {
         if (event.target?.closest?.("button")) return;
         event.preventDefault();
         view.shaderStudio?.togglePlayback();
-      } else if (Keys.latinKey(event) === "p" && !event.shiftKey) {
+      } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
         // 미리보기 분리 + 편집기 확대를 끝낸다(메인 창과 같은 키).
         event.preventDefault();
         view.shaderStudio?.splitEdit?.();
-      } else if (Keys.latinKey(event) === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         header?.querySelector("#hudToggle")?.click();
       } else if (event.key === "Escape" && d.body.classList.contains("hud-hidden")) {

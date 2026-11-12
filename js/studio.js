@@ -3,7 +3,6 @@
 // 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
 //   · 화면 배치·리사이저·작업공간 저장(studio-layout) · Pack 파일 형식(studio-pack)
 import * as Editor from "./cm-editor.js";
-import * as Keys from "./keys.js";
 import * as Annotations from "./annotations.js";
 import * as Model from "./project-model.js";
 import * as Examples from "./studio-examples.js";
@@ -1710,10 +1709,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (
       (event.ctrlKey || event.metaKey) &&
       !event.altKey &&
-      (Keys.latinKey(event) === "z" || Keys.latinKey(event) === "y")
+      (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")
     ) {
       event.preventDefault();
-      historyMove(Keys.latinKey(event) === "z" && !event.shiftKey);
+      historyMove(event.key.toLowerCase() === "z" && !event.shiftKey);
     } else if (passStep(event)) {
       event.preventDefault();
       const tabs = ["Image", ...project.passes.map(p => p.name)],
@@ -1725,7 +1724,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       event.preventDefault();
       rememberEditor();
       apply();
-    } else if (Keys.latinKey(event) === "s" && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
+    } else if (
+      event.key.toLowerCase() === "s" &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
       event.preventDefault();
       saveShortcut();
     }
@@ -1995,7 +1999,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (event.defaultPrevented || event.isComposing || event.altKey) return;
     if (document.querySelector?.("dialog[open]")) return;
     const mod = event.ctrlKey || event.metaKey,
-      key = Keys.latinKey(event);
+      key = event.key.toLowerCase();
     if (mod && !event.shiftKey && key === "s") {
       event.preventDefault();
       saveShortcut();
@@ -2016,10 +2020,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on(document, "keydown", event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
     if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
-    if (Keys.latinKey(event) === "e") {
+    if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       toggle();
-    } else if (Keys.latinKey(event) === "p" && !event.shiftKey) {
+    } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
       event.preventDefault();
       splitEdit();
     }
