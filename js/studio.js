@@ -3,6 +3,7 @@
 // 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
 //   · 화면 배치·리사이저·작업공간 저장(studio-layout) · Pack 파일 형식(studio-pack)
 import * as Editor from "./cm-editor.js";
+import * as Keys from "./keys.js";
 import * as Annotations from "./annotations.js";
 import * as Model from "./project-model.js";
 import * as Examples from "./studio-examples.js";
@@ -562,7 +563,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!open) channelPicker.close();
     const toggle = $("studioInputsToggle");
     toggle.setAttribute("aria-expanded", String(open));
-    toggle.setAttribute("aria-label", open ? "입력 채널 숨기기" : "입력 채널 보이기");
+    toggle.setAttribute("aria-label", `입력 채널 ${open ? "접기" : "펼치기"}`);
   };
   const syncInputs = () => {
     const channels = activeChannels() || {},
@@ -584,7 +585,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       empty = [...ChannelPicker.usedChannels(source)].filter(i => !channels[i]),
       toggle = $("studioInputsToggle");
     toggle.dataset.warn = String(empty.length > 0);
-    toggle.title = `입력 채널(iChannel0–3) ${inputsOpen ? "숨기기" : "보이기"}${inputsCount ? ` · ${inputsCount}개 연결됨` : " · 연결 없음"}${empty.length ? ` · 코드가 읽는 iChannel${empty.join(", ")}이 비어 있음` : ""}`;
+    toggle.title = `이 패스의 입력 채널(iChannel0–3) ${inputsOpen ? "접기" : "펼치기"}${inputsCount ? ` · ${inputsCount}개 연결됨` : " · 연결 없음"}${empty.length ? ` · 코드가 읽는 iChannel${empty.join(", ")}이 비어 있음` : ""}`;
   };
   const renderChannels = () => {
     const channels = activeChannels(),
@@ -1709,10 +1710,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (
       (event.ctrlKey || event.metaKey) &&
       !event.altKey &&
-      (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")
+      (Keys.latinKey(event) === "z" || Keys.latinKey(event) === "y")
     ) {
       event.preventDefault();
-      historyMove(event.key.toLowerCase() === "z" && !event.shiftKey);
+      historyMove(Keys.latinKey(event) === "z" && !event.shiftKey);
     } else if (passStep(event)) {
       event.preventDefault();
       const tabs = ["Image", ...project.passes.map(p => p.name)],
@@ -1724,12 +1725,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       event.preventDefault();
       rememberEditor();
       apply();
-    } else if (
-      event.key.toLowerCase() === "s" &&
-      (event.ctrlKey || event.metaKey) &&
-      !event.shiftKey &&
-      !event.altKey
-    ) {
+    } else if (Keys.latinKey(event) === "s" && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
       event.preventDefault();
       saveShortcut();
     }
@@ -1999,7 +1995,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (event.defaultPrevented || event.isComposing || event.altKey) return;
     if (document.querySelector?.("dialog[open]")) return;
     const mod = event.ctrlKey || event.metaKey,
-      key = event.key.toLowerCase();
+      key = Keys.latinKey(event);
     if (mod && !event.shiftKey && key === "s") {
       event.preventDefault();
       saveShortcut();
@@ -2020,10 +2016,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on(document, "keydown", event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
     if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
-    if (event.key.toLowerCase() === "e") {
+    if (Keys.latinKey(event) === "e") {
       event.preventDefault();
       toggle();
-    } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
+    } else if (Keys.latinKey(event) === "p" && !event.shiftKey) {
       event.preventDefault();
       splitEdit();
     }
@@ -2162,11 +2158,6 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     showInputs(!inputsOpen);
     syncInputsWarning();
     if (inputsOpen) $("studioChannels").querySelector("button")?.focus();
-  });
-  on($("studioInputsCollapse"), "click", () => {
-    showInputs(false);
-    syncInputsWarning();
-    $("studioInputsToggle").focus();
   });
   // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
   on(document, "shader-preview-changed", syncPreviewControls);

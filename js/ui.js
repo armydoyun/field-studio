@@ -1,5 +1,6 @@
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
 import * as StageMenu from "./stage-menu.js";
+import * as Keys from "./keys.js";
 import * as Recorder from "./recorder.js";
 import * as Annotations from "./annotations.js";
 import * as VideoDialog from "./video-dialog.js";
@@ -2440,7 +2441,7 @@ const mount = (renderer, input, settings) => {
   listen(document, "keydown", event => {
     if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
-    const key = event.key.toLowerCase();
+    const key = Keys.latinKey(event);
     if (event.code === "Space" && (document.activeElement === stage || document.activeElement === $("screen"))) {
       event.preventDefault();
       window.shaderStudio?.togglePlayback();

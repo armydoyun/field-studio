@@ -271,6 +271,30 @@ with sync_playwright() as p:
     check(js("(t=>[t.selectionStart,t.selectionEnd])(document.getElementById('studioCode'))")==[2,15],'Shift+Alt+→ ignores brackets inside comments when growing to the parentheses')
     keys_case("f(a|b)",['@Control+Shift+Backslash'],"f(ab|)",'Ctrl+Shift+\\ inside parentheses jumps to the enclosing closing bracket')
     keys_case("f(a /* ) */ |b)",['@Control+Shift+Backslash'],"f(a /* ) */ b|)",'Ctrl+Shift+\\ skips brackets inside comments')
+    # 한글 입력 상태의 연속 키: Ctrl+K 뒤 글자 키는 IME가 처리(key=Process)하고 한글 조합("ㅋ")을 시작한다.
+    # 물리 키(KeyZ)로 Ctrl+K Z(집중 모드)를 실행하고, 조합된 글자는 문서에 넣지 않는다. 그 뒤의 한글 입력은 그대로 들어간다.
+    cdp=page.context.new_cdp_session(page)
+    def raw(kind,**o):cdp.send('Input.dispatchKeyEvent',{'type':kind,**o})
+    def ime_chord(code,jamo):
+        raw('rawKeyDown',key='Control',code='ControlLeft',windowsVirtualKeyCode=17,modifiers=2)
+        raw('rawKeyDown',key='ㅏ',code='KeyK',windowsVirtualKeyCode=75,modifiers=2);raw('keyUp',key='ㅏ',code='KeyK',windowsVirtualKeyCode=75,modifiers=2)
+        raw('keyUp',key='Control',code='ControlLeft',windowsVirtualKeyCode=17)
+        raw('rawKeyDown',key='Process',code=code,windowsVirtualKeyCode=229)
+        cdp.send('Input.imeSetComposition',{'text':jamo,'selectionStart':1,'selectionEnd':1})
+        raw('keyUp',key='Process',code=code,windowsVirtualKeyCode=229)
+        wait(30);cdp.send('Input.insertText',{'text':jamo});wait(200)  # 실제 브라우저처럼 초점이 빠질 때 조합 글자가 확정된다
+    js("s=>{document.getElementById('studioCode').value=s}","x;");wait();content.click();page.keyboard.press('Control+End');wait(100)
+    maximized="document.getElementById('stage').classList.contains('studio-maximized')"
+    ime_chord('KeyZ','ㅋ')
+    check(js(maximized) and val()=="x;",f'Korean IME: Ctrl+K then ㅋ(Z) runs focus mode without typing ㅋ: {val()!r}')
+    ime_chord('KeyZ','ㅋ')
+    check(not js(maximized) and val()=="x;",'Korean IME: the chord works again right after (editor is not left composing)')
+    wait(1600);content.click();page.keyboard.press('Control+End')
+    raw('rawKeyDown',key='Process',code='KeyD',windowsVirtualKeyCode=229)
+    cdp.send('Input.imeSetComposition',{'text':'아','selectionStart':1,'selectionEnd':1});cdp.send('Input.insertText',{'text':'아'});wait(100)
+    check(val()=="x;아",f'Korean typing outside a chord is kept: {val()!r}')
+    raw('rawKeyDown',key='ㅋ',code='KeyZ',windowsVirtualKeyCode=90,modifiers=2);raw('keyUp',key='ㅋ',code='KeyZ',windowsVirtualKeyCode=90,modifiers=2);wait(100)
+    check('아' not in val(),f'Ctrl+ㅋ (Ctrl+Z in Korean mode) undoes: {val()!r}')  # 창구로 넣은 'x;'는 기록에 없어 더 이전 상태로 돌아갈 수 있다
     # 되돌리기: 타이핑 직후(0.7초 안)의 명령은 따로 되돌린다. 타이핑과 Enter는 한 단계로 묶인다.
     js("s=>{document.getElementById('studioCode').value=s}","x;\n");wait();content.click();page.keyboard.press('Control+End');wait(800)
     page.keyboard.type("float k;",delay=30);page.keyboard.press('Control+/');wait(100);page.keyboard.press('Control+z');wait(100)

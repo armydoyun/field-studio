@@ -1,8 +1,11 @@
 // node tests/popout-regression.js — 미리보기 분리 창(js/popout.js)의 DOM 계약을 가짜 문서로 검사한다(GPU·브라우저 불필요).
 "use strict";
 const fs = require("fs"), path = require("path"), assert = require("assert");
-const source = fs.readFileSync(path.join(__dirname, "..", "js", "popout.js"), "utf8").replace(/\bexport \{([^{}]+)\};\s*$/, "return {$1};");
-const factory = new Function("document", "CustomEvent", "setTimeout", "clearTimeout", source);
+const moduleBody = name => fs.readFileSync(path.join(__dirname, "..", "js", name), "utf8").replace(/\bexport \{([^{}]+)\};\s*$/, "return {$1};");
+// popout.js가 가져오는 단축키 도우미(keys.js)도 같은 방식으로 읽어 Keys로 넘긴다.
+const Keys = new Function(moduleBody("keys.js"))();
+const source = moduleBody("popout.js").replace(/^import \* as Keys from "\.\/keys\.js";\n/m, "");
+const factory = (...args) => new Function("Keys", "document", "CustomEvent", "setTimeout", "clearTimeout", source)(Keys, ...args);
 
 class El {
   constructor(tag) { this.tagName = tag; this.parent = null; this.children = []; this.attrs = {}; this.listeners = {}; this.hidden = false; this.dataset = {}; this.textContent = ""; this.title = "";
