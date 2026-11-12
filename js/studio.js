@@ -69,6 +69,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const proceed = (decision, action) =>
     decision instanceof Promise ? decision.then(ok => ok && action()) : decision && action();
   let expanded = false,
+    splitMode = false, // 미리보기 분리 + 편집기 확대(splitEdit)로 들어온 집중 모드
     resumeAfterMaximize = false,
     navigatingHistory = false;
   const undoStack = [],
@@ -1301,7 +1302,40 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("stage").classList.toggle("studio-maximized", expanded);
     $("studioResize").hidden = expanded;
     $("studioMaximize").setAttribute("aria-pressed", String(expanded));
+    if (!expanded) splitMode = false;
     syncPauseButton();
+    syncSplit();
+  };
+  const syncSplit = () =>
+    $("studioSplitEdit")?.setAttribute("aria-pressed", String(splitMode && expanded && previewPopped()));
+  // 미리보기 분리 + 편집기 확대(P · 편집기 안에서 Ctrl+K P): 미리보기를 별도 창(popout.js)으로 빼고 편집기를 집중 모드로 키운다.
+  // 둘 다 켜져 있으면 원래대로 되돌린다. 분리 창을 닫으면(Esc · 창 닫기) 집중 모드도 함께 끝낸다.
+  // 분리 창은 사용자 입력(키·클릭) 안에서 열어야 하므로 popout.open()을 먼저 부른다.
+  const splitEdit = async () => {
+    const popout = window.shaderPopout;
+    if (disposed || !popout) return false;
+    if (expanded && previewPopped()) {
+      maximize(); // 미리보기가 분리된 채로 끝내므로 재생 상태는 그대로다
+      popout.close();
+      return false;
+    }
+    if (!openState) open();
+    if (!previewPopped()) {
+      try {
+        await popout.open();
+      } catch (error) {
+        setStatus(`미리보기 분리 실패: ${error?.message || error}`, "is-error");
+        return false;
+      }
+    }
+    if (disposed || !previewPopped()) return false;
+    if (!expanded) maximize();
+    splitMode = true;
+    syncSplit();
+    window.focus();
+    $("studioCode").focus({ preventScroll: true });
+    setStatus("미리보기를 별도 창으로 분리하고 편집기를 확대했습니다 · 다시 P(Ctrl+K P)로 되돌리기");
+    return true;
   };
   const close = () => {
     if (expanded) maximize();
@@ -1856,6 +1890,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on($("studioHide"), "click", close);
   on($("studioOpenFromPanel"), "click", open);
   on($("studioMaximize"), "click", maximize);
+  on($("studioSplitEdit"), "click", () => {
+    $("studioCodeTools").open = false;
+    splitEdit();
+  });
   on($("studioPause"), "click", () => togglePlayback());
   on($("studioResetFrames"), "click", () => {
     renderer.resetSimulation();
@@ -1877,9 +1915,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       } else {
         resumeAfterMaximize = renderer.getStats().running;
         if (resumeAfterMaximize) renderer.stop();
+        // 분리 편집 중에 분리 창을 닫으면 집중 모드도 끝낸다(붙잡은 재생 상태는 maximize가 되돌린다).
+        if (splitMode) maximize();
       }
     }
     syncPauseButton();
+    syncSplit();
   });
   // 편집기 메뉴(⋯): 항목을 고르거나, 바깥을 누르거나, Esc를 누르면 닫는다. 글자 크기·들여쓰기 같은 값 조절은 열어 둔다.
   const menu = $("studioCodeTools");
@@ -1982,6 +2023,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       toggle();
+    } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
+      event.preventDefault();
+      splitEdit();
     }
   });
   on(document, "fullscreenchange", () => {
@@ -2146,6 +2190,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press("시간·프레임 초기화", "studioResetFrames"),
     press("프로젝트 메뉴 열기", "projectMenuToggle", "Ctrl+O"),
     press("집중 모드 전환", "studioMaximize", "Ctrl+K Z", ["Mod-k z", "Mod-k Z"]),
+    {
+      label: "미리보기 분리 + 편집기 확대 (전환)",
+      key: "Ctrl+K P · 편집기 밖에서는 P",
+      bind: ["Mod-k p", "Mod-k P"],
+      run: () => splitEdit(),
+    },
     press("편집기 배치 바꾸기 (옆 ↔ 위아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
     press("편집기 닫기", "studioHide", "E"),
     press("코드 조각 모음 열기", "studioSnippets"),
@@ -2172,6 +2222,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     open,
     close,
     toggle,
+    splitEdit,
     apply,
     setProject,
     getPlaybackState,

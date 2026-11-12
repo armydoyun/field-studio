@@ -495,6 +495,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
         keys: [
           ["가이드 열기/닫기", "?"],
           ["셰이더 편집기", "E"],
+          ["미리보기 분리 + 편집기 확대 (다시 누르면 원래대로)", "P · 편집기 안에서 Ctrl+K P"],
           ["프로젝트 메뉴 (저장·열기·이미지)", "Ctrl+O"],
           ["프로젝트 저장 / 다른 이름으로 저장", "Ctrl+S / Ctrl+Shift+S"],
           ["명령 팔레트 (어디서나)", "Ctrl+Shift+P / F1"],
@@ -544,6 +545,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           ["모두 접기 / 모두 펴기", "Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J"],
           ["다음 · 이전 오류 / 오류 목록 / 아래 패널", "F8 · Shift+F8 / Ctrl+Shift+M / Ctrl+J"],
           ["편집기 배치 바꾸기(옆 ↔ 위아래) / 집중 모드(Zen)", "Ctrl+\\ / Ctrl+K Z"],
+          ["미리보기 분리 + 편집기 확대", "Ctrl+K P"],
           ["편집기·설정 패널 자리 옮기기 (손잡이 ⠿에서)", "끌어 놓기 · 방향키"],
           ["글자 크게 / 작게", "Ctrl+= / Ctrl+-"],
           ["긴 줄 자동 줄바꿈", "Alt+Z"],

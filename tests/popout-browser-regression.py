@@ -201,6 +201,29 @@ try:
             assert after == before + 2, f"분리 창 캔버스에 초점이 남아 있어도 메인 편집기 입력은 막히지 않는다 ({before} → {after})"
             popup.close()
             page.wait_for_function("!shaderPopout.isOpen")
+
+            # 미리보기 분리 + 편집기 확대: 편집기 밖에서 P · 편집기 안에서 Ctrl+K P로 켜고 끈다. 분리 창을 닫으면 확대도 끝난다.
+            both_on = """shaderPopout.isOpen && document.getElementById('stage').classList.contains('studio-maximized')
+                && document.getElementById('studioSplitEdit').getAttribute('aria-pressed') === 'true'"""
+            both_off = """!shaderPopout.isOpen && !document.getElementById('stage').classList.contains('studio-maximized')
+                && document.getElementById('studioSplitEdit').getAttribute('aria-pressed') === 'false'"""
+            page.bring_to_front()
+            page.evaluate("document.activeElement.blur()")
+            with page.expect_popup():
+                page.keyboard.press("p")
+            page.wait_for_function(both_on)
+            assert page.evaluate("!!document.activeElement.closest('.cm-editor')"), "분리 편집을 켜면 메인 창 편집기에 초점"
+            page.click(".cm-content")
+            page.keyboard.press("Control+k")
+            page.keyboard.press("p")
+            page.wait_for_function(both_off)
+            with page.expect_popup() as opened:
+                page.keyboard.press("Control+k")
+                page.keyboard.press("p")
+            page.wait_for_function(both_on)
+            opened.value.close()
+            page.wait_for_function(both_off)
+            assert page.evaluate("shaderPlayground.getStats().running"), "분리 창을 닫고 확대가 끝나면 재생 상태는 그대로"
             assert not errors, errors
             print("PASS", "일반 팝업" if fallback else "PiP/지원 브라우저 기본 창", "상단 도구·저장·녹화·복귀", flush=True)
             context.close()
