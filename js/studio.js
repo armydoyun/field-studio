@@ -538,6 +538,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       schedule();
       renderGraph();
       syncTextureTargets();
+      syncInputs();
       if (!$("studioLive").checked) return;
       if (timer) {
         clearTimeout(timer);
@@ -548,6 +549,42 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     onLoadImage: i => pickImage(i),
     onDropImage: (i, file) => runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, i)),
   });
+  // 입력 채널 줄은 자주 쓰지 않으므로 기본은 접어 둔다: 패스나 프로젝트가 바뀔 때 그 패스에 연결이 있으면 펴고, 없으면 접는다.
+  // 그 사이에는 사용자가 정한 대로 두되(연결을 끊어도 갑자기 닫지 않는다), 접힌 동안 새 연결이 생기면 편다.
+  // 접혀 있어도 코드 머리줄의 입력 버튼이 연결 수와 "읽는데 비어 있음" 경고를 보여 준다.
+  let inputsOpen = false,
+    inputsFor = "",
+    inputsCount = 0;
+  const showInputs = open => {
+    inputsOpen = open;
+    $("studioInputs").hidden = !open;
+    if (!open) channelPicker.close();
+    const toggle = $("studioInputsToggle");
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "입력 채널 숨기기" : "입력 채널 보이기");
+  };
+  const syncInputs = () => {
+    const channels = activeChannels() || {},
+      count = Object.keys(channels).length,
+      key = `${workEpoch}:${selected}`;
+    if (key !== inputsFor) {
+      inputsFor = key;
+      showInputs(count > 0);
+    } else if (count > inputsCount && !inputsOpen) showInputs(true);
+    inputsCount = count;
+    const counter = $("studioInputsCount");
+    counter.textContent = String(count);
+    counter.hidden = !count;
+    syncInputsWarning(activeSource() || ""); // 편집기 문서는 renderEditor가 이 다음에 바꾼다
+  };
+  // 코드가 읽는 iChannel이 비어 있으면 입력 버튼에 경고 점을 찍는다(타이핑 중에는 줄을 펴지 않는다 — 화면이 밀리지 않게).
+  const syncInputsWarning = (source = $("studioCode").value) => {
+    const channels = activeChannels() || {},
+      empty = [...ChannelPicker.usedChannels(source)].filter(i => !channels[i]),
+      toggle = $("studioInputsToggle");
+    toggle.dataset.warn = String(empty.length > 0);
+    toggle.title = `입력 채널(iChannel0–3) ${inputsOpen ? "숨기기" : "보이기"}${inputsCount ? ` · ${inputsCount}개 연결됨` : " · 연결 없음"}${empty.length ? ` · 코드가 읽는 iChannel${empty.join(", ")}이 비어 있음` : ""}`;
+  };
   const renderChannels = () => {
     const channels = activeChannels(),
       assets = renderer.getTextures(),
@@ -567,6 +604,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       source: activeSource() || "",
     });
     syncTextureTargets();
+    syncInputs();
   };
   // 패스 탭에 마우스를 올리면 그 패스가 읽는 입력을 보여 준다(전체 그래프는 성능 탭의 패스 연결).
   const tabTitle = name => {
@@ -1046,6 +1084,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       }
       recordEdit();
       workEpoch++;
+      syncInputs(); // 새 프로젝트: 입력 줄을 연결 여부에 맞춰 다시 접거나 편다
       return true;
     } catch (error) {
       project = before;
@@ -1221,6 +1260,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       dirty = false;
       clearDraft();
       workEpoch++;
+      syncInputs();
       setStatus("렌더러의 현재 버퍼 구성을 불러왔습니다.");
       saveLocal();
       return true;
@@ -1616,6 +1656,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on($("studioCode"), "input", event => {
     rememberEditor();
     channelPicker.syncUsage($("studioCode").value);
+    syncInputsWarning();
     schedule(
       (event.inputType === "insertText" && event.data?.length === 1) ||
         /^(deleteContent|insertCompositionText|insertReplacementText|insertLineBreak)/.test(event.inputType || "")
@@ -2073,6 +2114,16 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   on($("studioPreviewTarget"), "click", togglePreview);
   on($("studioPreviewPin"), "click", () => setPreviewPinned(!previewPinned));
+  on($("studioInputsToggle"), "click", () => {
+    showInputs(!inputsOpen);
+    syncInputsWarning();
+    if (inputsOpen) $("studioChannels").querySelector("button")?.focus();
+  });
+  on($("studioInputsCollapse"), "click", () => {
+    showInputs(false);
+    syncInputsWarning();
+    $("studioInputsToggle").focus();
+  });
   // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
   on(document, "shader-preview-changed", syncPreviewControls);
   syncPreviewControls();
