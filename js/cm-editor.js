@@ -518,9 +518,76 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     else if (update.selectionSet) updateCrumb(update.state);
   };
   // 키 입력은 먼저 textarea로 알린다(studio의 Ctrl+Z/Y·Alt+PageUp 등). studio가 처리하면 CodeMirror는 건너뛴다.
+  // ---- Ctrl+K 연속 키(Ctrl+K Z · Ctrl+K P · Ctrl+K Ctrl+0 …) ----
+  // 한글 입력기가 켜져 있으면 편집기 안에서 누른 두 번째 키가 한글 조합("ㅋ")을 시작해 명령이 실행되지 않는다.
+  // 그래서 Ctrl+K(물리 키 K)를 누르면 초점을 글자 입력이 안 되는 대기 표시(chordBox)로 잠깐 옮겨 두 번째 키를 받고,
+  // 그 키를 물리 키(code)에서 읽은 영문 키로 바꿔 Ctrl+K와 함께 편집기에 다시 보낸다. 명령 실행은 CodeMirror 키맵이 그대로 맡는다.
+  // 한계: 한글이 조합 중일 때 누른 Ctrl+K는 입력기·브라우저가 먼저 처리해 페이지가 받지 못한다(조합을 끝낸 뒤에는 동작).
+  const CHORD_MS = 4000;
+  const chordBox = document.createElement("div");
+  chordBox.className = "studio-chord";
+  chordBox.tabIndex = -1;
+  chordBox.hidden = true;
+  chordBox.setAttribute("role", "status");
+  host.append(chordBox);
+  let chord = null;
+  const endChord = refocus => {
+    if (!chord) return;
+    clearTimeout(chord.timer);
+    chord = null;
+    chordBox.hidden = true;
+    if (refocus) view.focus();
+  };
+  const startChord = event => {
+    chord = { ctrlKey: event.ctrlKey, metaKey: event.metaKey, timer: setTimeout(() => endChord(true), CHORD_MS) };
+    chordBox.textContent = `${event.metaKey ? "Cmd" : "Ctrl"}+K · 다음 키를 누르세요 (Esc 취소)`;
+    chordBox.hidden = false;
+    chordBox.focus({ preventScroll: true });
+  };
+  const PASS_KEYS = new Set(["Control", "Shift", "Alt", "Meta", "CapsLock", "HangulMode", "Hangul", "Process"]);
+  listen(chordBox, "keydown", event => {
+    if (!chord || (PASS_KEYS.has(event.key) && !/^(Key|Digit)/.test(event.code))) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Escape") return endChord(true);
+    const match = /^Key([A-Z])$|^Digit(\d)$/.exec(event.code),
+      letter = match?.[1],
+      digit = match?.[2],
+      key = letter ? (event.shiftKey ? letter : letter.toLowerCase()) : (digit ?? event.key),
+      keyCode = match ? (letter || digit).charCodeAt(0) : event.keyCode,
+      prefix = { ctrlKey: chord.ctrlKey, metaKey: chord.metaKey };
+    endChord(true);
+    // 사용자의 키 입력 안에서 보내므로, 분리 창 열기처럼 사용자 동작이 필요한 명령도 실행된다.
+    const send = init =>
+      view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
+    send({ key: "k", code: "KeyK", keyCode: 75, ...prefix });
+    send({
+      key,
+      code: event.code,
+      keyCode,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+    });
+  });
+  listen(chordBox, "blur", () => endChord(false));
   const forwardKeys = CM.Prec.highest(
     CM.EditorView.domEventHandlers({
       keydown(event) {
+        // 사용자가 누른 Ctrl+K(물리 키 K): 브라우저 기본 동작(주소창 검색)을 막고 다음 키를 대기 표시에서 받는다.
+        if (
+          event.isTrusted &&
+          (event.ctrlKey || event.metaKey) &&
+          !event.altKey &&
+          !event.shiftKey &&
+          event.code === "KeyK" &&
+          !event.isComposing
+        ) {
+          event.preventDefault();
+          startChord(event);
+          return true;
+        }
         const clone = new KeyboardEvent("keydown", {
           key: event.key,
           code: event.code,
