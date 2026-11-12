@@ -245,6 +245,12 @@ with sync_playwright() as p:
     check(js("Math.abs(document.getElementById('studioDock').getBoundingClientRect().width-document.getElementById('stage').getBoundingClientRect().width)<2"),'focus mode in the side layout gives the editor the full stage width')
     js("document.getElementById('studioMaximize').click()");wait()
     check(js("document.getElementById('studioDock').getBoundingClientRect().width<document.getElementById('stage').getBoundingClientRect().width*0.8"),'leaving focus mode restores the side-by-side width')
+    # ---- Enter 들여쓰기: 소괄호도 중괄호처럼 열리고, 괄호 안에서 손으로 맞춘 들여쓰기는 다음 줄에 유지 ----
+    js("s=>{document.getElementById('studioCode').value=s}","void main() {\n    vec3 c = mix");wait();caret_to_end()
+    page.keyboard.type("(");page.keyboard.press('Enter');wait()
+    check(val()=="void main() {\n    vec3 c = mix(\n        \n    )",'Enter between ( ) opens an indented line like braces')
+    page.keyboard.type("a,");page.keyboard.press('Enter');page.keyboard.press('Tab');page.keyboard.type("b,");page.keyboard.press('Enter');page.keyboard.type("c");wait()
+    check(val()=="void main() {\n    vec3 c = mix(\n        a,\n            b,\n            c\n    )",'inside parentheses Enter keeps the indentation of the line above (incl. a manual Tab)')
     js('''src => testStudio.setProject({image:src,passes:[],imageChannels:{}})''',SRC2);wait()
     js("document.getElementById('studioCode').value=''");wait()
     check('GLSL 코드를 입력하세요' in js("document.querySelector('.cm-placeholder')?.textContent || ''"),'an empty document shows a placeholder hint')

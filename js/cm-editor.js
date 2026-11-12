@@ -100,53 +100,90 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     "glsl-function",
   ];
   const tokenTable = Object.fromEntries(CLASSES.map(name => [name, CM.Tag.define()]));
+  const CLOSER = { "(": ")", "[": "]", "{": "}" };
+  // GLSL 토큰 하나를 읽는다. 괄호를 만나면 state.open 스택을 갱신한다.
+  const readGlslToken = (stream, state) => {
+    const closeComment = () => {
+      if (stream.skipTo("*/")) {
+        stream.pos += 2;
+        state.comment = false;
+      } else stream.skipToEnd();
+      return "glsl-comment";
+    };
+    if (state.comment) return closeComment();
+    if (stream.match("//")) {
+      stream.skipToEnd();
+      return "glsl-comment";
+    }
+    if (stream.match("/*")) {
+      state.comment = true;
+      return closeComment();
+    }
+    if (stream.peek() === "#") {
+      stream.skipToEnd();
+      return "glsl-directive";
+    }
+    if (stream.match(/^"(?:\\.|[^"\\])*"?/)) return "glsl-string";
+    if (stream.match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[uU]?/)) return "glsl-number";
+    const word = stream.match(/^[A-Za-z_]\w*/);
+    if (word) {
+      const name = word[0],
+        kind = highlighter.tokenClass(name);
+      if (kind === "glsl-keyword" || kind === "glsl-type") return kind;
+      if (name.startsWith("gl_")) return "glsl-builtin";
+      return /^\s*\(/.test(stream.string.slice(stream.pos)) ? kind : null; // 호출(이름 + '(')만 함수 색
+    }
+    const ch = stream.next();
+    if (CLOSER[ch]) state.open.push({ ch, indent: state.lineIndent, line: state.line, hanging: true });
+    else if (ch === ")" || ch === "]" || ch === "}") {
+      // 짝이 맞는 가장 가까운 여는 괄호까지 닫는다(짝 없는 닫는 괄호는 무시).
+      for (let i = state.open.length - 1; i >= 0; i--)
+        if (CLOSER[state.open[i].ch] === ch) {
+          state.open.length = i;
+          break;
+        }
+    }
+    return null;
+  };
   const glsl = CM.StreamLanguage.define({
     name: "glsl",
-    startState: () => ({ comment: false, depth: 0 }),
-    copyState: state => ({ comment: state.comment, depth: state.depth }),
+    // open: 아직 닫히지 않은 괄호 스택 { ch, indent: 연 줄의 들여쓰기, line: 연 줄 번호, hanging: 괄호가 그 줄의 마지막 글자인지 }
+    // line/lineIndent: 마지막으로 읽은 (빈 줄이 아닌) 줄의 번호와 들여쓰기 — Enter 뒤 들여쓰기 계산에 쓴다.
+    startState: () => ({ comment: false, open: [], line: 0, lineIndent: 0 }),
+    copyState: state => ({
+      comment: state.comment,
+      open: state.open.map(entry => ({ ...entry })),
+      line: state.line,
+      lineIndent: state.lineIndent,
+    }),
     token(stream, state) {
-      const closeComment = () => {
-        if (stream.skipTo("*/")) {
-          stream.pos += 2;
-          state.comment = false;
-        } else stream.skipToEnd();
-        return "glsl-comment";
-      };
-      if (state.comment) return closeComment();
-      if (stream.eatSpace()) return null;
-      if (stream.match("//")) {
-        stream.skipToEnd();
-        return "glsl-comment";
+      if (stream.sol() && /\S/.test(stream.string)) {
+        state.line++;
+        state.lineIndent = stream.indentation();
       }
-      if (stream.match("/*")) {
-        state.comment = true;
-        return closeComment();
-      }
-      if (stream.peek() === "#") {
-        stream.skipToEnd();
-        return "glsl-directive";
-      }
-      if (stream.match(/^"(?:\\.|[^"\\])*"?/)) return "glsl-string";
-      if (stream.match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[uU]?/)) return "glsl-number";
-      const word = stream.match(/^[A-Za-z_]\w*/);
-      if (word) {
-        const name = word[0],
-          kind = highlighter.tokenClass(name);
-        if (kind === "glsl-keyword" || kind === "glsl-type") return kind;
-        if (name.startsWith("gl_")) return "glsl-builtin";
-        return /^\s*\(/.test(stream.string.slice(stream.pos)) ? kind : null; // 호출(이름 + '(')만 함수 색
-      }
-      const ch = stream.next();
-      if (ch === "{") state.depth++;
-      else if (ch === "}") state.depth = Math.max(0, state.depth - 1);
-      return null;
+      if (!state.comment && stream.eatSpace()) return null;
+      const top = state.open[state.open.length - 1],
+        kind = readGlslToken(stream, state);
+      // 같은 줄에서 여는 괄호 뒤에 (주석이 아닌) 무언가가 오면 '매달린 괄호'가 아니다.
+      if (top && top.line === state.line && kind !== "glsl-comment") top.hanging = false;
+      return kind;
     },
-    // 들여쓰기: 열린 '{' 수만큼 한 단계씩. 줄이 '}'로 시작하면 한 단계 덜.
-    indent: (state, textAfter, cx) => Math.max(0, state.depth - (/^\s*\}/.test(textAfter) ? 1 : 0)) * cx.unit,
+    // 들여쓰기(VS Code와 비슷하게):
+    //  - 줄이 닫는 괄호로 시작하면 그 괄호를 연 줄의 들여쓰기
+    //  - '{' 안: 연 줄의 들여쓰기 + 한 단계
+    //  - '(' '[' 안: 괄호로 줄이 끝난 바로 다음 줄이면 + 한 단계, 그 밖에는 윗줄 들여쓰기를 그대로 유지
+    indent: (state, textAfter, cx) => {
+      const top = state.open[state.open.length - 1];
+      if (!top) return 0;
+      if (textAfter.trimStart().startsWith(CLOSER[top.ch])) return top.indent;
+      if (top.ch === "{") return top.indent + cx.unit;
+      if (top.line === state.line) return top.hanging ? top.indent + cx.unit : state.lineIndent;
+      return state.lineIndent;
+    },
     languageData: {
       commentTokens: { line: "//", block: { open: "/*", close: "*/" } },
       closeBrackets: { brackets: ["(", "[", "{", '"'] },
-      indentOnInput: /^\s*\}$/,
+      indentOnInput: /^\s*[}\])]$/,
     },
     tokenTable,
   });
