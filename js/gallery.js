@@ -8,6 +8,7 @@ import * as Lazy from "./lazy-render.js";
 import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
 import * as Technique from "./technique-examples.js";
+import * as Raymarch from "./raymarch-lessons.js";
 const { COMMUNITY } = Community;
 // 예제의 파라미터(범위·기본값·색상)는 셰이더 소스의 @어노테이션 한곳에만 적는다.
 // 코드를 복사해 다른 곳에 붙여도 슬라이더가 그대로 따라오게 하기 위해서다.
@@ -776,6 +777,8 @@ const LESSONS = [
   },
   // 주제가 큰 예제(PBR · 볼류메트릭 구름 · 2D 유체)는 technique-examples.js에 있다.
   ...Technique.LESSONS,
+  // 3D 레이마칭(궤도 카메라 · 유리 · 반사 재질 · 키보드 탐험)은 raymarch-lessons.js에 있다.
+  ...Raymarch.LESSONS,
   {
     id: "raymarch",
     title: "Ray Marching SDF",
@@ -924,13 +927,16 @@ const mount = ({ studio, Shader, preview = null }) => {
     const project = item.project || { image: item.image, passes: [] };
     return { project, uniforms: params(sourcesOf(item)) };
   };
-  // 썸네일로 그릴 소스: 단일 패스 예제와 Ray Marching. 버퍼가 필요한 예제는 CSS 그림(data-thumb)을 쓴다.
+  // 썸네일로 그릴 소스: 단일 패스 예제 · Ray Marching · liveThumb 예제(상태 버퍼가 비면 처음 시점을 그리도록 짠 Image를
+  // 버퍼 없이 그린다). 그 밖에 버퍼가 필요한 예제는 CSS 그림(data-thumb)을 쓴다.
   const thumbSource = item =>
     item.image
       ? { fragment: item.image, uniforms: params([item.image]) }
-      : item.action === "exampleRaymarch"
-        ? { fragment: Shader.raymarch, uniforms: perfProject(item).uniforms }
-        : null;
+      : item.liveThumb && item.project
+        ? { fragment: item.project.image, uniforms: params(sourcesOf(item)) }
+        : item.action === "exampleRaymarch"
+          ? { fragment: Shader.raymarch, uniforms: perfProject(item).uniforms }
+          : null;
   const startLazy = () => {
     const surface = document.createElement("canvas");
     surface.width = 320;
