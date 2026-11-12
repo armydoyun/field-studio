@@ -271,6 +271,26 @@ with sync_playwright() as p:
     check(js("(t=>[t.selectionStart,t.selectionEnd])(document.getElementById('studioCode'))")==[2,15],'Shift+Alt+→ ignores brackets inside comments when growing to the parentheses')
     keys_case("f(a|b)",['@Control+Shift+Backslash'],"f(ab|)",'Ctrl+Shift+\\ inside parentheses jumps to the enclosing closing bracket')
     keys_case("f(a /* ) */ |b)",['@Control+Shift+Backslash'],"f(a /* ) */ b|)",'Ctrl+Shift+\\ skips brackets inside comments')
+    # Ctrl+K 연속 키: Ctrl+K(물리 키 K)를 누르면 대기 표시가 초점을 받아 다음 키를 물리 키로 읽는다.
+    # 한글 입력 상태처럼 key가 자모('ㅏ' · 'ㅋ')로 와도 Ctrl+K Z(집중 모드)가 실행되고, 문서에는 아무것도 들어가지 않는다.
+    cdp=page.context.new_cdp_session(page)
+    def raw(kind,**o):cdp.send('Input.dispatchKeyEvent',{'type':kind,**o})
+    def kor(code,jamo,vk,mods=0):
+        raw('rawKeyDown',key=jamo,code=code,windowsVirtualKeyCode=vk,modifiers=mods,**({} if mods else {'text':jamo}));raw('keyUp',key=jamo,code=code,windowsVirtualKeyCode=vk,modifiers=mods)
+    def kor_ctrl_k():
+        raw('rawKeyDown',key='Control',code='ControlLeft',windowsVirtualKeyCode=17,modifiers=2);kor('KeyK','ㅏ',75,2);raw('keyUp',key='Control',code='ControlLeft',windowsVirtualKeyCode=17)
+    js("s=>{document.getElementById('studioCode').value=s}","x;");wait();content.click();page.keyboard.press('Control+End');wait(100)
+    maximized="document.getElementById('stage').classList.contains('studio-maximized')"
+    kor_ctrl_k();wait(60)
+    check(js("!document.querySelector('.studio-chord').hidden && document.activeElement.classList.contains('studio-chord')"),'Ctrl+K shows the chord indicator and moves focus off the text (no Korean composition)')
+    kor('KeyZ','ㅋ',90);wait(150)
+    check(js(maximized) and val()=="x;" and js("!!document.activeElement.closest('.cm-editor')"),f'Ctrl+K then ㅋ(Z) runs focus mode, types nothing and refocuses the editor: {val()!r}')
+    kor_ctrl_k();kor('KeyZ','ㅋ',90);wait(150)
+    check(not js(maximized),'the chord works again right after')
+    kor_ctrl_k();kor('KeyC','ㅊ',67,2);wait(150)
+    check(val()=="// x;",f'Ctrl+K Ctrl+ㅊ(C) adds a line comment: {val()!r}')
+    page.keyboard.press('Control+k');page.keyboard.press('Escape');wait(100)
+    check(js("document.querySelector('.studio-chord').hidden && !!document.activeElement.closest('.cm-editor')") and val()=="// x;",'Esc cancels the chord and returns to the editor')
     # 되돌리기: 타이핑 직후(0.7초 안)의 명령은 따로 되돌린다. 타이핑과 Enter는 한 단계로 묶인다.
     js("s=>{document.getElementById('studioCode').value=s}","x;\n");wait();content.click();page.keyboard.press('Control+End');wait(800)
     page.keyboard.type("float k;",delay=30);page.keyboard.press('Control+/');wait(100);page.keyboard.press('Control+z');wait(100)

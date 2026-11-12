@@ -877,7 +877,10 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-draft { border-top-color:color-mix(in srgb,var(--warning) 35%,transparent);background:color-mix(in srgb,var(--warning) 6%,var(--panel));color:var(--warning); }
 .studio-change-notice { border-top-color:var(--line);background:var(--elevated);color:var(--text-soft); }
 /* CodeMirror 6 편집기: #studioCode(숨은 textarea)는 studio.js용 소스 창구이고, 화면은 CodeMirror가 그린다. */
-.studio-cm-host { display:flex;flex:1;min-width:0;min-height:0; }
+.studio-cm-host { position:relative;display:flex;flex:1;min-width:0;min-height:0; }
+/* Ctrl+K 연속 키 대기 표시: 초점을 받아 다음 키를 읽는다(글자 입력 칸이 아니어서 한글 조합이 시작되지 않는다) */
+.studio-chord { position:absolute;right:12px;bottom:12px;z-index:6;padding:5px 10px;border:1px solid var(--accent);border-radius:6px;background:var(--elevated);color:var(--text);font:600 11px/1.5 var(--mono);box-shadow:var(--shadow);pointer-events:none; }
+.studio-chord:focus { outline:none; }
 .studio-cm-host>.cm-editor { flex:1;min-width:0;height:100%; }
 .studio-cm-host .cm-editor.cm-focused { outline:none; }
 .studio-cm-host .cm-selectionLayer:not(.studio-selection-layer) { display:none; }

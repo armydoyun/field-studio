@@ -543,6 +543,10 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           ["짝 괄호로 이동", "Ctrl+Shift+\\"],
           ["블록 접기 / 펴기", "Ctrl+Shift+[ / Ctrl+Shift+]"],
           ["모두 접기 / 모두 펴기", "Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J"],
+          [
+            "Ctrl+K 연속 키: 오른쪽 아래 대기 표시가 뜨면 다음 키 (한글이 조합 중이면 조합을 끝낸 뒤 Ctrl+K)",
+            "Ctrl+K → 다음 키 · Esc 취소",
+          ],
           ["다음 · 이전 오류 / 오류 목록 / 아래 패널", "F8 · Shift+F8 / Ctrl+Shift+M / Ctrl+J"],
           ["편집기 배치 바꾸기(옆 ↔ 위아래) / 집중 모드(Zen)", "Ctrl+\\ / Ctrl+K Z"],
           ["미리보기 분리 + 편집기 확대", "Ctrl+K P"],
