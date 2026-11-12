@@ -289,11 +289,12 @@
                         <button id="studioHide" type="button" title="셰이더 편집기 닫기 (E)" aria-label="편집기 닫기" class="glyph-icon icon-close"></button>
                     </div>
                 </header>
-                <div id="studioInputs" class="studio-inputs" role="group" aria-labelledby="studioInputsTitle">
+                <div id="studioInputs" class="studio-inputs" role="group" aria-labelledby="studioInputsTitle" hidden>
                     <span id="studioInputsTitle" class="studio-inputs-title">Image · 입력</span>
                     <div id="studioChannels" class="studio-channel-bar"></div>
                     <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="입력 채널 연결 규칙" title="iChannel0–3 연결 규칙: current는 앞선 패스, previous는 직전 프레임"></button>
                     <p id="studioChannelRules" class="studio-channel-rules" hidden></p>
+                    <button id="studioInputsCollapse" type="button" class="studio-inputs-collapse glyph-icon icon-chevron" aria-controls="studioInputs" aria-label="입력 채널 접기" title="입력 채널 접기 · 코드 머리줄의 입력 버튼으로 다시 열기"></button>
                 </div>
                 <details id="studioPassTools" class="studio-pass-settings">
                     <summary><span class="studio-pass-settings-label">버퍼 설정</span><span id="studioPassSummary" class="studio-pass-summary"></span></summary>
@@ -322,6 +323,7 @@
                         <div class="studio-code-label">
                             <span id="studioCodeTitle">Image.frag</span><span id="studioState" class="studio-state" role="status" data-state="applied">실행 반영됨</span><button id="studioPreviewTarget" type="button" class="studio-preview-target glyph-icon icon-eye" aria-label="미리보기: Image">Image</button><button id="studioPreviewPin" type="button" class="studio-preview-pin glyph-icon icon-pin" aria-pressed="false" aria-label="미리보기 고정" title="미리보기 고정: 켜면 탭을 바꿔도 미리보기를 바꾸지 않습니다"></button>
                             <div class="studio-editor-tools" role="toolbar" aria-label="검색과 코드 탐색">
+                                <button id="studioInputsToggle" type="button" class="studio-inputs-toggle glyph-icon icon-input" aria-controls="studioInputs" aria-expanded="false" aria-label="입력 채널 보이기" title="입력 채널(iChannel0–3) 보이기/숨기기"><span id="studioInputsCount" class="studio-inputs-count" hidden></span></button>
                                 <button id="studioFunctions" type="button" class="studio-crumb" aria-haspopup="dialog" aria-label="현재 위치 · 함수·변수로 이동 (Ctrl+Shift+O)" title="함수·변수로 이동 (Ctrl+Shift+O)"><span class="studio-crumb-kind" aria-hidden="true"></span><span class="studio-crumb-name">함수</span><span class="studio-crumb-chevron" aria-hidden="true"></span></button>
                                 <button id="studioFind" type="button" class="glyph-icon icon-search" aria-label="찾기" title="찾기 (Ctrl+F) · 찾아 바꾸기 Ctrl+H"></button>
                                 <button id="studioGoto" type="button" class="glyph-icon icon-goto" aria-label="줄 번호로 이동" title="줄 번호로 이동 (Ctrl+G)"></button>
@@ -350,6 +352,7 @@
                                         <button id="studioLineWrap" type="button" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
                                         <button id="studioCtrlSRuns" type="button" aria-pressed="false" title="켜면 Ctrl+S가 프로젝트 저장 대신 셰이더 실행이 됩니다(이전 방식). 실행은 언제나 Alt+Enter로도 됩니다.">Ctrl+S로 실행 (이전 방식)</button>
                                         <p class="studio-menu-title">창</p>
+                                        <button id="studioSplitEdit" type="button" aria-pressed="false" title="미리보기를 별도 창으로 빼고 편집기를 화면 가득 확대 · 다시 누르면 원래대로 (Ctrl+K P · 편집기 밖에서는 P)">미리보기 분리 + 편집기 확대 <kbd>Ctrl+K P</kbd></button>
                                         <button id="studioLayout" type="button" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>
                                         <button id="studioParameters" type="button" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 패널 열기</button>
                                         <button id="studioHelp" type="button" title="편집기 도움말 및 단축키 (?)" aria-haspopup="dialog" aria-controls="quickHelp">도움말 · 단축키 <kbd>?</kbd></button>

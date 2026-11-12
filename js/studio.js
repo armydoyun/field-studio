@@ -69,6 +69,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const proceed = (decision, action) =>
     decision instanceof Promise ? decision.then(ok => ok && action()) : decision && action();
   let expanded = false,
+    splitMode = false, // 미리보기 분리 + 편집기 확대(splitEdit)로 들어온 집중 모드
     resumeAfterMaximize = false,
     navigatingHistory = false;
   const undoStack = [],
@@ -538,6 +539,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       schedule();
       renderGraph();
       syncTextureTargets();
+      syncInputs();
       if (!$("studioLive").checked) return;
       if (timer) {
         clearTimeout(timer);
@@ -548,6 +550,42 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     onLoadImage: i => pickImage(i),
     onDropImage: (i, file) => runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, i)),
   });
+  // 입력 채널 줄은 자주 쓰지 않으므로 기본은 접어 둔다: 패스나 프로젝트가 바뀔 때 그 패스에 연결이 있으면 펴고, 없으면 접는다.
+  // 그 사이에는 사용자가 정한 대로 두되(연결을 끊어도 갑자기 닫지 않는다), 접힌 동안 새 연결이 생기면 편다.
+  // 접혀 있어도 코드 머리줄의 입력 버튼이 연결 수와 "읽는데 비어 있음" 경고를 보여 준다.
+  let inputsOpen = false,
+    inputsFor = "",
+    inputsCount = 0;
+  const showInputs = open => {
+    inputsOpen = open;
+    $("studioInputs").hidden = !open;
+    if (!open) channelPicker.close();
+    const toggle = $("studioInputsToggle");
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "입력 채널 숨기기" : "입력 채널 보이기");
+  };
+  const syncInputs = () => {
+    const channels = activeChannels() || {},
+      count = Object.keys(channels).length,
+      key = `${workEpoch}:${selected}`;
+    if (key !== inputsFor) {
+      inputsFor = key;
+      showInputs(count > 0);
+    } else if (count > inputsCount && !inputsOpen) showInputs(true);
+    inputsCount = count;
+    const counter = $("studioInputsCount");
+    counter.textContent = String(count);
+    counter.hidden = !count;
+    syncInputsWarning(activeSource() || ""); // 편집기 문서는 renderEditor가 이 다음에 바꾼다
+  };
+  // 코드가 읽는 iChannel이 비어 있으면 입력 버튼에 경고 점을 찍는다(타이핑 중에는 줄을 펴지 않는다 — 화면이 밀리지 않게).
+  const syncInputsWarning = (source = $("studioCode").value) => {
+    const channels = activeChannels() || {},
+      empty = [...ChannelPicker.usedChannels(source)].filter(i => !channels[i]),
+      toggle = $("studioInputsToggle");
+    toggle.dataset.warn = String(empty.length > 0);
+    toggle.title = `입력 채널(iChannel0–3) ${inputsOpen ? "숨기기" : "보이기"}${inputsCount ? ` · ${inputsCount}개 연결됨` : " · 연결 없음"}${empty.length ? ` · 코드가 읽는 iChannel${empty.join(", ")}이 비어 있음` : ""}`;
+  };
   const renderChannels = () => {
     const channels = activeChannels(),
       assets = renderer.getTextures(),
@@ -567,6 +605,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       source: activeSource() || "",
     });
     syncTextureTargets();
+    syncInputs();
   };
   // 패스 탭에 마우스를 올리면 그 패스가 읽는 입력을 보여 준다(전체 그래프는 성능 탭의 패스 연결).
   const tabTitle = name => {
@@ -1046,6 +1085,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       }
       recordEdit();
       workEpoch++;
+      syncInputs(); // 새 프로젝트: 입력 줄을 연결 여부에 맞춰 다시 접거나 편다
       return true;
     } catch (error) {
       project = before;
@@ -1221,6 +1261,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       dirty = false;
       clearDraft();
       workEpoch++;
+      syncInputs();
       setStatus("렌더러의 현재 버퍼 구성을 불러왔습니다.");
       saveLocal();
       return true;
@@ -1261,7 +1302,40 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("stage").classList.toggle("studio-maximized", expanded);
     $("studioResize").hidden = expanded;
     $("studioMaximize").setAttribute("aria-pressed", String(expanded));
+    if (!expanded) splitMode = false;
     syncPauseButton();
+    syncSplit();
+  };
+  const syncSplit = () =>
+    $("studioSplitEdit")?.setAttribute("aria-pressed", String(splitMode && expanded && previewPopped()));
+  // 미리보기 분리 + 편집기 확대(P · 편집기 안에서 Ctrl+K P): 미리보기를 별도 창(popout.js)으로 빼고 편집기를 집중 모드로 키운다.
+  // 둘 다 켜져 있으면 원래대로 되돌린다. 분리 창을 닫으면(Esc · 창 닫기) 집중 모드도 함께 끝낸다.
+  // 분리 창은 사용자 입력(키·클릭) 안에서 열어야 하므로 popout.open()을 먼저 부른다.
+  const splitEdit = async () => {
+    const popout = window.shaderPopout;
+    if (disposed || !popout) return false;
+    if (expanded && previewPopped()) {
+      maximize(); // 미리보기가 분리된 채로 끝내므로 재생 상태는 그대로다
+      popout.close();
+      return false;
+    }
+    if (!openState) open();
+    if (!previewPopped()) {
+      try {
+        await popout.open();
+      } catch (error) {
+        setStatus(`미리보기 분리 실패: ${error?.message || error}`, "is-error");
+        return false;
+      }
+    }
+    if (disposed || !previewPopped()) return false;
+    if (!expanded) maximize();
+    splitMode = true;
+    syncSplit();
+    window.focus();
+    $("studioCode").focus({ preventScroll: true });
+    setStatus("미리보기를 별도 창으로 분리하고 편집기를 확대했습니다 · 다시 P(Ctrl+K P)로 되돌리기");
+    return true;
   };
   const close = () => {
     if (expanded) maximize();
@@ -1616,6 +1690,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on($("studioCode"), "input", event => {
     rememberEditor();
     channelPicker.syncUsage($("studioCode").value);
+    syncInputsWarning();
     schedule(
       (event.inputType === "insertText" && event.data?.length === 1) ||
         /^(deleteContent|insertCompositionText|insertReplacementText|insertLineBreak)/.test(event.inputType || "")
@@ -1815,6 +1890,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on($("studioHide"), "click", close);
   on($("studioOpenFromPanel"), "click", open);
   on($("studioMaximize"), "click", maximize);
+  on($("studioSplitEdit"), "click", () => {
+    $("studioCodeTools").open = false;
+    splitEdit();
+  });
   on($("studioPause"), "click", () => togglePlayback());
   on($("studioResetFrames"), "click", () => {
     renderer.resetSimulation();
@@ -1836,9 +1915,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       } else {
         resumeAfterMaximize = renderer.getStats().running;
         if (resumeAfterMaximize) renderer.stop();
+        // 분리 편집 중에 분리 창을 닫으면 집중 모드도 끝낸다(붙잡은 재생 상태는 maximize가 되돌린다).
+        if (splitMode) maximize();
       }
     }
     syncPauseButton();
+    syncSplit();
   });
   // 편집기 메뉴(⋯): 항목을 고르거나, 바깥을 누르거나, Esc를 누르면 닫는다. 글자 크기·들여쓰기 같은 값 조절은 열어 둔다.
   const menu = $("studioCodeTools");
@@ -1941,6 +2023,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       toggle();
+    } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
+      event.preventDefault();
+      splitEdit();
     }
   });
   on(document, "fullscreenchange", () => {
@@ -2073,6 +2158,16 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   on($("studioPreviewTarget"), "click", togglePreview);
   on($("studioPreviewPin"), "click", () => setPreviewPinned(!previewPinned));
+  on($("studioInputsToggle"), "click", () => {
+    showInputs(!inputsOpen);
+    syncInputsWarning();
+    if (inputsOpen) $("studioChannels").querySelector("button")?.focus();
+  });
+  on($("studioInputsCollapse"), "click", () => {
+    showInputs(false);
+    syncInputsWarning();
+    $("studioInputsToggle").focus();
+  });
   // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
   on(document, "shader-preview-changed", syncPreviewControls);
   syncPreviewControls();
@@ -2095,6 +2190,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press("시간·프레임 초기화", "studioResetFrames"),
     press("프로젝트 메뉴 열기", "projectMenuToggle", "Ctrl+O"),
     press("집중 모드 전환", "studioMaximize", "Ctrl+K Z", ["Mod-k z", "Mod-k Z"]),
+    {
+      label: "미리보기 분리 + 편집기 확대 (전환)",
+      key: "Ctrl+K P · 편집기 밖에서는 P",
+      bind: ["Mod-k p", "Mod-k P"],
+      run: () => splitEdit(),
+    },
     press("편집기 배치 바꾸기 (옆 ↔ 위아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
     press("편집기 닫기", "studioHide", "E"),
     press("코드 조각 모음 열기", "studioSnippets"),
@@ -2121,6 +2222,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     open,
     close,
     toggle,
+    splitEdit,
     apply,
     setProject,
     getPlaybackState,

@@ -212,6 +212,10 @@ const mount = ({ doc = document } = {}) => {
         if (event.target?.closest?.("button")) return;
         event.preventDefault();
         view.shaderStudio?.togglePlayback();
+      } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
+        // 미리보기 분리 + 편집기 확대를 끝낸다(메인 창과 같은 키).
+        event.preventDefault();
+        view.shaderStudio?.splitEdit?.();
       } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         header?.querySelector("#hudToggle")?.click();
