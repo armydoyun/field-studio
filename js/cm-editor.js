@@ -8,7 +8,6 @@ import * as Language from "./glsl-language.js";
 import * as Features from "./cm-glsl-features.js";
 import * as Store from "./storage.js";
 import * as SearchPanel from "./cm-search-panel.js";
-import * as Keys from "./keys.js";
 // 선택 영역을 줄 높이에 맞춰 그린다.
 // drawSelection은 줄 일부만 선택된 첫·마지막 줄을 글자 상자 높이(coordsAtPos)로 칠하고, 가운데 줄은 그 사이를 꽉 채운다.
 // 이 편집기는 줄 간격이 1.65라서 첫·마지막 줄의 띠만 얇고 위치도 어긋나 보였다.
@@ -518,74 +517,12 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     if (update.docChanged) updateFunctions();
     else if (update.selectionSet) updateCrumb(update.state);
   };
-  // ---- 한글 입력 상태의 단축키 ----
-  // 한글 IME가 켜져 있으면 글자 키의 key가 "ㅋ"·"Process"로 와서 Ctrl+K Z 같은 연속 키의 두 번째 키를 CodeMirror가 알아보지 못하고,
-  // 그 키로 한글 조합("ㅋ")이 시작돼 문서에 들어간다. 그래서 Ctrl+K(물리 키 K) 뒤의 글자 키는 물리 키(code)에서 읽은 영문 키로
-  // 다시 보내고, 그 키가 시작한 한글 조합은 문서에 넣지 않는다(composeGuard).
-  const CHORD_MS = 4000; // CodeMirror의 연속 키 대기 시간과 같다
-  // armUntil: 연속 키를 바꿔 보낸 직후, 그 키가 시작하는 조합을 기다리는 짧은 시간.
-  // guardUntil: 그 조합을 버리는 최대 시간(조합 끝 이벤트가 오지 않아도 일반 입력이 막히지 않게).
-  let chordAt = 0,
-    armUntil = 0,
-    guardUntil = 0;
-  const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta", "CapsLock", "HangulMode", "Hangul", "KanaMode"]);
-  const imeChordKey = (event, editorView) => {
-    if (MODIFIER_KEYS.has(event.key)) return false; // Shift 등을 누르는 동안 연속 키 대기를 유지한다
-    const pending = Date.now() - chordAt < CHORD_MS;
-    chordAt =
-      (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.code === "KeyK" ? Date.now() : 0;
-    const letter = Keys.imeLetter(event);
-    if (!pending || !letter || event.ctrlKey || event.metaKey || event.altKey) return false;
-    event.preventDefault();
-    armUntil = Date.now() + 400;
-    const key = event.shiftKey ? letter.toUpperCase() : letter;
-    editorView.contentDOM.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key,
-        code: event.code,
-        keyCode: letter.toUpperCase().charCodeAt(0),
-        shiftKey: event.shiftKey,
-        bubbles: true,
-        cancelable: true,
-      })
-    );
-    return true;
-  };
-  const composeGuard = [
-    CM.EditorView.domEventHandlers({
-      compositionstart(event, editorView) {
-        if (Date.now() > armUntil) return false;
-        guardUntil = Date.now() + 1500;
-        // 조합을 바로 끝낸다(초점을 잠깐 뺐다가 되돌림). 끝날 때 들어오는 글자는 아래 필터가 버린다.
-        setTimeout(() => {
-          if (!editorView.composing || !editorView.hasFocus) return;
-          editorView.contentDOM.blur();
-          editorView.focus();
-          // 초점을 옮겨도 조합 끝(compositionend)을 알리지 않는 환경이면 편집기가 조합 중으로 남아 키를 무시하므로 직접 알린다.
-          setTimeout(() => {
-            if (editorView.composing)
-              editorView.contentDOM.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "" }));
-          }, 50);
-        }, 0);
-        return false;
-      },
-      compositionend() {
-        if (Date.now() < guardUntil) setTimeout(() => (guardUntil = 0), 0); // 조합을 끝내며 들어온 글자까지 버린 뒤 푼다
-        return false;
-      },
-    }),
-    CM.EditorState.transactionFilter.of(tr =>
-      Date.now() < Math.max(armUntil, guardUntil) && tr.docChanged && tr.isUserEvent("input.type") ? [] : tr
-    ),
-  ];
   // 키 입력은 먼저 textarea로 알린다(studio의 Ctrl+Z/Y·Alt+PageUp 등). studio가 처리하면 CodeMirror는 건너뛴다.
-  // 한글 입력 상태의 Ctrl+글자는 key가 자모로 올 수 있으므로 물리 키에서 읽은 영문 글자로 알린다.
   const forwardKeys = CM.Prec.highest(
     CM.EditorView.domEventHandlers({
-      keydown(event, editorView) {
-        if (imeChordKey(event, editorView)) return true;
+      keydown(event) {
         const clone = new KeyboardEvent("keydown", {
-          key: (event.ctrlKey || event.metaKey) && Keys.imeLetter(event) ? Keys.imeLetter(event) : event.key,
+          key: event.key,
           code: event.code,
           ctrlKey: event.ctrlKey,
           metaKey: event.metaKey,
@@ -978,7 +915,6 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
         CM.lintGutter(),
         CM.search({ top: true, createPanel: SearchPanel.createSearchPanel(CM) }), // 두 줄 찾기·바꾸기 창(cm-search-panel.js)
         forwardKeys,
-        composeGuard,
         beforeUserEdit,
         ...features.extensions,
         CM.scrollPastEnd(),
