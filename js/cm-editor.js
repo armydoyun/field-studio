@@ -145,21 +145,38 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     }
     return null;
   };
+  // 중괄호 없는 제어문 머리 줄인가: if (…) · else if (…) · for (…) · while (…) · else · do (앞에 '}'가 붙어도 된다).
+  // 괄호는 그 줄 안에서 닫혀야 하고, 닫는 ')' 뒤에는 (줄 주석 말고) 아무것도 없어야 한다.
+  const isControlHeader = line => {
+    const text = line.replace(/\/\/.*$/, "").trimEnd();
+    if (/^\s*(?:\}\s*)?(?:else|do)$/.test(text)) return true;
+    const head = /^\s*(?:\}\s*)?(?:else\s+)?(?:if|for|while)\s*\(/.exec(text);
+    if (!head) return false;
+    let depth = 0;
+    for (let i = head[0].length - 1; i < text.length; i++) {
+      if (text[i] === "(") depth++;
+      else if (text[i] === ")" && --depth === 0) return i === text.length - 1;
+    }
+    return false;
+  };
   const glsl = CM.StreamLanguage.define({
     name: "glsl",
     // open: 아직 닫히지 않은 괄호 스택 { ch, indent: 연 줄의 들여쓰기, line: 연 줄 번호, hanging: 괄호가 그 줄의 마지막 글자인지 }
     // line/lineIndent: 마지막으로 읽은 (빈 줄이 아닌) 줄의 번호와 들여쓰기 — Enter 뒤 들여쓰기 계산에 쓴다.
-    startState: () => ({ comment: false, open: [], line: 0, lineIndent: 0 }),
+    // control: 마지막 줄이 중괄호 없는 제어문 머리 줄(if (…) 등)인지 — 다음 줄을 한 단계 들여쓴다.
+    startState: () => ({ comment: false, open: [], line: 0, lineIndent: 0, control: false }),
     copyState: state => ({
       comment: state.comment,
       open: state.open.map(entry => ({ ...entry })),
       line: state.line,
       lineIndent: state.lineIndent,
+      control: state.control,
     }),
     token(stream, state) {
       if (stream.sol() && /\S/.test(stream.string)) {
         state.line++;
         state.lineIndent = stream.indentation();
+        state.control = !state.comment && isControlHeader(stream.string);
       }
       if (!state.comment && stream.eatSpace()) return null;
       const top = state.open[state.open.length - 1],
@@ -172,10 +189,13 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     //  - 줄이 닫는 괄호로 시작하면 그 괄호를 연 줄의 들여쓰기
     //  - '{' 안: 연 줄의 들여쓰기 + 한 단계
     //  - '(' '[' 안: 괄호로 줄이 끝난 바로 다음 줄이면 + 한 단계, 그 밖에는 윗줄 들여쓰기를 그대로 유지
+    //  - 중괄호 없는 제어문(if (…) · else · for (…) · while (…)) 다음 줄: 그 줄 + 한 단계
     indent: (state, textAfter, cx) => {
       const top = state.open[state.open.length - 1];
+      if (top && textAfter.trimStart().startsWith(CLOSER[top.ch])) return top.indent;
+      // 중괄호 없는 if (…) · else · for (…) 다음 줄: 그 줄 + 한 단계 (다음 줄이 '{'로 시작하면 그대로)
+      if (state.control && !textAfter.trimStart().startsWith("{")) return state.lineIndent + cx.unit;
       if (!top) return 0;
-      if (textAfter.trimStart().startsWith(CLOSER[top.ch])) return top.indent;
       if (top.ch === "{") return top.indent + cx.unit;
       if (top.line === state.line) return top.hanging ? top.indent + cx.unit : state.lineIndent;
       return state.lineIndent;
@@ -183,7 +203,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     languageData: {
       commentTokens: { line: "//", block: { open: "/*", close: "*/" } },
       closeBrackets: { brackets: ["(", "[", "{", '"'] },
-      indentOnInput: /^\s*[}\])]$/,
+      indentOnInput: /^\s*[{}\])]$/, // '{'는 제어문 다음 줄에 '{'만 칠 때(Allman 스타일) 제자리로
     },
     tokenTable,
   });
@@ -326,16 +346,27 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     });
   };
   const facade = (name, descriptor) => Object.defineProperty(textarea, name, { configurable: true, ...descriptor });
-  const inputTypeOf = tr =>
-    tr.isUserEvent("input.type.compose")
-      ? "insertCompositionText"
-      : tr.isUserEvent("input.type")
-        ? "insertText"
-        : tr.isUserEvent("delete")
-          ? "deleteContentBackward"
-          : tr.isUserEvent("input.paste") || tr.isUserEvent("input.drop")
-            ? "insertFromPaste"
-            : "insertReplacementText";
+  // studio의 되돌리기는 타이핑(한 글자 입력 · Backspace/Delete · Enter · 한글 조합)만 0.7초 안에서 한 단계로 묶는다.
+  // 주석 전환 · 줄 이동/삭제 · 자동 완성 · 들여쓰기 같은 명령은 "editorCommand"로 알려 따로 되돌리게 한다(VS Code와 같이).
+  const inputTypeOf = tr => {
+    if (tr.isUserEvent("input.type.compose")) return "insertCompositionText";
+    if (tr.isUserEvent("input.type")) return "insertText";
+    if (tr.isUserEvent("delete.backward")) return "deleteContentBackward";
+    if (tr.isUserEvent("delete.forward")) return "deleteContentForward";
+    if (tr.isUserEvent("delete.cut")) return "deleteByCut";
+    if (tr.isUserEvent("input.paste") || tr.isUserEvent("input.drop")) return "insertFromPaste";
+    // Enter(insertNewlineAndIndent): userEvent가 딱 "input"이고 줄바꿈과 들여쓰기 공백만 넣은 편집
+    if (tr.annotation(CM.Transaction.userEvent) === "input") {
+      let lineBreak = true;
+      tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+        // Enter는 커서 앞 줄 끝 공백을 지우기도 한다
+        if (/\S/.test(tr.startState.sliceDoc(fromA, toA)) || !/^[ \t]*\n\s*$/.test(inserted.toString()))
+          lineBreak = false;
+      });
+      if (lineBreak) return "insertLineBreak";
+    }
+    return "editorCommand";
+  };
 
   // ---- 화면 만들기 ----
   const frame = textarea.closest(".studio-editor-frame"),
@@ -470,6 +501,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
         typeof InputEvent === "function"
           ? new InputEvent("input", {
               bubbles: true,
+              // 여러 글자 입력(괄호 자동 닫기 · 다중 커서)도 타이핑이다
               inputType: data === null && type === "insertText" ? "insertReplacementText" : type,
               data,
             })
@@ -678,7 +710,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     grownSelection = null;
   const expandSelection = editorView => {
     const state = editorView.state,
-      text = state.doc.toString();
+      text = cleanOf(state.doc.toString()); // 주석·문자열 안의 괄호는 세지 않는다(길이는 원문과 같다)
     if (!grownSelection || !grownSelection.eq(state.selection)) growHistory = [];
     const next = CM.EditorSelection.create(
       state.selection.ranges.map(range => {
@@ -697,6 +729,58 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     if (!grownSelection || !grownSelection.eq(editorView.state.selection) || !growHistory.length) return false;
     grownSelection = growHistory.pop();
     editorView.dispatch({ selection: grownSelection, scrollIntoView: true, userEvent: "select" });
+    return true;
+  };
+  // Ctrl+Shift+\\: 괄호 바로 옆이면 짝 괄호로, 괄호 안 다른 곳이면 감싸는 닫는 괄호 앞으로 간다(VS Code와 같이).
+  const jumpToBracket = editorView => {
+    if (CM.cursorMatchingBracket(editorView)) return true;
+    const state = editorView.state,
+      text = cleanOf(state.doc.toString());
+    let found = false;
+    const selection = CM.EditorSelection.create(
+      state.selection.ranges.map(range => {
+        const pair = enclosingPair(text, range.head, range.head);
+        if (!pair) return range;
+        found = true;
+        return CM.EditorSelection.cursor(pair.close);
+      }),
+      state.selection.mainIndex
+    );
+    if (!found) return false;
+    editorView.dispatch({ selection, scrollIntoView: true, userEvent: "select" });
+    return true;
+  };
+  // Shift+Alt+A: 선택이 있으면 CodeMirror 블록 주석 전환. 선택이 없으면 VS Code처럼
+  // 커서가 /* … */ 안이면 그 주석을 풀고, 아니면 "/*  */"를 넣고 커서를 가운데에 둔다.
+  const blockComment = editorView => {
+    const state = editorView.state;
+    if (state.selection.ranges.some(range => !range.empty)) return CM.toggleBlockComment(editorView);
+    const src = state.doc.toString();
+    const enclosing = head => {
+      const open = src.lastIndexOf("/*", head - 1);
+      if (open < 0 || src.lastIndexOf("*/", head - 1) > open) return null; // 앞의 주석은 이미 닫혔다
+      const close = src.indexOf("*/", Math.max(head - 1, open + 2));
+      return close < 0 ? null : { open, close };
+    };
+    editorView.dispatch(
+      state.changeByRange(range => {
+        const found = enclosing(range.head);
+        if (!found) {
+          return {
+            changes: { from: range.head, insert: "/*  */" },
+            range: CM.EditorSelection.cursor(range.head + 3),
+          };
+        }
+        const openEnd = found.open + (src[found.open + 2] === " " ? 3 : 2),
+          closeStart = found.close - (found.close > openEnd && src[found.close - 1] === " " ? 1 : 0);
+        const changes = state.changes([
+          { from: found.open, to: openEnd },
+          { from: closeStart, to: found.close + 2 },
+        ]);
+        return { changes, range: CM.EditorSelection.cursor(changes.mapPos(range.head, -1)) };
+      }),
+      { scrollIntoView: true, userEvent: "input.comment" }
+    );
     return true;
   };
   const run = command => () => {
@@ -744,7 +828,10 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { key: "Mod-k Mod-c", run: lineComment(true) },
     { key: "Mod-k Mod-u", run: lineComment(false) },
     ...both("Mod-Shift-d", CM.copyLineDown), // 예전 편집기의 줄 복제 키(VS Code는 Shift+Alt+↓)
-    { key: "Mod-Shift-\\", run: CM.cursorMatchingBracket },
+    { key: "Mod-Shift-\\", run: jumpToBracket },
+    // Shift+Alt+A: CodeMirror 기본 키맵은 이 키를 "Alt-A"(대문자 = Shift)로 묶으므로 같은 이름으로도 먼저 받는다.
+    { key: "Alt-A", run: blockComment },
+    { key: "Shift-Alt-a", run: blockComment },
     // 접기 · 오류 · 보기
     { key: "Mod-k Mod-0", run: CM.foldAll },
     { key: "Mod-k Mod-j", run: CM.unfoldAll },
@@ -1027,7 +1114,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "패스로 이동 (Image · Buffer)", key: "Ctrl+P", run: () => openPalette("") },
     { label: "자동 완성 열기", key: "Ctrl+Space · Ctrl+I", run: () => CM.startCompletion(view) },
     { label: "줄 주석 전환", key: "Ctrl+/", run: () => CM.toggleComment(view) },
-    { label: "블록 주석 전환 (/* */)", key: "Shift+Alt+A", run: () => CM.toggleBlockComment(view) },
+    { label: "블록 주석 전환 (/* */)", key: "Shift+Alt+A", run: () => blockComment(view) },
     { label: "줄 주석 추가", key: "Ctrl+K Ctrl+C", run: () => lineComment(true)(view) },
     { label: "줄 주석 제거", key: "Ctrl+K Ctrl+U", run: () => lineComment(false)(view) },
     { label: "다음 일치 항목 선택 추가", key: "Ctrl+D", run: () => CM.selectNextOccurrence(view) },
@@ -1037,7 +1124,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "아래에 줄 삽입", key: "Ctrl+Enter", run: () => CM.insertBlankLine(view) },
     { label: "위에 줄 삽입", key: "Ctrl+Shift+Enter", run: () => insertLineAbove(view) },
     { label: "줄 삭제", key: "Ctrl+Shift+K", run: () => CM.deleteLine(view) },
-    { label: "짝 괄호로 이동", key: "Ctrl+Shift+\\", run: () => CM.cursorMatchingBracket(view) },
+    { label: "짝 괄호로 이동", key: "Ctrl+Shift+\\", run: () => jumpToBracket(view) },
     { label: "들여쓰기", key: "Ctrl+]", run: () => CM.indentMore(view) },
     { label: "내어쓰기", key: "Ctrl+[", run: () => CM.indentLess(view) },
     { label: "정의로 이동", key: "F12 · Ctrl+클릭", run: () => features.goToDefinition(view) },
