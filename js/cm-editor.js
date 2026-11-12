@@ -454,10 +454,13 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
         backgroundColor: "color-mix(in srgb, var(--accent) 34%, transparent) !important",
       },
-      ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--text)" },
+      // 커서는 VS Code처럼 2px로 그려 괄호 표시와 겹쳐도 잘 보이게 한다.
+      ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--text)", borderLeftWidth: "2px", marginLeft: "-1px" },
+      // 짝 괄호: 옅은 배경 + 아래 밑줄만. 좌우 테두리(outline)는 커서와 같은 세로선이라 커서가
+      // 괄호 안/밖 어디 있는지 헷갈리게 했다.
       "&.cm-focused .cm-matchingBracket": {
-        backgroundColor: "color-mix(in srgb, var(--accent) 22%, transparent)",
-        outline: "1px solid color-mix(in srgb, var(--accent) 70%, transparent)",
+        backgroundColor: "color-mix(in srgb, var(--accent) 14%, transparent)",
+        boxShadow: "inset 0 -2px 0 color-mix(in srgb, var(--accent) 80%, transparent)",
       },
       ".cm-selectionMatch": { backgroundColor: "color-mix(in srgb, var(--syn-builtin) 16%, transparent)" },
       ".cm-searchMatch": {
