@@ -7,6 +7,7 @@ import * as PreviewDOM from "./preview-dom.js";
 import * as Presets from "./presets.js";
 import * as Links from "./links.js";
 import * as Timeline from "./timeline.js";
+import * as LinkSheet from "./link-sheet.js";
 const mount = (renderer, input, settings) => {
   const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
@@ -1496,226 +1497,62 @@ const mount = (renderer, input, settings) => {
   listen(document, "shader-presets-changed", () => renderPresets());
   // ---- 파라미터 연결(links.js · renderer.setLinks · settings.getLinks/setLinks) ----
   // 파라미터 줄의 연결 버튼이 아래에 편집 칸을 연다. 바꾸면 settings.setLinks로 저장하고 렌더러가 프레임마다 적용한다.
-  let openLink = null; // 편집 칸을 연 파라미터 이름
-  const SOURCE_LABEL = { audio: "소리", midi: "MIDI", lfo: "흔들기", keys: "키프레임" };
-  const BAND_LABEL = { bass: "저음", mid: "중음", treble: "고음", volume: "음량" };
-  const SHAPE_LABEL = { sine: "사인", triangle: "삼각", saw: "톱니", square: "사각" };
+  let openLink = null; // 연결 시트를 연 파라미터 이름
   const linkOf = name => (settings.getLinks?.() || []).find(link => link.name === name) || null;
-  const describeLink = link =>
-    link.source === "audio"
-      ? `소리 · ${BAND_LABEL[link.band]}`
-      : link.source === "midi"
-        ? `MIDI CC ${link.cc}${link.channel ? ` · 채널 ${link.channel}` : ""}`
-        : link.source === "lfo"
-          ? `흔들기 · ${SHAPE_LABEL[link.shape]} ${displayNumber(link.period)}초`
-          : `키프레임 ${link.keys.length}개${link.loop ? ` · ${displayNumber(link.loop)}초 반복` : ""}`;
   const saveLink = (name, next) =>
     attempt(() => {
       const others = (settings.getLinks?.() || []).filter(link => link.name !== name);
       settings.setLinks(next ? [...others, { ...next, name }] : others); // → shader-links-changed가 다시 그린다
+      renderer.redraw?.();
     });
-  // 기본 범위: 슬라이더 범위(없으면 0~1). bool은 0~1.
-  const linkRange = item =>
-    item.type === "bool"
-      ? [0, 1]
-      : [
-          Number.isFinite(item.options?.min) ? item.options.min : 0,
-          Number.isFinite(item.options?.max) ? item.options.max : 1,
-        ];
+  // 끄는 동안: 렌더러에만 적용(저장 · 다시 그리기 없음). 놓으면(change) saveLink.
+  const previewLink = (name, next) =>
+    attempt(() => {
+      const others = (settings.getLinks?.() || []).filter(link => link.name !== name);
+      renderer.setLinks([...others, { ...next, name }]);
+      renderer.redraw?.();
+    });
+  // 연결 미터 · 시트의 실시간 표시: 파라미터 탭이 보이는 동안 매 프레임 지금 값으로 고친다.
+  const liveLinks = new Map(); // 이름 → [update(value)…]
+  let liveFrame = 0;
+  const liveStep = () => {
+    liveFrame = 0;
+    if (!liveLinks.size) return;
+    // 다른 탭이 보이는 동안은 그리지 않고 기다린다
+    if ($("view-uniforms").hidden || document.hidden) {
+      liveFrame = requestAnimationFrame(liveStep);
+      return;
+    }
+    const values = new Map(renderer.getUserUniforms().map(item => [item.name, item.value]));
+    for (const [name, updates] of liveLinks) for (const update of updates) update(values.get(name));
+    liveFrame = requestAnimationFrame(liveStep);
+  };
+  const watchLink = (name, update) => {
+    if (!liveLinks.has(name)) liveLinks.set(name, []);
+    liveLinks.get(name).push(update);
+    if (!liveFrame) liveFrame = requestAnimationFrame(liveStep);
+  };
+  const openTimeline = name => {
+    const box = $("timeline");
+    box.open = true;
+    timeline.render();
+    box.scrollIntoView({ block: "nearest" });
+    [...box.querySelectorAll(".timeline-lane")]
+      .find(lane => lane.dataset.name === name)
+      ?.querySelector(".timeline-key")
+      ?.focus();
+  };
   const linkEditor = item => {
-    const link = linkOf(item.name),
-      box = element("div"),
-      field = (label, control, hint = "") => {
-        const wrap = element("label");
-        wrap.className = "link-field";
-        wrap.append(label, control);
-        if (hint) wrap.title = hint;
-        return wrap;
-      },
-      select = (options, value, onChange) => {
-        const node = element("select");
-        for (const [key, text] of options) {
-          const option = element("option");
-          option.value = key;
-          option.textContent = text;
-          node.append(option);
-        }
-        node.value = value;
-        node.addEventListener("change", () => onChange(node.value));
-        return node;
-      },
-      number = (value, onChange, { step = "any", min } = {}) => {
-        const node = element("input");
-        node.type = "number";
-        node.step = step;
-        if (min !== undefined) node.min = String(min);
-        node.value = String(value);
-        node.addEventListener("change", () => {
-          const v = Number(node.value);
-          if (Number.isFinite(v)) onChange(v);
-        });
-        return node;
-      };
-    box.className = "link-editor";
-    box.dataset.name = item.name;
-    const [low, high] = linkRange(item);
-    const base = link || { source: "", min: low, max: high, smooth: 0 };
-    const update = change => saveLink(item.name, { ...base, ...change });
-    box.append(
-      field(
-        "연결",
-        select(
-          [["", "없음"], ...Links.SOURCES.map(source => [source, SOURCE_LABEL[source]])],
-          link?.source || "",
-          source => {
-            if (!source) return saveLink(item.name, null);
-            const fresh = { source, min: low, max: high, smooth: source === "audio" ? 0.1 : 0 };
-            if (source === "keys") fresh.keys = [[renderer.getStats().time ?? 0, Number(item.value) || 0]];
-            saveLink(item.name, fresh);
-          }
-        ),
-        "이 파라미터의 값을 정할 소스"
-      )
-    );
-    if (!link) {
-      const hint = element("p");
-      hint.className = "link-hint";
-      hint.textContent =
-        "소리 대역 · MIDI 컨트롤러 · 흔들기 · 키프레임이 이 값을 프레임마다 정하게 합니다. 영상 렌더링에서도 렌더 시간에 맞습니다.";
-      box.append(hint);
-      return box;
-    }
-    if (link.source === "audio")
-      box.append(
-        field(
-          "대역",
-          select(Object.entries(BAND_LABEL), link.band, band => update({ band })),
-          "켜진 오디오 파일 · 마이크의 주파수 대역(저음 20~250Hz · 중음 ~2kHz · 고음 ~8kHz) 또는 음량"
-        )
-      );
-    if (link.source === "midi") {
-      const learn = element("button"),
-        status = element("span"),
-        midi = renderer.midiStatus?.() || { state: "off", devices: [] };
-      learn.type = "button";
-      learn.textContent = "학습";
-      learn.title = "누른 뒤 MIDI 컨트롤러의 노브 · 슬라이더를 움직이면 그 CC로 연결합니다";
-      learn.addEventListener("click", async () => {
-        if (!(await renderer.startMidi())) return renderUniforms();
-        learn.textContent = "움직이세요…";
-        renderer.learnMidi(({ channel, cc }) => update({ channel, cc }));
-      });
-      status.className = "link-status";
-      status.textContent =
-        midi.state === "on"
-          ? `장치 ${midi.devices.length}개${midi.devices.length ? ` · ${midi.devices.join(", ")}` : ""}`
-          : midi.state === "error"
-            ? midi.error
-            : "학습을 누르면 MIDI를 켭니다(권한 필요)";
-      box.append(
-        field(
-          "채널",
-          select(
-            [["0", "모든 채널"], ...Array.from({ length: 16 }, (_, i) => [String(i + 1), String(i + 1)])],
-            String(link.channel),
-            channel => update({ channel: Number(channel) })
-          )
-        ),
-        field(
-          "CC",
-          number(link.cc, cc => update({ cc }), { step: 1, min: 0 })
-        ),
-        learn,
-        status
-      );
-    }
-    if (link.source === "lfo")
-      box.append(
-        field(
-          "모양",
-          select(Object.entries(SHAPE_LABEL), link.shape, shape => update({ shape }))
-        ),
-        field(
-          "주기(초)",
-          number(link.period, period => update({ period }), { min: 0.05 })
-        ),
-        field(
-          "위상",
-          number(link.phase, phase => update({ phase }), { min: 0 }),
-          "0~1 · 주기에서 시작 위치"
-        )
-      );
-    if (link.source !== "keys")
-      box.append(
-        field(
-          "최소",
-          number(link.min, min => update({ min })),
-          "소스가 0일 때의 값"
-        ),
-        field(
-          "최대",
-          number(link.max, max => update({ max })),
-          "소스가 1일 때의 값"
-        )
-      );
-    box.append(
-      field(
-        "부드럽게(초)",
-        number(link.smooth, smooth => update({ smooth }), { min: 0 }),
-        "값이 목표를 따라가는 시간 상수"
-      )
-    );
-    if (link.source === "keys") {
-      const list = element("div");
-      list.className = "link-keys";
-      link.keys.forEach(([t, v], index) => {
-        const key = element("span"),
-          remove = element("button");
-        key.className = "link-key";
-        key.textContent = `${displayNumber(t)}초 → ${displayNumber(v)}`;
-        remove.type = "button";
-        remove.className = "glyph-icon icon-close";
-        remove.setAttribute("aria-label", `${displayNumber(t)}초 키 지우기`);
-        remove.addEventListener("click", () => update({ keys: link.keys.filter((_, i) => i !== index) }));
-        key.append(remove);
-        list.append(key);
-      });
-      const value = number(Number(item.value) || 0, () => {}),
-        add = element("button"),
-        now = renderer.getStats().time ?? 0;
-      value.setAttribute("aria-label", "키 값");
-      add.type = "button";
-      add.textContent = `지금 시간(${displayNumber(Math.round(now * 100) / 100)}초)에 키`;
-      add.title = "재생 위치(uTime)에 이 값으로 키를 더합니다(같은 시간의 키는 바꿉니다)";
-      add.addEventListener("click", () => {
-        const at = Math.round((renderer.getStats().time ?? 0) * 1000) / 1000,
-          v = Number(value.value);
-        if (!Number.isFinite(v)) return;
-        update({ keys: [...link.keys.filter(([t]) => Math.abs(t - at) > 1e-3), [at, v]] });
-      });
-      box.append(
-        list,
-        field("키 값", value),
-        add,
-        field(
-          "반복(초)",
-          number(link.loop, loop => update({ loop }), { min: 0 }),
-          "0이면 끝 값 유지"
-        ),
-        field(
-          "잇기",
-          select(
-            [
-              ["smooth", "부드럽게"],
-              ["linear", "직선"],
-            ],
-            link.ease,
-            ease => update({ ease })
-          )
-        )
-      );
-    }
-    return box;
+    const view = LinkSheet.sheet({
+      item,
+      link: linkOf(item.name),
+      renderer,
+      save: next => saveLink(item.name, next),
+      preview: next => previewLink(item.name, next),
+      openTimeline,
+    });
+    watchLink(item.name, view.update);
+    return view.node;
   };
   // 다시 그려도 편집 칸 안의 초점은 같은 자리(같은 파라미터의 n번째 조작)로 돌려 둔다.
   listen(document, "shader-links-changed", () => {
@@ -1727,7 +1564,12 @@ const mount = (renderer, input, settings) => {
     renderUniforms();
     if (!box) return;
     const next = [...$("uniformList").querySelectorAll(".link-editor")].find(node => node.dataset.name === name);
-    if (next) (controls(next)[index] || controls(next)[0])?.focus();
+    if (!next) return;
+    // 라디오(소스 · 모양 …)를 눌렀으면 같은 묶음의 고른 칸으로
+    const group = active.closest?.('[role="radiogroup"]'),
+      groups = [...box.querySelectorAll('[role="radiogroup"]')].indexOf(group),
+      picked = group && next.querySelectorAll('[role="radiogroup"]')[groups]?.querySelector('[aria-checked="true"]');
+    (picked || controls(next)[index] || controls(next)[0])?.focus();
   });
   // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
   let hiddenKey = "";
@@ -1754,6 +1596,7 @@ const mount = (renderer, input, settings) => {
     curveResizeObserver?.disconnect();
     curveRedraws.clear();
     playViews.clear();
+    liveLinks.clear();
     resetSyncs.clear();
     playButtons.clear();
     userList.replaceChildren();
@@ -1886,7 +1729,7 @@ const mount = (renderer, input, settings) => {
         linkButton.className = "link-uniform glyph-icon icon-link";
         linkButton.type = "button";
         linkButton.title = link
-          ? `연결됨: ${describeLink(link)} · 누르면 연결 설정`
+          ? `연결됨: ${LinkSheet.describe(link)} · 누르면 연결 설정`
           : "연결: 소리 · MIDI · 흔들기 · 키프레임이 이 값을 정하게 하기";
         linkButton.setAttribute("aria-label", `${item.name} 연결 설정`);
         linkButton.setAttribute("aria-expanded", String(openLink === item.name));
@@ -1894,7 +1737,9 @@ const mount = (renderer, input, settings) => {
         linkButton.addEventListener("click", () => {
           openLink = openLink === item.name ? null : item.name;
           renderUniforms();
-          $("uniformList").querySelector(`.link-editor[data-name="${item.name}"] select`)?.focus();
+          $("uniformList")
+            .querySelector(`.link-editor[data-name="${item.name}"] [role="radio"][tabindex="0"]`)
+            ?.focus();
         });
         extras.push(linkButton);
       }
@@ -1902,7 +1747,7 @@ const mount = (renderer, input, settings) => {
         row.classList.add("is-linked");
         const badge = element("span");
         badge.className = "link-badge";
-        badge.textContent = describeLink(link);
+        badge.textContent = LinkSheet.describe(link);
         badge.title = "연결이 프레임마다 이 값을 정합니다(직접 바꿔도 다음 프레임에 덮어씁니다)";
         title.append(badge);
       }
@@ -2325,7 +2170,12 @@ const mount = (renderer, input, settings) => {
         }
       };
       const array = typeInfo(item.type).count;
-      if (array) {
+      if (link) {
+        // 연결이 값을 정하는 동안은 슬라이더 대신 읽기 전용 미터(움직여도 덮어써지는 조작을 두지 않는다)
+        const gauge = LinkSheet.meter(item, link);
+        watchLink(item.name, gauge.update);
+        row.append(gauge.node);
+      } else if (array) {
         const size = typeInfo(typeInfo(item.type).base).components,
           list = element("div");
         list.className = "uniform-array";

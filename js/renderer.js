@@ -1863,6 +1863,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     // 파라미터 연결(links.js) · MIDI
     setLinks,
     getLinks: () => links.map(link => ({ ...link })),
+    // 연결 시트의 실시간 표시: 켜진 오디오의 대역 세기(없으면 null) · 마지막 MIDI CC
+    linkMonitor: () => {
+      const audio = media.audioKinds().length ? media.audioData() : null;
+      return { audio: audio ? Links.audioLevels(audio.rows, audio.rate) : null, midi: midi.status().last };
+    },
     startMidi: () => midi.start(),
     midiStatus: () => midi.status(),
     learnMidi: callback => midi.learn(callback),

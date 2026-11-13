@@ -15,12 +15,14 @@ const create = ({ onChange = () => {}, requestAccess = () => navigator.requestMI
   let access = null,
     state = "off", // off · starting · on · error
     error = "",
-    learner = null;
+    learner = null,
+    last = null; // 마지막으로 받은 CC { channel, cc, value } — 연결 시트의 상태 표시
   const receive = event => {
     const message = parse(event.data);
     if (!message) return;
     values.set(`${message.channel}:${message.cc}`, message.value);
     values.set(`0:${message.cc}`, message.value);
+    last = message;
     if (learner) {
       const callback = learner;
       learner = null;
@@ -60,7 +62,13 @@ const create = ({ onChange = () => {}, requestAccess = () => navigator.requestMI
     learner = null;
   };
   const devices = () => (access ? [...access.inputs.values()].map(input => input.name || "MIDI 장치") : []);
-  return { start, value, learn, cancelLearn, status: () => ({ state, error, devices: devices() }) };
+  return {
+    start,
+    value,
+    learn,
+    cancelLearn,
+    status: () => ({ state, error, devices: devices(), last: last && { ...last } }),
+  };
 };
 
 export { create, parse };
