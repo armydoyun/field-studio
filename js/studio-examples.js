@@ -20,9 +20,8 @@ const blank = `#version 300 es
 precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     fragColor = vec4(uv, 0.5 + 0.5 * sin(uTime), 1.0);
 }`;
 const movingDot = `#version 300 es

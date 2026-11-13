@@ -95,42 +95,45 @@ void main() {
     summary: "GLSL ES 3.00 구조 · 실행 · 오류 읽기",
     blocks: [
       {
-        p: "모든 패스는 GLSL ES 3.00(`#version 300 es`) 프래그먼트 셰이더입니다. 화면의 각 픽셀마다 `main()`이 실행되고 `out vec4`에 색을 씁니다. 머리말은 생략할 수 있습니다(아래 **짧게 쓰기**).",
+        p: "모든 패스는 GLSL ES 3.00(`#version 300 es`) 프래그먼트 셰이더입니다. 화면의 각 픽셀마다 `mainImage(fragColor, fragCoord)`가 실행되어 `fragColor`에 그 픽셀의 색을 씁니다. `fragCoord`는 픽셀 중심 좌표(`gl_FragCoord.xy`)입니다. 갤러리 예제와 입문 과정도 모두 이 모양입니다.",
       },
       {
         code: `#version 300 es
 precision highp float;
 uniform vec2 uResolution;   // 현재 패스의 픽셀 크기
 uniform float uTime;        // 재생 시간(초)
-out vec4 fragColor;
 
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;   // 0~1 좌표
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;   // 0~1 좌표
     vec3 color = 0.5 + 0.5 * cos(uTime + uv.xyx + vec3(0, 2, 4));
     fragColor = vec4(color, 1.0);
 }`,
         title: "가장 작은 셰이더",
         insert: "replace",
       },
-      { heading: "짧게 쓰기 · mainImage" },
+      { heading: "mainImage와 main() · 짧게 쓰기" },
       {
-        p: "`#version 300 es`와 `precision highp float;`은 생략해도 됩니다. 없으면 실행할 때 자동으로 붙이고, 오류 줄 번호는 편집기 줄 그대로 나옵니다. `main()` 대신 Shadertoy처럼 `mainImage(out vec4 fragColor, in vec2 fragCoord)`만 써도 됩니다. 실행할 때 `main()`이 이 함수를 불러 그 색을 출력하고, `fragCoord`는 `gl_FragCoord.xy`(픽셀 중심 좌표)입니다.",
+        p: "GPU가 실제로 부르는 진입점은 GLSL의 `main()`입니다. 코드에 `main()`이 없으면 실행할 때 앱이 `main()`을 만들어 `mainImage(색, gl_FragCoord.xy)`를 부르고 그 색을 출력합니다(Shadertoy와 같은 방식). 여러 출력(MRT)은 `out vec4` 매개변수를 출력 수만큼 받습니다(**MRT · 다중 출력**).",
+      },
+      {
+        p: "`#version 300 es`와 `precision highp float;`도 생략할 수 있습니다. 없으면 실행할 때 자동으로 붙이고, 오류 줄 번호는 편집기 줄 그대로 나옵니다.",
       },
       {
         code: `uniform vec2 uResolution;
 uniform float uTime;
+out vec4 fragColor;
 
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec2 uv = fragCoord / uResolution;
+void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage는 보통 함수다
+    vec2 uv = gl_FragCoord.xy / uResolution;
     fragColor = vec4(0.5 + 0.5 * cos(uTime + uv.xyx + vec3(0, 2, 4)), 1.0);
 }`,
-        title: "머리말 없이 mainImage로",
+        title: "머리말 없이 · main()으로 직접",
         insert: "replace",
       },
       {
         list: [
           "Uniform은 직접 선언합니다. Shadertoy의 `iTime` · `iResolution`은 이 앱에서 `uTime` · `uResolution`(vec2)입니다.",
-          "`main()`이 있으면 그쪽이 진입점이고 `mainImage`는 보통 함수입니다. 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
+          "`mainImage`를 쓰면서 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
           "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말과 `main()`을 직접 넣어야 합니다.",
         ],
       },

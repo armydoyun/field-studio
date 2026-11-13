@@ -12,8 +12,7 @@
 const HEAD = `#version 300 es
 precision highp float;
 uniform vec2 uResolution;   // 화면 크기(픽셀)
-uniform float uTime;        // 경과 시간(초)
-out vec4 fragColor;         // 이 픽셀의 최종 색`;
+uniform float uTime;        // 경과 시간(초)`;
 
 const SD = `float sdCircle(vec2 p, float r) { return length(p) - r; }
 float sdBox(vec2 p, vec2 b) {
@@ -39,18 +38,18 @@ float hash21(vec2 p) {
 // ---------------------------------------------------------------- 1. 픽셀 하나의 관점
 const L1 = `${HEAD}
 
-void main() {
-    // gl_FragCoord.xy: 이 호출이 맡은 픽셀의 중심 좌표 (0.5, 0.5) ~ (W-0.5, H-0.5)
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    // fragCoord: 이 호출이 맡은 픽셀의 중심 좌표 (0.5, 0.5) ~ (W-0.5, H-0.5)
     // 원점은 '왼쪽 아래'입니다. C 이미지 배열(왼쪽 위)과 반대예요.
-    vec2 uv = gl_FragCoord.xy / uResolution;   // 0~1로 정규화
+    vec2 uv = fragCoord / uResolution;   // 0~1로 정규화
 
     // 빨강 = x, 초록 = y. 화면 전체가 '좌표의 그래프'가 됩니다.
     fragColor = vec4(uv.x, uv.y, 0.0, 1.0);
 }`;
 const L1_SOL = `${HEAD}
 
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
 
     // 과제 3: 세로 줄무늬 10개 — floor로 '몇 번째 칸인지'(정수 인덱스)를 구하고
     // mod로 짝수/홀수를 가립니다. C의 (x / w) % 2 와 같은 생각입니다.
@@ -68,10 +67,10 @@ void main() {
 const L3 = `${HEAD}
 uniform vec2 uMouse;        // 포인터 픽셀 좌표(화면 밖이면 -1)
 
-void main() {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // 중심이 (0,0), 세로가 -1~1, 가로는 화면 비율만큼 넓어지는 좌표.
     // 거의 모든 셰이더가 이 한 줄로 시작합니다.
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
 
     float px = 2.0 / uResolution.y;          // 이 좌표계에서 '픽셀 1개'의 크기
     float d = length(p) - 0.5;               // 원까지의 거리: 안쪽 < 0 < 바깥쪽
@@ -86,8 +85,8 @@ void main() {
 const L3_SOL = `${HEAD}
 uniform vec2 uMouse;
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     vec2 m = (2.0 * uMouse - uResolution) / uResolution.y;  // 마우스도 같은 좌표계로
     float px = 2.0 / uResolution.y;
 
@@ -107,8 +106,8 @@ const L4 = `${HEAD}
 
 ${SD}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
 
     // 도형을 '움직이는' 대신 질의 좌표를 반대로 옮깁니다: sd(p - 위치)
     float circle = sdCircle(p - vec2(-0.35, 0.0), 0.4);
@@ -132,8 +131,8 @@ float smin(float a, float b, float k) {
     return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     float px = 2.0 / uResolution.y;
 
     float circle = sdCircle(p - vec2(-0.3 + 0.2 * sin(uTime), 0.0), 0.35);
@@ -157,8 +156,8 @@ const L5 = `${HEAD}
 ${SD}
 ${ROT}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     float px = 2.0 / uResolution.y;
     float t = uTime;
 
@@ -178,8 +177,8 @@ const L5_SOL = `${HEAD}
 ${SD}
 ${ROT}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     float px = 2.0 / uResolution.y;
 
     // 과제 2: 6개를 원 위에 — 각 도형까지의 거리 중 최솟값(합집합)을 루프로 구합니다.
@@ -204,8 +203,8 @@ const L6 = `${HEAD}
 
 ${HASH}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
 
     float cells = 8.0;
     vec2 g  = p * cells;
@@ -228,8 +227,8 @@ ${HASH}
 mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, s, -s, c); }
 float sdBox(vec2 p, vec2 b) { vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     float cells = 8.0;
     vec2 g = p * cells, id = floor(g), f = fract(g) - 0.5;
     float px = 2.0 * cells / uResolution.y;
@@ -257,8 +256,8 @@ const L7 = `${HEAD}
 
 ${PALETTE}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
 
     // 레이어 1: 배경 그라디언트
     vec3 col = mix(vec3(0.02, 0.02, 0.05), vec3(0.08, 0.05, 0.15), p.y * 0.5 + 0.5);
@@ -308,8 +307,8 @@ const L8 = `${HEAD}
 
 ${NOISE}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
 
     float n = fbm(p * 2.5 + vec2(uTime * 0.15, 0.0));
 
@@ -322,8 +321,8 @@ const L8_SOL = `${HEAD}
 
 ${NOISE}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y * 2.0;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y * 2.0;
     float t = uTime * 0.1;
 
     // 과제 3: 도메인 워핑 — 노이즈 값으로 좌표 자체를 비틉니다.
@@ -350,12 +349,11 @@ uniform float uSpeed;  // @range 0 4 @default 1
 uniform float uFill;   // @range 0 1 @default 0.6
 uniform vec3  uTint;   // @color @default 1.0 0.6 0.25
 uniform vec3  uBack;   // @color @default 0.06 0.07 0.1
-out vec4 fragColor;
 
 ${HASH}
 
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     vec2 g = p * uCells, id = floor(g), f = fract(g) - 0.5;
     float px = 2.0 * uCells / uResolution.y;
 
@@ -376,7 +374,6 @@ uniform vec2 uResolution;      // 이 버퍼의 크기(셀 수)
 uniform int uFrame;            // 0이면 초기화
 uniform vec4 uMouse;           // xy = 포인터(이 버퍼 좌표), z > 0 = 누르는 중
 uniform sampler2D iChannel0;
-out vec4 fragColor;            // r = 살아 있음(0/1), g = 나이
 
 ${HASH}
 
@@ -388,11 +385,11 @@ int alive(ivec2 c) {
     return texelFetch(iChannel0, c, 0).r > 0.5 ? 1 : 0;
 }
 
-void main() {
-    ivec2 c = ivec2(gl_FragCoord.xy);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    ivec2 c = ivec2(fragCoord);
 
     if (uFrame == 0) {                               // 첫 프레임: 무작위로 30% 채우기
-        fragColor = vec4(step(0.7, hash21(gl_FragCoord.xy)), 0.0, 0.0, 1.0);
+        fragColor = vec4(step(0.7, hash21(fragCoord)), 0.0, 0.0, 1.0);
         return;
     }
 
@@ -404,7 +401,7 @@ void main() {
     int self = alive(c);
     int next = (n == 3 || (self == 1 && n == 2)) ? 1 : 0;   // B3/S23 규칙
 
-    if (uMouse.z > 0.0 && distance(gl_FragCoord.xy, uMouse.xy) < 4.0) next = 1;  // 그려서 살리기
+    if (uMouse.z > 0.0 && distance(fragCoord, uMouse.xy) < 4.0) next = 1;  // 그려서 살리기
 
     float age = texelFetch(iChannel0, c, 0).g;
     fragColor = vec4(float(next), next == 1 ? min(age + 0.01, 1.0) : 0.0, 0.0, 1.0);
@@ -414,10 +411,9 @@ precision highp float;
 // Image: Buffer A의 내용을 화면에 그립니다. 시뮬레이션 로직은 없습니다(표시 전용).
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;   // A · current (이번 프레임에 계산된 세대)
-out vec4 fragColor;
 
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     vec4 cell = texture(iChannel0, uv);          // A는 Filter = Nearest라 칸이 또렷합니다
 
     vec3 dead  = vec3(0.04, 0.05, 0.08);
@@ -436,7 +432,6 @@ uniform vec2 uMouse;
 uniform float uSpeed;   // @range 0 3 @default 1
 uniform vec3  uColorA;  // @color @default 0.06 0.07 0.12
 uniform vec3  uColorB;  // @color @default 1.0 0.55 0.3
-out vec4 fragColor;
 
 // ── 1. 도구 상자: 쓰지 않는 함수는 지워도 됩니다 ───────────────
 ${HASH}
@@ -453,9 +448,9 @@ float scene(vec2 p, float t) {
     return smin(body, arm, 0.1);
 }
 
-void main() {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // ── 3. 좌표 ────────────────────────────────────────────
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     float px = 2.0 / uResolution.y;
     float t = uTime * uSpeed;
 
@@ -507,7 +502,7 @@ const LESSONS = [
         table: {
           head: ["이미 아는 것", "셰이더에서는"],
           rows: [
-            ["이중 for 루프로 픽셀 채우기", "루프 **본문**만 작성(`main`). GPU가 모든 픽셀에 동시에 실행"],
+            ["이중 for 루프로 픽셀 채우기", "루프 **본문**만 작성(`mainImage`). GPU가 모든 픽셀에 동시에 실행"],
             ["SIMD · 스레드 병렬", "수천 개 호출이 묶음(warp)으로 같은 명령을 실행. 분기가 갈리면 양쪽 모두 실행 비용"],
             ["전역 변수 (읽기 전용)", "`uniform` — CPU가 프레임마다 넣는 상수(시간·해상도·마우스)"],
             ["출력 배열 `out[y][x] = …`", "`fragColor` 하나. **자기 픽셀에만** 쓸 수 있음(gather O, scatter X)"],
@@ -547,7 +542,10 @@ const LESSONS = [
     summary: "루프 본문만 쓰는 프로그래밍",
     blocks: [
       {
-        p: 'C로 그라디언트 이미지를 만든다면 이중 루프를 돌며 배열에 씁니다. 셰이더는 **그 루프의 본문만** 작성합니다. GPU가 화면의 모든 픽셀에 대해 `main()`을 병렬로 호출하고, 각 호출은 `gl_FragCoord`로 "내가 몇 번째 픽셀인지"를 압니다.',
+        p: 'C로 그라디언트 이미지를 만든다면 이중 루프를 돌며 배열에 씁니다. 셰이더는 **그 루프의 본문만** 작성합니다. 화면의 모든 픽셀에 대해 `mainImage(fragColor, fragCoord)`가 병렬로 호출되고, 각 호출은 `fragCoord`로 "내가 몇 번째 픽셀인지"를 알고 `fragColor`에 그 픽셀의 색을 씁니다.',
+      },
+      {
+        p: "GPU가 실제로 부르는 진입점은 GLSL의 `main()`입니다. FIELD Studio가 실행할 때 `main()`을 대신 만들어 `mainImage(색, gl_FragCoord.xy)`를 부르게 하므로(Shadertoy와 같은 방식), 여러분은 `mainImage`만 쓰면 됩니다. `fragCoord`는 GLSL 내장 변수 `gl_FragCoord.xy`와 같은 값입니다.",
       },
       {
         compare: {
@@ -556,17 +554,17 @@ const LESSONS = [
   for (int x = 0; x < W; x++)
     img[y][x] = shade(x, y);`,
           glslTitle: "GLSL · 본문만 쓴다",
-          glsl: `void main() {
-  vec2 xy = gl_FragCoord.xy;  // 이번 픽셀
-  fragColor = shade(xy);      // img[y][x] = …
+          glsl: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 xy = fragCoord;  // 이번 픽셀
+  fragColor = shade(xy);  // img[y][x] = …
 }`,
         },
       },
       {
         list: [
-          "`main()`은 **입력 → 색**인 순수 함수입니다. 다른 픽셀의 결과를 읽을 수도, 다른 픽셀에 쓸 수도 없습니다.",
+          "`mainImage()`는 **입력 → 색**인 순수 함수입니다. 다른 픽셀의 결과를 읽을 수도, 다른 픽셀에 쓸 수도 없습니다.",
           "그래서 **실행 순서가 없습니다.** 어떤 픽셀이 먼저 계산되든 결과가 같아야 하고, 그 덕분에 수천 개를 동시에 돌릴 수 있습니다.",
-          "`gl_FragCoord.xy`는 픽셀 **중심**(x+0.5, y+0.5)이고 원점은 **왼쪽 아래**입니다.",
+          "`fragCoord`는 픽셀 **중심**(x+0.5, y+0.5)이고 원점은 **왼쪽 아래**입니다.",
           "색은 0~1 실수입니다. `vec4(r, g, b, a)` — 255가 아니라 1.0이 최대입니다.",
         ],
       },
@@ -673,7 +671,7 @@ const LESSONS = [
         p: "0~1 좌표는 화면이 가로로 길면 원이 타원이 됩니다. 그래서 거의 모든 셰이더가 **중심이 (0,0)이고 세로가 -1~1**인 좌표로 시작합니다. 가로 범위는 화면 비율에 따라 늘어납니다.",
       },
       {
-        code: `vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;`,
+        code: `vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;`,
         title: "이 한 줄을 외워 두세요",
         insert: "cursor",
       },
@@ -960,7 +958,7 @@ for (;;) {               // 매 프레임
 // 출력 fragColor → 이번 프레임의 A
 // 교환(swap)은 렌더러가 자동으로 합니다.
 vec4 old = texelFetch(iChannel0,
-                      ivec2(gl_FragCoord.xy), 0);`,
+                      ivec2(fragCoord), 0);`,
         },
       },
       {

@@ -237,7 +237,7 @@ const create = ctx => {
     {
       label: "frag",
       detail: "새 셰이더 전체 골격",
-      body: "#version 300 es\nprecision highp float;\nuniform vec2 uResolution;\nuniform float uTime;\nout vec4 fragColor;\n\nvoid main() {\n\tvec2 uv = gl_FragCoord.xy / uResolution;\n\tfragColor = vec4(${1:uv, 0.5 + 0.5 * sin(uTime)}, 1.0);$0\n}",
+      body: "#version 300 es\nprecision highp float;\nuniform vec2 uResolution;\nuniform float uTime;\n\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n\tvec2 uv = fragCoord / uResolution;\n\tfragColor = vec4(${1:uv, 0.5 + 0.5 * sin(uTime)}, 1.0);$0\n}",
     },
   ];
 
