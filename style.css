@@ -152,12 +152,15 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .seed-uniform:hover,.play-uniform:hover { color:var(--text); }
 .play-uniform[aria-pressed="true"] { color:var(--accent-strong); }
 /* 키프레임 타임라인 도크(timeline.js): #workspace 아래 줄(미리보기 칸 폭) · 위 막대 + 레인(이름 | 곡선 · 키) */
-.timeline-dock { grid-area:timeline;display:flex;flex-direction:column;height:var(--timeline-height,220px);min-height:0;border-top:1px solid var(--line-strong);background:var(--panel);font-size:11px; }
+.timeline-dock { grid-area:timeline;display:flex;flex-direction:column;height:var(--timeline-height,220px);min-height:0;border-top:1px solid var(--line);background:var(--panel);font-size:11px; }
 .timeline-dock[hidden] { display:none; }
 .timeline-dock { container:timeline / inline-size; }
 .timeline-group { flex-wrap:nowrap; }
-.timeline-resize { flex:0 0 6px;margin-top:-3px;cursor:row-resize;touch-action:none; }
+/* 크기 조절 막대: 편집기(studio-resizer) · 설정 패널(panel-resizer)과 같은 모양(8px 띠 + 가운데 48×2 손잡이 선) · 같은 색 */
+.timeline-resize { display:grid;place-items:center;flex:0 0 8px;border-bottom:1px solid var(--line);background:var(--panel);cursor:row-resize;touch-action:none; }
+.timeline-resize::before { content:"";width:48px;height:2px;border-radius:2px;background:var(--line-strong); }
 .timeline-resize:hover,.timeline-resize:focus-visible { background:var(--accent-soft);outline:none; }
+.timeline-resize:hover::before,.timeline-resize:focus-visible::before { background:var(--accent); }
 .timeline-bar { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:4px 46px 6px 10px;border-bottom:1px solid var(--line); }
 .timeline-group { display:flex;align-items:center;gap:4px; }
 .timeline-field { display:inline-flex;align-items:center;gap:4px;margin:0;color:var(--muted);white-space:nowrap; }
