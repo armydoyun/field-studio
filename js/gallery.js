@@ -928,7 +928,8 @@ const mount = ({ studio, Shader, preview = null }) => {
     const surface = document.createElement("canvas");
     surface.width = 320;
     surface.height = 200;
-    const gl = surface.getContext("webgl2", { preserveDrawingBuffer: true, antialias: false });
+    // 불투명(alpha: false): 메인 렌더러와 같게, 셰이더가 알파를 1로 두지 않아도 썸네일이 비치거나 사라지지 않는다.
+    const gl = surface.getContext("webgl2", { alpha: false, preserveDrawingBuffer: true, antialias: false });
     if (!gl) {
       for (const item of [...ART, ...COMMUNITY, ...LESSONS])
         setBadge(item.id, {

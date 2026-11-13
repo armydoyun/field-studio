@@ -397,7 +397,8 @@ const create = ({ plan }) => {
     surface = document.createElement("canvas");
     surface.width = WIDTH;
     surface.height = HEIGHT;
-    gl = surface.getContext("webgl2", { preserveDrawingBuffer: true, antialias: false });
+    // 불투명(alpha: false): 메인 렌더러와 같게, 알파를 1로 두지 않는 조각도 미리보기가 비치거나 사라지지 않는다.
+    gl = surface.getContext("webgl2", { alpha: false, preserveDrawingBuffer: true, antialias: false });
     if (!gl) {
       unavailable = true;
       return false;
