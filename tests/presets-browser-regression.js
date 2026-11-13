@@ -1,6 +1,6 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
 // 파라미터 프리셋(js/presets.js · settings.js · ui.js의 프리셋 막대):
-//  · '지금 값 저장'(이름 묻기) → 칩 · 즉시 전환 · 1초 동안 부드럽게 전환(중간값) · 지금 값과 같은 칩은 눌린 상태
+//  · '지금 값 저장'(이름을 묻지 않고 바로 저장 · 두 번 눌러 이름 바꾸기) → 칩 · 즉시 전환 · 1초 동안 부드럽게 전환(중간값) · 지금 값과 같은 칩은 눌린 상태
 //  · ⋯ 메뉴: 덮어쓰기(바뀌는 값을 보여 주고 확인 · 취소 · 되돌리기 · Ctrl+Z) · 이름 바꾸기 · 삭제와 되돌리기
 //  · 자동 저장 · 프로젝트 파일(Pack)에 담김 · 다시 열면 복원 · 새 프로젝트는 프리셋 없이 · Undo로 돌아옴
 (async () => {
@@ -38,10 +38,20 @@
     await wait(50);
     test(!$("presetSave").disabled && $("presetList").textContent.includes("저장한 프리셋이 없습니다"), "빈 프리셋 막대");
 
-    // 1) 저장: 낮(기본값) · 밤(바꾼 값)
-    $("presetSave").click(); await answer("낮");
+    test($("presetBar").classList.contains("is-empty") && getComputedStyle($("presetBlend").closest(".preset-blend")).display === "none", "프리셋이 없으면 한 줄(전환 시간 숨김)");
+
+    // 1) 저장: 이름을 묻지 않고 바로 '프리셋 N'으로 저장 → 칩을 두 번 눌러 이름 바꾸기. 낮(기본값) · 밤(바꾼 값)
+    const saveAs = async (auto, text) => {
+      $("presetSave").click();
+      await until(() => chip(auto), `바로 저장: '${auto}'`);
+      test(!$("studioPromptDialog").open, `'${auto}' 저장에 이름 창이 뜨지 않음`);
+      chip(auto).querySelector(".preset-apply").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      await answer(text);
+      await until(() => chip(text), `이름 바꿈: '${text}'`);
+    };
+    await saveAs("프리셋 1", "낮");
     r.setUniform("uGain", 1); r.setUniform("uTint", [0, 0, 1]); r.setUniform("uMode", 2);
-    $("presetSave").click(); await answer("밤");
+    await saveAs("프리셋 2", "밤");
     await wait(50);
     test(chips().map(c => c.querySelector(".preset-apply").textContent).join() === "낮,밤", "칩 두 개");
     test(chip("밤").querySelector(".preset-apply").getAttribute("aria-pressed") === "true", "지금 값과 같은 '밤'이 눌린 상태");

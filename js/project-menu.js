@@ -77,8 +77,9 @@ const create = ({ $, on }) => {
     close({ refocus: true });
   });
   // 머리줄 버튼에 지금 작업 이름을 보여 준다. saved: 보관함의 항목과 이어져 있는지
+  // 보관함에 없는 작업은 '새 작업'으로 부른다(저장 여부는 옆의 저장 버튼이 말한다).
   const setLabel = (text, saved) => {
-    $("projectMenuLabel").textContent = text;
+    $("projectMenuLabel").textContent = saved ? text : "새 작업";
     toggle.dataset.saved = String(saved);
   };
   // modified: 보관함에 저장한 뒤 바뀌었는지(이름 옆 점). 저장하면 사라진다.

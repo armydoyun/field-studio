@@ -156,12 +156,17 @@ const numberField = (label, value, onCommit, { min, max, step = "any", unit = ""
   return wrap;
 };
 
+// 소스별 마지막 설정(이 창을 연 동안만): 끄기 · 소리 · 흔들기 · 키프레임을 눌러 비교해 봐도
+// 앞서 만든 설정(키프레임의 키 · 흔들기 주기 …)이 사라지지 않고, 그 소스를 다시 고르면 그대로 돌아온다.
+const remembered = new Map(); // "이름|소스" → 연결
+const rememberKey = (name, source) => `${name}|${source}`;
+
 // 시트. options:
 //   item: 파라미터 { name, type, value, options } · link: 지금 연결(없으면 null)
 //   renderer: midiStatus · startMidi · learnMidi · cancelMidiLearn · linkMonitor · getStats
-//   save(next | null): 저장 · preview(next): 렌더러에만 미리 적용 · openTimeline(name)
+//   save(next | null): 저장 · preview(next): 렌더러에만 미리 적용 · openTimeline(name) · openInputs(): 입력 채널 열기
 // 돌려줌: { node, update(value) } — update는 매 프레임(시트가 보이는 동안) 실시간 표시를 고친다.
-const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
+const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs = null }) => {
   const [low, high] = rangeOf(item),
     span = high - low,
     node = element("div", "link-editor"),
@@ -187,24 +192,25 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
       link?.source || "",
       source => {
         if (!source) return save(null);
-        const fresh = { source, min: low, max: high, smooth: source === "audio" ? 0.1 : 0 };
-        if (source === "keys")
+        const kept = remembered.get(rememberKey(item.name, source));
+        const fresh = kept
+          ? structuredClone(kept)
+          : { source, min: low, max: high, smooth: source === "audio" ? 0.1 : 0 };
+        if (source === "keys" && !kept)
           fresh.keys = [[Number((renderer.getStats().time ?? 0).toFixed(3)), Number(item.value) || 0]];
         save(fresh);
+        // 키프레임은 타임라인에서 다듬는 일이므로, 고르는 순간 타임라인을 그 레인과 함께 연다(따로 찾아 열 필요 없음)
+        if (source === "keys") openTimeline?.(item.name, { focus: false });
       },
       "link-sources"
     )
   );
   if (!link) {
-    node.append(
-      element(
-        "p",
-        "link-hint",
-        "소스를 고르면 그 소스가 이 값을 프레임마다 정합니다. 소리 대역 · MIDI 노브 · 주기적인 흔들기 · 시간에 따른 키프레임. 영상 렌더링에서도 렌더 시간에 맞습니다."
-      )
-    );
+    node.append(element("p", "link-hint", "무엇이 이 값을 움직일지 고르세요: 소리 · MIDI 노브 · 흔들기 · 키프레임."));
     return { node, update: () => {} };
   }
+
+  remembered.set(rememberKey(item.name, link.source), structuredClone(link));
 
   // ---- 입력 ----
   if (link.source === "audio") {
@@ -217,8 +223,15 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
       empty = element(
         "p",
         "link-note",
-        "켜진 오디오가 없습니다. 채널에서 오디오 파일이나 마이크를 켜면 세기가 보입니다."
+        "켜진 오디오가 없습니다. 입력 채널에 오디오 파일이나 마이크를 연결하면 세기가 보입니다."
       );
+    // 막힌 곳에서 바로 해결하러 간다: 편집기의 입력 채널 줄을 연다
+    if (openInputs) {
+      const go = element("button", "link-go", "입력 채널 열기");
+      go.type = "button";
+      go.addEventListener("click", openInputs);
+      empty.append(" ", go);
+    }
     for (const [band, gauge] of levels) {
       const line = element("div", "link-band-line");
       line.append(element("span", "link-band-name", BAND_LABEL[band]), gauge.node);
@@ -233,6 +246,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
     live.push(() => {
       const audio = renderer.linkMonitor?.().audio;
       empty.hidden = !!audio;
+      meters.hidden = !audio; // 오디오가 없으면 빈 막대 넷 대신 안내만
       for (const [band, gauge] of levels) gauge.set(audio ? audio[band] : 0);
     });
   }
@@ -347,8 +361,8 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
       mode = segmented(
         "키프레임 시간 기준",
         [
-          ["once", "재생 시간 그대로(한 번)"],
-          ["loop", "일정 길이로 반복"],
+          ["once", "한 번"],
+          ["loop", "반복"],
         ],
         looping ? "loop" : "once",
         next => change({ loop: next === "loop" ? Math.max(1, Math.ceil(last + 0.001)) : 0 })
@@ -357,8 +371,8 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
         "p",
         "link-note",
         looping
-          ? `재생 시간(uTime)을 ${seconds(link.loop)} 길이로 잘라, 0 ~ ${seconds(link.loop)} 사이의 키를 끝없이 되풀이합니다. 키의 시간은 '바퀴 안의 시간'입니다.`
-          : "키의 시간 = 재생 시간(uTime). 0초부터 키를 차례로 한 번 지나가고, 마지막 키 뒤로는 그 값을 유지합니다. 처음부터 다시 보려면 시간 초기화(⟲)."
+          ? `${seconds(link.loop)}마다 0초로 돌아가 키를 되풀이합니다.`
+          : "재생 시간대로 한 번 지나가고, 마지막 키 값을 유지합니다."
       );
     row("시간 기준", mode, explain);
     if (looping) {
@@ -388,11 +402,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
     const open = element("button", "link-open-timeline", "타임라인에서 편집");
     open.type = "button";
     open.addEventListener("click", () => openTimeline(item.name));
-    row(
-      "키",
-      element("p", "link-note", `키 ${link.keys.length}개 — 시간 · 값은 파라미터 줄의 ◆ · 타임라인에서 고칩니다.`),
-      open
-    );
+    row("키", element("p", "link-note", `키 ${link.keys.length}개 · 아래 타임라인에서 고칩니다.`), open);
     row(
       "기본 잇기",
       segmented(

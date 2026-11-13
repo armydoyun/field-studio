@@ -17,7 +17,7 @@ await test('Parameter deletion uses the shared SVG mask and retains its accessib
   const remove=row().children[0].children.at(-1);assert.equal(remove.className,'remove-uniform glyph-icon icon-close');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
   await remove.click();assert.equal(f.renderer.getUserUniforms().length,0);
 });
-await test('Empty parameter list explains how to start',async(f,n,row)=>{assert.match(row().textContent,/추가|Starter/);assert.equal(n('uniformCount').textContent,'0 / 64');});
+await test('Empty parameter list explains how to start',async(f,n,row)=>{assert.match(row().textContent,/파라미터가 없습니다/);assert.equal(n('uniformCount').textContent,'0 / 64');});
 await test('Adding a parameter clears stale search and ignores hidden scalar bounds',async(f,n)=>{
   // 벡터는 이제 성분별 슬라이더 범위를 지원하므로 범위 칸이 보인다. 범위 칸이 숨겨지는 행렬 타입에 남은 Min 값은 무시되어야 한다.
   n('uniformMin').value='0';n('uniformType').value='mat2';await n('uniformType').dispatchEvent({type:'change'});

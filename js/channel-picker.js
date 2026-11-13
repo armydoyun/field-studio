@@ -79,7 +79,7 @@ const create = ({
     options = [];
 
   const short = ref => {
-    if (!ref) return { badge: "＋", tag: "", kind: "empty" };
+    if (!ref) return { badge: "＋", tag: "비어 있음", kind: "empty" };
     if (ref.keyboard) return { badge: "⌨", tag: "키보드", kind: "keyboard" };
     if (ref.media) {
       const media = mediaState(ref.media);
@@ -397,7 +397,7 @@ const create = ({
         chip = element("button"),
         hint = element("p");
       row.className = "studio-channel";
-      label.textContent = `${i}`;
+      label.textContent = `iChannel${i}`;
       label.title = `iChannel${i}`;
       label.htmlFor = chip.id = `studioChannel${i}`;
       chip.type = "button";

@@ -2271,6 +2271,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const button = $("studioProjectSave");
     if (!button.disabled) button.click();
   };
+  // 프로젝트 이름 옆 '저장' 버튼(바뀐 내용이 있을 때만 보인다) = Ctrl+S
+  if ($("projectMenuState")) on($("projectMenuState"), "click", saveProject);
   const saveShortcut = () => {
     if (ctrlSRuns()) {
       rememberEditor();

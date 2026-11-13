@@ -94,6 +94,8 @@ const mount = renderer => {
       return false;
     }
     if (!raw) {
+      // 처음 여는 좁은 화면(휴대폰)도 작품부터 보이게: 패널은 뷰포트를 덮는 서랍이라 닫힌 채로 시작한다.
+      if (globalThis.matchMedia?.("(max-width:820px)").matches === true) document.body.classList.add("panel-hidden");
       savedText = JSON.stringify(readState());
       return false;
     }
