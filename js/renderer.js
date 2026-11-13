@@ -1658,6 +1658,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 분석값(영상 렌더링에서는 렌더 시간에 맞춘 값)을 쓰므로 영상 렌더링에서도 맞는다. 연결된 파라미터는 직접 바꿔도 덮어쓴다.
   let links = [];
   const linkValues = new Map(); // 이름 → 부드럽게 따라가는 지금 값
+  const linkLive = new Set(); // 지난 프레임에 입력이 있어 값을 정한 연결(없으면 값은 그대로 — 화면에 '입력 없음')
   const usesAudioLinks = () => links.some(link => link.source === "audio");
   // 이번 프레임에 올릴 미디어: 채널이 읽는 것 + 소리 연결이 있으면 켜진 오디오
   const mediaKindsForFrame = () => {
@@ -1666,6 +1667,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     return kinds;
   };
   const applyLinks = dt => {
+    linkLive.clear();
     if (!links.length) return;
     const audio = usesAudioLinks() ? media.audioData() : null;
     const inputs = {
@@ -1678,6 +1680,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       if (!item || !Links.LINKABLE.has(item.type)) continue;
       const goal = Links.target(link, inputs);
       if (goal === null || !Number.isFinite(goal)) continue;
+      linkLive.add(link.name);
       const value = Links.follow(linkValues.get(link.name) ?? null, goal, link.smooth, dt);
       linkValues.set(link.name, value);
       try {
@@ -1863,6 +1866,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     // 파라미터 연결(links.js) · MIDI
     setLinks,
     getLinks: () => links.map(link => ({ ...link })),
+    // 이 연결이 지난 프레임에 값을 정했는가(소리가 꺼져 있거나 MIDI 신호가 아직 없으면 false — 값은 그대로)
+    linkActive: name => linkLive.has(name),
     // 연결 시트의 실시간 표시: 켜진 오디오의 대역 세기(없으면 null) · 마지막 MIDI CC
     linkMonitor: () => {
       const audio = media.audioKinds().length ? media.audioData() : null;

@@ -95,7 +95,8 @@
     settings.setLinks(settings.getLinks().map(l => (l.name === "uGain" ? { ...l, keys: [[0, 0.1], [2.5, 0.3]], loop: 4 } : l)));
     await until(() => !!row("uGain")?.querySelector(".key-nav"), "다시 그림");
     r.setTime(5.5);
-    await until(() => row("uGain").querySelector(".key-nav-hint").textContent.includes("1.5초(반복 안)"), "안내에 바퀴 안 시간");
+    await until(() => row("uGain").querySelector(".key-nav-local").textContent === "바퀴 안 1.50초", "바퀴 안 시간 표시");
+    test(row("uGain").querySelector(".key-nav-mode").textContent === "↻ 4초", "시간 기준 표시: 4초마다 반복");
     set(row("uGain").querySelector('input[type="number"]:not(.key-nav-time)'), 0.8);
     await until(() => keysOf("uGain") === "[[0,0.1],[1.5,0.8],[2.5,0.3]]", `반복 안 시간에 키 ${keysOf("uGain")}`);
     nav("uGain", "다음 키로").click();
