@@ -94,6 +94,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const historyState = () => ({
     project: copy(project),
     users: renderer.getUserUniforms(),
+    presets: settings?.getPresets?.() ?? [], // 프로젝트를 바꾼 뒤 Undo하면 그 프로젝트의 프리셋도 돌아온다
+    links: settings?.getLinks?.() ?? [], // 파라미터 연결도
     selected,
     ...cursorState(),
   });
@@ -103,8 +105,18 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const recordEdit = (typing = false, usersChanged = false) => {
     if (navigatingHistory) return;
     const current = historyState();
-    if (!usersChanged) checkpoint.users = current.users;
-    if (same(current.project, checkpoint.project) && same(current.users, checkpoint.users)) return;
+    if (!usersChanged) {
+      checkpoint.users = current.users;
+      checkpoint.presets = current.presets;
+      checkpoint.links = current.links;
+    }
+    if (
+      same(current.project, checkpoint.project) &&
+      same(current.users, checkpoint.users) &&
+      same(current.links, checkpoint.links) &&
+      same(current.presets, checkpoint.presets)
+    )
+      return;
     const now = Date.now(),
       group = typing && editTab === selected && now - editTime < 700 && undoStack.length;
     if (!group) {
@@ -117,6 +129,17 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     editTab = selected;
     syncHistory();
   };
+  // 파라미터 연결(키프레임 포함) · 프리셋을 저장할 때마다 되돌리기 한 칸(끄는 동안의 미리보기는 저장이 아니라 기록되지 않는다).
+  // 되돌리기 · 다시 실행이 되돌릴 때(navigatingHistory)와 프로젝트 바꾸기 · Pack 열기 중(quietSettings)에는 기록하지 않는다.
+  let quietSettings = false;
+  on(document, "shader-links-changed", () => {
+    if (navigatingHistory || quietSettings || same(settings?.getLinks?.() ?? [], checkpoint.links)) return;
+    recordEdit(false, true);
+  });
+  on(document, "shader-presets-changed", () => {
+    if (navigatingHistory || quietSettings || same(settings?.getPresets?.() ?? [], checkpoint.presets)) return;
+    recordEdit(false, true);
+  });
   const captureCursor = () => {
     if (!navigatingHistory && selected === checkpoint.selected && same(project, checkpoint.project))
       Object.assign(checkpoint, cursorState());
@@ -488,7 +511,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         added.push(spec.name);
       } else if (current.type === spec.type && !Annotations.sameOptions(current.options, spec.options)) {
         current.options = spec.options;
-        current.value = Annotations.clampValue(current.value, spec.options);
+        current.value = Annotations.clampValue(current.value, spec.options, spec.type);
         updated.push(spec.name);
       }
     }
@@ -1276,6 +1299,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     editor.update();
     const applied = apply(target.users);
     if (applied && !same(current.users, target.users)) document.dispatchEvent(new Event("shader-settings-applied"));
+    if (applied && target.presets && !same(current.presets, target.presets)) settings?.setPresets?.(target.presets);
+    if (applied && target.links && !same(current.links, target.links)) settings?.setLinks?.(target.links);
     navigatingHistory = false;
     checkpoint = historyState();
     editTime = 0;
@@ -1322,6 +1347,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioCode").setSelectionRange(head + shift, head + shift);
     const applied = apply(nextUsers);
     if (applied && nextUsers) document.dispatchEvent(new Event("shader-settings-applied"));
+    if (applied) settings?.renameParameter?.(from, to); // 프리셋 값 · 파라미터 연결도 새 이름으로
     if (!applied && same(before, project)) return null;
     recordEdit(false, true);
     return { passes, parameter: registered && applied };
@@ -1433,6 +1459,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       rememberEditor();
       checkpoint = historyState();
       renderer.applyPortable(next, users);
+      // 새 프로젝트 · 예제는 프리셋 · 연결 없이 시작한다(Undo로 이전 작업의 것까지 돌아온다).
+      // 비우기는 프로젝트 바꾸기의 한 부분 — 따로 되돌리기 칸을 만들지 않는다.
+      quietSettings = true;
+      try {
+        settings?.setPresets?.([]);
+        settings?.setLinks?.([]);
+      } finally {
+        quietSettings = false;
+      }
       adoptProject(next);
       // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
       syncAnnotations();
@@ -1740,7 +1775,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         checkpoint = historyState();
         renderer.applyPortable(next, state.user);
         applied = true;
-        settings.applyPack(state);
+        quietSettings = true; // Pack의 연결은 Pack 열기의 한 부분(되돌리기 한 칸)
+        try {
+          settings.applyPack(state);
+        } finally {
+          quietSettings = false;
+        }
       } else if (!setProject(next)) throw new Error("Pack 셰이더를 적용하지 못했습니다.");
       adoptProject(next, data.selected);
       renderTextures();
@@ -1751,7 +1791,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       if (applied) {
         try {
           renderer.applyPortable(previous, before.user);
-          settings.applyPack(before);
+          quietSettings = true;
+          try {
+            settings.applyPack(before);
+          } finally {
+            quietSettings = false;
+          }
           project = draftBefore;
           dirty = wasDirty;
           selected = beforeTab;
@@ -2483,6 +2528,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     getProject: () => copy(project),
     exportPack,
     importPack,
+    // 앱 공용 확인 · 입력 대화상자(studio-dialog.js) — 파라미터 패널(프리셋 이름) 등 다른 화면도 같은 창을 쓴다
+    ask,
     // 재생 전용 HTML: {html, title, data}(내려받지 않는다 — 테스트 · 확장용) · exportHTML()은 내려받는다
     buildPlayerHTML,
     exportHTML,

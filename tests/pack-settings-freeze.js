@@ -17,8 +17,10 @@ function assign(name,v){assert(v>=bounds[name][0]&&v<=bounds[name][1]);state[nam
 const localStorage={getItem:()=>stored,setItem:(_,text)=>{stored=text;},removeItem:()=>{stored='';}};
 const document={dispatchEvent:()=>{},body:{classList:{contains:()=>hidden,toggle:(_,v)=>{hidden=v;},remove:()=>{hidden=false;}}}};
 const window={localStorage,addEventListener:()=>{},removeEventListener:()=>{}};
+let Presets;vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../js/presets.js'),'utf8'),{define:(_,factory)=>Presets=factory()});
+let Links;vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../js/links.js'),'utf8'),{define:(_,factory)=>Links=factory()});
 let Settings;vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../js/settings.js'),'utf8'),{
-  define:(_,factory)=>Settings=factory(),console,setInterval:()=>1,clearInterval:()=>{},window,document,Event:class {constructor(type){this.type=type;}},Object,Number,Array,Map,Set
+  define:(_,factory)=>Settings=factory(Presets,Links),console,setInterval:()=>1,clearInterval:()=>{},window,document,Event:class {constructor(type){this.type=type;}},Object,Number,Array,Map,Set
 });
 let passed=0;const ok=(condition,label)=>{assert(condition,label);console.log('PASS',label);passed++;};
 const settings=Settings.mount(r);

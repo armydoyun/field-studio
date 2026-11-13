@@ -14,7 +14,7 @@ async function test(name,fn){const f=fixture();let ui;try{
 (async()=>{
 await test('Parameter deletion uses the shared SVG mask and retains its accessible name',async(f,n,row)=>{
   f.renderer.defineUniform('uAmount','float',1);await n('uniformSearch').dispatchEvent({type:'input'});
-  const remove=row().children[0].children[1];assert.equal(remove.className,'remove-uniform glyph-icon icon-close');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
+  const remove=row().children[0].children.at(-1);assert.equal(remove.className,'remove-uniform glyph-icon icon-close');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
   await remove.click();assert.equal(f.renderer.getUserUniforms().length,0);
 });
 await test('Empty parameter list explains how to start',async(f,n,row)=>{assert.match(row().textContent,/추가|Starter/);assert.equal(n('uniformCount').textContent,'0 / 64');});
@@ -46,15 +46,15 @@ await test('Slider and numeric field stay synchronized and reject invalid intege
 });
 await test('Delete can restore the last parameter including value and slider options',async(f,n,row)=>{
   f.renderer.defineUniform('uGain','float',.7,{min:0,max:1,step:.1});await n('uniformSearch').dispatchEvent({type:'input'});
-  await row().children[0].children[1].click();assert.equal(f.renderer.getUserUniforms().length,0);assert.equal(n('undoUniform').hidden,false);
+  await row().children[0].children.at(-1).click();assert.equal(f.renderer.getUserUniforms().length,0);assert.equal(n('undoUniform').hidden,false);
   await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms()[0].value,.7);assert.equal(f.renderer.getUserUniforms()[0].options.step,.1);assert.equal(n('undoUniform').hidden,true);
 });
 await test('Failed deletion retains parameter and offers no false undo',async(f,n,row)=>{
   f.renderer.defineUniform('uGain','float',.7);await n('uniformSearch').dispatchEvent({type:'input'});f.gl.getProgramParameter=()=>false;
-  await row().children[0].children[1].click();assert.equal(f.renderer.getUserUniforms().length,1);assert.notEqual(n('undoUniform').hidden,false);assert(n('uiError').textContent);
+  await row().children[0].children.at(-1).click();assert.equal(f.renderer.getUserUniforms().length,1);assert.notEqual(n('undoUniform').hidden,false);assert(n('uiError').textContent);
 });
 await test('Project switch clears search and previous-project deletion undo',async(f,n,row)=>{
-  f.renderer.defineUniform('uGain','float',.7);await n('uniformSearch').dispatchEvent({type:'input'});await row().children[0].children[1].click();
+  f.renderer.defineUniform('uGain','float',.7);await n('uniformSearch').dispatchEvent({type:'input'});await row().children[0].children.at(-1).click();
   n('uniformSearch').value='missing';f.studio.exampleFeedback();await f.document.dispatchEvent({type:'shader-settings-applied'});
   assert.equal(n('uniformSearch').value,'');assert.equal(n('undoUniform').hidden,true);await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms().length,0);
 });
@@ -63,7 +63,7 @@ await test('Editor Parameters button opens the parameter view and focuses search
 });
 await test('Deletion undo captures the latest external value rather than stale displayed value',async(f,n,row)=>{
   f.renderer.defineUniform('uGain','float',.1);await n('uniformSearch').dispatchEvent({type:'input'});f.renderer.setUniform('uGain',.9);
-  await row().children[0].children[1].click();await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms()[0].value,.9);
+  await row().children[0].children.at(-1).click();await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms()[0].value,.9);
 });
 await test('Malformed comma vectors are rejected without adding a zero component',async(f,n)=>{
   n('uniformType').value='vec3';n('uniformName').value='uVector';n('uniformValue').value='1,2,';

@@ -101,6 +101,11 @@
                             </form>
                         </details>
                         <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" hidden>삭제 되돌리기</button></div>
+                        <div id="presetBar" class="preset-bar" role="group" aria-labelledby="presetTitle">
+                            <div class="preset-head"><span id="presetTitle" class="preset-title">프리셋</span><label class="preset-blend" title="프리셋을 고를 때 값이 바뀌는 시간">전환 <select id="presetBlend"><option value="0">즉시</option><option value="0.5">0.5초</option><option value="1" selected>1초</option><option value="2">2초</option><option value="4">4초</option></select></label><button id="presetSave" type="button" class="glyph-icon icon-plus" title="지금 파라미터 값 전체를 이름 붙여 저장">지금 값 저장</button></div>
+                            <div id="presetList" class="preset-list" role="list"></div>
+                            <p id="presetNotice" class="help preset-notice" role="status"><span id="presetNoticeText"></span><button id="presetUndo" type="button" hidden>되돌리기</button></p>
+                        </div>
                         <p id="uniformResults" class="help" role="status"></p>
                         <div id="uniformList" class="uniform-list"></div>
                         <p class="help uniform-footnote">선언은 자동 생성됩니다. 실제 화면에 반영하려면 GLSL에서 해당 변수를 참조해야 합니다.</p>
@@ -243,6 +248,7 @@
                         <button id="galleryToggle" type="button" class="stage-menu-item" title="예제 갤러리 (X)" aria-label="예제 갤러리 열기" aria-haspopup="dialog" aria-controls="gallery"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg><span>예제 갤러리</span><kbd>X</kbd></button>
                         <button id="helpToggle" type="button" class="stage-menu-item glyph-icon icon-help" title="사용법과 단축키 (?)" aria-label="사용법 및 단축키 도움말" aria-haspopup="dialog" aria-controls="quickHelp"><span>가이드 · 단축키</span><kbd>?</kbd></button>
                         <hr class="stage-menu-sep">
+                        <button id="timelineToggle" type="button" class="stage-menu-item glyph-icon icon-timeline" title="키프레임 타임라인 (T) · 미리보기 아래에 열림" aria-label="키프레임 타임라인" aria-pressed="false"><span>키프레임 타임라인</span><kbd>T</kbd></button>
                         <button id="panelToggle" type="button" class="stage-menu-item" title="설정 패널 (H)" aria-label="설정 패널 숨기기"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg><span>설정 패널</span><kbd>H</kbd></button>
                         <button id="hudToggle" type="button" class="stage-menu-item" title="HUD 보이기/숨기기 (G) · 숨기면 도구 막대·프로젝트 이름·FPS까지 모두 숨기고 셰이더만 보입니다" aria-label="HUD 숨기기" aria-pressed="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5h4M16 5h4v4M4 15v4h4M16 19h4v-4"/><circle cx="12" cy="12" r="2"/></svg><span>HUD</span><kbd>G</kbd></button>
                         <button id="previewPopout" type="button" class="stage-menu-item glyph-icon icon-popout" title="미리보기를 별도 창으로 분리" aria-label="미리보기를 별도 창으로 분리" aria-pressed="false"><span>미리보기 분리 창</span></button>
@@ -377,6 +383,8 @@
                 <pre id="studioError" class="studio-error" hidden></pre>
             </section>
         </main>
+        <!-- 키프레임 타임라인 도크(timeline.js가 채운다): 미리보기 아래 넓은 띠. 도구 막대의 타임라인 버튼으로 연다. -->
+        <section id="timelineDock" class="timeline-dock" aria-label="키프레임 타임라인" hidden></section>
     </div>
 
     <dialog id="studioPromptDialog" class="studio-prompt-dialog" aria-labelledby="studioDialogTitle" aria-describedby="studioDialogMessage">

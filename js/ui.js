@@ -4,6 +4,10 @@ import * as Recorder from "./recorder.js";
 import * as Annotations from "./annotations.js";
 import * as VideoDialog from "./video-dialog.js";
 import * as PreviewDOM from "./preview-dom.js";
+import * as Presets from "./presets.js";
+import * as Links from "./links.js";
+import * as Timeline from "./timeline.js";
+import * as LinkSheet from "./link-sheet.js";
 const mount = (renderer, input, settings) => {
   const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
@@ -34,12 +38,25 @@ const mount = (renderer, input, settings) => {
   const focusSearch = () => (touchOnly ? $("tab-uniforms") : $("uniformSearch")).focus();
   // 타입 정보(성분 수, f/i/u/b/m 종류)는 Renderer의 표를 따른다. 새 타입이 추가돼도 UI 분기는 바뀌지 않는다.
   const typeTable = new Map((renderer.getUniformTypes?.() || []).map(item => [item.type, item]));
-  const typeInfo = type =>
-    typeTable.get(type) || {
-      type,
-      components: Number(/^vec([234])$/.exec(type)?.[1]) || 1,
-      kind: type === "bool" ? "b" : type === "int" ? "i" : "f",
-    };
+  const typeInfo = type => {
+    // 배열("vec3[4]"): 원소 타입의 정보 + base · count, 성분 수는 전체
+    const array = /^(\w+)\[(\d+)\]$/.exec(type);
+    if (array) {
+      const base = typeInfo(array[1]),
+        count = Number(array[2]);
+      return { ...base, type, base: array[1], count, components: base.components * count };
+    }
+    return (
+      typeTable.get(type) || {
+        type,
+        components: Number(/^vec([234])$/.exec(type)?.[1]) || 1,
+        kind: type === "bool" ? "b" : type === "int" ? "i" : "f",
+      }
+    );
+  };
+  // 파라미터의 지금 값. 배열 원소 편집기가 만든 가짜 항목(read가 있는 것)은 전체 배열에서 자기 몫을 읽는다.
+  const liveValue = item =>
+    item.read ? item.read() : renderer.getUserUniforms().find(u => u.name === item.name)?.value;
   const parseBool = (raw, type) => {
     if (!["true", "false", "1", "0"].includes(raw.toLowerCase()))
       throw new Error(`${type}은 true/false 또는 1/0으로 입력하세요.`);
@@ -642,7 +659,7 @@ const mount = (renderer, input, settings) => {
   // @enum: int/uint를 이름 붙은 선택지로. 짧은 목록은 버튼 묶음(세그먼트), 길면 드롭다운. 값은 0부터의 순번.
   const enumControl = (item, commit) => {
     const labels = item.options.enum,
-      current = () => renderer.getUserUniforms().find(u => u.name === item.name)?.value ?? item.value,
+      current = () => liveValue(item) ?? item.value,
       segmented = labels.length <= 6 && labels.join("").length <= 24;
     const wrap = element("div");
     if (segmented) {
@@ -1200,6 +1217,12 @@ const mount = (renderer, input, settings) => {
     $("uniformNotice").textContent = "";
   };
   let uniformSnapshot = "";
+  // 목록을 다시 그릴지 가늠하는 요약. 연결된 파라미터의 값은 프레임마다 바뀌므로 빼고(미터 · 내비게이터가 따로 따라간다)
+  // 나머지(이름 · 타입 · 설정 · 연결 없는 값)만 본다 — 그러지 않으면 0.5초마다 목록 전체를 다시 그려 누르기 · 끌기가 끊긴다.
+  const snapshotOf = items => {
+    const linked = new Set((settings.getLinks?.() || []).map(link => link.name));
+    return JSON.stringify(items.map(item => (linked.has(item.name) ? { ...item, value: null } : item)));
+  };
   // 셰이더 주석(@default·@range…)에서 읽은 파라미터 기본값. 코드에 어노테이션이 없는 파라미터는 되돌릴 값이 없다.
   const annotatedDefaults = () => {
     const project = window.shaderStudio?.getProject?.();
@@ -1268,7 +1291,7 @@ const mount = (renderer, input, settings) => {
       resetSyncs.get(name)?.(value);
     }
     // 재생으로 바뀐 값 때문에 목록을 다시 그리지 않게 기준을 맞춘다.
-    uniformSnapshot = JSON.stringify(renderer.getUserUniforms());
+    uniformSnapshot = snapshotOf(renderer.getUserUniforms());
     if (playing.size) playFrame = requestAnimationFrame(playStep);
     else syncPlayButtons();
   };
@@ -1314,16 +1337,496 @@ const mount = (renderer, input, settings) => {
   };
   // @group 접힘 상태(이 화면에서만 기억).
   const collapsedGroups = new Set();
+  // ---- 파라미터 프리셋(presets.js · settings.getPresets/setPresets) ----
+  // 칩을 누르면 그 값 묶음으로 바꾼다(전환 시간만큼 부드럽게). 지금 값이 프리셋과 같으면 그 칩이 눌린 상태로 보인다.
+  // 고치는 일(지금 값으로 덮어쓰기 · 이름 바꾸기 · 삭제)은 칩 옆 ⋯ 메뉴 안에만 둔다 — 칩을 누르려다 잘못 누르지 않게.
+  // 덮어쓰기는 무엇이 바뀌는지 보여 주고 한 번 더 묻는다. 덮어쓰기 · 삭제는 안내 줄의 되돌리기 · Ctrl+Z로 되돌린다.
+  let morph = 0,
+    presetRestore = null, // 되돌리기: 바로 전 프리셋 목록
+    presetMenu = null; // 열린 ⋯ 메뉴 { node, button }
+  // undo: 되돌릴 때 다시 쓸 프리셋 목록(없으면 되돌리기 버튼을 숨긴다)
+  const presetNotice = (text, undo = null) => {
+    $("presetNoticeText").textContent = text;
+    presetRestore = undo;
+    $("presetUndo").hidden = !undo;
+  };
+  const closePresetMenu = (focusButton = false) => {
+    if (!presetMenu) return;
+    const { node, button } = presetMenu;
+    presetMenu = null;
+    node.remove();
+    button.setAttribute("aria-expanded", "false");
+    if (focusButton) button.focus();
+  };
+  listen(document, "pointerdown", event => {
+    if (presetMenu && !presetMenu.node.contains(event.target) && event.target !== presetMenu.button) closePresetMenu();
+  });
+  // 덮어쓰면 바뀌는 파라미터: [이름, 프리셋 값, 지금 값]
+  const presetChanges = (preset, users) =>
+    users
+      .filter(item => !Object.hasOwn(preset.values, item.name) || !sameValue(item.value, preset.values[item.name]))
+      .map(item => [item.name, preset.values[item.name], item.value]);
+  const formatPresetValue = value =>
+    value === undefined
+      ? "(없음)"
+      : Array.isArray(value)
+        ? value.length > 4
+          ? `[${value.length}개]`
+          : `(${value.map(v => (typeof v === "number" ? displayNumber(Number(v.toFixed(4))) : String(v))).join(", ")})`
+        : typeof value === "number"
+          ? displayNumber(Number(value.toFixed(4)))
+          : String(value);
+  const overwritePreset = async index => {
+    stopMorph();
+    const presets = settings.getPresets(),
+      preset = presets[index],
+      users = renderer.getUserUniforms(),
+      changes = presetChanges(preset, users);
+    if (!preset || !changes.length) return;
+    const ask = window.shaderStudio?.ask,
+      lines = changes
+        .slice(0, 6)
+        .map(([name, from, to]) => `${name}: ${formatPresetValue(from)} → ${formatPresetValue(to)}`),
+      more = changes.length > 6 ? `\n… 외 ${changes.length - 6}개` : "";
+    const ok = ask
+      ? await ask({
+          title: `'${preset.name}' 덮어쓰기`,
+          message: `이 프리셋을 지금 파라미터 값으로 바꿉니다. 바뀌는 값 ${changes.length}개:\n${lines.join("\n")}${more}\n\n덮어쓴 뒤에도 '되돌리기'나 Ctrl+Z로 되돌릴 수 있습니다.`,
+          ok: "덮어쓰기",
+          danger: true,
+        })
+      : true;
+    if (!ok) return;
+    attempt(() => {
+      settings.setPresets(
+        settings.getPresets().map((item, i) => (i === index ? Presets.capture(item.name, users) : item))
+      );
+      presetNotice(`'${preset.name}'을 지금 값으로 덮어썼습니다(값 ${changes.length}개)`, presets);
+      $("presetUndo").focus();
+    });
+  };
+  const renamePreset = async index => {
+    stopMorph();
+    const presets = settings.getPresets(),
+      preset = presets[index],
+      others = presets.filter((_, i) => i !== index).map(item => item.name);
+    const name = await askName("프리셋 이름 바꾸기", preset.name, others);
+    if (!name || name === preset.name) return;
+    attempt(() => {
+      settings.setPresets(settings.getPresets().map((item, i) => (i === index ? { ...item, name } : item)));
+      presetNotice(`'${preset.name}' → '${name}'`, presets);
+    });
+  };
+  const removePreset = index => {
+    const presets = settings.getPresets(),
+      preset = presets[index];
+    attempt(() => {
+      settings.setPresets(presets.filter((_, i) => i !== index));
+      presetNotice(`'${preset.name}' 삭제됨`, presets);
+      $("presetUndo").focus();
+    });
+  };
+  // ⋯ 메뉴: 덮어쓰기(지금 값과 같으면 꺼짐) · 이름 바꾸기 · 삭제. ↑↓로 옮기고 Esc로 닫는다.
+  const openPresetMenu = (button, index) => {
+    if (presetMenu?.button === button) return closePresetMenu(true);
+    closePresetMenu();
+    const preset = settings.getPresets()[index],
+      same = !presetChanges(preset, renderer.getUserUniforms()).length,
+      node = element("div");
+    node.className = "preset-menu";
+    node.setAttribute("role", "menu");
+    node.setAttribute("aria-label", `'${preset.name}' 프리셋 관리`);
+    const items = [
+      [
+        "지금 값으로 덮어쓰기…",
+        () => overwritePreset(index),
+        same,
+        same ? "지금 값과 같습니다" : "바뀌는 값을 확인한 뒤 덮어씁니다",
+      ],
+      ["이름 바꾸기…", () => renamePreset(index), false, "이름을 두 번 눌러도 바꿀 수 있습니다"],
+      ["삭제", () => removePreset(index), false, "삭제한 뒤 되돌릴 수 있습니다"],
+    ].map(([text, run, disabled, title]) => {
+      const item = element("button");
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      item.className = text === "삭제" ? "preset-menu-item is-danger" : "preset-menu-item";
+      item.textContent = text;
+      item.title = title;
+      item.disabled = disabled;
+      item.addEventListener("click", () => {
+        closePresetMenu();
+        run();
+      });
+      return item;
+    });
+    node.append(...items);
+    node.addEventListener("keydown", event => {
+      const enabled = items.filter(item => !item.disabled),
+        at = enabled.indexOf(document.activeElement);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closePresetMenu(true);
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        enabled[(at + step + enabled.length) % enabled.length]?.focus();
+      } else if (event.key === "Tab") closePresetMenu();
+    });
+    button.after(node);
+    // 칩 왼쪽 끝에 맞춰 펼치고, 프리셋 막대 오른쪽을 넘으면 오른쪽 끝에 맞춘다
+    const bounds = $("presetBar").getBoundingClientRect();
+    if (node.getBoundingClientRect().right > bounds.right) node.classList.add("is-end");
+    button.setAttribute("aria-expanded", "true");
+    presetMenu = { node, button };
+    items.find(item => !item.disabled)?.focus();
+  };
+  const stopMorph = () => {
+    if (morph) cancelAnimationFrame(morph);
+    morph = 0;
+  };
+  const askName = async (title, value, others) => {
+    const ask = window.shaderStudio?.ask;
+    if (!ask) return value;
+    const name = await ask({
+      title,
+      message: "파라미터 값 전체를 이 이름으로 저장합니다. 같은 프로젝트에 저장되고 프로젝트 파일에도 담깁니다.",
+      value,
+      label: "프리셋 이름",
+      validate: text => {
+        const trimmed = text.trim();
+        if (!trimmed) return "이름을 적으세요.";
+        if (trimmed.length > Presets.MAX_NAME) return `${Presets.MAX_NAME}자 이하로 적으세요.`;
+        return others.includes(trimmed) ? "같은 이름의 프리셋이 있습니다." : "";
+      },
+    });
+    return name === null || name === undefined ? null : name.trim();
+  };
+  const matchesPreset = (preset, users) =>
+    users.some(item => Object.hasOwn(preset.values, item.name)) &&
+    users.every(item => !Object.hasOwn(preset.values, item.name) || sameValue(item.value, preset.values[item.name]));
+  const applyPreset = preset => {
+    stopMorph();
+    const users = renderer.getUserUniforms(),
+      from = Object.fromEntries(users.map(item => [item.name, item.value])),
+      names = Object.keys(preset.values),
+      used = users.filter(item => names.includes(item.name)).length,
+      skipped = names.length - used;
+    // 프리셋이 바꾸는 파라미터의 자동 재생(@anim)은 멈춘다(재생이 값을 덮어쓰지 않게).
+    let stopped = false;
+    for (const item of users) if (names.includes(item.name) && playing.delete(item.name)) stopped = true;
+    if (stopped) syncPlayButtons();
+    const write = t => {
+      for (const [name, value] of Presets.blend(users, from, preset, Presets.ease(t)))
+        try {
+          renderer.setUniform(name, value);
+        } catch (error) {
+          console.warn(`프리셋 값 무시 (${name}):`, error.message);
+        }
+    };
+    const finish = () => {
+      morph = 0;
+      settings.save();
+      renderUniforms();
+    };
+    const seconds = Number($("presetBlend").value) || 0;
+    presetNotice(
+      `'${preset.name}' · 파라미터 ${used}개${skipped ? ` · 이 프로젝트에 없는 ${skipped}개는 건너뜀` : ""}${seconds ? ` · ${seconds}초 동안 전환` : ""}`
+    );
+    if (!seconds) {
+      write(1);
+      return finish();
+    }
+    const start = performance.now();
+    const tick = now => {
+      const t = Math.min(1, (now - start) / (seconds * 1000));
+      write(t);
+      if (t < 1) morph = requestAnimationFrame(tick);
+      else finish();
+    };
+    morph = requestAnimationFrame(tick);
+  };
+  // force: 프리셋 목록 자체가 바뀌었을 때. 값만 바뀌어 다시 그릴 때(@anim · 외부 변경)는 ⋯ 메뉴가 열려 있으면 그대로 둔다.
+  const renderPresets = (force = false) => {
+    if (presetMenu && !force) return;
+    const list = $("presetList"),
+      presets = settings.getPresets?.() || [],
+      users = renderer.getUserUniforms();
+    closePresetMenu();
+    list.replaceChildren();
+    $("presetSave").disabled = !users.length || presets.length >= Presets.MAX_PRESETS;
+    $("presetSave").title = !users.length
+      ? "저장할 파라미터가 없습니다"
+      : presets.length >= Presets.MAX_PRESETS
+        ? `프리셋은 최대 ${Presets.MAX_PRESETS}개입니다`
+        : "지금 파라미터 값 전체를 이름 붙여 저장";
+    if (!presets.length) {
+      const empty = element("span");
+      empty.className = "preset-empty";
+      empty.textContent = "저장한 프리셋이 없습니다. 값을 맞춘 뒤 '지금 값 저장'을 누르세요.";
+      list.append(empty);
+      return;
+    }
+    presets.forEach((preset, index) => {
+      const chip = element("div"),
+        apply = element("button"),
+        more = element("button");
+      chip.className = "preset-chip";
+      chip.setAttribute("role", "listitem");
+      apply.type = more.type = "button";
+      apply.className = "preset-apply";
+      apply.textContent = preset.name;
+      apply.setAttribute("aria-pressed", String(matchesPreset(preset, users)));
+      apply.title = `'${preset.name}' 값으로 바꾸기 · 두 번 누르면 이름 바꾸기`;
+      apply.addEventListener("click", () => applyPreset(preset));
+      apply.addEventListener("dblclick", () => renamePreset(index));
+      more.className = "preset-more glyph-icon icon-more";
+      more.title = `'${preset.name}' 관리: 덮어쓰기 · 이름 바꾸기 · 삭제`;
+      more.setAttribute("aria-label", more.title);
+      more.setAttribute("aria-haspopup", "menu");
+      more.setAttribute("aria-expanded", "false");
+      more.addEventListener("click", () => openPresetMenu(more, index));
+      chip.append(apply, more);
+      list.append(chip);
+    });
+  };
+  listen($("presetSave"), "click", async () => {
+    const presets = settings.getPresets(),
+      names = presets.map(item => item.name);
+    let n = presets.length + 1;
+    while (names.includes(`프리셋 ${n}`)) n++;
+    const name = await askName("프리셋 저장", `프리셋 ${n}`, names);
+    if (!name) return;
+    attempt(() => {
+      settings.setPresets([...settings.getPresets(), Presets.capture(name, renderer.getUserUniforms())]);
+      presetNotice(`'${name}' 저장 · 파라미터 ${renderer.getUserUniforms().length}개`);
+    });
+  });
+  listen($("presetUndo"), "click", () => {
+    if (!presetRestore) return;
+    const previous = presetRestore;
+    attempt(() => {
+      settings.setPresets(previous);
+      presetNotice("프리셋을 바로 전으로 되돌렸습니다");
+    });
+  });
+  listen(document, "shader-presets-changed", () => renderPresets(true));
+  // ---- 파라미터 연결(links.js · renderer.setLinks · settings.getLinks/setLinks) ----
+  // 파라미터 줄의 연결 버튼이 아래에 편집 칸을 연다. 바꾸면 settings.setLinks로 저장하고 렌더러가 프레임마다 적용한다.
+  let openLink = null; // 연결 시트를 연 파라미터 이름
+  const linkOf = name => (settings.getLinks?.() || []).find(link => link.name === name) || null;
+  const saveLink = (name, next) =>
+    attempt(() => {
+      const others = (settings.getLinks?.() || []).filter(link => link.name !== name);
+      settings.setLinks(next ? [...others, { ...next, name }] : others); // → shader-links-changed가 다시 그린다
+      renderer.redraw?.();
+    });
+  // 끄는 동안: 렌더러에만 적용(저장 · 다시 그리기 없음). 놓으면(change) saveLink.
+  const previewLink = (name, next) =>
+    attempt(() => {
+      const others = (settings.getLinks?.() || []).filter(link => link.name !== name);
+      renderer.setLinks([...others, { ...next, name }]);
+      renderer.redraw?.();
+    });
+  // 연결 미터 · 시트의 실시간 표시: 파라미터 탭이 보이는 동안 매 프레임 지금 값으로 고친다.
+  const liveLinks = new Map(); // 이름 → [update(value)…]
+  let liveFrame = 0;
+  const liveStep = () => {
+    liveFrame = 0;
+    if (!liveLinks.size) return;
+    // 다른 탭이 보이는 동안은 그리지 않고 기다린다
+    if ($("view-uniforms").hidden || document.hidden) {
+      liveFrame = requestAnimationFrame(liveStep);
+      return;
+    }
+    const values = new Map(renderer.getUserUniforms().map(item => [item.name, item.value]));
+    for (const [name, updates] of liveLinks) for (const update of updates) update(values.get(name));
+    liveFrame = requestAnimationFrame(liveStep);
+  };
+  const watchLink = (name, update) => {
+    if (!liveLinks.has(name)) liveLinks.set(name, []);
+    liveLinks.get(name).push(update);
+    if (!liveFrame) liveFrame = requestAnimationFrame(liveStep);
+  };
+  const openTimeline = name => timeline.open(name);
+  // ---- 키프레임 정밀 입력: 키프레임 연결 줄의 내비게이터(◀ ◆ ▶ · 재생 위치) · 자동 키 ----
+  // 키프레임 연결 줄에서 값을 바꾸면 재생선 위치에 키를 찍는다(그 시간에 키가 있으면 값만 바꾼다).
+  // 끄는 동안은 렌더러에만 적용하고, 놓거나(change · pointerup · keyup) 잠시 멈추면 저장한다 — 끌기가 끊기지 않게.
+  const KEY_EPSILON = 5e-4;
+  const playTime = () => Number((renderer.getStats().time ?? 0).toFixed(3));
+  // 반복(loop)이 있으면 키의 시간은 한 바퀴 안의 시간이다: 재생 위치 t → { local: 바퀴 안 시간, base: 이 바퀴의 시작 }
+  const loopTime = (link, t = playTime()) => {
+    const loop = link?.loop > 0 ? link.loop : 0,
+      local = loop ? Number((((t % loop) + loop) % loop).toFixed(3)) : t;
+    return { local, base: t - local };
+  };
+  const pendingKeys = new Map();
+  let keyTimer = 0,
+    keyPointer = false;
+  const flushKeys = () => {
+    clearTimeout(keyTimer);
+    keyTimer = 0;
+    if (keyPointer || !pendingKeys.size) return;
+    const list = [...pendingKeys.values()];
+    pendingKeys.clear();
+    attempt(() =>
+      settings.setLinks(
+        list.reduce((all, next) => all.map(l => (l.name === next.name ? next : l)), settings.getLinks())
+      )
+    );
+  };
+  const recordKey = (name, value) => {
+    const link = linkOf(name),
+      v = typeof value === "boolean" ? (value ? 1 : 0) : value;
+    if (link?.source !== "keys" || typeof v !== "number") return;
+    const t = loopTime(link).local,
+      keys = [...link.keys.filter(([k]) => Math.abs(k - t) >= KEY_EPSILON), [t, v]].sort((a, b) => a[0] - b[0]),
+      next = { ...link, keys };
+    pendingKeys.set(name, next);
+    previewLink(name, next);
+    clearTimeout(keyTimer);
+    keyTimer = setTimeout(flushKeys, 700);
+  };
+  listen(document, "pointerup", () => {
+    keyPointer = false;
+    if (pendingKeys.size) setTimeout(flushKeys);
+  });
+  const keyNav = (item, link) => {
+    const nav = element("div"),
+      prev = element("button"),
+      key = element("button"),
+      next = element("button"),
+      time = element("input"),
+      unit = element("span"),
+      hint = element("span");
+    nav.className = "key-nav";
+    for (const [button, label, text] of [
+      [prev, "이전 키로", "◀"],
+      [key, "이 시간에 키", "◆"],
+      [next, "다음 키로", "▶"],
+    ]) {
+      button.type = "button";
+      button.className = "key-nav-button";
+      button.textContent = text;
+      button.setAttribute("aria-label", `${item.name} ${label}`);
+    }
+    key.classList.add("key-nav-key");
+    prev.title = "이전 키로 재생선 옮기기";
+    next.title = "다음 키로 재생선 옮기기";
+    time.type = "number";
+    time.className = "key-nav-time";
+    time.min = "0";
+    time.step = "0.01";
+    time.setAttribute("aria-label", "재생 위치(초)");
+    time.title = "재생 위치(uTime) — 숫자로 옮긴 뒤 값을 바꾸면 이 시간에 키가 찍힙니다";
+    unit.className = "key-nav-unit";
+    unit.textContent = "초";
+    hint.className = "key-nav-hint";
+    hint.textContent = "값을 바꾸면 이 시간에 키";
+    const current = () => linkOf(item.name) || link,
+      keys = () => current().keys;
+    const at = t => keys().findIndex(([k]) => Math.abs(k - t) < KEY_EPSILON);
+    // ◀ ▶는 이 바퀴 안에서 움직인다(반복이 있으면 바퀴 시작 + 키 시간)
+    prev.addEventListener("click", () => {
+      const { local, base } = loopTime(current()),
+        before = keys().filter(([k]) => k < local - KEY_EPSILON);
+      if (before.length) attempt(() => renderer.setTime(Number((base + before.at(-1)[0]).toFixed(3))));
+    });
+    next.addEventListener("click", () => {
+      const { local, base } = loopTime(current()),
+        after = keys().find(([k]) => k > local + KEY_EPSILON);
+      if (after) attempt(() => renderer.setTime(Number((base + after[0]).toFixed(3))));
+    });
+    key.addEventListener("click", () => {
+      const t = loopTime(current()).local,
+        index = at(t),
+        live = renderer.getUserUniforms().find(u => u.name === item.name)?.value,
+        value = typeof live === "boolean" ? (live ? 1 : 0) : live;
+      const list =
+        index >= 0 ? keys().filter((_, i) => i !== index) : [...keys(), [t, value]].sort((a, b) => a[0] - b[0]);
+      saveLink(item.name, { ...linkOf(item.name), keys: list });
+    });
+    time.addEventListener("change", () => {
+      const v = Number(time.value);
+      if (time.value.trim() && Number.isFinite(v) && v >= 0) attempt(() => renderer.setTime(v));
+    });
+    time.addEventListener("keydown", event => {
+      if (event.key === "Enter") time.dispatchEvent(new Event("change"));
+    });
+    nav.append(prev, key, next, time, unit, hint);
+    const update = () => {
+      const now = renderer.getStats().time ?? 0,
+        t = loopTime(current(), Number(now.toFixed(3))).local,
+        here = at(t) >= 0,
+        list = keys();
+      key.setAttribute("aria-pressed", String(here));
+      key.title = here ? "이 시간의 키 지우기" : "이 시간에 지금 값으로 키 찍기";
+      prev.disabled = !list.some(([k]) => k < t - KEY_EPSILON);
+      next.disabled = !list.some(([k]) => k > t + KEY_EPSILON);
+      if (document.activeElement !== time) time.value = String(Number(now.toFixed(3)));
+      hint.textContent =
+        current().loop > 0 ? `값을 바꾸면 ${Number(t.toFixed(2))}초(반복 안)에 키` : "값을 바꾸면 이 시간에 키";
+    };
+    update();
+    return { node: nav, update };
+  };
+  const linkEditor = item => {
+    const view = LinkSheet.sheet({
+      item,
+      link: linkOf(item.name),
+      renderer,
+      save: next => saveLink(item.name, next),
+      preview: next => previewLink(item.name, next),
+      openTimeline,
+    });
+    watchLink(item.name, view.update);
+    return view.node;
+  };
+  // 다시 그려도 편집 칸 안의 초점은 같은 자리(같은 파라미터의 n번째 조작)로 돌려 둔다.
+  listen(document, "shader-links-changed", () => {
+    const active = document.activeElement,
+      // 연결 시트 안이면 시트 기준, 아니면 파라미터 줄(◆ · 슬라이더 …) 기준으로 같은 자리를 찾는다
+      box = active instanceof Element ? active.closest(".link-editor, .uniform-row") : null,
+      selector = box?.classList.contains("link-editor") ? ".link-editor" : ".uniform-row",
+      controls = node => [...node.querySelectorAll("select,input,button")],
+      index = box ? controls(box).indexOf(active) : -1,
+      name = box?.dataset.name;
+    renderUniforms();
+    if (!box) return;
+    const next = [...$("uniformList").querySelectorAll(selector)].find(node => node.dataset.name === name);
+    if (!next) return;
+    // 라디오(소스 · 모양 …)를 눌렀으면 같은 묶음의 고른 칸으로
+    const group = active.closest?.('[role="radiogroup"]'),
+      groups = [...box.querySelectorAll('[role="radiogroup"]')].indexOf(group),
+      picked = group && next.querySelectorAll('[role="radiogroup"]')[groups]?.querySelector('[aria-checked="true"]');
+    (picked || controls(next)[index] || controls(next)[0])?.focus();
+  });
+  // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
+  let hiddenKey = "";
+  const conditionHidden = (items, defaults) => {
+    const values = new Map(items.map(item => [item.name, item.value]));
+    return items
+      .filter(item => {
+        const spec = defaults.get(item.name);
+        return (
+          spec?.when && spec.type === item.type && !Annotations.visible(spec.when, name => values.get(name), defaults)
+        );
+      })
+      .map(item => item.name);
+  };
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
     const search = $("uniformSearch").value.trim().toLowerCase();
-    uniformSnapshot = JSON.stringify(items);
-    const defaults = annotatedDefaults();
+    uniformSnapshot = snapshotOf(items);
+    const defaults = annotatedDefaults(),
+      hidden = new Set(search ? [] : conditionHidden(items, defaults));
+    hiddenKey = [...hidden].join();
     directionRedraws = [];
     curveResizeObserver?.disconnect();
     curveRedraws.clear();
     playViews.clear();
+    liveLinks.clear();
     resetSyncs.clear();
     playButtons.clear();
     userList.replaceChildren();
@@ -1337,12 +1840,15 @@ const mount = (renderer, input, settings) => {
       groups.get(group).push(row);
     };
     $("uniformCount").textContent = `${items.length} / 64`;
+    renderPresets();
     $("uniformCreate").disabled = items.length >= 64;
     for (const item of items) {
       if (search && !`${item.name} ${item.type}`.toLowerCase().includes(search)) continue;
+      if (hidden.has(item.name)) continue;
       const row = element("div");
       row.className = "uniform-row";
       row.dataset.type = item.type;
+      row.dataset.name = item.name;
       const top = element("div");
       top.className = "uniform-top";
       const title = element("div");
@@ -1384,19 +1890,19 @@ const mount = (renderer, input, settings) => {
         syncReset = null;
       if (annotated) {
         // 기본값으로 되돌리기: 버튼 또는 슬라이더 더블클릭. 이미 기본값이면 버튼을 비활성화한다.
-        const fallback = Annotations.clampValue(spec.value, item.options || {});
+        const fallback = Annotations.clampValue(spec.value, item.options || {}, item.type);
         reset = element("button");
         reset.className = "reset-uniform glyph-icon icon-reset";
         reset.type = "button";
         reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
         reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
-        syncReset = (value = renderer.getUserUniforms().find(u => u.name === item.name)?.value) => {
+        syncReset = (value = liveValue(item)) => {
           reset.disabled = sameValue(value, fallback);
         };
         syncReset();
         resetSyncs.set(item.name, syncReset);
         const restore = () => {
-          if (sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback)) return;
+          if (sameValue(liveValue(item), fallback)) return;
           if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
           renderUniforms();
           $("uniformNotice").textContent = `${item.name} 기본값으로 되돌림`;
@@ -1447,17 +1953,60 @@ const mount = (renderer, input, settings) => {
         playButtons.set(item.name, play);
         extras.push(play);
       }
+      const link = Links.LINKABLE.has(item.type) ? linkOf(item.name) : null,
+        keyed = link?.source === "keys"; // 키프레임 줄: 슬라이더는 살려 두고 바꾸면 자동 키
+      if (Links.LINKABLE.has(item.type)) {
+        const linkButton = element("button");
+        linkButton.className = "link-uniform glyph-icon icon-link";
+        linkButton.type = "button";
+        linkButton.title = link
+          ? `연결됨: ${LinkSheet.describe(link)} · 누르면 연결 설정`
+          : "연결: 소리 · MIDI · 흔들기 · 키프레임이 이 값을 정하게 하기";
+        linkButton.setAttribute("aria-label", `${item.name} 연결 설정`);
+        linkButton.setAttribute("aria-expanded", String(openLink === item.name));
+        linkButton.setAttribute("aria-pressed", String(!!link));
+        linkButton.addEventListener("click", () => {
+          openLink = openLink === item.name ? null : item.name;
+          renderUniforms();
+          $("uniformList")
+            .querySelector(`.link-editor[data-name="${item.name}"] [role="radio"][tabindex="0"]`)
+            ?.focus();
+        });
+        extras.push(linkButton);
+      }
+      if (link) {
+        row.classList.add("is-linked");
+        const badge = element("span");
+        badge.className = "link-badge";
+        badge.textContent = LinkSheet.describe(link);
+        badge.title = "연결이 프레임마다 이 값을 정합니다(직접 바꿔도 다음 프레임에 덮어씁니다)";
+        title.append(badge);
+      }
       top.append(title, ...extras, ...(reset ? [reset] : []), remove);
       if (description) top.append(description);
       const commit = (field, value) => {
-        // 사용자가 직접 바꾸면 그 파라미터의 재생을 멈춘다.
+        // 사용자가 직접 바꾸면 그 파라미터의 재생과 프리셋 전환을 멈춘다.
         if (playing.delete(item.name)) syncPlayButtons();
+        stopMorph();
         try {
           renderer.setUniform(item.name, value);
           item.value = value;
+          if (keyed) recordKey(item.name, value);
           syncReset?.();
           field.removeAttribute("aria-invalid");
           showError("");
+          // 이 값이 다른 파라미터의 @if를 바꾸면 목록을 다시 그리고 초점은 이 파라미터 줄로 돌려 둔다.
+          if (!$("uniformSearch").value.trim()) {
+            const users = renderer.getUserUniforms();
+            if (conditionHidden(users, annotatedDefaults()).join() !== hiddenKey)
+              queueMicrotask(() => {
+                renderUniforms();
+                [...$("uniformList").querySelectorAll(".uniform-row")]
+                  .find(node => node.dataset.name === item.name)
+                  ?.querySelector("input,button,select")
+                  ?.focus();
+              });
+          }
           return true;
         } catch (error) {
           field.setAttribute("aria-invalid", "true");
@@ -1466,388 +2015,441 @@ const mount = (renderer, input, settings) => {
         }
       };
       row.append(top);
-      if (item.type === "bool") {
-        const label = element("label");
-        label.className = "uniform-switch";
-        const input = element("input");
-        input.type = "checkbox";
-        input.checked = item.value;
-        input.setAttribute("role", "switch");
-        const text = element("span");
-        text.textContent = String(item.value);
-        input.setAttribute("aria-label", item.name);
-        input.addEventListener("change", () => {
-          if (!commit(input, input.checked)) input.checked = item.value;
-          text.textContent = String(input.checked);
-        });
-        label.append(input, text);
-        row.append(label);
-      } else if (item.type === "sampler2D") {
-        const current = () => [...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value)];
-        row.append(
-          item.options?.gradient ? gradientControl(item, commit, current) : curveControl(item, commit, current)
-        );
-      } else if (item.options?.color) {
-        // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
-        const wrap = element("div");
-        wrap.className = "uniform-color";
-        const picker = element("input");
-        picker.type = "color";
-        picker.setAttribute("aria-label", `${item.name} 색상`);
-        const hexField = element("input");
-        hexField.type = "text";
-        hexField.className = "uniform-hex";
-        hexField.spellcheck = false;
-        hexField.maxLength = 7;
-        hexField.setAttribute("aria-label", `${item.name} HEX`);
-        const code = element("code");
-        const hex = values =>
-          "#" +
-          values
-            .slice(0, 3)
-            .map(v =>
-              Math.round(Math.max(0, Math.min(1, v)) * 255)
-                .toString(16)
-                .padStart(2, "0")
-            )
-            .join("");
-        const channels = item.type === "vec4" ? "RGBA" : "RGB";
-        // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
-        const hdr = item.options.hdr;
-        let alpha = null,
-          alphaNumber = null,
-          intensity = null,
-          intensityNumber = null,
-          lastBase = [1, 1, 1];
-        const split = values => {
-          const level = Math.max(0, ...values.slice(0, 3));
-          if (level > 1e-6) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
-          return { level, base: lastBase };
-        };
-        const show = values => {
-          if (hdr) {
-            const { level, base } = split(values);
-            picker.value = hex(base);
-            intensity.value = String(level);
-            showNumber(intensityNumber, Number(level.toFixed(4)));
-          } else picker.value = hex(values);
-          hexField.value = picker.value;
-          hexField.removeAttribute("aria-invalid");
-          code.textContent = values
-            .slice(0, 3)
-            .map(v => Number(v).toFixed(2))
-            .join(" ");
-          code.title = `${channels} ${values.map(v => Number(v).toFixed(4)).join(", ")}`;
-          if (alpha) {
-            alpha.value = String(values[3]);
-            showNumber(alphaNumber, values[3]);
-          }
-        };
-        const current = () => [...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value)];
-        const setRGB = (field, text) => {
-          const match = /^#?([0-9a-f]{6})$/i.exec(text.trim());
-          if (!match) {
-            field.setAttribute("aria-invalid", "true");
-            showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`);
-            return;
-          }
-          const values = current(),
-            picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
-          // HDR: 고른 색에 지금 밝기 배율을 곱한다(배율이 0이면 1로 되살린다).
-          const level = hdr ? split(values).level || 1 : 1;
-          values.splice(0, 3, ...picked.map(v => Number((v * level).toFixed(6))));
-          if (commit(field, values)) show(values);
-        };
-        picker.addEventListener("input", () => setRGB(picker, picker.value));
-        hexField.addEventListener("change", () => setRGB(hexField, hexField.value));
-        hexField.addEventListener("keydown", event => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            setRGB(hexField, hexField.value);
-          } else if (event.key === "Escape") {
-            show(current());
-            showError("");
-          }
-        });
-        wrap.append(picker, hexField, code);
-        row.append(wrap);
-        if (hdr) {
-          const line = element("div");
-          line.className = "uniform-axis is-ranged uniform-alpha uniform-intensity";
-          const label = element("label");
-          label.className = "uniform-axis-label";
-          label.textContent = "I";
-          label.title = "밝기 배율";
-          intensity = element("input");
-          intensity.type = "range";
-          intensity.min = "0";
-          intensity.max = String(hdr);
-          intensity.step = String(Number((hdr / 1000).toPrecision(2)));
-          intensity.setAttribute("aria-label", `${item.name} 밝기 배율`);
-          intensityNumber = element("input");
-          intensityNumber.type = "number";
-          intensityNumber.min = "0";
-          intensityNumber.step = "any";
-          intensityNumber.setAttribute("aria-label", `${item.name} 밝기 배율 값`);
-          const setLevel = (field, level) => {
-            if (!Number.isFinite(level)) return show(current());
-            const values = current(),
-              { base } = split(values);
-            values.splice(0, 3, ...base.map(v => Number((v * Math.max(0, level)).toFixed(6))));
-            if (commit(field, values)) show(values);
-            else show(current());
-          };
-          intensity.addEventListener("input", () => setLevel(intensity, Number(intensity.value)));
-          intensityNumber.addEventListener("change", () =>
-            setLevel(intensityNumber, intensityNumber.value.trim() ? Number(intensityNumber.value) : NaN)
-          );
-          scrubbable(label, {
-            kind: "f",
-            read: () => Number(split(current()).level.toFixed(3)),
-            write: value => setLevel(intensity, value),
-            min: 0,
-            step: hdr / 200,
-          });
-          line.append(label, intensity, intensityNumber);
-          row.append(line);
-        }
-        if (item.type === "vec4") {
-          const line = element("div");
-          line.className = "uniform-axis is-ranged uniform-alpha";
-          const label = element("label");
-          label.className = "uniform-axis-label";
-          label.textContent = "A";
-          alpha = element("input");
-          alpha.type = "range";
-          alpha.min = "0";
-          alpha.max = "1";
-          alpha.step = "0.001";
-          alpha.setAttribute("aria-label", `${item.name} 알파`);
-          alphaNumber = element("input");
-          alphaNumber.type = "number";
-          alphaNumber.min = "0";
-          alphaNumber.max = "1";
-          alphaNumber.step = "0.01";
-          alphaNumber.setAttribute("aria-label", `${item.name} 알파 값`);
-          const setAlpha = (field, value) => {
-            const values = current();
-            values[3] = Math.max(0, Math.min(1, value));
-            if (Number.isFinite(value) && commit(field, values)) show(values);
-            else show(current());
-          };
-          alpha.addEventListener("input", () => setAlpha(alpha, Number(alpha.value)));
-          alphaNumber.addEventListener("change", () =>
-            setAlpha(alphaNumber, alphaNumber.value.trim() ? Number(alphaNumber.value) : NaN)
-          );
-          scrubbable(label, {
-            kind: "f",
-            read: () => current()[3],
-            write: value => setAlpha(alpha, value),
-            min: 0,
-            max: 1,
-            step: 0.01,
-          });
-          line.append(label, alpha, alphaNumber);
-          row.append(line);
-        }
-        show(item.value);
-      } else if (item.options?.enum) {
-        const choices = enumControl(item, commit);
-        playViews.set(item.name, choices.refresh);
-        row.append(choices);
-      } else if (item.options?.pos) {
-        row.append(
-          positionControl(item, commit, () => [
-            ...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value),
-          ])
-        );
-      } else if (item.options?.angle) {
-        const dial = directionControl(item, commit, () => {
-          const value = renderer.getUserUniforms().find(u => u.name === item.name)?.value;
-          return typeof value === "number" ? value : item.value;
-        });
-        playViews.set(item.name, dial.refresh);
-        row.append(dial);
-      } else if (item.options?.dir) {
-        row.append(
-          directionControl(item, commit, () => [
-            ...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value),
-          ])
-        );
-      } else if (typeInfo(item.type).components > 1) {
-        // 벡터는 X/Y/Z/W, 행렬은 column-major 순서의 [열,행] 칸으로 편집한다. bvec 성분은 체크박스.
-        // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
-        const { kind } = typeInfo(item.type),
-          dim = kind === "m" ? Math.round(Math.sqrt(item.value.length)) : 0;
-        // 배치: bvec은 X·Y… 토글 칩 한 줄, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
-        // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자], 행렬은 열 단위 격자.
-        const opts = item.options || {},
-          ranged = !dim && kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
-        const layout = dim
-          ? "is-matrix"
-          : kind === "b"
-            ? "is-bool"
-            : ranged
-              ? "is-ranged"
-              : item.value.length <= 2
-                ? "is-inline"
-                : "is-stacked";
-        const grid = element("div");
-        grid.className = `uniform-vector ${layout}`;
-        if (dim) grid.style.setProperty("--uniform-columns", String(dim));
-        item.value.forEach((value, index) => {
-          const field = element(kind === "b" ? "label" : "div");
-          field.className = ranged ? "uniform-axis is-ranged" : "uniform-axis";
-          const label = element(kind === "b" ? "span" : "label");
-          label.className = "uniform-axis-label";
-          label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
-          const input = element("input");
-          input.setAttribute(
-            "aria-label",
-            `${item.name} ${dim ? `열 ${Math.floor(index / dim)} 행 ${index % dim}` : label.textContent}`
-          );
-          if (kind === "b") {
-            input.type = "checkbox";
-            input.checked = value;
-          } else {
-            input.type = "number";
-            input.step = kind === "f" || kind === "m" ? "any" : "1";
-            if (kind === "u") input.min = "0";
-            showNumber(input, value);
-          }
-          const update = (source, next) => {
-            const values = renderer.getUserUniforms().find(u => u.name === item.name)?.value;
-            if (!values) return renderUniforms();
-            item.value = [...values];
-            values[index] = next;
-            if (!commit(source, values)) {
-              if (kind === "b") input.checked = item.value[index];
-              else showNumber(input, item.value[index]);
-              return false;
-            }
-            return true;
-          };
-          let slider = null;
-          input.addEventListener("change", () => {
-            if (update(input, kind === "b" ? input.checked : input.value.trim() ? Number(input.value) : NaN) && slider)
-              slider.value = input.value;
-          });
-          if (kind !== "b" && !dim)
-            scrubbable(label, {
-              kind,
-              min: opts.min,
-              max: opts.max,
-              step: opts.step,
-              read: () => renderer.getUserUniforms().find(u => u.name === item.name)?.value?.[index],
-              write: next => {
-                if (update(label, next)) {
-                  showNumber(input, next);
-                  if (slider) slider.value = String(next);
-                }
-              },
-            });
-          if (ranged) {
-            slider = element("input");
-            slider.type = "range";
-            slider.min = String(opts.min);
-            slider.max = String(opts.max);
-            slider.step = String(opts.step);
-            slider.value = String(value);
-            slider.setAttribute("aria-label", `${item.name} ${label.textContent} 슬라이더`);
-            slider.addEventListener("input", () => {
-              if (update(slider, Number(slider.value))) showNumber(input, Number(slider.value));
-            });
-            field.append(label, slider, input);
-          } else if (kind === "b") field.append(input, label);
-          else field.append(label, input);
-          grid.append(field);
-        });
-        row.append(grid);
-        if (ranged) {
-          row.style.setProperty("--number-width", rangedWidth(opts));
-          row.append(rangeEnds(opts, true));
-        }
-      } else {
-        // 숫자 하나: 범위가 있으면 [슬라이더 | 숫자] + 아래에 최소·최대, 없으면 숫자 칸이 줄 전체를 쓴다. 이름을 끌면 값이 바뀐다.
-        const pair = element("div");
-        const { kind } = typeInfo(item.type);
-        const number = element("input");
-        number.type = "number";
-        number.step = kind === "f" ? "any" : "1";
-        if (item.type === "uint") number.min = "0";
-        showNumber(number, item.value);
-        number.setAttribute("aria-label", item.name);
-        const opts = item.options || {},
-          ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
-        // @log: 슬라이더는 0~1 위치를 쓰고 값은 min·(max/min)^t로 바꾼다. 0.001~100처럼 넓은 범위의 아래쪽도 고르게 다룬다.
-        const logScale = ranged && opts.log === true && opts.min > 0,
-          logSpan = logScale ? Math.log(opts.max / opts.min) : 1,
-          toSlider = value =>
-            logScale ? Math.min(1, Math.max(0, Math.log(Math.max(value, opts.min) / opts.min) / logSpan)) : value,
-          fromSlider = t => (logScale ? Number((opts.min * Math.exp(t * logSpan)).toPrecision(4)) : t);
-        let range;
-        pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
-        const changeNumber = () => {
-          let value;
-          try {
-            value = parseValue(item.type, number.value);
-          } catch (error) {
-            showError(`${item.name}: ${error.message}`);
-            number.setAttribute("aria-invalid", "true");
-            showNumber(number, item.value);
-            return;
-          }
-          if (commit(number, value)) {
-            if (range) range.value = String(toSlider(value));
-            showNumber(number, value);
-          } else showNumber(number, item.value);
-        };
-        number.addEventListener("change", changeNumber);
-        if (ranged) {
-          range = element("input");
-          range.type = "range";
-          range.min = String(logScale ? 0 : opts.min);
-          range.max = String(logScale ? 1 : opts.max);
-          range.step = logScale ? "0.001" : String(opts.step);
-          range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
-          if (logScale) {
-            range.classList.add("is-log");
-            range.title = "로그 눈금 · 같은 거리를 움직이면 같은 배율로 바뀐다";
-          }
-          range.value = String(toSlider(item.value));
-          range.addEventListener("input", () => {
-            if (commit(range, fromSlider(Number(range.value)))) showNumber(number, item.value);
-          });
-          pair.append(range);
-        }
-        pair.append(number);
-        row.append(pair);
-        if (ranged) {
-          row.style.setProperty("--number-width", rangedWidth(opts));
-          row.append(rangeEnds(opts, false));
-        }
-        const readValue = () => renderer.getUserUniforms().find(u => u.name === item.name)?.value;
-        scrubbable(name, {
-          kind,
-          // 로그 눈금이면 이름 끌기도 슬라이더 위치(0~1)로 움직여 배율 단위로 바뀌게 한다.
-          min: logScale ? 0 : opts.min,
-          max: logScale ? 1 : opts.max,
-          step: logScale ? 0.005 : opts.step,
-          read: () => (logScale ? Number(toSlider(readValue()).toFixed(3)) : readValue()),
-          write: next => {
-            const value = fromSlider(next);
-            if (commit(number, value)) {
-              showNumber(number, value);
-              if (range) range.value = String(toSlider(value));
-            }
-          },
-        });
-        // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
-        playViews.set(item.name, value => {
-          showNumber(number, value);
-          if (range) range.value = String(toSlider(value));
+      if (keyed) {
+        // 키프레임 내비게이터 + 자동 키. 재생 중 값은 지금 키프레임 값으로 따라간다(이 줄을 만지는 동안은 그대로).
+        const nav = keyNav(item, link);
+        row.append(nav.node);
+        row.classList.add("is-keyed");
+        row.addEventListener("pointerdown", () => (keyPointer = true));
+        row.addEventListener("change", () => setTimeout(flushKeys));
+        row.addEventListener("keyup", () => pendingKeys.size && setTimeout(flushKeys));
+        watchLink(item.name, value => {
+          nav.update();
+          if (!row.contains(document.activeElement) && !pendingKeys.has(item.name))
+            playViews.get(item.name)?.(typeof value === "number" ? Number(value.toFixed(4)) : value);
         });
       }
+      // 값 편집기(위젯). 배열이면 원소마다 하나씩 그린다: 원소 몫만 읽고(read) 바꾸면 전체 배열을 고쳐 올린다.
+      const widget = (row, item, commit, name) => {
+        if (item.type === "bool") {
+          const label = element("label");
+          label.className = "uniform-switch";
+          const input = element("input");
+          input.type = "checkbox";
+          input.checked = item.value;
+          input.setAttribute("role", "switch");
+          const text = element("span");
+          text.textContent = String(item.value);
+          input.setAttribute("aria-label", item.name);
+          input.addEventListener("change", () => {
+            if (!commit(input, input.checked)) input.checked = item.value;
+            text.textContent = String(input.checked);
+          });
+          label.append(input, text);
+          row.append(label);
+        } else if (item.type === "sampler2D") {
+          const current = () => [...(liveValue(item) || item.value)];
+          row.append(
+            item.options?.gradient ? gradientControl(item, commit, current) : curveControl(item, commit, current)
+          );
+        } else if (item.options?.color) {
+          // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
+          const wrap = element("div");
+          wrap.className = "uniform-color";
+          const picker = element("input");
+          picker.type = "color";
+          picker.setAttribute("aria-label", `${item.name} 색상`);
+          const hexField = element("input");
+          hexField.type = "text";
+          hexField.className = "uniform-hex";
+          hexField.spellcheck = false;
+          hexField.maxLength = 7;
+          hexField.setAttribute("aria-label", `${item.name} HEX`);
+          const code = element("code");
+          const hex = values =>
+            "#" +
+            values
+              .slice(0, 3)
+              .map(v =>
+                Math.round(Math.max(0, Math.min(1, v)) * 255)
+                  .toString(16)
+                  .padStart(2, "0")
+              )
+              .join("");
+          const channels = item.type === "vec4" ? "RGBA" : "RGB";
+          // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
+          const hdr = item.options.hdr;
+          let alpha = null,
+            alphaNumber = null,
+            intensity = null,
+            intensityNumber = null,
+            lastBase = [1, 1, 1];
+          const split = values => {
+            const level = Math.max(0, ...values.slice(0, 3));
+            if (level > 1e-6) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
+            return { level, base: lastBase };
+          };
+          const show = values => {
+            if (hdr) {
+              const { level, base } = split(values);
+              picker.value = hex(base);
+              intensity.value = String(level);
+              showNumber(intensityNumber, Number(level.toFixed(4)));
+            } else picker.value = hex(values);
+            hexField.value = picker.value;
+            hexField.removeAttribute("aria-invalid");
+            code.textContent = values
+              .slice(0, 3)
+              .map(v => Number(v).toFixed(2))
+              .join(" ");
+            code.title = `${channels} ${values.map(v => Number(v).toFixed(4)).join(", ")}`;
+            if (alpha) {
+              alpha.value = String(values[3]);
+              showNumber(alphaNumber, values[3]);
+            }
+          };
+          const current = () => [...(liveValue(item) || item.value)];
+          const setRGB = (field, text) => {
+            const match = /^#?([0-9a-f]{6})$/i.exec(text.trim());
+            if (!match) {
+              field.setAttribute("aria-invalid", "true");
+              showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`);
+              return;
+            }
+            const values = current(),
+              picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
+            // HDR: 고른 색에 지금 밝기 배율을 곱한다(배율이 0이면 1로 되살린다).
+            const level = hdr ? split(values).level || 1 : 1;
+            values.splice(0, 3, ...picked.map(v => Number((v * level).toFixed(6))));
+            if (commit(field, values)) show(values);
+          };
+          picker.addEventListener("input", () => setRGB(picker, picker.value));
+          hexField.addEventListener("change", () => setRGB(hexField, hexField.value));
+          hexField.addEventListener("keydown", event => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              setRGB(hexField, hexField.value);
+            } else if (event.key === "Escape") {
+              show(current());
+              showError("");
+            }
+          });
+          wrap.append(picker, hexField, code);
+          row.append(wrap);
+          if (hdr) {
+            const line = element("div");
+            line.className = "uniform-axis is-ranged uniform-alpha uniform-intensity";
+            const label = element("label");
+            label.className = "uniform-axis-label";
+            label.textContent = "I";
+            label.title = "밝기 배율";
+            intensity = element("input");
+            intensity.type = "range";
+            intensity.min = "0";
+            intensity.max = String(hdr);
+            intensity.step = String(Number((hdr / 1000).toPrecision(2)));
+            intensity.setAttribute("aria-label", `${item.name} 밝기 배율`);
+            intensityNumber = element("input");
+            intensityNumber.type = "number";
+            intensityNumber.min = "0";
+            intensityNumber.step = "any";
+            intensityNumber.setAttribute("aria-label", `${item.name} 밝기 배율 값`);
+            const setLevel = (field, level) => {
+              if (!Number.isFinite(level)) return show(current());
+              const values = current(),
+                { base } = split(values);
+              values.splice(0, 3, ...base.map(v => Number((v * Math.max(0, level)).toFixed(6))));
+              if (commit(field, values)) show(values);
+              else show(current());
+            };
+            intensity.addEventListener("input", () => setLevel(intensity, Number(intensity.value)));
+            intensityNumber.addEventListener("change", () =>
+              setLevel(intensityNumber, intensityNumber.value.trim() ? Number(intensityNumber.value) : NaN)
+            );
+            scrubbable(label, {
+              kind: "f",
+              read: () => Number(split(current()).level.toFixed(3)),
+              write: value => setLevel(intensity, value),
+              min: 0,
+              step: hdr / 200,
+            });
+            line.append(label, intensity, intensityNumber);
+            row.append(line);
+          }
+          if (item.type === "vec4") {
+            const line = element("div");
+            line.className = "uniform-axis is-ranged uniform-alpha";
+            const label = element("label");
+            label.className = "uniform-axis-label";
+            label.textContent = "A";
+            alpha = element("input");
+            alpha.type = "range";
+            alpha.min = "0";
+            alpha.max = "1";
+            alpha.step = "0.001";
+            alpha.setAttribute("aria-label", `${item.name} 알파`);
+            alphaNumber = element("input");
+            alphaNumber.type = "number";
+            alphaNumber.min = "0";
+            alphaNumber.max = "1";
+            alphaNumber.step = "0.01";
+            alphaNumber.setAttribute("aria-label", `${item.name} 알파 값`);
+            const setAlpha = (field, value) => {
+              const values = current();
+              values[3] = Math.max(0, Math.min(1, value));
+              if (Number.isFinite(value) && commit(field, values)) show(values);
+              else show(current());
+            };
+            alpha.addEventListener("input", () => setAlpha(alpha, Number(alpha.value)));
+            alphaNumber.addEventListener("change", () =>
+              setAlpha(alphaNumber, alphaNumber.value.trim() ? Number(alphaNumber.value) : NaN)
+            );
+            scrubbable(label, {
+              kind: "f",
+              read: () => current()[3],
+              write: value => setAlpha(alpha, value),
+              min: 0,
+              max: 1,
+              step: 0.01,
+            });
+            line.append(label, alpha, alphaNumber);
+            row.append(line);
+          }
+          show(item.value);
+        } else if (item.options?.enum) {
+          const choices = enumControl(item, commit);
+          playViews.set(item.name, choices.refresh);
+          row.append(choices);
+        } else if (item.options?.pos) {
+          row.append(positionControl(item, commit, () => [...(liveValue(item) || item.value)]));
+        } else if (item.options?.angle) {
+          const dial = directionControl(item, commit, () => {
+            const value = liveValue(item);
+            return typeof value === "number" ? value : item.value;
+          });
+          playViews.set(item.name, dial.refresh);
+          row.append(dial);
+        } else if (item.options?.dir) {
+          row.append(directionControl(item, commit, () => [...(liveValue(item) || item.value)]));
+        } else if (typeInfo(item.type).components > 1) {
+          // 벡터는 X/Y/Z/W, 행렬은 column-major 순서의 [열,행] 칸으로 편집한다. bvec 성분은 체크박스.
+          // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
+          const { kind } = typeInfo(item.type),
+            dim = kind === "m" ? Math.round(Math.sqrt(item.value.length)) : 0;
+          // 배치: bvec은 X·Y… 토글 칩 한 줄, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
+          // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자], 행렬은 열 단위 격자.
+          const opts = item.options || {},
+            ranged = !dim && kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
+          const layout = dim
+            ? "is-matrix"
+            : kind === "b"
+              ? "is-bool"
+              : ranged
+                ? "is-ranged"
+                : item.value.length <= 2
+                  ? "is-inline"
+                  : "is-stacked";
+          const grid = element("div");
+          grid.className = `uniform-vector ${layout}`;
+          if (dim) grid.style.setProperty("--uniform-columns", String(dim));
+          item.value.forEach((value, index) => {
+            const field = element(kind === "b" ? "label" : "div");
+            field.className = ranged ? "uniform-axis is-ranged" : "uniform-axis";
+            const label = element(kind === "b" ? "span" : "label");
+            label.className = "uniform-axis-label";
+            label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
+            const input = element("input");
+            input.setAttribute(
+              "aria-label",
+              `${item.name} ${dim ? `열 ${Math.floor(index / dim)} 행 ${index % dim}` : label.textContent}`
+            );
+            if (kind === "b") {
+              input.type = "checkbox";
+              input.checked = value;
+            } else {
+              input.type = "number";
+              input.step = kind === "f" || kind === "m" ? "any" : "1";
+              if (kind === "u") input.min = "0";
+              showNumber(input, value);
+            }
+            const update = (source, next) => {
+              const values = liveValue(item);
+              if (!values) return renderUniforms();
+              item.value = [...values];
+              values[index] = next;
+              if (!commit(source, values)) {
+                if (kind === "b") input.checked = item.value[index];
+                else showNumber(input, item.value[index]);
+                return false;
+              }
+              return true;
+            };
+            let slider = null;
+            input.addEventListener("change", () => {
+              if (
+                update(input, kind === "b" ? input.checked : input.value.trim() ? Number(input.value) : NaN) &&
+                slider
+              )
+                slider.value = input.value;
+            });
+            // 성분별 범위(@range를 성분마다)면 이 성분의 범위를 쓴다.
+            const axis = opts.ranges?.[index]
+              ? { min: opts.ranges[index][0], max: opts.ranges[index][1], step: opts.ranges[index][2] }
+              : opts;
+            if (kind !== "b" && !dim)
+              scrubbable(label, {
+                kind,
+                min: axis.min,
+                max: axis.max,
+                step: axis.step,
+                read: () => liveValue(item)?.[index],
+                write: next => {
+                  if (update(label, next)) {
+                    showNumber(input, next);
+                    if (slider) slider.value = String(next);
+                  }
+                },
+              });
+            if (ranged) {
+              slider = element("input");
+              slider.type = "range";
+              slider.min = String(axis.min);
+              slider.max = String(axis.max);
+              slider.step = String(axis.step);
+              slider.value = String(value);
+              slider.setAttribute("aria-label", `${item.name} ${label.textContent} 슬라이더`);
+              if (opts.ranges)
+                field.title = `${label.textContent}: ${displayNumber(axis.min)} ~ ${displayNumber(axis.max)}`;
+              slider.addEventListener("input", () => {
+                if (update(slider, Number(slider.value))) showNumber(input, Number(slider.value));
+              });
+              field.append(label, slider, input);
+            } else if (kind === "b") field.append(input, label);
+            else field.append(label, input);
+            grid.append(field);
+          });
+          row.append(grid);
+          if (ranged) {
+            row.style.setProperty("--number-width", rangedWidth(opts));
+            if (!opts.ranges) row.append(rangeEnds(opts, true));
+          }
+        } else {
+          // 숫자 하나: 범위가 있으면 [슬라이더 | 숫자] + 아래에 최소·최대, 없으면 숫자 칸이 줄 전체를 쓴다. 이름을 끌면 값이 바뀐다.
+          const pair = element("div");
+          const { kind } = typeInfo(item.type);
+          const number = element("input");
+          number.type = "number";
+          number.step = kind === "f" ? "any" : "1";
+          if (item.type === "uint") number.min = "0";
+          showNumber(number, item.value);
+          number.setAttribute("aria-label", item.name);
+          const opts = item.options || {},
+            ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
+          // @log: 슬라이더는 0~1 위치를 쓰고 값은 min·(max/min)^t로 바꾼다. 0.001~100처럼 넓은 범위의 아래쪽도 고르게 다룬다.
+          const logScale = ranged && opts.log === true && opts.min > 0,
+            logSpan = logScale ? Math.log(opts.max / opts.min) : 1,
+            toSlider = value =>
+              logScale ? Math.min(1, Math.max(0, Math.log(Math.max(value, opts.min) / opts.min) / logSpan)) : value,
+            fromSlider = t => (logScale ? Number((opts.min * Math.exp(t * logSpan)).toPrecision(4)) : t);
+          let range;
+          pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
+          const changeNumber = () => {
+            let value;
+            try {
+              value = parseValue(item.type, number.value);
+            } catch (error) {
+              showError(`${item.name}: ${error.message}`);
+              number.setAttribute("aria-invalid", "true");
+              showNumber(number, item.value);
+              return;
+            }
+            if (commit(number, value)) {
+              if (range) range.value = String(toSlider(value));
+              showNumber(number, value);
+            } else showNumber(number, item.value);
+          };
+          number.addEventListener("change", changeNumber);
+          if (ranged) {
+            range = element("input");
+            range.type = "range";
+            range.min = String(logScale ? 0 : opts.min);
+            range.max = String(logScale ? 1 : opts.max);
+            range.step = logScale ? "0.001" : String(opts.step);
+            range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
+            if (logScale) {
+              range.classList.add("is-log");
+              range.title = "로그 눈금 · 같은 거리를 움직이면 같은 배율로 바뀐다";
+            }
+            range.value = String(toSlider(item.value));
+            range.addEventListener("input", () => {
+              if (commit(range, fromSlider(Number(range.value)))) showNumber(number, item.value);
+            });
+            pair.append(range);
+          }
+          pair.append(number);
+          row.append(pair);
+          if (ranged) {
+            row.style.setProperty("--number-width", rangedWidth(opts));
+            row.append(rangeEnds(opts, false));
+          }
+          const readValue = () => liveValue(item);
+          scrubbable(name, {
+            kind,
+            // 로그 눈금이면 이름 끌기도 슬라이더 위치(0~1)로 움직여 배율 단위로 바뀌게 한다.
+            min: logScale ? 0 : opts.min,
+            max: logScale ? 1 : opts.max,
+            step: logScale ? 0.005 : opts.step,
+            read: () => (logScale ? Number(toSlider(readValue()).toFixed(3)) : readValue()),
+            write: next => {
+              const value = fromSlider(next);
+              if (commit(number, value)) {
+                showNumber(number, value);
+                if (range) range.value = String(toSlider(value));
+              }
+            },
+          });
+          // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
+          playViews.set(item.name, value => {
+            showNumber(number, value);
+            if (range) range.value = String(toSlider(value));
+          });
+        }
+      };
+      const array = typeInfo(item.type).count;
+      if (link && !keyed) {
+        // 연결이 값을 정하는 동안은 슬라이더 대신 읽기 전용 미터(움직여도 덮어써지는 조작을 두지 않는다)
+        const gauge = LinkSheet.meter(item, link);
+        watchLink(item.name, gauge.update);
+        row.append(gauge.node);
+      } else if (array) {
+        const size = typeInfo(typeInfo(item.type).base).components,
+          list = element("div");
+        list.className = "uniform-array";
+        for (let index = 0; index < array; index++) {
+          const cell = element("div"),
+            label = element("span");
+          cell.className = "uniform-array-item";
+          cell.dataset.type = typeInfo(item.type).base;
+          label.className = "uniform-array-index";
+          label.textContent = `[${index}]`;
+          cell.append(label);
+          const whole = () => [...(liveValue(item) || item.value)],
+            read = () => (size === 1 ? whole()[index] : whole().slice(index * size, index * size + size)),
+            part = { name: `${item.name}[${index}]`, type: typeInfo(item.type).base, options: item.options, read };
+          part.value = read();
+          const commitPart = (field, value) => {
+            const next = whole();
+            next.splice(index * size, size, ...(size === 1 ? [value] : value));
+            if (!commit(field, next)) return false;
+            part.value = value;
+            return true;
+          };
+          widget(cell, part, commitPart, label);
+          list.append(cell);
+        }
+        row.append(list);
+      } else widget(row, item, commit, name);
+      if (openLink === item.name && Links.LINKABLE.has(item.type)) row.append(linkEditor(item));
       place(row, annotated ? spec.group : "");
     }
     // 묶음 순서는 코드에 처음 나온 순서(다른 프로젝트에서 남은 파라미터의 등록 순서가 아니라).
@@ -1886,13 +2488,19 @@ const mount = (renderer, input, settings) => {
     // 방향 패드는 문서에 붙은 뒤에야 테마 색을 읽을 수 있으므로 한 번 더 그린다.
     for (const draw of directionRedraws) draw();
     const count = shown;
-    $("uniformResults").textContent = search ? `${items.length}개 중 ${count}개 표시` : "";
+    $("uniformResults").textContent = search
+      ? `${items.length}개 중 ${count}개 표시`
+      : hidden.size
+        ? `조건(@if)으로 숨긴 파라미터 ${hidden.size}개: ${[...hidden].join(", ")}`
+        : "";
     if (!count) {
       const hint = element("div");
       hint.className = "uniform-empty";
       hint.textContent = search
         ? "검색 결과가 없습니다. 이름이나 타입을 확인하세요."
-        : "아직 파라미터가 없습니다. 위에서 추가하거나 갤러리 예제로 시작하세요.";
+        : hidden.size
+          ? "모든 파라미터가 조건(@if)으로 숨겨져 있습니다."
+          : "아직 파라미터가 없습니다. 위에서 추가하거나 갤러리 예제로 시작하세요.";
       userList.append(hint);
     }
   };
@@ -2461,6 +3069,9 @@ const mount = (renderer, input, settings) => {
     } else if (key === "g") {
       event.preventDefault();
       toggleHud();
+    } else if (key === "t") {
+      event.preventDefault();
+      $("timelineToggle").click();
     } else if (event.key === ".") {
       event.preventDefault();
       attempt(stepFrame);
@@ -2519,7 +3130,7 @@ const mount = (renderer, input, settings) => {
     if (
       !$("view-uniforms").hidden &&
       !(active instanceof Element && active.closest("#uniformList")) &&
-      uniformSnapshot !== JSON.stringify(renderer.getUserUniforms())
+      uniformSnapshot !== snapshotOf(renderer.getUserUniforms())
     )
       renderUniforms();
     $("statFps").textContent = s.fps.toFixed(1) + (s.fpsLimit ? ` / ${s.fpsLimit}` : "");
@@ -2568,9 +3179,12 @@ const mount = (renderer, input, settings) => {
   renderUniforms();
   updateStats();
   const timer = setInterval(updateStats, 500);
+  const timeline = Timeline.mount({ renderer, settings, root: $("timelineDock") });
+  timeline.bindToggle($("timelineToggle"));
   return {
     dispose: () => {
       clearInterval(timer);
+      timeline.dispose();
       recorder.dispose(); // 창을 닫는 중에는 녹화 파일을 내려받지 않고 버린다.
       controller.abort();
     },
