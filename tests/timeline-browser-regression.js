@@ -152,6 +152,33 @@
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true }));
     await until(() => dock.hidden, "T로 닫기");
     test($("moreMenu").contains($("timelineToggle")), "타임라인 버튼은 ⋯ 메뉴 안에");
+
+    // 9) 높이 경계: 다른 패널처럼 최소 높이의 절반보다 낮게 끌면 '놓으면 숨김' → 놓으면 닫힘(다시 열면 원래 높이)
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true }));
+    await until(() => !dock.hidden, "다시 열기");
+    const grip = q(".timeline-resize"), drag = (type, dy) => {
+      const r0 = grip.getBoundingClientRect();
+      pointer(grip, type, { bubbles: true, cancelable: true, button: 0, buttons: type === "pointerup" ? 0 : 1, pointerId: 7, clientX: r0.left + 40, clientY: startY + dy });
+    };
+    const startY = grip.getBoundingClientRect().top + 4, h0 = dock.getBoundingClientRect().height;
+    grip.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+    test(Math.round(dock.getBoundingClientRect().height) === 140, "Home = 최소 높이 140px");
+    grip.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    test(Math.round(dock.getBoundingClientRect().height) === 220, "두 번 누르면 기본 높이 220px");
+    drag("pointerdown", 0);
+    drag("pointermove", 120);
+    test(!dock.classList.contains("is-collapsing") && Math.round(dock.getBoundingClientRect().height) === 140, "최소 높이까지는 그냥 줄어든다");
+    drag("pointermove", 180);
+    test(dock.classList.contains("is-collapsing") && getComputedStyle(dock, "::after").content.includes("놓으면 숨김"), "더 끌면 '놓으면 숨김'");
+    drag("pointermove", 60);
+    test(!dock.classList.contains("is-collapsing"), "다시 끌어올리면 취소");
+    drag("pointermove", 190);
+    drag("pointerup", 190);
+    await until(() => dock.hidden, "놓으면 타임라인이 닫힌다");
+    test(!dock.classList.contains("is-collapsing"), "닫힌 뒤에는 표시가 남지 않는다");
+    $("timelineToggle").click();
+    await until(() => !dock.hidden, "다시 열기");
+    test(Math.abs(dock.getBoundingClientRect().height - h0) <= 1, `다시 열면 끌기 전 높이 (${Math.round(dock.getBoundingClientRect().height)}px)`);
   } finally {
     clearInterval(autoAnswer);
     if (!dock.hidden) q(".timeline-close").click();
