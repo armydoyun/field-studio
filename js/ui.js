@@ -1697,7 +1697,6 @@ const mount = (renderer, input, settings) => {
       key = element("button"),
       next = element("button"),
       time = element("input"),
-      unit = element("span"),
       hint = element("span");
     nav.className = "key-nav";
     for (const [button, label, text] of [
@@ -1718,9 +1717,8 @@ const mount = (renderer, input, settings) => {
     time.min = "0";
     time.step = "0.01";
     time.setAttribute("aria-label", "재생 위치(초)");
+    time.placeholder = "초";
     time.title = "재생 위치(uTime) — 숫자로 옮긴 뒤 값을 바꾸면 이 시간에 키가 찍힙니다";
-    unit.className = "key-nav-unit";
-    unit.textContent = "초";
     hint.className = "key-nav-hint";
     hint.textContent = "값을 바꾸면 이 시간에 키";
     const current = () => linkOf(item.name) || link,
@@ -1753,7 +1751,17 @@ const mount = (renderer, input, settings) => {
     time.addEventListener("keydown", event => {
       if (event.key === "Enter") time.dispatchEvent(new Event("change"));
     });
-    nav.append(prev, key, next, time, unit, hint);
+    // 시간 기준 표시: '한 번'(키 시간 = 재생 시간) · '↻ N초'(재생 시간을 N초로 잘라 되풀이). 반복이면 바퀴 안 시간을 따로 보인다.
+    const mode = element("span"),
+      inner = element("span");
+    mode.className = "key-nav-mode";
+    inner.className = "key-nav-local";
+    // 한 줄: [한 번 | ↻ N초] ◀ ◆ ▶ [재생 위치] 초 — 둘째 줄(설명): (바퀴 안 X초 ·) 값을 바꾸면 … 키
+    const caption = element("div");
+    caption.className = "key-nav-caption";
+    caption.append(inner, hint);
+    nav.append(mode, prev, key, next, time, caption);
+    let shownLoop = null;
     const update = () => {
       const now = renderer.getStats().time ?? 0,
         t = loopTime(current(), Number(now.toFixed(3))).local,
@@ -1763,9 +1771,22 @@ const mount = (renderer, input, settings) => {
       key.title = here ? "이 시간의 키 지우기" : "이 시간에 지금 값으로 키 찍기";
       prev.disabled = !list.some(([k]) => k < t - KEY_EPSILON);
       next.disabled = !list.some(([k]) => k > t + KEY_EPSILON);
-      if (document.activeElement !== time) time.value = String(Number(now.toFixed(3)));
-      hint.textContent =
-        current().loop > 0 ? `값을 바꾸면 ${Number(t.toFixed(2))}초(반복 안)에 키` : "값을 바꾸면 이 시간에 키";
+      // 재생 중에는 자릿수를 고정(소수 둘째)해 글자 폭이 흔들리지 않게, 멈췄을 때는 정확한 값(셋째)까지
+      const running = renderer.getStats().running;
+      if (document.activeElement !== time) time.value = running ? now.toFixed(2) : String(Number(now.toFixed(3)));
+      const loop = current().loop > 0 ? current().loop : 0;
+      if (loop !== shownLoop) {
+        // 글자는 반복 설정이 바뀔 때만 고친다(매 프레임 바뀌는 글자 없음)
+        shownLoop = loop;
+        mode.textContent = loop ? `↻ ${Number(loop.toFixed(2))}초` : "한 번";
+        mode.title = loop
+          ? `재생 시간을 ${Number(loop.toFixed(2))}초 길이로 잘라 키를 되풀이합니다 — 키의 시간은 바퀴 안의 시간`
+          : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다";
+        mode.classList.toggle("is-loop", !!loop);
+        inner.hidden = !loop;
+        hint.textContent = loop ? "· 값을 바꾸면 이 바퀴 안 시간에 키" : "값을 바꾸면 이 재생 시간에 키(자동 키)";
+      }
+      if (loop) inner.textContent = `바퀴 안 ${t.toFixed(2)}초`;
     };
     update();
     return { node: nav, update };
@@ -2023,10 +2044,37 @@ const mount = (renderer, input, settings) => {
         row.addEventListener("pointerdown", () => (keyPointer = true));
         row.addEventListener("change", () => setTimeout(flushKeys));
         row.addEventListener("keyup", () => pendingKeys.size && setTimeout(flushKeys));
+        // 숫자는 자릿수를 고정해(범위 · step 기준) 재생 중에 글자 폭이 흔들리지 않게 한다
+        const span = (item.options?.max ?? 1) - (item.options?.min ?? 0),
+          step = String(item.options?.step ?? ""),
+          digits = ["int", "uint", "bool"].includes(item.type)
+            ? 0
+            : Math.min(
+                4,
+                step.includes(".")
+                  ? step.split(".")[1].length
+                  : Math.max(2, 3 - Math.floor(Math.log10(Math.max(1e-6, Math.abs(span)))))
+              );
         watchLink(item.name, value => {
           nav.update();
-          if (!row.contains(document.activeElement) && !pendingKeys.has(item.name))
-            playViews.get(item.name)?.(typeof value === "number" ? Number(value.toFixed(4)) : value);
+          // 값 칸(숫자 · 슬라이더 · 위젯)을 만지는 중일 때만 멈춘다 — 줄의 다른 곳(연결 시트 · ◆)에 초점이 있어도 값은 따라간다
+          const active = document.activeElement,
+            editing =
+              row.contains(active) &&
+              !active.closest(".key-nav, .link-editor, .uniform-top") &&
+              active.matches("input, select, textarea, [role=slider], [tabindex]");
+          if (editing || pendingKeys.has(item.name)) return;
+          // 숫자가 아닌 값 · 로그 눈금 · 다이얼 · 선택지 위젯은 위젯 자신의 갱신 함수로
+          if (typeof value !== "number" || item.options?.log || item.options?.angle || item.options?.enum)
+            return playViews.get(item.name)?.(typeof value === "number" ? Number(value.toFixed(4)) : value);
+          const number = row.querySelector('input[type="number"]:not(.key-nav-time)'),
+            slider = row.querySelector('input[type="range"]');
+          if (number) {
+            number.value = value.toFixed(digits);
+            number.title = String(value);
+          }
+          if (slider) slider.value = String(value);
+          if (!number && !slider) playViews.get(item.name)?.(value);
         });
       }
       // 값 편집기(위젯). 배열이면 원소마다 하나씩 그린다: 원소 몫만 읽고(read) 바꾸면 전체 배열을 고쳐 올린다.

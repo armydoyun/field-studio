@@ -171,7 +171,8 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     shape = "",
     frames = 0;
   let ruler = null,
-    playhead = null;
+    playhead = null,
+    edge = null;
   const lanes = new Map(); // 이름 → { area, plot, path, low, high, item, link, dots: [] }
 
   const links = () => settings.getLinks?.() || [];
@@ -304,7 +305,17 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     lane.dataset.name = link.name;
     remove.title = "이 파라미터의 키프레임 연결 지우기(값은 지금 값으로 남는다)";
     on(remove, "click", () => settings.setLinks(links().filter(l => l.name !== link.name)));
-    head.append(name, range, remove);
+    // 시간 기준: '한 번'(키 시간 = 재생 시간, 마지막 키 뒤로는 그 값 유지) · '↻ N초'(N초 길이로 되풀이)
+    const mode = element(
+      "span",
+      link.loop > 0 ? "timeline-lane-mode is-loop" : "timeline-lane-mode",
+      link.loop > 0 ? `↻ ${round(link.loop, 2)}초마다 반복` : "한 번 · 끝 값 유지"
+    );
+    mode.title =
+      link.loop > 0
+        ? `재생 시간을 ${round(link.loop, 2)}초 길이로 잘라 0 ~ ${round(link.loop, 2)}초의 키를 되풀이합니다. 흐린 키는 되풀이되는 모습(고칠 때는 첫 바퀴의 진한 키를)`
+        : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다";
+    head.append(name, remove, mode, range);
     graph.setAttribute("viewBox", "0 0 1000 100");
     graph.setAttribute("preserveAspectRatio", "none");
     graph.setAttribute("aria-hidden", "true");
@@ -349,6 +360,24 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         save(new Map([[link.name, { ...link, loop: 0 }]]));
       });
       area.append(shade, marker);
+      // 되풀이되는 바퀴: 경계선과 흐린 키(누를 수 없음) — 이 키들이 반복 길이마다 다시 지나간다는 것을 보인다
+      for (let cycle = 1; cycle * link.loop < view.end && cycle < 200; cycle++) {
+        const offset = cycle * link.loop;
+        if (cycle > 1 && offset >= view.start) {
+          const edge = element("span", "timeline-cycle");
+          edge.style.left = xOf(offset);
+          area.append(edge);
+        }
+        for (const ghostKey of link.keys) {
+          const t = ghostKey[0] + offset;
+          if (ghostKey[0] >= link.loop || t < view.start || t > view.end) continue;
+          const ghost = element("span", "timeline-ghost");
+          ghost.style.left = xOf(t);
+          ghost.style.top = yOf(ghostKey[1], info);
+          ghost.setAttribute("aria-hidden", "true");
+          plot.append(ghost);
+        }
+      }
     }
     link.keys.forEach((key, index) => {
       const dot = element("span", "timeline-key");
@@ -415,8 +444,17 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     for (const link of list) track.append(renderLane(link, items.get(link.name)));
     const overlay = element("div", "timeline-overlay");
     playhead = element("div", "timeline-playhead");
-    overlay.setAttribute("aria-hidden", "true");
-    overlay.append(playhead);
+    // 재생선이 보이는 범위 밖이면 가장자리에 시간 표시(누르면 그쪽으로 이동)
+    edge = button("timeline-edge", "재생선이 있는 곳으로 보기 이동");
+    edge.hidden = true;
+    on(edge, "click", () => {
+      const t = now(),
+        width = span();
+      view = { start: round(Math.max(0, t - width * 0.25), 4), end: round(Math.max(0, t - width * 0.25) + width, 4) };
+      viewTouched = true;
+      render();
+    });
+    overlay.append(playhead, edge);
     track.append(overlay);
     // + 파라미터: 연결할 수 있는 타입 중 아직 키프레임이 아닌 것
     const linked = new Map(links().map(link => [link.name, link.source]));
@@ -827,11 +865,20 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   const tick = () => {
     const t = now();
     if (playhead) {
-      playhead.hidden = t < view.start || t > view.end;
+      const before = t < view.start,
+        after = t > view.end;
+      playhead.hidden = before || after;
       playhead.style.left = xOf(t);
+      edge.hidden = !before && !after;
+      if (before || after) {
+        edge.textContent = before ? `← ${t.toFixed(2)}초` : `${t.toFixed(2)}초 →`;
+        edge.classList.toggle("is-before", before);
+      }
     }
     if (ruler) ruler.setAttribute("aria-valuenow", String(round(t, 2)));
-    if (document.activeElement !== timeField) timeField.value = String(round(t, 3));
+    // 재생 중에는 자릿수 고정(소수 둘째)으로 글자 폭이 흔들리지 않게, 멈췄을 때는 정확한 값
+    if (document.activeElement !== timeField)
+      timeField.value = renderer.getStats().running ? t.toFixed(2) : String(round(t, 3));
     const playing = studio()?.getPlaybackState?.() ?? renderer.getStats().running;
     play.classList.toggle("icon-play", !playing);
     play.classList.toggle("icon-pause", !!playing);

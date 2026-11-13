@@ -119,7 +119,15 @@
     test(settings.getLinks().find(l => l.name === "uStep").ease === "linear", "잇기: 직선");
     const steps = await offlineAt([0, 0.25, 0.5, 2], "uStep");
     test(steps.join() === "0,3,5,10", `키프레임(int 반올림 · 끝 값 유지): ${steps}`);
-    choose(field("uStep", "반복(초, 0이면 끝 값 유지)"), 1);
+    // 시간 기준: '한 번'이 기본 · '반복'으로 바꾸면 길이 칸과 지금 바퀴 안내 · 길이 밖 키 경고
+    const timeMode = label => [...editor("uStep").querySelectorAll('[aria-label="키프레임 시간 기준"] [role="radio"]')].find(b => b.textContent.startsWith(label));
+    test(timeMode("재생 시간 그대로").getAttribute("aria-checked") === "true" && editor("uStep").textContent.includes("마지막 키 뒤로는 그 값을 유지"), "기본은 '재생 시간 그대로(한 번)'과 설명");
+    timeMode("일정 길이로 반복").click();
+    await until(() => settings.getLinks().find(l => l.name === "uStep").loop === 2, "반복으로 바꾸면 마지막 키를 담는 길이(2초)");
+    await until(() => /바퀴 안 \d+\.\d\d초 · \d+번째 바퀴/.test(editor("uStep").querySelector(".link-loop-status").textContent), "지금 바퀴 안내");
+    choose(field("uStep", "반복 길이(초)"), 0.5);
+    await until(() => editor("uStep").querySelector(".link-warn")?.textContent.includes("키 1개는 쓰이지 않습니다"), "길이 밖 키 경고");
+    choose(field("uStep", "반복 길이(초)"), 1);
     await wait(30);
     const looped = await offlineAt([1.5], "uStep");
     test(looped[0] === 5, `1초 반복: 1.5초 → ${looped[0]}`);

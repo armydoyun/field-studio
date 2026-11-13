@@ -12,10 +12,13 @@ const SHAPE_LABEL = { sine: "사인", triangle: "삼각", saw: "톱니", square:
 
 // 범위 폭에 맞춘 자릿수: 0~1 → 3자리, 0~100 → 1자리, 0~10000 → 0자리
 const decimalsFor = span => Math.min(4, Math.max(0, 3 - Math.floor(Math.log10(Math.max(1e-6, Math.abs(span))))));
-const format = (value, span = 1) => {
+// 숫자 글자: 실시간으로 바뀌는 칸(미터 · 결과)은 자릿수를 고정해(fixed) 글자 폭이 흔들리지 않게 한다.
+// 입력 칸 초깃값처럼 한 번 보이는 곳은 끝의 0을 뗀다.
+const format = (value, span = 1, fixed = false) => {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (!Number.isFinite(value)) return "—";
-  return String(Number(value.toFixed(decimalsFor(span))));
+  const text = value.toFixed(decimalsFor(span));
+  return fixed ? (text === "-0" || /^-0\.0+$/.test(text) ? text.slice(1) : text) : String(Number(text));
 };
 const seconds = value => `${Number(value.toFixed(2))}초`;
 
@@ -78,7 +81,7 @@ const meter = (item, link) => {
   const update = current => {
     const v = typeof current === "boolean" ? (current ? 1 : 0) : current;
     gauge.set((v - low) / (span || 1), format(current, span));
-    value.textContent = format(current, span);
+    value.textContent = format(current, span, true);
   };
   update(item.value);
   return { node, update };
@@ -253,7 +256,9 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
       status.textContent =
         midi.state === "on"
           ? `${midi.devices.length ? midi.devices.join(", ") : "장치 없음"}${
-              midi.last ? ` · 마지막: CC ${midi.last.cc} · 채널 ${midi.last.channel} = ${format(midi.last.value)}` : ""
+              midi.last
+                ? ` · 마지막: CC ${midi.last.cc} · 채널 ${midi.last.channel} = ${format(midi.last.value, 1, true)}`
+                : ""
             }`
           : midi.state === "error"
             ? midi.error
@@ -300,14 +305,53 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
     });
   }
   if (link.source === "keys") {
+    // 시간 기준: '한 번'(키 시간 = 재생 시간 uTime, 마지막 키 뒤로는 그 값 유지) · '반복'(uTime을 N초 길이로 잘라 되풀이)
+    const looping = link.loop > 0,
+      last = link.keys.length ? link.keys.at(-1)[0] : 0,
+      mode = segmented(
+        "키프레임 시간 기준",
+        [
+          ["once", "재생 시간 그대로(한 번)"],
+          ["loop", "일정 길이로 반복"],
+        ],
+        looping ? "loop" : "once",
+        next => change({ loop: next === "loop" ? Math.max(1, Math.ceil(last + 0.001)) : 0 })
+      ),
+      explain = element(
+        "p",
+        "link-note",
+        looping
+          ? `재생 시간(uTime)을 ${seconds(link.loop)} 길이로 잘라, 0 ~ ${seconds(link.loop)} 사이의 키를 끝없이 되풀이합니다. 키의 시간은 '바퀴 안의 시간'입니다.`
+          : "키의 시간 = 재생 시간(uTime). 0초부터 키를 차례로 한 번 지나가고, 마지막 키 뒤로는 그 값을 유지합니다. 처음부터 다시 보려면 시간 초기화(⟲)."
+      );
+    row("시간 기준", mode, explain);
+    if (looping) {
+      const length = element("div", "link-inline"),
+        status = element("p", "link-note link-loop-status"),
+        outside = link.keys.filter(([t]) => t >= link.loop - 1e-9).length;
+      length.append(
+        numberField("반복 길이(초)", link.loop, loop => loop > 0 && change({ loop }), {
+          min: 0.05,
+          max: 3600,
+          unit: "초",
+        })
+      );
+      const warn = element(
+        "p",
+        "link-note link-warn",
+        outside ? `반복 길이(${seconds(link.loop)}) 밖의 키 ${outside}개는 쓰이지 않습니다.` : ""
+      );
+      warn.hidden = !outside;
+      row("반복 길이", length, status, warn);
+      live.push(() => {
+        const t = renderer.getStats().time ?? 0,
+          cycle = Math.floor(t / link.loop);
+        status.textContent = `지금 uTime ${t.toFixed(2)}초 → 바퀴 안 ${(t - cycle * link.loop).toFixed(2)}초 · ${cycle + 1}번째 바퀴`;
+      });
+    }
     const open = element("button", "link-open-timeline", "타임라인에서 편집");
     open.type = "button";
     open.addEventListener("click", () => openTimeline(item.name));
-    const timing = element("div", "link-inline");
-    timing.append(
-      element("span", "link-unit", "반복"),
-      numberField("반복(초, 0이면 끝 값 유지)", link.loop, loop => change({ loop }), { min: 0, max: 3600, unit: "초" })
-    );
     row(
       "키",
       element("p", "link-note", `키 ${link.keys.length}개 — 시간 · 값은 파라미터 줄의 ◆ · 타임라인에서 고칩니다.`),
@@ -316,15 +360,14 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
     row(
       "잇기",
       segmented(
-        "키 사이 잇기",
+        "키 사이 잇기(키마다 따로 정한 것은 그대로)",
         [
           ["smooth", "부드럽게"],
           ["linear", "직선"],
         ],
         link.ease,
         ease => change({ ease })
-      ),
-      timing
+      )
     );
   }
 
@@ -422,7 +465,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline }) => {
     for (const draw of live) draw();
     const v = typeof current === "boolean" ? (current ? 1 : 0) : current;
     result.set((v - low) / (span || 1));
-    resultValue.textContent = format(current, span);
+    resultValue.textContent = format(current, span, true);
   };
   update(item.value);
   return { node, update };
