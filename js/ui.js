@@ -1482,9 +1482,34 @@ const mount = (renderer, input, settings) => {
     presetMenu = { node, button };
     items.find(item => !item.disabled)?.focus();
   };
-  const stopMorph = () => {
+  // 전환 중 표시: 목표 칩에 진행 막대(--morph 0~1) · 알림 줄에 '전환 중'과 '바로 끝내기'.
+  // 직접 값을 만지면 전환은 그 자리에서 멈추고(만진 값이 이긴다) 멈췄다고 알린다.
+  let morphState = null; // { name, finish(): 끝 값으로 바로 }
+  const morphChip = name =>
+    [...($("presetList")?.querySelectorAll?.(".preset-chip") || [])].find(
+      chip => chip.querySelector(".preset-apply")?.textContent === name
+    );
+  const paintMorph = t => {
+    const chip = morphState && morphChip(morphState.name);
+    for (const node of $("presetList")?.querySelectorAll?.(".preset-chip.is-morphing") || [])
+      if (node !== chip) node.classList.remove("is-morphing");
+    if (!chip) return;
+    chip.classList.add("is-morphing");
+    chip.style.setProperty("--morph", String(t));
+  };
+  const endMorphUi = () => {
+    morphState = null;
+    paintMorph(0);
+    $("presetBar")?.classList?.remove("is-morphing");
+    if ($("presetFinish")) $("presetFinish").hidden = true;
+  };
+  // byUser: 사용자가 값을 직접 바꿔 멈춘 경우(알림을 남긴다)
+  const stopMorph = (byUser = false) => {
     if (morph) cancelAnimationFrame(morph);
+    const wasMorphing = !!morph && morphState;
     morph = 0;
+    if (wasMorphing && byUser) presetNotice(`'${morphState.name}' 전환을 멈췄습니다 · 직접 바꾼 값을 그대로 둡니다`);
+    if (morphState) endMorphUi();
   };
   const askName = async (title, value, others) => {
     const ask = window.shaderStudio?.ask;
@@ -1517,31 +1542,59 @@ const mount = (renderer, input, settings) => {
     let stopped = false;
     for (const item of users) if (names.includes(item.name) && playing.delete(item.name)) stopped = true;
     if (stopped) syncPlayButtons();
+    // 전환 도중의 값은 파라미터의 간격(step) 자릿수로 맞춘다: 숫자 칸 폭(간격 자릿수 기준)을 넘지 않아 잘리지 않고,
+    // 슬라이더로 고를 수 있는 값만 지난다. 끝(t = 1)에는 프리셋 값 그대로.
+    const places = new Map(
+      users.map(item => {
+        const step = String(item.options?.step ?? "");
+        return [item.name, step.includes(".") ? Math.min(6, step.split(".")[1].length) : 3];
+      })
+    );
+    const tidy = (name, value, t) => {
+      if (t >= 1) return value;
+      const round = v => (typeof v === "number" ? Number(v.toFixed(places.get(name) ?? 3)) : v);
+      return Array.isArray(value) ? value.map(round) : round(value);
+    };
     const write = t => {
       for (const [name, value] of Presets.blend(users, from, preset, Presets.ease(t)))
         try {
-          renderer.setUniform(name, value);
+          renderer.setUniform(name, tidy(name, value, t));
         } catch (error) {
           console.warn(`프리셋 값 무시 (${name}):`, error.message);
         }
     };
+    const summary = `'${preset.name}' · 파라미터 ${used}개${skipped ? ` · 이 프로젝트에 없는 ${skipped}개는 건너뜀` : ""}`;
     const finish = () => {
       morph = 0;
+      endMorphUi();
+      presetNotice(summary);
       settings.save();
       renderUniforms();
     };
     const seconds = Number($("presetBlend").value) || 0;
-    presetNotice(
-      `'${preset.name}' · 파라미터 ${used}개${skipped ? ` · 이 프로젝트에 없는 ${skipped}개는 건너뜀` : ""}${seconds ? ` · ${seconds}초 동안 전환` : ""}`
-    );
     if (!seconds) {
+      presetNotice(summary);
       write(1);
       return finish();
     }
+    presetNotice(`'${preset.name}'(으)로 바꾸는 중 · ${seconds}초`);
+    $("presetNoticeText").title = "값을 직접 만지면 전환이 그 자리에서 멈춥니다";
+    morphState = {
+      name: preset.name,
+      finish: () => {
+        if (morph) cancelAnimationFrame(morph);
+        write(1);
+        finish();
+      },
+    };
+    $("presetBar")?.classList?.add("is-morphing");
+    if ($("presetFinish")) $("presetFinish").hidden = false;
+    paintMorph(0);
     const start = performance.now();
     const tick = now => {
       const t = Math.min(1, (now - start) / (seconds * 1000));
       write(t);
+      paintMorph(t);
       if (t < 1) morph = requestAnimationFrame(tick);
       else finish();
     };
@@ -1609,6 +1662,7 @@ const mount = (renderer, input, settings) => {
       presetNotice(`'${name}' 저장 · 이름은 칩을 두 번 눌러 바꿉니다`, presets);
     });
   });
+  if ($("presetFinish")) listen($("presetFinish"), "click", () => morphState?.finish());
   listen($("presetUndo"), "click", () => {
     if (!presetRestore) return;
     const previous = presetRestore;
@@ -1704,6 +1758,7 @@ const mount = (renderer, input, settings) => {
     keyPointer = false;
     if (pendingKeys.size) setTimeout(flushKeys);
   });
+  const heldNav = new WeakMap(); // 파라미터 줄 → 연결 시트 안으로 옮겨 둘 키프레임 내비게이터
   const keyNav = (item, link) => {
     const nav = element("div"),
       prev = element("button"),
@@ -1835,15 +1890,30 @@ const mount = (renderer, input, settings) => {
       controls = node => [...node.querySelectorAll("select,input,button")],
       index = box ? controls(box).indexOf(active) : -1,
       name = box?.dataset.name;
+    // 화면 고정: 다시 그리면 줄 위쪽에 칸이 생기거나 사라질 수 있다(키프레임을 고르면 ◀ ◆ ▶ 줄이 생김).
+    // 누른 칸(없으면 열린 연결 시트)이 화면에서 같은 자리에 머물도록 다시 그린 뒤 스크롤을 그만큼 옮긴다.
+    const scroller = $("panel")?.querySelector?.(".panel-scroll"),
+      sheetName = document.querySelector(".link-editor")?.dataset?.name,
+      anchorBefore = (box ? active : document.querySelector(".link-editor"))?.getBoundingClientRect?.().top;
+    const keepAnchor = node => {
+      const after = node?.getBoundingClientRect?.().top;
+      if (scroller && Number.isFinite(anchorBefore) && Number.isFinite(after) && Math.abs(after - anchorBefore) > 0.5)
+        scroller.scrollTop += after - anchorBefore;
+    };
     renderUniforms();
-    if (!box) return;
+    if (!box) {
+      keepAnchor([...$("uniformList").querySelectorAll(".link-editor")].find(node => node.dataset.name === sheetName));
+      return;
+    }
     const next = [...$("uniformList").querySelectorAll(selector)].find(node => node.dataset.name === name);
     if (!next) return;
     // 라디오(소스 · 모양 …)를 눌렀으면 같은 묶음의 고른 칸으로
     const group = active.closest?.('[role="radiogroup"]'),
       groups = [...box.querySelectorAll('[role="radiogroup"]')].indexOf(group),
-      picked = group && next.querySelectorAll('[role="radiogroup"]')[groups]?.querySelector('[aria-checked="true"]');
-    (picked || controls(next)[index] || controls(next)[0])?.focus();
+      picked = group && next.querySelectorAll('[role="radiogroup"]')[groups]?.querySelector('[aria-checked="true"]'),
+      target = picked || controls(next)[index] || controls(next)[0];
+    target?.focus({ preventScroll: true });
+    keepAnchor(target);
   });
   // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
   let hiddenKey = "";
@@ -2033,9 +2103,9 @@ const mount = (renderer, input, settings) => {
       top.append(title, ...extras, ...(reset ? [reset] : []), remove);
       if (description) top.append(description);
       const commit = (field, value) => {
-        // 사용자가 직접 바꾸면 그 파라미터의 재생과 프리셋 전환을 멈춘다.
+        // 사용자가 직접 바꾸면 그 파라미터의 재생과 프리셋 전환을 멈춘다(전환을 멈췄다고 알린다).
         if (playing.delete(item.name)) syncPlayButtons();
-        stopMorph();
+        stopMorph(true);
         try {
           renderer.setUniform(item.name, value);
           item.value = value;
@@ -2066,7 +2136,10 @@ const mount = (renderer, input, settings) => {
       if (keyed) {
         // 키프레임 내비게이터 + 자동 키. 재생 중 값은 지금 키프레임 값으로 따라간다(이 줄을 만지는 동안은 그대로).
         const nav = keyNav(item, link);
-        row.append(nav.node);
+        // 연결 시트가 열려 있으면 내비게이터는 시트 안(방식 버튼 아래)에 둔다: 방식을 바꿀 때 생기고 사라지는 칸이
+        // 누른 버튼 아래쪽에서만 바뀌어, 버튼이 화면에서 위아래로 튀지 않는다.
+        if (openLink === item.name) heldNav.set(row, nav.node);
+        else row.append(nav.node);
         row.classList.add("is-keyed");
         row.addEventListener("pointerdown", () => (keyPointer = true));
         row.addEventListener("change", () => setTimeout(flushKeys));
@@ -2526,7 +2599,14 @@ const mount = (renderer, input, settings) => {
         }
         row.append(list);
       } else widget(row, item, commit, name);
-      if (openLink === item.name && Links.LINKABLE.has(item.type)) row.append(linkEditor(item));
+      if (openLink === item.name && Links.LINKABLE.has(item.type)) {
+        const editor = linkEditor(item),
+          held = heldNav.get(row);
+        if (held) editor.insertBefore(held, editor.children[1] ?? null);
+        // 시트는 이름 바로 아래(조작 칸 위)에 연다: 방식을 바꾸면 조작 칸(다이얼 · 슬라이더 ↔ 미터)이 달라지는데,
+        // 그 변화가 누른 버튼보다 아래에서만 일어나 버튼이 화면에서 튀지 않는다.
+        top.after(editor);
+      }
       place(row, annotated ? spec.group : "");
     }
     // 묶음 순서는 코드에 처음 나온 순서(다른 프로젝트에서 남은 파라미터의 등록 순서가 아니라).

@@ -126,14 +126,16 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   keyValue.step = "any";
   keyValue.setAttribute("aria-label", "선택한 키 값");
   keyEase.setAttribute("aria-label", "선택한 키에서 다음 키까지 잇기");
-  for (const [value, text] of [["", "연결 설정 따름"], ...Object.entries(EASE_LABEL)]) {
+  for (const [value, text] of [["", "기본"], ...Object.entries(EASE_LABEL)]) {
     const option = element("option", "", text);
     option.value = value;
     keyEase.append(option);
   }
-  const mixed = element("option", "", "여러 가지");
+  // 고른 키들의 잇기가 서로 다를 때만 보이는 상태 표시(고를 수는 없다). 다른 항목을 고르면 모두 그 방식이 된다.
+  const mixed = element("option", "", "서로 다름");
   mixed.value = "*";
   mixed.disabled = true;
+  mixed.hidden = true;
   keyEase.append(mixed);
   const labelled = (text, control, unit = "") => {
     const label = element("label", "timeline-field");
@@ -511,8 +513,20 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       keyValue.value = values.length === 1 ? String(round(values[0], 4)) : "";
       keyValue.placeholder = values.length > 1 ? "여러 값" : "";
     }
-    const eases = [...new Set(list.map(entry => entry.key[2] || ""))];
-    keyEase.value = !list.length ? "" : eases.length === 1 ? eases[0] : "*";
+    const eases = [...new Set(list.map(entry => entry.key[2] || ""))],
+      differs = eases.length > 1;
+    mixed.hidden = !differs;
+    keyEase.value = !list.length ? "" : differs ? "*" : eases[0];
+    // '기본'이 무엇인지 보이게: 고른 키들이 한 레인이면 그 레인의 기본 잇기 이름을 붙인다
+    const defaults = [...new Set(list.map(entry => entry.link.ease || "smooth"))];
+    keyEase.options[0].textContent = !list.length
+      ? "기본"
+      : defaults.length === 1
+        ? `기본 (${EASE_LABEL[defaults[0]] || "부드럽게"})`
+        : "기본 (레인 설정)";
+    keyEase.title = differs
+      ? `고른 키 ${list.length}개의 잇기가 서로 다릅니다 · 하나를 고르면 모두 그 방식으로 바뀝니다`
+      : "이 키에서 다음 키까지 값을 잇는 방식 · '기본'은 연결 시트의 기본 잇기를 따릅니다";
     for (const [name, info] of lanes)
       info.dots.forEach((dot, i) => dot.classList.toggle("is-selected", isSelected(name, info.link.keys[i][0])));
   };
