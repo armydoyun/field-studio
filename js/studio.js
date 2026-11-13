@@ -160,6 +160,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       onScrub: scrubApply,
       renameUniform: request => renameUniform(request),
       notify: text => setStatus(text, "is-dirty"),
+      // 다른 탭의 편집기가 Common의 이름을 알도록(자동 완성 · 설명 · 정의로 이동). Common 탭 자신에게는 넘기지 않는다.
+      shared: () => (selected !== COMMON && hasCommon() ? project.common : ""),
+      openShared: (line, column) => {
+        select(COMMON);
+        editor.goToLine(line, column);
+        setStatus(`Common 탭 ${line}번째 줄의 정의로 이동했습니다`);
+      },
     }
   );
   for (const type of ["beforeinput", "select", "click", "keyup", "scroll"]) on($("studioCode"), type, captureCursor);

@@ -241,6 +241,21 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       found = wordAround(src, pos);
     if (!found) return false;
     const at = definitionOf(src, found.word, found.start);
+    // 이 탭에 없으면 Common 탭에서 찾는다: 함수 · 전역 변수 · 구조체 · #define이면 options.openShared(줄, 열)로 그 탭의 그 자리로.
+    const common = at < 0 ? language.shared?.() : null;
+    if (common && options.openShared) {
+      const where =
+        common.functions.find(f => f.name === found.word)?.offset ??
+        common.structs.get(found.word)?.offset ??
+        common.defines.find(d => d.name === found.word)?.offset ??
+        common.variables.find(v => v.name === found.word)?.offset;
+      if (where !== undefined) {
+        const before = common.src.slice(0, where),
+          line = before.split("\n").length;
+        options.openShared(line, where - before.lastIndexOf("\n"));
+        return true;
+      }
+    }
     if (at < 0) {
       notify(
         options.lookup?.(found.word)

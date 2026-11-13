@@ -113,6 +113,8 @@ test("Shadertoy 이름: #version이 있는 코드는 precision 뒤에 넣고 inj
   assert.deepEqual(out.injected,{after:2,count:2,generated:2});
 });
 // "#line N S"까지 따라 (소스번호, 줄) → 내용. 진입점 줄과 그 뒤는 뺀다.
+// Common이 있으면 패스의 uniform 선언은 Common 앞으로 끌어올리고 원래 자리는 같은 길이 공백이 된다.
+const blankUniform=line=>line.replace(/uniform\s[^;]*;/g,m=>" ".repeat(m.length));
 const sourceLines=src=>{const map=new Map();let n=1,s=0;for(const line of src.split("\n")){const m=/^#line (\d+)(?: (\d+))?$/.exec(line);if(m){n=Number(m[1]);if(m[2]!==undefined)s=Number(m[2]);continue;}if(/void main\(\) \{ vec4 color/.test(line))break;map.set(`${s}:${n}`,line);n++;}return map;};
 test("Common: 머리말 뒤 · 패스 코드 앞에 넣고, Common 줄은 소스 1번 · 패스 줄은 소스 0번 번호를 그대로 쓴다",()=>{
   const common="// 공용\nfloat hash(float x) { return fract(sin(x) * 43758.5); }\n#define TAU 6.2831853";
@@ -120,10 +122,11 @@ test("Common: 머리말 뒤 · 패스 코드 앞에 넣고, Common 줄은 소스
   const out=prepareFragment(user,["uniform float uGain;"],{common}).source;
   assert(out.indexOf("precision highp float;")<out.indexOf("uniform float uGain;")&&out.indexOf("uniform float uGain;")<out.indexOf("float hash"),"precision → 선언 → Common");
   assert(out.indexOf("#define iTime uTime")<out.indexOf("float hash"),"Shadertoy 연결도 Common 앞");
-  assert(!out.includes("uniform float uTime;\n#define"),"패스가 선언한 uTime은 다시 선언하지 않는다");
+  assert.equal(out.split("uniform float uTime;").length,2,"패스가 선언한 uTime은 한 번만(끌어올린 것)");
+  assert(/\n#line 2 0\nuniform float uTime;\n#line 1 1\n\/\/ 공용/.test(out),"패스의 uniform은 원래 줄 번호로 Common 바로 앞에");
   const lines=sourceLines(out);
   common.split("\n").forEach((line,i)=>assert.equal(lines.get(`1:${i+1}`),line,`Common ${i+1}번 줄`));
-  user.split("\n").forEach((line,i)=>assert.equal(lines.get(`0:${i+1}`),line,`패스 ${i+1}번 줄`));
+  user.split("\n").forEach((line,i)=>assert.equal(lines.get(`0:${i+1}`),blankUniform(line),`패스 ${i+1}번 줄`));
   assert(/\n#line 3\nout vec4 field_FragColor_; void main\(\)/.test(out),"진입점은 패스의 mainImage 줄(소스 0번)");
 });
 test("Common: Shadertoy 이름을 Common에서만 써도 연결하고, Common의 #define은 존중한다",()=>{
@@ -142,10 +145,38 @@ test("Common: #version이 있는 코드는 precision 뒤에 넣고, 패스 줄�
     const out=prepareFragment(user,["uniform float uGain;"],{common:"float f() { return 1.0; }"});
     const lines=sourceLines(out.source),{after,count}=out.injected;
     assert.equal(lines.get("1:1"),"float f() { return 1.0; }");
-    user.split("\n").forEach((line,i)=>{const n=i+1;if(n>after)assert.equal(lines.get(`0:${n+count}`),line,`패스 ${n}번 줄 → 컴파일러 ${n+count}`);});
+    user.split("\n").forEach((line,i)=>{const n=i+1;if(n>after)assert.equal(lines.get(`0:${n+count}`),blankUniform(line),`패스 ${n}번 줄 → 컴파일러 ${n+count}`);});
+    assert(out.source.includes(`\n#line ${3+count} 0\nuniform float uTime;\n#line 1 1\n`),"끌어올린 uniform도 같은 규칙의 번호(원래 줄 + count)");
   }
   const noDecl=prepareFragment("#version 300 es\nprecision highp float;\nout vec4 o;\nvoid main(){ o = vec4(f()); }",[],{common:"float f() { return 1.0; }"});
   assert.deepEqual(noDecl.injected,{after:2,count:0,generated:0});
   assert.equal(sourceLines(noDecl.source).get("0:3"),"out vec4 o;");
+});
+test("Common의 Uniform: 패스 uniform을 Common 앞으로 끌어올려 Common이 uTime · 파라미터 · iChannel을 쓴다",()=>{
+  const common="float pulse() { return sin(uTime * uSpeed); }\nvec4 pick(vec2 uv) { return texture(iChannel0, uv); }";
+  const user="uniform float uTime;\nuniform float uSpeed; // @range 0 4\nuniform sampler2D iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) { c = pick(p) * pulse(); }";
+  const out=prepareFragment(user,[],{common}).source;
+  for(const decl of["uniform float uTime;","uniform float uSpeed;","uniform sampler2D iChannel0;"]){
+    assert.equal(out.split(decl).length,2,`${decl} 한 번`);
+    assert(out.indexOf(decl)<out.indexOf("float pulse()"),`${decl}는 Common 앞`);
+  }
+  assert(out.includes("\n#line 2 0\nuniform float uSpeed;\n"),"끌어올린 줄은 원래 줄 번호");
+  const lines=sourceLines(out);
+  assert.equal(lines.get("0:2"),"                      // @range 0 4","원래 자리는 공백 · 뒤의 주석은 그대로");
+});
+test("Common의 Uniform: Common이 쓰는 앱 Uniform을 패스가 선언하지 않았으면 넣는다(이미 있거나 Common이 선언했으면 넣지 않는다)",()=>{
+  const common="vec2 center() { return 0.5 * uResolution; }\nfloat t() { return uTime; }\nvec3 size0() { return iChannelResolution[0]; }";
+  let out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(center(), t(), size0().x); }",[],{common}).source;
+  for(const decl of["uniform vec2 uResolution;","uniform float uTime;","uniform vec3 iChannelResolution[4];"])
+    assert(out.includes(decl)&&out.indexOf(decl)<out.indexOf("vec2 center()"),`${decl}를 Common 앞에 넣는다`);
+  out=prepareFragment("uniform vec3 uResolution;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(center(), t(), 0.0); }",[],{common:"uniform float uTime;\n"+common}).source;
+  assert(!out.includes("uniform vec2 uResolution;")&&out.split("uniform float uTime;").length===2,"패스(vec3) · Common이 선언한 것은 그대로");
+  assert(!prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(uTime); }",[],{common:"float k() { return 1.0; }"}).source.includes("uniform float uTime;"),"Common이 쓰지 않는 앱 Uniform은 넣지 않는다(패스의 미선언은 예전처럼 오류)");
+});
+test("Common의 Uniform: Common이 같은 이름을 선언했으면 패스 쪽은 지우기만, 구조체 · 상수 크기 배열은 그대로 둔다",()=>{
+  const user="struct Light { vec3 dir; };\nconst int N = 3;\nuniform Light uLight;\nuniform vec3 uPoints[N];\nuniform float uGain;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(uGain); }";
+  const out=prepareFragment(user,[],{common:"uniform float uGain;\nfloat g() { return uGain; }"}).source;
+  assert.equal(out.split("uniform float uGain;").length,2,"uGain은 Common의 선언 하나만");
+  assert(out.includes("\nuniform Light uLight;\nuniform vec3 uPoints[N];\n"),"구조체 타입 · 상수 크기 배열은 제자리");
 });
 console.log(`GLSL prepare: ${passed} passed`);

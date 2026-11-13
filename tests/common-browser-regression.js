@@ -56,6 +56,35 @@
     clash.imageChannels = { 0: { buffer: "Common", frame: "current" } };
     test(!studio.setProject(clash), "Buffer 이름 Common은 거부");
 
+    // 6-1) Common이 패스의 Uniform · iChannel · 앱 Uniform · Shadertoy 이름을 직접 쓴다(패스 선언을 Common 앞으로 끌어올림).
+    //      Common이 쓰는 파라미터는 Common에 선언한다(모든 패스에 들어가고, 어노테이션도 Common에서 읽는다).
+    const shared = "// Common\nuniform float uGain;   // @range 0 1 @default 0.25\nvec3 tint() { return vec3(uGain, texelFetch(iChannel0, ivec2(0), 0).r, iResolution.x / 8.0) * step(0.0, uTime); }";
+    const withUniforms = project(shared, "uniform float uTime;\nuniform sampler2D iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) {\n    c = vec4(tint(), 1.0);\n}");
+    withUniforms.passes[0].channels = { 0: { buffer: "A", frame: "previous" } };
+    test(studio.setProject(withUniforms), "Common이 패스 Uniform · 파라미터 · iChannel을 쓰는 프로젝트");
+    await frames(4);
+    test(pixel()[0] === 0.25 && pixel()[2] === 0.5, `Common의 uGain(0.25) · iResolution.x / 8(0.5): ${pixel()}`);
+    // Image는 uTime을 선언하지 않았지만 Common이 쓰므로 앱이 선언을 넣는다
+    test(!diagnostics().length, `오류 없음: ${diagnostics()}`);
+    test(r.getUserUniforms().some(u => u.name === "uGain"), "Common의 어노테이션으로 파라미터 등록");
+    // 끌어올린 선언에서 난 오류도 원래 줄로: 3번 줄의 잘못된 선언
+    test(!studio.setProject(project(shared, "uniform float uTime;\nuniform vec2 iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(tint(), 1.0); }")), "타입이 틀린 iChannel0 선언");
+    test(diagnostics().some(text => /^Common · Line 3 · /.test(text)), `Common에서 쓰는 곳(3번 줄)에 오류: ${diagnostics()}`);
+
+    // 6-2) 정의로 이동(F12): Image 탭에서 Common의 함수를 가리키면 Common 탭의 그 줄로 간다
+    const jump = project("// 1\n// 2\nvec3 tint() { return vec3(0.5); }");
+    jump.image = "uniform sampler2D iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(tint(), 1.0); }";
+    test(studio.setProject(jump), "F12용 프로젝트");
+    $("studioTab-Image").click();
+    await frames(1);
+    const area = $("studioCode"), at = area.value.indexOf("tint()") + 1;
+    area.focus();
+    area.setSelectionRange(at, at);
+    document.querySelector(".cm-content").dispatchEvent(new KeyboardEvent("keydown", { key: "F12", code: "F12", keyCode: 123, bubbles: true, cancelable: true }));
+    await frames(2);
+    const caretLine = $("studioCode").value.slice(0, $("studioCode").selectionStart).split("\n").length;
+    test(activeTab() === "Common" && caretLine === 3, `F12 → Common 탭 3번째 줄: ${activeTab()} · ${caretLine}`);
+
     // 7) 편집기: Common 추가 → 탭이 생기고 고른 상태 · 삭제 → 사라짐 · Undo → 돌아옴
     test(studio.setProject({ image: "void mainImage(out vec4 c, in vec2 p) { c = vec4(1.0); }", passes: [], imageChannels: {} }), "Common 없는 프로젝트");
     test(!$("studioAddCommon").hidden && !$("studioTab-Common"), "Common이 없으면 추가 버튼만 있다");

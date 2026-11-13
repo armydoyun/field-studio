@@ -64,19 +64,24 @@ const create = ctx => {
   const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const userUniforms = () => options.userUniforms?.() || uniformNames().map(name => ({ name, type: "" }));
 
-  // 주석·문자열을 같은 길이 공백으로 지운 사본(위치 보존). 같은 소스면 다시 계산하지 않는다.
-  let cleanCache = { src: null, clean: "" };
-  const cleanOf = src => {
-    if (cleanCache.src !== src) cleanCache = { src, clean: cleanSource(src) };
-    return cleanCache.clean;
+  // 소스별 결과를 두 개까지 기억한다: 지금 탭의 소스와 Common(options.shared)을 번갈아 읽어도 다시 계산하지 않게.
+  const memo2 = fn => {
+    let a = null,
+      b = null;
+    return src => {
+      if (a?.src === src) return a.value;
+      if (b?.src === src) [a, b] = [b, a];
+      else [a, b] = [{ src, value: fn(src) }, a];
+      return a.value;
+    };
   };
+  // 주석·문자열을 같은 길이 공백으로 지운 사본(위치 보존). 같은 소스면 다시 계산하지 않는다.
+  const cleanOf = memo2(cleanSource);
 
   // ==== 심볼 표: 함수·변수(매개변수 포함)·구조체·#define. 소스가 바뀔 때만 다시 만든다 ====
   const DECL =
     /\b((?:(?:const|uniform|in|out|inout|highp|mediump|lowp|flat|smooth)\s+)*)((?:[biu]?vec[234]|mat[234](?:x[234])?|float|int|uint|bool|[iu]?sampler2D|samplerCube|sampler3D|[A-Z]\w*))\s+([A-Za-z_]\w*)\s*(?=[=;,)[])/g;
-  let symbolCache = { src: null };
-  const symbolsOf = src => {
-    if (symbolCache.src === src) return symbolCache;
+  const symbolsOf = memo2(src => {
     const clean = cleanOf(src),
       starts = lineStartsOf(src),
       line = at => lineIndexAt(starts, at) + 1,
@@ -114,13 +119,38 @@ const create = ctx => {
       });
     for (const m of src.matchAll(/^[ \t]*#define[ \t]+([A-Za-z_]\w*)[ \t]*(.*)$/gm))
       defines.push({ name: m[1], value: m[2].trim(), offset: m.index + m[0].indexOf(m[1]), line: line(m.index) });
-    return (symbolCache = { src, functions, variables, structs, defines });
+    return { src, functions, variables, structs, defines };
+  });
+  // Common 탭(options.shared() = 지금 탭이 아닌 Common의 소스): 다른 탭의 자동 완성 · 설명 · 시그니처가 그 함수 ·
+  // 전역 변수(Uniform · 상수) · 구조체 · #define을 안다. 함수 안의 지역 변수 · 매개변수는 빼고 전역만 둔다.
+  const sharedOf = memo2(src => {
+    const sym = symbolsOf(src),
+      clean = cleanOf(src),
+      depth = new Int32Array(clean.length + 1);
+    for (let i = 0, d = 0; i < clean.length; i++) {
+      if (clean[i] === "{") d++;
+      else if (clean[i] === "}") d = Math.max(0, d - 1);
+      depth[i + 1] = d;
+    }
+    // 매개변수는 괄호 안이라 깊이 0이어도 함수 머리줄에 있다: 함수 머리줄 범위를 뺀다.
+    const heads = sym.functions.map(f => [f.offset, clean.indexOf("{", f.offset)]);
+    return {
+      ...sym,
+      variables: sym.variables.filter(
+        v => depth[v.offset] === 0 && !heads.some(([a, b]) => v.offset > a && v.offset < b)
+      ),
+    };
+  });
+  const shared = () => {
+    const src = options.shared?.() || "";
+    return src.trim() ? sharedOf(src) : null;
   };
   // 이름의 타입: 가장 가까운 앞쪽 선언 → 내장 변수 → 앱 Uniform
   const typeOf = (name, pos) => {
     const vars = symbolsOf(source()).variables.filter(v => v.name === name);
     if (!vars.length)
       return (
+        shared()?.variables.find(v => v.name === name)?.type ||
         BUILTIN_VARS[name] ||
         APP_UNIFORMS.find(u => u[0] === name)?.[1] ||
         SHADERTOY_UNIFORMS.find(u => u[0] === name)?.[1] ||
@@ -136,8 +166,10 @@ const create = ctx => {
     const builtin = options.lookup?.(name);
     if (builtin) return { sig: builtin.sig, desc: builtin.desc };
     const own = symbolsOf(src).functions.find(entry => entry.name === name);
-    return own
-      ? { sig: `${own.ret} ${name}(${own.params})`, desc: `이 패스에 정의된 함수 · ${own.line}번째 줄` }
+    if (own) return { sig: `${own.ret} ${name}(${own.params})`, desc: `이 패스에 정의된 함수 · ${own.line}번째 줄` };
+    const common = shared()?.functions.find(entry => entry.name === name);
+    return common
+      ? { sig: `${common.ret} ${name}(${common.params})`, desc: `Common 탭의 함수 · ${common.line}번째 줄` }
       : null;
   };
   const describeSymbol = (name, pos) => {
@@ -154,6 +186,23 @@ const create = ctx => {
           ? app[2]
           : `${decl.uniform ? "Uniform" : decl.output ? "출력" : "변수"} · ${decl.line}번째 줄에서 선언`,
       };
+    const common = shared();
+    const commonVar = common?.variables.find(v => v.name === name);
+    if (commonVar)
+      return {
+        sig: `${commonVar.uniform ? "uniform " : ""}${commonVar.type} ${name}`,
+        desc: `${app ? `${app[2]} · ` : ""}Common 탭 · ${commonVar.line}번째 줄에서 선언`,
+      };
+    if (common?.structs.has(name)) {
+      const struct = common.structs.get(name);
+      return {
+        sig: `struct ${name} { ${struct.fields.map(f => `${f.type} ${f.name};`).join(" ")} }`,
+        desc: `구조체 · Common 탭 ${struct.line}번째 줄`,
+      };
+    }
+    const commonDefine = common?.defines.find(d => d.name === name);
+    if (commonDefine && !sym.defines.some(d => d.name === name))
+      return { sig: `#define ${name} ${commonDefine.value}`, desc: `매크로 · Common 탭 ${commonDefine.line}번째 줄` };
     if (app) return { sig: `uniform ${app[1]} ${name}`, desc: `${app[2]} · 아직 선언되지 않음` };
     const toy = SHADERTOY_UNIFORMS.find(u => u[0] === name);
     if (toy && !sym.defines.some(d => d.name === name)) return { sig: `${toy[1]} ${name}`, desc: toy[2] };
@@ -361,7 +410,7 @@ const create = ctx => {
       const owner = src.slice(0, start - 1).match(/([A-Za-z_]\w*)(?:\[[^\]]*\])?\s*$/)?.[1];
       if (!owner) return { items: [], member: true };
       const type = typeOf(owner, start),
-        struct = symbolsOf(src).structs.get(type);
+        struct = symbolsOf(src).structs.get(type) || shared()?.structs.get(type);
       return {
         member: true,
         items: struct
@@ -400,6 +449,38 @@ const create = ctx => {
       add({ label: name, kind: "type", detail: "struct", desc: s.fields.map(f => `${f.type} ${f.name}`).join(" · ") });
     for (const d of sym.defines)
       add({ label: d.name, kind: "constant", detail: `#define ${d.value}`.trim(), desc: `${d.line}번째 줄` });
+    // Common 탭의 이름(이 탭에 같은 이름이 있으면 이 탭 것이 먼저 — add가 같은 이름을 한 번만 넣는다)
+    const common = shared();
+    if (common) {
+      for (const f of common.functions)
+        add({
+          label: f.name,
+          kind: "function",
+          detail: `${f.ret} ${f.name}(${f.params})`,
+          desc: `Common 탭의 함수 · ${f.line}번째 줄`,
+        });
+      for (const v of common.variables)
+        add({
+          label: v.name,
+          kind: v.uniform ? "uniform" : "variable",
+          detail: `${v.uniform ? "uniform " : ""}${v.type}`,
+          desc: `Common 탭 · ${v.line}번째 줄에서 선언`,
+        });
+      for (const [name, st] of common.structs)
+        add({
+          label: name,
+          kind: "type",
+          detail: "struct",
+          desc: `Common 탭 · ${st.fields.map(f => `${f.type} ${f.name}`).join(" · ")}`,
+        });
+      for (const d of common.defines)
+        add({
+          label: d.name,
+          kind: "constant",
+          detail: `#define ${d.value}`.trim(),
+          desc: `Common 탭 · ${d.line}번째 줄`,
+        });
+    }
     for (const u of userUniforms())
       add({
         label: u.name,
@@ -466,6 +547,7 @@ const create = ctx => {
     escapeRe,
     cleanOf,
     symbolsOf,
+    shared,
     describeFunction,
     describeSymbol,
     fuzzy,

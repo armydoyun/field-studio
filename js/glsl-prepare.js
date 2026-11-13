@@ -100,6 +100,50 @@ const shadertoyLines = code => {
   return lines;
 };
 
+// ---- Common이 Uniform을 쓸 수 있게 ----
+// Common은 패스 코드 앞에 붙는다. 그대로면 패스가 아래에서 선언한 Uniform(uTime · 파라미터 · iChannel …)을 Common이 쓸 수 없으므로,
+//  1) 패스의 전역 uniform 선언(GLSL 기본 타입 · 크기가 숫자인 배열만)을 Common 앞으로 끌어올린다. 원래 자리는 같은 길이의
+//     공백으로 지워(줄 · 열 그대로) 끌어올린 문장 앞에 "#line 원래 줄"을 붙인다 — 그 선언에서 난 오류도 원래 줄로 나온다.
+//     구조체 타입 · 상수로 크기를 정한 배열은 그 정의가 아래에 있을 수 있어 그대로 둔다. Common이 같은 이름을 이미 선언했으면
+//     패스 쪽 선언은 지우기만 한다(두 번 선언하면 오류).
+//  2) Common이 쓰는 앱 Uniform(아래 APP_UNIFORMS)을 이 패스가 선언하지 않았으면 선언을 넣는다(값은 렌더러가 이름으로 넣는다).
+const HOIST_TYPE =
+  /^(?:float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler(?:2D|3D|Cube|2DArray)(?:Shadow)?)$/;
+const hoistable = code =>
+  [...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+([^;{}]*);/g)]
+    .filter(m => HOIST_TYPE.test(m[1]) && !/\[(?!\s*\d+\s*\])/.test(m[2]))
+    .map(m => ({
+      start: m.index,
+      end: m.index + m[0].length,
+      names: m[2].split(",").map(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0]),
+    }));
+const blankRanges = (text, ranges) =>
+  ranges.reduce(
+    (out, { start, end }) => out.slice(0, start) + out.slice(start, end).replace(/[^\r\n]/g, " ") + out.slice(end),
+    text
+  );
+// 렌더러가 이름으로 값을 넣는 앱 Uniform(renderer.js · pass-manager.js). Common이 쓰면 선언 없는 패스에 이 타입으로 넣는다.
+const APP_UNIFORMS = [
+  ["uResolution", "vec2"],
+  ["uTime", "float"],
+  ["uDeltaTime", "float"],
+  ["uFrame", "int"],
+  ["uMouse", "vec4"],
+  ["uWheel", "float"],
+  ["iChannel0", "sampler2D"],
+  ["iChannel1", "sampler2D"],
+  ["iChannel2", "sampler2D"],
+  ["iChannel3", "sampler2D"],
+  ["iChannelResolution", "vec3", "[4]"],
+];
+const commonUniforms = (commonCode, known) =>
+  APP_UNIFORMS.filter(
+    ([name]) => new RegExp(`\\b${name}\\b`).test(commonCode) && !uniformType(known, name) && !definesName(known, name)
+  ).map(([name, type, array = ""]) => `uniform ${type} ${name}${array};`);
+// 끌어올릴 줄: 문장마다 "#line 컴파일러 줄 0" + 원문. shift = 원래 줄에 더할 수(#version 경로에서 넣은 줄 수).
+const hoistLines = (source, ranges, shift) =>
+  ranges.flatMap(({ start, end }) => [`#line ${lineOf(source, start) + shift} 0`, source.slice(start, end)]);
+
 // Common 코드 묶음: GLSL의 "#line 줄 소스번호"로 Common 줄을 소스 1번의 1번 줄부터 세게 한다.
 // 그래서 Common에서 난 오류는 "ERROR: 1:줄:"로 나오고(패스 코드는 소스 0번), studio가 Common 탭의 그 줄로 보낸다.
 // resume = 묶음 다음 줄이 컴파일러에서 가질 줄 번호(소스 0번).
@@ -108,15 +152,31 @@ const commonBlock = (common, resume) => ["#line 1 " + COMMON_SOURCE, ...common.s
 
 // source: 편집기 코드, declarations: 넣어야 할 Uniform 선언 줄 목록.
 // options.common: 모든 패스가 같이 쓰는 코드(Common 탭). precision과 자동으로 넣는 선언(declarations · Shadertoy 이름) 뒤,
-// 패스 코드 앞에 들어간다 — 패스가 직접 선언한 Uniform보다 앞이라 Common은 그것을 쓸 수 없다.
+// 패스 코드 앞에 들어간다. 패스의 Uniform 선언은 Common 앞으로 끌어올리고, Common이 쓰는 앱 Uniform은 선언을 넣어
+// Common에서도 uTime · 파라미터 · iChannel을 쓸 수 있다(위 "Common이 Uniform을 쓸 수 있게").
 // 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 줄을 넣었을 때만.
 const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
   if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
   if (typeof common !== "string") throw new TypeError("Common 코드는 문자열이어야 합니다.");
+  const source0 = source; // 끌어올릴 원문(아래에서 source는 그 자리를 지운 사본이 된다)
   const code = blankComments(source),
-    hasCommon = !!common.trim();
+    hasCommon = !!common.trim(),
+    commonCode = hasCommon ? blankComments(common) : "";
   // Shadertoy 이름은 Common에서 쓰거나 정의해도 알아본다.
-  declarations = [...declarations, ...shadertoyLines(hasCommon ? blankComments(common) + "\n" + code : code)];
+  declarations = [...declarations, ...shadertoyLines(hasCommon ? commonCode + "\n" + code : code)];
+  // Common이 있을 때만: 끌어올릴 패스 Uniform(Common이 이미 선언한 이름뿐이면 지우기만) · Common이 쓰는 앱 Uniform 선언
+  let hoisted = [],
+    removed = [];
+  if (hasCommon) {
+    const found = hoistable(code);
+    removed = found.filter(r => r.names.every(name => name && uniformType(commonCode, name)));
+    hoisted = found.filter(r => !removed.includes(r));
+    declarations = [
+      ...declarations,
+      ...commonUniforms(commonCode, `${commonCode}\n${code}\n${declarations.join("\n")}`),
+    ];
+    source = blankRanges(source, found);
+  }
   const needsEntry = !hasMain(code) && !!mainImageAt(code);
   const versioned = /^\s*#\s*version\b/.test(code);
 
@@ -132,7 +192,7 @@ const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
       "#line 1",
       ...lines.slice(0, first),
       ...header,
-      ...(hasCommon ? commonBlock(common, first + 1) : [`#line ${first + 1}`]),
+      ...(hasCommon ? [...hoistLines(source0, hoisted, 0), ...commonBlock(common, first + 1)] : [`#line ${first + 1}`]),
       ...lines.slice(first),
     ];
     let out = parts.join("\n");
@@ -154,7 +214,13 @@ const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
     // Common 묶음은 #line으로 줄 번호를 되돌리므로 넣은 줄 수(count)에 들어가지 않는다.
     // 묶음 뒤 첫 줄(precision 줄의 나머지 또는 그다음 줄)은 선언만 넣었을 때와 같은 번호(after + 선언 수 + 1)로 맞춰,
     // studio의 줄 되돌리기(count 빼기)가 그대로 맞는다.
-    const block = hasCommon ? [...declarations, ...commonBlock(common, after + declarations.length + 1)] : declarations;
+    const block = hasCommon
+      ? [
+          ...declarations,
+          ...hoistLines(source0, hoisted, count),
+          ...commonBlock(common, after + declarations.length + 1),
+        ]
+      : declarations;
     out = source.slice(0, end) + "\n" + block.join("\n") + extra + tail;
     injected = { after, count, generated: declarations.length };
   }
