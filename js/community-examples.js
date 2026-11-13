@@ -4172,6 +4172,8 @@ void mainImage(out vec4 o, vec2 u) {
     // divide by d for depth
     // colorize
     o = tanh(vec4(5,2,1,1) * o * o / d / 2e6);
+    // FIELD: 위 식은 알파까지 바꾼다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
+    o.a = 1.0;
 }
 
 
