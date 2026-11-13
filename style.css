@@ -779,6 +779,11 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-tabs { display:flex;align-items:center;gap:4px;min-width:0; }
 .studio-tabs .studio-pass-tabs { flex:0 1 auto;scrollbar-width:thin; }
 .studio-top .studio-add { flex:0 0 30px;width:30px;min-height:30px;height:30px;padding:0; }
+/* Common 추가: 아이콘 + 짧은 글자. Common이 있으면 숨기고 탭으로 보여 준다. */
+.studio-top .studio-add-common { flex:0 0 auto;min-height:30px;height:30px;padding:0 8px;gap:4px;color:var(--muted);font:600 11px/1 var(--mono);white-space:nowrap; }
+.studio-top .studio-add-common[hidden] { display:none; }
+/* Common 탭: 버퍼가 아니라 공용 코드임을 기울임으로 구분한다 */
+.studio-pass-tabs button.is-common { font-style:italic; }
 .studio-window-tools { flex-wrap:nowrap;gap:2px; }
 .studio-window-tools>.glyph-icon,.studio-run-tools>.glyph-icon:not(.studio-primary) { flex:0 0 32px;width:32px;min-height:32px;height:32px;padding:0; }
 .studio-top .studio-run-tools { flex-wrap:nowrap;gap:2px;margin:0; }

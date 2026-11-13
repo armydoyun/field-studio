@@ -376,6 +376,16 @@ fragColor = max(newColor, history * 0.97);   // 잔상 누적`,
         insert: "cursor",
       },
       {
+        p: "**Common** — 패스 탭 옆의 **+ Common**을 누르면 모든 패스(Image · Buffer)가 같이 쓰는 공용 코드 탭이 생깁니다. 여기에 쓴 함수 · 상수 · `#define` · 구조체는 실행할 때 각 패스의 머리말(`#version` · precision · Uniform 선언) 바로 뒤에 붙으므로, 해시 · 노이즈 같은 함수를 패스마다 복사하지 않아도 됩니다. `mainImage`는 각 패스에 둡니다.",
+      },
+      {
+        list: [
+          "Common만 고쳐도 모든 패스가 다시 컴파일됩니다. Common에서 난 오류는 **Common** 탭의 그 줄로 표시됩니다(어느 패스를 컴파일하다 났는지도 함께 적습니다).",
+          "Common에는 입력 채널이 없습니다. 채널 연결 · `iChannel` 선언은 그것을 읽는 각 패스에 둡니다.",
+          "Common 탭을 고른 뒤 설정 줄의 **삭제**로 지울 수 있습니다(Undo로 복원). `Common`은 Buffer 이름으로 쓸 수 없습니다.",
+        ],
+      },
+      {
         p: "Buffer 탭을 선택하면 코드 위에 **버퍼 설정** 요약 줄(예: `A · RGBA8 · 100% · Linear · Clamp`)이 나타나고, 누르면 아래 설정이 펼쳐집니다.",
       },
       {

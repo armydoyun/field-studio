@@ -100,12 +100,22 @@ const shadertoyLines = code => {
   return lines;
 };
 
+// Common 코드 묶음: GLSL의 "#line 줄 소스번호"로 Common 줄을 소스 1번의 1번 줄부터 세게 한다.
+// 그래서 Common에서 난 오류는 "ERROR: 1:줄:"로 나오고(패스 코드는 소스 0번), studio가 Common 탭의 그 줄로 보낸다.
+// resume = 묶음 다음 줄이 컴파일러에서 가질 줄 번호(소스 0번).
+const COMMON_SOURCE = 1;
+const commonBlock = (common, resume) => ["#line 1 " + COMMON_SOURCE, ...common.split("\n"), `#line ${resume} 0`];
+
 // source: 편집기 코드, declarations: 넣어야 할 Uniform 선언 줄 목록.
-// 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 선언을 넣었을 때만.
-const prepareFragment = (source, declarations = []) => {
+// options.common: 모든 패스가 같이 쓰는 코드(Common 탭). precision · Uniform 선언 뒤, 패스 코드 앞에 들어간다.
+// 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 줄을 넣었을 때만.
+const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
   if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
-  const code = blankComments(source);
-  declarations = [...declarations, ...shadertoyLines(code)];
+  if (typeof common !== "string") throw new TypeError("Common 코드는 문자열이어야 합니다.");
+  const code = blankComments(source),
+    hasCommon = !!common.trim();
+  // Shadertoy 이름은 Common에서 쓰거나 정의해도 알아본다.
+  declarations = [...declarations, ...shadertoyLines(hasCommon ? blankComments(common) + "\n" + code : code)];
   const needsEntry = !hasMain(code) && !!mainImageAt(code);
   const versioned = /^\s*#\s*version\b/.test(code);
 
@@ -121,7 +131,7 @@ const prepareFragment = (source, declarations = []) => {
       "#line 1",
       ...lines.slice(0, first),
       ...header,
-      `#line ${first + 1}`,
+      ...(hasCommon ? commonBlock(common, first + 1) : [`#line ${first + 1}`]),
       ...lines.slice(first),
     ];
     let out = parts.join("\n");
@@ -131,19 +141,21 @@ const prepareFragment = (source, declarations = []) => {
 
   let out = source,
     injected = null;
-  if (declarations.length) {
+  if (declarations.length || hasCommon) {
     const marker = /\bprecision\s+(?:lowp|mediump|highp)\s+float\s*;/.exec(code);
     if (!source.startsWith("#version 300 es") || !marker)
-      throw new Error("사용자 Uniform을 추가하려면 GLSL ES 3.00과 float precision 선언이 필요합니다.");
+      throw new Error("사용자 Uniform이나 Common 코드를 넣으려면 GLSL ES 3.00과 float precision 선언이 필요합니다.");
     const end = marker.index + marker[0].length,
       tail = source.slice(end),
-      extra = /^[^\r\n]*\S/.test(tail.split(/\r?\n/)[0]) ? "\n" : "";
-    out = source.slice(0, end) + "\n" + declarations.join("\n") + extra + tail;
-    injected = {
-      after: source.slice(0, end).split("\n").length,
-      count: declarations.length + extra.length,
-      generated: declarations.length,
-    };
+      extra = /^[^\r\n]*\S/.test(tail.split(/\r?\n/)[0]) ? "\n" : "",
+      after = source.slice(0, end).split("\n").length,
+      count = declarations.length + extra.length;
+    // Common 묶음은 #line으로 줄 번호를 되돌리므로 넣은 줄 수(count)에 들어가지 않는다.
+    // 묶음 뒤 첫 줄(precision 줄의 나머지 또는 그다음 줄)은 선언만 넣었을 때와 같은 번호(after + 선언 수 + 1)로 맞춰,
+    // studio의 줄 되돌리기(count 빼기)가 그대로 맞는다.
+    const block = hasCommon ? [...declarations, ...commonBlock(common, after + declarations.length + 1)] : declarations;
+    out = source.slice(0, end) + "\n" + block.join("\n") + extra + tail;
+    injected = { after, count, generated: declarations.length };
   }
   if (needsEntry) {
     // 컴파일러 기준 줄 번호: 선언을 넣은 위치보다 아래면 넣은 줄 수만큼 밀려 있다(studio가 다시 빼서 보여 준다).
@@ -154,4 +166,4 @@ const prepareFragment = (source, declarations = []) => {
   return { source: out, ...(injected ? { injected } : {}), header: false, entry: needsEntry };
 };
 
-export { prepareFragment, blankComments };
+export { prepareFragment, blankComments, COMMON_SOURCE };

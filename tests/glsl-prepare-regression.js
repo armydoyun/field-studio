@@ -112,4 +112,40 @@ test("Shadertoy 이름: #version이 있는 코드는 precision 뒤에 넣고 inj
   assert.equal(out.source,"#version 300 es\nprecision highp float;\nuniform float uTime;\n#define iTime uTime\nout vec4 o;\nvoid main(){ o = vec4(iTime); }");
   assert.deepEqual(out.injected,{after:2,count:2,generated:2});
 });
+// "#line N S"까지 따라 (소스번호, 줄) → 내용. 진입점 줄과 그 뒤는 뺀다.
+const sourceLines=src=>{const map=new Map();let n=1,s=0;for(const line of src.split("\n")){const m=/^#line (\d+)(?: (\d+))?$/.exec(line);if(m){n=Number(m[1]);if(m[2]!==undefined)s=Number(m[2]);continue;}if(/void main\(\) \{ vec4 color/.test(line))break;map.set(`${s}:${n}`,line);n++;}return map;};
+test("Common: 머리말 뒤 · 패스 코드 앞에 넣고, Common 줄은 소스 1번 · 패스 줄은 소스 0번 번호를 그대로 쓴다",()=>{
+  const common="// 공용\nfloat hash(float x) { return fract(sin(x) * 43758.5); }\n#define TAU 6.2831853";
+  const user="// 패스\nuniform float uTime;\nvoid mainImage(out vec4 c, in vec2 p) {\n    c = vec4(hash(iTime) * TAU);\n}";
+  const out=prepareFragment(user,["uniform float uGain;"],{common}).source;
+  assert(out.indexOf("precision highp float;")<out.indexOf("uniform float uGain;")&&out.indexOf("uniform float uGain;")<out.indexOf("float hash"),"precision → 선언 → Common");
+  assert(out.indexOf("#define iTime uTime")<out.indexOf("float hash"),"Shadertoy 연결도 Common 앞");
+  assert(!out.includes("uniform float uTime;\n#define"),"패스가 선언한 uTime은 다시 선언하지 않는다");
+  const lines=sourceLines(out);
+  common.split("\n").forEach((line,i)=>assert.equal(lines.get(`1:${i+1}`),line,`Common ${i+1}번 줄`));
+  user.split("\n").forEach((line,i)=>assert.equal(lines.get(`0:${i+1}`),line,`패스 ${i+1}번 줄`));
+  assert(/\n#line 3\nout vec4 field_FragColor_; void main\(\)/.test(out),"진입점은 패스의 mainImage 줄(소스 0번)");
+});
+test("Common: Shadertoy 이름을 Common에서만 써도 연결하고, Common의 #define은 존중한다",()=>{
+  let out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(t()); }",[],{common:"float t() { return iTime; }"}).source;
+  assert(out.includes("#define iTime uTime")&&out.includes("uniform float uTime;"),out);
+  out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(iTime); }",[],{common:"uniform float uSpeed;\n#define iTime (uTime * uSpeed)\nuniform float uTime;"}).source;
+  assert(!out.includes("#define iTime uTime")&&!/uniform float uTime;[\s\S]*uniform float uTime;/.test(out),out);
+});
+test("Common: 비었거나 공백뿐이면 아무것도 넣지 않는다",()=>{
+  const user="out vec4 o;\nvoid main(){ o = vec4(1.0); }";
+  assert.equal(prepareFragment(user,[],{common:"  \n"}).source,prepareFragment(user).source);
+});
+test("Common: #version이 있는 코드는 precision 뒤에 넣고, 패스 줄은 예전처럼 count만큼 밀린 번호(studio가 되돌림)",()=>{
+  for(const precision of["precision highp float;","precision highp float; // 같은 줄에 주석"]){
+    const user=`#version 300 es\n${precision}\nuniform float uTime;\nout vec4 o;\nvoid main(){ o = vec4(f()); }`;
+    const out=prepareFragment(user,["uniform float uGain;"],{common:"float f() { return 1.0; }"});
+    const lines=sourceLines(out.source),{after,count}=out.injected;
+    assert.equal(lines.get("1:1"),"float f() { return 1.0; }");
+    user.split("\n").forEach((line,i)=>{const n=i+1;if(n>after)assert.equal(lines.get(`0:${n+count}`),line,`패스 ${n}번 줄 → 컴파일러 ${n+count}`);});
+  }
+  const noDecl=prepareFragment("#version 300 es\nprecision highp float;\nout vec4 o;\nvoid main(){ o = vec4(f()); }",[],{common:"float f() { return 1.0; }"});
+  assert.deepEqual(noDecl.injected,{after:2,count:0,generated:0});
+  assert.equal(sourceLines(noDecl.source).get("0:3"),"out vec4 o;");
+});
 console.log(`GLSL prepare: ${passed} passed`);

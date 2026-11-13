@@ -609,7 +609,7 @@ void main(){
 }`;
   const ensurePreviewProgram = () => {
     if (previewProgram) return;
-    const next = createProgram(previewFragment);
+    const next = createProgram(previewFragment, { internal: true }); // 사용자의 Common을 붙이지 않는다
     try {
       previewLocations = {
         texture: gl.getUniformLocation(next, "uPreview"),

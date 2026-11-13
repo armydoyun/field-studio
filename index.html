@@ -273,6 +273,7 @@
                     <div class="studio-tabs">
                         <div id="studioPassTabs" class="studio-pass-tabs" role="tablist" aria-label="셰이더 패스"></div>
                         <button id="studioAdd" type="button" class="glyph-icon icon-plus studio-add" aria-label="버퍼 패스 추가" title="새 버퍼 패스 추가 (최대 8개)"></button>
+                        <button id="studioAddCommon" type="button" class="glyph-icon icon-plus studio-add-common" title="Common 추가 · 모든 패스(Image · Buffer) 앞에 붙는 공용 코드(함수 · 상수)">Common</button>
                     </div>
                     <div class="studio-window-tools" role="group" aria-label="편집기 창 조작">
                         <div class="studio-run-tools" role="group" aria-label="실행과 편집 이력">
@@ -296,7 +297,7 @@
                     <p id="studioChannelRules" class="studio-channel-rules" hidden></p>
                 </div>
                 <details id="studioPassTools" class="studio-pass-settings">
-                    <summary><span class="studio-pass-settings-label">버퍼 설정</span><span id="studioPassSummary" class="studio-pass-summary"></span></summary>
+                    <summary><span id="studioPassToolsLabel" class="studio-pass-settings-label">버퍼 설정</span><span id="studioPassSummary" class="studio-pass-summary"></span></summary>
                     <div class="studio-pass-settings-body">
                         <div class="studio-pass-fields">
                             <label id="studioFormatField" title="RGBA8 = 일반 색 · 16F/32F = 음수·1 초과 값(시뮬레이션·HDR)">형식 <select id="studioFormat"><option value="rgba8">RGBA8</option><option value="rgba16f">RGBA16F</option><option value="rgba32f">RGBA32F</option></select></label>
