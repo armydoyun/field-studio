@@ -132,7 +132,9 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
       },
       {
         list: [
-          "Uniform은 직접 선언합니다. Shadertoy의 `iTime` · `iResolution`은 이 앱에서 `uTime` · `uResolution`(vec2)입니다.",
+          "Uniform은 직접 선언합니다. 이 앱의 이름은 `uTime` · `uResolution`(vec2) · `uMouse` · `uFrame` · `uDeltaTime`입니다.",
+          "Shadertoy 이름 `iTime` · `iTimeDelta` · `iFrame` · `iResolution`(vec3) · `iMouse`는 선언 없이 그대로 써도 됩니다. 실행할 때 앱이 위 Uniform에 연결합니다(필요하면 그 Uniform 선언도 넣습니다). 그래서 Shadertoy 코드를 붙여 넣으면 대부분 바로 돌아갑니다.",
+          "`iMouse`는 `uMouse`(vec4)와 같은 값입니다. Shadertoy와 달리 xy는 누르지 않아도 포인터를 따라가고, 포인터가 뷰포트 밖이면 -1입니다. `iDate` · `iFrameRate` · `iChannelTime`은 아직 없습니다.",
           "`mainImage`를 쓰면서 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
           "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말과 `main()`을 직접 넣어야 합니다.",
         ],

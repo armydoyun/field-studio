@@ -47,6 +47,14 @@ const create = ctx => {
     ...[0, 1, 2, 3].map(i => [`iChannel${i}`, "sampler2D", `입력 채널 ${i} — 편집기 입력 채널에서 연결한 이미지·버퍼`]),
     ["iChannelResolution", "vec3", "각 입력 채널의 크기 (배열 4개)", "uniform vec3 iChannelResolution[4];"],
   ];
+  // Shadertoy 이름: 선언하지 않고 쓰면 실행할 때 위 Uniform에 #define으로 연결된다(glsl-prepare.js). 자동 완성은 선언을 넣지 않는다.
+  const SHADERTOY_UNIFORMS = [
+    ["iTime", "float", "Shadertoy 이름 — uTime(재생 시간, 초)과 같음 · 선언 없이 씁니다"],
+    ["iTimeDelta", "float", "Shadertoy 이름 — uDeltaTime(프레임 간격, 초)과 같음 · 선언 없이 씁니다"],
+    ["iFrame", "int", "Shadertoy 이름 — uFrame(누적 프레임 수)과 같음 · 선언 없이 씁니다"],
+    ["iResolution", "vec3", "Shadertoy 이름 — (uResolution.xy, 1.0) · 선언 없이 씁니다"],
+    ["iMouse", "vec4", "Shadertoy 이름 — uMouse(vec4)와 같음 · 선언 없이 씁니다"],
+  ];
   const BUILTIN_VARS = { gl_FragCoord: "vec4", gl_FrontFacing: "bool", gl_PointCoord: "vec2", gl_FragDepth: "float" };
   const isIdent = text => /^[A-Za-z_]\w*$/.test(text);
   const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -107,7 +115,13 @@ const create = ctx => {
   // 이름의 타입: 가장 가까운 앞쪽 선언 → 내장 변수 → 앱 Uniform
   const typeOf = (name, pos) => {
     const vars = symbolsOf(source()).variables.filter(v => v.name === name);
-    if (!vars.length) return BUILTIN_VARS[name] || APP_UNIFORMS.find(u => u[0] === name)?.[1] || "";
+    if (!vars.length)
+      return (
+        BUILTIN_VARS[name] ||
+        APP_UNIFORMS.find(u => u[0] === name)?.[1] ||
+        SHADERTOY_UNIFORMS.find(u => u[0] === name)?.[1] ||
+        ""
+      );
     const before = vars.filter(v => v.offset <= pos);
     return (before.length ? before[before.length - 1] : vars[0]).type;
   };
@@ -137,6 +151,8 @@ const create = ctx => {
           : `${decl.uniform ? "Uniform" : decl.output ? "출력" : "변수"} · ${decl.line}번째 줄에서 선언`,
       };
     if (app) return { sig: `uniform ${app[1]} ${name}`, desc: `${app[2]} · 아직 선언되지 않음` };
+    const toy = SHADERTOY_UNIFORMS.find(u => u[0] === name);
+    if (toy && !sym.defines.some(d => d.name === name)) return { sig: `${toy[1]} ${name}`, desc: toy[2] };
     const param = userUniforms().find(u => u.name === name);
     if (param)
       return { sig: `uniform ${param.type} ${name}`, desc: "파라미터 패널에 등록된 값 · 선언은 자동으로 추가됩니다" };
@@ -395,6 +411,7 @@ const create = ctx => {
         desc: `${desc} · 고르면 선언도 함께 추가합니다`,
         declare: declare || `uniform ${type} ${name};`,
       });
+    for (const [name, type, desc] of SHADERTOY_UNIFORMS) add({ label: name, kind: "uniform", detail: type, desc });
     const builtins = options.builtins?.length
       ? options.builtins
       : [...highlighter.builtins].map(name => ({ name, sig: "", desc: "" })); // 레퍼런스 없이 쓰일 때의 최소 목록
@@ -439,6 +456,7 @@ const create = ctx => {
     KEYWORDS,
     TYPES,
     APP_UNIFORMS,
+    SHADERTOY_UNIFORMS,
     BUILTIN_VARS,
     isIdent,
     escapeRe,
