@@ -171,12 +171,10 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .timeline-bar input[type="number"] { width:calc(8ch + 18px);min-height:28px;padding:3px 8px;font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield; }
 .timeline-bar input[type="number"]::-webkit-inner-spin-button,.timeline-bar input[type="number"]::-webkit-outer-spin-button { margin:0;-webkit-appearance:none; }
 .timeline-bar input.timeline-key-value { width:calc(10ch + 18px); }
-.timeline-bar select { width:auto;min-width:0;min-height:28px;padding:2px 24px 2px 8px;font-size:12px; }
-/* 선택 칸 폭도 글자 기준: 고른 값(예: 0.05초 · 0.25×)이 다 보이고 화살표 자리(24px)가 남게 */
-.timeline-bar .timeline-snap { width:calc(6ch + 1em + 34px); }
-.timeline-bar .timeline-speed { width:calc(5ch + 34px); }
-/* 잇기 칸은 고정 폭: 항목 이름('기본 (부드럽게)' 등)이 바뀌어도 막대가 줄바꿈되거나 흔들리지 않게 */
-.timeline-bar .timeline-key-ease { width:calc(7.5em + 34px);min-width:0; }
+/* 선택 칸: 폭은 timeline.js(fitSelect)가 가장 긴 이름에 맞춰 재서 정한다. 막대가 좁아도 줄어들어 글자를 자르지 않는다(줄이 넘어간다). */
+.timeline-bar select { flex-shrink:0;width:auto;min-width:0;min-height:28px;padding:2px 24px 2px 8px;font-size:12px; }
+
+
 .timeline-bar .timeline-zoom { width:28px;padding:0;font:600 13px var(--mono); }
 /* 붙은 버튼 쌍: ▶ ⟲ · − + (선 하나를 함께 쓴다) */
 .timeline-bar .timeline-play,.timeline-bar .timeline-zoom:first-of-type { border-radius:var(--radius-sm) 0 0 var(--radius-sm); }
@@ -201,7 +199,6 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
  /* 휴대폰 폭: 키를 고르기 전의 빈 안내 칸이 레인 자리를 차지하지 않게 감춘다 */
  .timeline-inspector.is-empty { display:none; }
  .timeline-group>.timeline-field>.timeline-unit:first-child { display:none; }
- .timeline-inspector .timeline-key-ease { min-width:0;max-width:120px; }
 }
 .timeline-body { position:relative;flex:1 1 auto;min-height:0;overflow:auto;outline:none; }
 .timeline-body:focus-visible { outline:2px solid var(--accent);outline-offset:-2px; }
@@ -1335,10 +1332,12 @@ html.panel-right body.panel-hidden #workspace { grid-template-columns:minmax(0,1
 body.panel-resizing { cursor:col-resize;user-select:none; }
 body.panel-resizing iframe,body.panel-resizing canvas { pointer-events:none; }
 /* 리사이저를 최소 크기의 절반보다 작게 끌면: 놓으면 숨긴다는 표시(패널·편집기 위에 덮개 + 안내, 리사이저는 강조색) */
-body.panel-collapsing #panel::after,.studio-collapsing .studio-dock::after { content:"놓으면 숨김";position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--text-soft);font:600 13px/1.4 var(--sans);letter-spacing:.02em;pointer-events:none; }
+body.panel-collapsing #panel::after,.studio-collapsing .studio-dock::after,.timeline-dock.is-collapsing::after { content:"놓으면 숨김";position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--text-soft);font:600 13px/1.4 var(--sans);letter-spacing:.02em;pointer-events:none; }
 .studio-collapsing .studio-dock { position:relative; }
-body.panel-collapsing .panel-resizer,.studio-collapsing .studio-resizer { background:var(--accent-soft); }
-body.panel-collapsing .panel-resizer span,.studio-collapsing .studio-resizer span { background:var(--accent); }
+body.panel-collapsing .panel-resizer,.studio-collapsing .studio-resizer,.timeline-dock.is-collapsing .timeline-resize { background:var(--accent-soft); }
+body.panel-collapsing .panel-resizer span,.studio-collapsing .studio-resizer span,.timeline-dock.is-collapsing .timeline-resize::before { background:var(--accent); }
+/* 넓은 화면의 타임라인은 격자 칸이라 덮개 기준을 세운다(좁은 화면은 이미 position:fixed) */
+@media (min-width:821px) { .timeline-dock { position:relative; } }
 
 /* 위치 손잡이(⠿): 끌어서 자리를 옮긴다. */
 .dock-grip { display:inline-grid;place-items:center;flex:0 0 28px;width:28px;min-height:32px;height:32px;padding:0;border:0;background:transparent;color:var(--faint);cursor:grab;touch-action:none; }

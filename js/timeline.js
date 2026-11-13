@@ -22,8 +22,8 @@ const SNAPS = [
   ["0.25", "0.25초"],
   ["0.5", "0.5초"],
   ["1", "1초"],
-  ["f30", "프레임(30fps)"],
-  ["f60", "프레임(60fps)"],
+  ["f30", "1/30초"],
+  ["f60", "1/60초"],
 ];
 const EASE_LABEL = { smooth: "부드럽게", linear: "직선", step: "계단", in: "천천히 시작", out: "천천히 끝" };
 const TICKS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
@@ -78,7 +78,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   resize.setAttribute("aria-orientation", "horizontal");
   resize.setAttribute("aria-label", "타임라인 높이 조절");
   resize.tabIndex = 0;
-  resize.title = "끌어서 높이 조절 · ↑↓";
+  resize.title = "끌어서 높이 조절 · 끝까지 줄여 놓으면 타임라인 숨기기 · ↑↓ · Home/End · 두 번 눌러 기본 높이";
   const bar = element("header", "timeline-bar"),
     play = button("timeline-play glyph-icon icon-play", "재생"),
     start = button("timeline-start glyph-icon icon-reset", "처음으로", "", "재생 위치를 0초로"),
@@ -104,6 +104,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   for (const [value, text] of SNAPS) {
     const option = element("option", "", text);
     option.value = value;
+    if (value.startsWith("f")) option.title = `프레임 단위(${value.slice(1)}fps)`;
     snapSelect.append(option);
   }
   snapSelect.value = snapChoice;
@@ -864,34 +865,78 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   on(close, "click", () => setOpen(false));
 
   // ---- 높이 ----
+  // 설정 패널 · 편집기의 경계와 같은 규칙: 최소 높이의 절반(COLLAPSE)보다 낮게 끌면 '놓으면 숨김'이 뜨고, 그대로 놓으면
+  // 타임라인을 닫는다(다시 끌어올리면 취소). 닫을 때는 끌기 전 높이로 되돌려 두어 다시 열면 원래 높이로 열린다.
+  // 두 번 누르면 기본 높이, Home/End는 최소 · 최대.
+  const HEIGHT = { min: 140, initial: 220 },
+    COLLAPSE = HEIGHT.min / 2;
+  const maxHeight = () => Math.max(180, window.innerHeight * 0.7);
   const setHeight = value => {
-    height = Math.round(Math.min(Math.max(140, value), Math.max(180, window.innerHeight * 0.7)));
+    height = Math.round(Math.min(Math.max(HEIGHT.min, value), maxHeight()));
     // 좁은 화면에서는 미리보기 높이도 이 값으로 줄이므로 문서 전체에 건다
     document.documentElement.style.setProperty("--timeline-height", `${height}px`);
+    resize.setAttribute("aria-valuemin", String(HEIGHT.min));
+    resize.setAttribute("aria-valuemax", String(Math.round(maxHeight())));
     resize.setAttribute("aria-valuenow", String(height));
   };
+  const commitHeight = () => {
+    remember();
+    window.dispatchEvent?.(new Event("resize"));
+  };
+  let collapsing = false;
+  const setCollapsing = on => {
+    if (collapsing === on) return;
+    collapsing = on;
+    root.classList.toggle("is-collapsing", on);
+    if (on) resize.setAttribute("aria-valuetext", "놓으면 타임라인을 숨깁니다");
+    else resize.removeAttribute("aria-valuetext");
+  };
   on(resize, "pointerdown", event => {
+    if (event.button !== 0) return;
     event.preventDefault();
     capture(resize, event);
     const from = event.clientY,
       base = height;
-    const move = e => setHeight(base + (from - e.clientY)),
-      up = () => {
-        resize.removeEventListener("pointermove", move);
-        resize.removeEventListener("pointerup", up);
-        remember();
-        window.dispatchEvent?.(new Event("resize"));
-      };
+    const move = e => {
+      const wanted = base + (from - e.clientY);
+      setCollapsing(wanted < COLLAPSE);
+      setHeight(wanted);
+    };
+    const end = e => {
+      for (const type of ["pointermove", "pointerup", "pointercancel", "lostpointercapture"])
+        resize.removeEventListener(type, type === "pointermove" ? move : end);
+      if (collapsing) {
+        setCollapsing(false);
+        setHeight(base); // 숨길 때(또는 끌기가 취소되면) 끌기 전 높이로
+        if (e.type === "pointerup") {
+          setOpen(false);
+          return;
+        }
+      }
+      commitHeight();
+    };
     resize.addEventListener("pointermove", move);
-    resize.addEventListener("pointerup", up);
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) resize.addEventListener(type, end);
+  });
+  on(resize, "dblclick", () => {
+    setHeight(HEIGHT.initial);
+    commitHeight();
   });
   on(resize, "keydown", event => {
-    const step = { ArrowUp: 24, ArrowDown: -24 }[event.key];
-    if (!step) return;
+    const next =
+      event.key === "ArrowUp"
+        ? height + 24
+        : event.key === "ArrowDown"
+          ? height - 24
+          : event.key === "Home"
+            ? HEIGHT.min
+            : event.key === "End"
+              ? maxHeight()
+              : null;
+    if (next === null) return;
     event.preventDefault();
-    setHeight(height + step);
-    remember();
-    window.dispatchEvent?.(new Event("resize"));
+    setHeight(next);
+    commitHeight();
   });
 
   // ---- 재생선 · 시계 ----
@@ -918,6 +963,10 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         const option = element("option", "", `${scale}×`);
         option.value = scale;
         speedSelect.append(option);
+        fitSelect(
+          speedSelect,
+          [...speedSelect.options].map(each => each.textContent)
+        );
       }
       speedSelect.value = scale;
     }
@@ -936,6 +985,40 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
 
   // ---- 열고 닫기 ----
   const toggles = new Set();
+  // 선택 칸 폭 맞추기: 글자 잘림 방지. 폭을 어림하지 않고, 그 칸이 보일 수 있는 모든 이름을 넣은 같은 모양의 선택 칸을
+  // 화면 밖에서 브라우저가 직접 재게 한다(실제 글꼴 · 운영체제의 화살표 폭까지 반영 — 윈도우 맑은 고딕에서도 잘리지 않음).
+  // 가장 긴 이름에 맞춘 고정 폭이라, 고른 항목이나 '기본 (…)' 이름이 바뀌어도 막대가 흔들리지 않는다.
+  const fitSelect = (select, labels) => {
+    if (!select.isConnected || !select.getClientRects().length) return; // 숨어 있으면 열 때 다시 잰다
+    const probe = select.cloneNode(false);
+    probe.removeAttribute("id");
+    probe.style.cssText =
+      "position:absolute;left:-9999px;top:0;visibility:hidden;width:auto;min-width:0;max-width:none";
+    for (const label of labels) probe.append(new Option(label));
+    select.parentNode.append(probe);
+    const width = Math.ceil(probe.getBoundingClientRect().width) + 2; // 반올림 · 굵게 그리기 여유
+    probe.remove();
+    if (width > 2) select.style.width = `${width}px`;
+  };
+  const easeLabels = () => [
+    "기본",
+    "기본 (레인 설정)",
+    ...Object.values(EASE_LABEL).flatMap(label => [label, `기본 (${label})`]),
+    "서로 다름",
+  ];
+  const fitSelects = () => {
+    fitSelect(
+      speedSelect,
+      [...speedSelect.options].map(option => option.textContent)
+    );
+    fitSelect(
+      snapSelect,
+      SNAPS.map(([, text]) => text)
+    );
+    fitSelect(keyEase, easeLabels());
+  };
+  // 웹 글꼴이 늦게 들어오면 글자 폭이 바뀌므로 그때 한 번 더 잰다
+  document.fonts?.ready?.then(() => !root.hidden && fitSelects());
   const setOpen = (open, { focus = false } = {}) => {
     root.hidden = !open;
     document.body.classList.toggle("timeline-open", open);
@@ -944,6 +1027,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     if (open) {
       setHeight(height);
       render();
+      fitSelects();
       if (!frame) frame = requestAnimationFrame(loop);
       if (focus) body.focus({ preventScroll: true });
     }
