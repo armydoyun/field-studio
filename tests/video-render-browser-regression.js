@@ -42,7 +42,8 @@
   const openDialog = async () => {
     $("videoRenderOpen").click();
     test(dialog.open, "대화상자 열림");
-    await until(() => [...$("videoFormat").options].some(o => /지원 안 됨/.test(o.textContent)) || !$("videoRenderSummary").textContent.includes("지원"), 3000);
+    // 인코더 지원 조사(비동기)가 끝난 뒤에 형식 목록을 읽는다 — 끝나기 전에는 모든 형식이 쓸 수 있는 것처럼 보인다.
+    test(await until(() => dialog.dataset.probed === "true", 30000), "인코더 지원 조사 끝남");
   };
   const runRender = async () => {
     const before = downloads.length;

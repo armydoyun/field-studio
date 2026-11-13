@@ -106,6 +106,7 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
       supported = { "mp4-h264": null, "webm-vp9": null, "webm-vp8": null, png: "png" };
     }
     probed = true;
+    dialog.dataset.probed = "true"; // 인코더 지원 조사가 끝났다(테스트 · 확장이 형식 목록을 믿고 읽을 수 있다)
     for (const option of $("videoFormat").options) {
       const ok = !!supported[option.value];
       option.disabled = !ok;

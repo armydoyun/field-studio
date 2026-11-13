@@ -78,13 +78,15 @@
 
     // 2) 결과 파일의 소리(대화상자로 렌더링)
     $("videoRenderOpen").click();
-    await until(() => !$("videoRenderSummary").textContent.includes("지원"), 3000);
+    // 인코더 지원 조사(비동기)가 끝난 뒤에 형식 목록을 읽는다 — 끝나기 전에는 모든 형식이 쓸 수 있는 것처럼 보인다.
+    test(await until(() => dialog.dataset.probed === "true", 30000), "인코더 지원 조사 끝남");
     const formats = [...$("videoFormat").options].filter(o => !o.disabled).map(o => o.value);
     let rendered = null;
     const containers = [formats.find(f => f.startsWith("webm")), formats.includes("mp4-h264") ? "mp4-h264" : null].filter(Boolean);
     if (!formats.includes("mp4-h264")) console.warn("이 브라우저는 H.264 인코딩이 없어 MP4 소리 검사를 건너뜀");
     for (const format of containers) {
       set("videoFormat", format); set("videoStart", 0); set("videoDuration", 2); set("videoFps", 10); set("videoSize", "custom"); set("videoWidth", 64); set("videoHeight", 36);
+      test(!$("videoRenderStart").disabled, `${format}: 렌더링 시작 가능 — ${$("videoRenderSummary").textContent}`);
       const video = await runRender();
       if (format.startsWith("webm")) rendered = video.blob;
       test(/소리 포함/.test(video.status), `${format}: 완료 메시지에 '소리 포함' — ${video.status}`);
