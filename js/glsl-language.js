@@ -44,7 +44,11 @@ const create = ctx => {
     ["uFrame", "int", "누적 프레임 수. 시간 초기화·구조 변경 시 0"],
     ["uMouse", "vec4", "포인터 픽셀 좌표(밖이면 -1) · zw = 클릭 위치, z > 0 누르는 중, w > 0 누른 첫 프레임"],
     ["uWheel", "float", "뷰포트에서 굴린 마우스 휠 누적 칸 수(위로 +1). 시간 초기화 시 0"],
-    ...[0, 1, 2, 3].map(i => [`iChannel${i}`, "sampler2D", `입력 채널 ${i} — 편집기 입력 채널에서 연결한 이미지·버퍼`]),
+    ...[0, 1, 2, 3].map(i => [
+      `iChannel${i}`,
+      "sampler2D",
+      `입력 채널 ${i} — 편집기 입력 채널에서 연결한 버퍼 · 이미지 · 키보드 · 미디어`,
+    ]),
     ["iChannelResolution", "vec3", "각 입력 채널의 크기 (배열 4개)", "uniform vec3 iChannelResolution[4];"],
   ];
   // Shadertoy 이름: 선언하지 않고 쓰면 실행할 때 위 Uniform에 #define으로 연결된다(glsl-prepare.js). 자동 완성은 선언을 넣지 않는다.

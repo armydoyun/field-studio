@@ -107,7 +107,8 @@ const COMMON_SOURCE = 1;
 const commonBlock = (common, resume) => ["#line 1 " + COMMON_SOURCE, ...common.split("\n"), `#line ${resume} 0`];
 
 // source: 편집기 코드, declarations: 넣어야 할 Uniform 선언 줄 목록.
-// options.common: 모든 패스가 같이 쓰는 코드(Common 탭). precision · Uniform 선언 뒤, 패스 코드 앞에 들어간다.
+// options.common: 모든 패스가 같이 쓰는 코드(Common 탭). precision과 자동으로 넣는 선언(declarations · Shadertoy 이름) 뒤,
+// 패스 코드 앞에 들어간다 — 패스가 직접 선언한 Uniform보다 앞이라 Common은 그것을 쓸 수 없다.
 // 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 줄을 넣었을 때만.
 const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
   if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
