@@ -147,14 +147,13 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .timeline-dock[hidden] { display:none; }
 .timeline-dock { container:timeline / inline-size; }
 .timeline-group { flex-wrap:nowrap; }
-/* 좁은 타임라인(설정 패널을 넓히거나 창을 줄였을 때): 칸을 줄이고, 키 칸은 고른 키가 있을 때만 한 줄을 통째로 쓴다. */
+/* 좁은 타임라인(설정 패널을 넓히거나 창을 줄였을 때): 칸을 줄이고, 키 칸은 (고르기 전에도) 한 줄을 통째로 쓴다. */
 @container timeline (max-width:760px) {
  .timeline-bar { gap:6px 10px; }
  .timeline-bar input[type="number"] { width:64px; }
  .timeline-bar .timeline-snap { width:84px; }
  .timeline-bar .timeline-add { max-width:128px; }
  .timeline-inspector { flex:1 1 100%;justify-content:flex-start;margin-left:0; }
- .timeline-inspector.is-empty { display:none; }
 }
 @container timeline (max-width:520px) {
  .timeline-group>.timeline-field>.timeline-unit:first-child { display:none; }
@@ -174,10 +173,14 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .timeline-bar .timeline-add { max-width:150px; }
 .timeline-bar .timeline-key-ease { min-width:104px; }
 .timeline-bar .timeline-zoom { width:26px;padding:0;font:600 13px var(--mono); }
-.timeline-inspector { display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-left:auto;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface); }
-.timeline-inspector.is-empty>:not(.timeline-selection) { display:none; }
-.timeline-selection { color:var(--muted);font-weight:600; }
-.timeline-inspector.is-empty .timeline-selection { font-weight:400;color:var(--faint); }
+/* 선택한 키 칸: 키를 고르든 말든 같은 자리·크기를 차지한다. 고르기 전에는 칸들을 감춰(visibility) 자리만 남기고
+   그 위에 안내 문구를 얹는다 — 끌어서 키를 고르는 도중 막대 높이가 바뀌어 레인이 밀려 내려가지 않게. */
+.timeline-inspector { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-left:auto;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface); }
+.timeline-inspector.is-empty>:not(.timeline-selection) { visibility:hidden; }
+.timeline-selection { flex:0 0 auto;width:96px;overflow:hidden;color:var(--muted);font-weight:600;text-overflow:ellipsis;white-space:nowrap; }
+/* 안내 문구가 흐름에서 빠진 만큼(이름 칸 96px + 사이 10px) 왼쪽을 비워 둔다 */
+.timeline-inspector.is-empty { padding-left:114px; }
+.timeline-inspector.is-empty .timeline-selection { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;width:auto;padding:0 10px;font-weight:400;color:var(--faint); }
 .timeline-bar .timeline-close { position:absolute;top:4px;right:10px; }
 .timeline-body { position:relative;flex:1 1 auto;min-height:0;overflow:auto;outline:none; }
 .timeline-body:focus-visible { outline:2px solid var(--accent);outline-offset:-2px; }
