@@ -229,6 +229,16 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .link-smooth input[type="range"] { flex:1 1 auto;min-width:40px; }
 .link-smooth .link-number input { width:56px; }
 .link-result output,.link-meter-value { min-width:4.5em;font:600 11px var(--mono);text-align:right; }
+/* 키프레임 줄: 내비게이터 ◀ ◆ ▶ + 재생 위치 + 자동 키 안내 */
+.key-nav { display:flex;flex-wrap:wrap;align-items:center;gap:4px; }
+.key-nav-button { flex:0 0 26px;width:26px;min-height:26px;height:26px;padding:0;font-size:10px;color:var(--muted); }
+.key-nav-button:disabled { opacity:.35; }
+.key-nav-key { font-size:13px; }
+.key-nav-key[aria-pressed="true"] { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
+.key-nav-key[aria-pressed="false"] { color:var(--faint); }
+.key-nav .key-nav-time { flex:0 0 76px;width:76px;min-height:26px;margin-left:4px;padding:2px 6px;font:11px var(--mono); }
+.key-nav-unit { color:var(--muted);font-size:11px; }
+.key-nav-hint { margin-left:auto;color:var(--faint);font-size:10px;white-space:nowrap; }
 /* 연결된 파라미터 줄: 슬라이더 대신 읽기 전용 미터 */
 .link-meter { display:flex;align-items:center;gap:8px;min-height:24px; }
 .link-meter-note { color:var(--faint);font-size:10px;white-space:nowrap; }

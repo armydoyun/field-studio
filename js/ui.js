@@ -1217,6 +1217,12 @@ const mount = (renderer, input, settings) => {
     $("uniformNotice").textContent = "";
   };
   let uniformSnapshot = "";
+  // 목록을 다시 그릴지 가늠하는 요약. 연결된 파라미터의 값은 프레임마다 바뀌므로 빼고(미터 · 내비게이터가 따로 따라간다)
+  // 나머지(이름 · 타입 · 설정 · 연결 없는 값)만 본다 — 그러지 않으면 0.5초마다 목록 전체를 다시 그려 누르기 · 끌기가 끊긴다.
+  const snapshotOf = items => {
+    const linked = new Set((settings.getLinks?.() || []).map(link => link.name));
+    return JSON.stringify(items.map(item => (linked.has(item.name) ? { ...item, value: null } : item)));
+  };
   // 셰이더 주석(@default·@range…)에서 읽은 파라미터 기본값. 코드에 어노테이션이 없는 파라미터는 되돌릴 값이 없다.
   const annotatedDefaults = () => {
     const project = window.shaderStudio?.getProject?.();
@@ -1285,7 +1291,7 @@ const mount = (renderer, input, settings) => {
       resetSyncs.get(name)?.(value);
     }
     // 재생으로 바뀐 값 때문에 목록을 다시 그리지 않게 기준을 맞춘다.
-    uniformSnapshot = JSON.stringify(renderer.getUserUniforms());
+    uniformSnapshot = snapshotOf(renderer.getUserUniforms());
     if (playing.size) playFrame = requestAnimationFrame(playStep);
     else syncPlayButtons();
   };
@@ -1542,6 +1548,127 @@ const mount = (renderer, input, settings) => {
       ?.querySelector(".timeline-key")
       ?.focus();
   };
+  // ---- 키프레임 정밀 입력: 키프레임 연결 줄의 내비게이터(◀ ◆ ▶ · 재생 위치) · 자동 키 ----
+  // 키프레임 연결 줄에서 값을 바꾸면 재생선 위치에 키를 찍는다(그 시간에 키가 있으면 값만 바꾼다).
+  // 끄는 동안은 렌더러에만 적용하고, 놓거나(change · pointerup · keyup) 잠시 멈추면 저장한다 — 끌기가 끊기지 않게.
+  const KEY_EPSILON = 5e-4;
+  const playTime = () => Number((renderer.getStats().time ?? 0).toFixed(3));
+  // 반복(loop)이 있으면 키의 시간은 한 바퀴 안의 시간이다: 재생 위치 t → { local: 바퀴 안 시간, base: 이 바퀴의 시작 }
+  const loopTime = (link, t = playTime()) => {
+    const loop = link?.loop > 0 ? link.loop : 0,
+      local = loop ? Number((((t % loop) + loop) % loop).toFixed(3)) : t;
+    return { local, base: t - local };
+  };
+  const pendingKeys = new Map();
+  let keyTimer = 0,
+    keyPointer = false;
+  const flushKeys = () => {
+    clearTimeout(keyTimer);
+    keyTimer = 0;
+    if (keyPointer || !pendingKeys.size) return;
+    const list = [...pendingKeys.values()];
+    pendingKeys.clear();
+    attempt(() =>
+      settings.setLinks(
+        list.reduce((all, next) => all.map(l => (l.name === next.name ? next : l)), settings.getLinks())
+      )
+    );
+  };
+  const recordKey = (name, value) => {
+    const link = linkOf(name),
+      v = typeof value === "boolean" ? (value ? 1 : 0) : value;
+    if (link?.source !== "keys" || typeof v !== "number") return;
+    const t = loopTime(link).local,
+      keys = [...link.keys.filter(([k]) => Math.abs(k - t) >= KEY_EPSILON), [t, v]].sort((a, b) => a[0] - b[0]),
+      next = { ...link, keys };
+    pendingKeys.set(name, next);
+    previewLink(name, next);
+    clearTimeout(keyTimer);
+    keyTimer = setTimeout(flushKeys, 700);
+  };
+  listen(document, "pointerup", () => {
+    keyPointer = false;
+    if (pendingKeys.size) setTimeout(flushKeys);
+  });
+  const keyNav = (item, link) => {
+    const nav = element("div"),
+      prev = element("button"),
+      key = element("button"),
+      next = element("button"),
+      time = element("input"),
+      unit = element("span"),
+      hint = element("span");
+    nav.className = "key-nav";
+    for (const [button, label, text] of [
+      [prev, "이전 키로", "◀"],
+      [key, "이 시간에 키", "◆"],
+      [next, "다음 키로", "▶"],
+    ]) {
+      button.type = "button";
+      button.className = "key-nav-button";
+      button.textContent = text;
+      button.setAttribute("aria-label", `${item.name} ${label}`);
+    }
+    key.classList.add("key-nav-key");
+    prev.title = "이전 키로 재생선 옮기기";
+    next.title = "다음 키로 재생선 옮기기";
+    time.type = "number";
+    time.className = "key-nav-time";
+    time.min = "0";
+    time.step = "0.01";
+    time.setAttribute("aria-label", "재생 위치(초)");
+    time.title = "재생 위치(uTime) — 숫자로 옮긴 뒤 값을 바꾸면 이 시간에 키가 찍힙니다";
+    unit.className = "key-nav-unit";
+    unit.textContent = "초";
+    hint.className = "key-nav-hint";
+    hint.textContent = "값을 바꾸면 이 시간에 키";
+    const current = () => linkOf(item.name) || link,
+      keys = () => current().keys;
+    const at = t => keys().findIndex(([k]) => Math.abs(k - t) < KEY_EPSILON);
+    // ◀ ▶는 이 바퀴 안에서 움직인다(반복이 있으면 바퀴 시작 + 키 시간)
+    prev.addEventListener("click", () => {
+      const { local, base } = loopTime(current()),
+        before = keys().filter(([k]) => k < local - KEY_EPSILON);
+      if (before.length) attempt(() => renderer.setTime(Number((base + before.at(-1)[0]).toFixed(3))));
+    });
+    next.addEventListener("click", () => {
+      const { local, base } = loopTime(current()),
+        after = keys().find(([k]) => k > local + KEY_EPSILON);
+      if (after) attempt(() => renderer.setTime(Number((base + after[0]).toFixed(3))));
+    });
+    key.addEventListener("click", () => {
+      const t = loopTime(current()).local,
+        index = at(t),
+        live = renderer.getUserUniforms().find(u => u.name === item.name)?.value,
+        value = typeof live === "boolean" ? (live ? 1 : 0) : live;
+      const list =
+        index >= 0 ? keys().filter((_, i) => i !== index) : [...keys(), [t, value]].sort((a, b) => a[0] - b[0]);
+      saveLink(item.name, { ...linkOf(item.name), keys: list });
+    });
+    time.addEventListener("change", () => {
+      const v = Number(time.value);
+      if (time.value.trim() && Number.isFinite(v) && v >= 0) attempt(() => renderer.setTime(v));
+    });
+    time.addEventListener("keydown", event => {
+      if (event.key === "Enter") time.dispatchEvent(new Event("change"));
+    });
+    nav.append(prev, key, next, time, unit, hint);
+    const update = () => {
+      const now = renderer.getStats().time ?? 0,
+        t = loopTime(current(), Number(now.toFixed(3))).local,
+        here = at(t) >= 0,
+        list = keys();
+      key.setAttribute("aria-pressed", String(here));
+      key.title = here ? "이 시간의 키 지우기" : "이 시간에 지금 값으로 키 찍기";
+      prev.disabled = !list.some(([k]) => k < t - KEY_EPSILON);
+      next.disabled = !list.some(([k]) => k > t + KEY_EPSILON);
+      if (document.activeElement !== time) time.value = String(Number(now.toFixed(3)));
+      hint.textContent =
+        current().loop > 0 ? `값을 바꾸면 ${Number(t.toFixed(2))}초(반복 안)에 키` : "값을 바꾸면 이 시간에 키";
+    };
+    update();
+    return { node: nav, update };
+  };
   const linkEditor = item => {
     const view = LinkSheet.sheet({
       item,
@@ -1557,13 +1684,15 @@ const mount = (renderer, input, settings) => {
   // 다시 그려도 편집 칸 안의 초점은 같은 자리(같은 파라미터의 n번째 조작)로 돌려 둔다.
   listen(document, "shader-links-changed", () => {
     const active = document.activeElement,
-      box = active instanceof Element ? active.closest(".link-editor") : null,
+      // 연결 시트 안이면 시트 기준, 아니면 파라미터 줄(◆ · 슬라이더 …) 기준으로 같은 자리를 찾는다
+      box = active instanceof Element ? active.closest(".link-editor, .uniform-row") : null,
+      selector = box?.classList.contains("link-editor") ? ".link-editor" : ".uniform-row",
       controls = node => [...node.querySelectorAll("select,input,button")],
       index = box ? controls(box).indexOf(active) : -1,
       name = box?.dataset.name;
     renderUniforms();
     if (!box) return;
-    const next = [...$("uniformList").querySelectorAll(".link-editor")].find(node => node.dataset.name === name);
+    const next = [...$("uniformList").querySelectorAll(selector)].find(node => node.dataset.name === name);
     if (!next) return;
     // 라디오(소스 · 모양 …)를 눌렀으면 같은 묶음의 고른 칸으로
     const group = active.closest?.('[role="radiogroup"]'),
@@ -1588,7 +1717,7 @@ const mount = (renderer, input, settings) => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
     const search = $("uniformSearch").value.trim().toLowerCase();
-    uniformSnapshot = JSON.stringify(items);
+    uniformSnapshot = snapshotOf(items);
     const defaults = annotatedDefaults(),
       hidden = new Set(search ? [] : conditionHidden(items, defaults));
     hiddenKey = [...hidden].join();
@@ -1723,7 +1852,8 @@ const mount = (renderer, input, settings) => {
         playButtons.set(item.name, play);
         extras.push(play);
       }
-      const link = Links.LINKABLE.has(item.type) ? linkOf(item.name) : null;
+      const link = Links.LINKABLE.has(item.type) ? linkOf(item.name) : null,
+        keyed = link?.source === "keys"; // 키프레임 줄: 슬라이더는 살려 두고 바꾸면 자동 키
       if (Links.LINKABLE.has(item.type)) {
         const linkButton = element("button");
         linkButton.className = "link-uniform glyph-icon icon-link";
@@ -1760,6 +1890,7 @@ const mount = (renderer, input, settings) => {
         try {
           renderer.setUniform(item.name, value);
           item.value = value;
+          if (keyed) recordKey(item.name, value);
           syncReset?.();
           field.removeAttribute("aria-invalid");
           showError("");
@@ -1783,6 +1914,20 @@ const mount = (renderer, input, settings) => {
         }
       };
       row.append(top);
+      if (keyed) {
+        // 키프레임 내비게이터 + 자동 키. 재생 중 값은 지금 키프레임 값으로 따라간다(이 줄을 만지는 동안은 그대로).
+        const nav = keyNav(item, link);
+        row.append(nav.node);
+        row.classList.add("is-keyed");
+        row.addEventListener("pointerdown", () => (keyPointer = true));
+        row.addEventListener("change", () => setTimeout(flushKeys));
+        row.addEventListener("keyup", () => pendingKeys.size && setTimeout(flushKeys));
+        watchLink(item.name, value => {
+          nav.update();
+          if (!row.contains(document.activeElement) && !pendingKeys.has(item.name))
+            playViews.get(item.name)?.(typeof value === "number" ? Number(value.toFixed(4)) : value);
+        });
+      }
       // 값 편집기(위젯). 배열이면 원소마다 하나씩 그린다: 원소 몫만 읽고(read) 바꾸면 전체 배열을 고쳐 올린다.
       const widget = (row, item, commit, name) => {
         if (item.type === "bool") {
@@ -2170,7 +2315,7 @@ const mount = (renderer, input, settings) => {
         }
       };
       const array = typeInfo(item.type).count;
-      if (link) {
+      if (link && !keyed) {
         // 연결이 값을 정하는 동안은 슬라이더 대신 읽기 전용 미터(움직여도 덮어써지는 조작을 두지 않는다)
         const gauge = LinkSheet.meter(item, link);
         watchLink(item.name, gauge.update);
@@ -2881,7 +3026,7 @@ const mount = (renderer, input, settings) => {
     if (
       !$("view-uniforms").hidden &&
       !(active instanceof Element && active.closest("#uniformList")) &&
-      uniformSnapshot !== JSON.stringify(renderer.getUserUniforms())
+      uniformSnapshot !== snapshotOf(renderer.getUserUniforms())
     )
       renderUniforms();
     $("statFps").textContent = s.fps.toFixed(1) + (s.fpsLimit ? ` / ${s.fpsLimit}` : "");
