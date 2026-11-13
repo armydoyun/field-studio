@@ -147,8 +147,9 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null) => 
   };
   // 패스 정의 정규화. 기본값(size=null, outputs=1, filter=형식 기본, wrap=clamp, mipmap=false)은 기존 정의와 같다.
   const normalizeSpec = s => {
-    if (typeof s.fragment !== "string" || !s.fragment.startsWith("#version 300 es") || s.fragment.length > 262144)
-      throw new Error(`${s.name}: 전체 GLSL ES 3.00 Fragment 문자열이 필요합니다.`);
+    // #version은 선택이다(없으면 renderer가 컴파일 직전에 붙인다).
+    if (typeof s.fragment !== "string" || !s.fragment.trim() || s.fragment.length > 262144)
+      throw new Error(`${s.name}: GLSL Fragment 문자열이 필요합니다.`);
     const scale = s.scale === undefined ? 1 : s.scale,
       format = s.format || "rgba8";
     if (!Number.isFinite(scale) || scale < 0.125 || scale > 1 || !Object.hasOwn(FORMATS, format))
@@ -310,8 +311,7 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null) => 
   const setPassFragment = (name, source) => {
     const pass = passes.find(p => p.name === name);
     if (!pass) throw new Error(`존재하지 않는 Buffer: ${name}`);
-    if (typeof source !== "string" || !source.startsWith("#version 300 es"))
-      throw new Error("GLSL ES 3.00 Fragment 소스가 필요합니다.");
+    if (typeof source !== "string" || !source.trim()) throw new Error("GLSL Fragment 소스가 필요합니다.");
     const { program, locations } = compilePass(source, name);
     const previous = pass.program;
     pass.program = program;

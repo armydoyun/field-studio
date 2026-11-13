@@ -15,11 +15,13 @@ const pass=(name,channels={})=>({name,fragment:SRC,format:'rgba8',scale:1,channe
   check(M.same({p:1,q:2},{q:2,p:1})&&!M.same({p:1},{p:1,q:undefined})&&!M.same([1],{0:1}),'same: 키 순서 무관 · 키 수 · 배열/객체 구분');
   const project={image:SRC,passes:[pass('A'),pass('B',{0:{buffer:'A',frame:'current'}})],imageChannels:{0:{buffer:'B',frame:'current'},1:{texture:'img1'}}};
   check(M.same(M.validateProject(project),project)&&M.validateProject(project)!==project,'올바른 프로젝트는 복사본으로 통과');
-  for(const [label,bad] of [['이미지 소스',{...project,image:'void main(){}'}],['버퍼 9개',{...project,passes:'ABCDEFGHI'.split('').map(n=>pass(n))}],
+  // #version은 생략할 수 있다(renderer가 컴파일 직전에 붙인다). 빈 소스 · 문자열이 아닌 소스는 거부한다.
+  check(M.same(M.validateProject({...project,image:'out vec4 o;\nvoid main(){ o = vec4(1.0); }'}).image,'out vec4 o;\nvoid main(){ o = vec4(1.0); }'),'머리말 없는 Image 소스도 받는다');
+  for(const [label,bad] of [['이미지 소스(빈 문자열)',{...project,image:'  \n'}],['이미지 소스(문자열 아님)',{...project,image:42}],['버퍼 9개',{...project,passes:'ABCDEFGHI'.split('').map(n=>pass(n))}],
     ['이름 중복',{...project,passes:[pass('A'),pass('A')]}],['Image 이름',{...project,passes:[pass('Image')]}],['형식',{...project,passes:[{...pass('A'),format:'rgb8'}]}],
     ['size 모양',{...project,passes:[{...pass('A'),size:[1]}]}],['imageChannels 배열',{...project,imageChannels:[]}]])
     assert.throws(()=>M.validateProject(bad),undefined,label);
-  check(true,'잘못된 프로젝트 7가지를 거부');
+  check(true,'잘못된 프로젝트 8가지를 거부');
   check(M.same(M.references(project,'A'),['B.iChannel0'])&&M.same(M.references(project,'B'),['Image.iChannel0']),'references: 버퍼를 읽는 채널 목록');
   check(M.validCurrent(project,'B','A')&&!M.validCurrent(project,'A','B')&&!M.validCurrent(project,'A','A')&&M.validCurrent(project,'Image','B'),'validCurrent: 앞선 버퍼만 current로 읽는다(Image는 모두)');
   const swapped=M.copy(project);swapped.passes.reverse();const changed=M.normalizeDependencies(swapped);

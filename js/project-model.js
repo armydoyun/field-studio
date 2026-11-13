@@ -29,11 +29,8 @@ const same = (a, b) =>
 const validateProject = candidate => {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate))
     throw new Error("프로젝트는 객체여야 합니다.");
-  if (
-    typeof candidate.image !== "string" ||
-    candidate.image.length > MAX_SOURCE ||
-    !candidate.image.startsWith("#version 300 es")
-  )
+  // #version 300 es는 쓰지 않아도 된다(없으면 renderer가 컴파일 직전에 붙인다 — glsl-prepare.js).
+  if (typeof candidate.image !== "string" || !candidate.image.trim() || candidate.image.length > MAX_SOURCE)
     throw new Error("Image GLSL 소스가 올바르지 않습니다.");
   if (!Array.isArray(candidate.passes) || candidate.passes.length > MAX_PASSES)
     throw new Error("버퍼는 최대 8개입니다.");
@@ -46,7 +43,7 @@ const validateProject = candidate => {
       p.name === "Image" ||
       names.has(p.name) ||
       typeof p.fragment !== "string" ||
-      !p.fragment.startsWith("#version 300 es") ||
+      !p.fragment.trim() ||
       p.fragment.length > MAX_SOURCE
     )
       throw new Error("Buffer 이름 또는 GLSL 소스를 확인하세요.");
