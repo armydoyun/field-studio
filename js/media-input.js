@@ -153,7 +153,15 @@ const create = (gl, { onChange = () => {} } = {}) => {
       if (problem) throw new Error(problem);
     }
     release(sources.get(kind));
-    const entry = { kind, state: "starting", name: file?.name || LABELS[kind], error: "", width: 0, height: 0 };
+    const entry = {
+      kind,
+      state: "starting",
+      name: file?.name || LABELS[kind],
+      error: "",
+      width: 0,
+      height: 0,
+      started: performance.now(),
+    };
     sources.set(kind, entry);
     notify();
     try {
@@ -239,6 +247,13 @@ const create = (gl, { onChange = () => {} } = {}) => {
       ? { texture: entry.texture, width: entry.width, height: entry.height }
       : { texture: null, width: 0, height: 0 };
   };
+  // uChannelTime: 재생 위치(초). 파일은 그 파일의 재생 위치, 마이크 · 웹캠은 켠 뒤 지난 시간, 꺼져 있으면 0.
+  const time = kind => {
+    const entry = sources.get(kind);
+    if (!entry || entry.state !== "on") return 0;
+    if (FILE_TYPES[kind] && entry.element) return entry.element.currentTime || 0;
+    return (performance.now() - entry.started) / 1000;
+  };
   // 편집기용 상태: 종류 → {state: "off" | "starting" | "on" | "error", name, error, width, height}
   const state = kind => {
     const entry = sources.get(kind);
@@ -257,7 +272,7 @@ const create = (gl, { onChange = () => {} } = {}) => {
     audioContext?.close?.().catch(() => {});
     audioContext = null;
   };
-  return { start, stop, retain, update, binding, state, restore, dispose };
+  return { start, stop, retain, update, binding, state, time, restore, dispose };
 };
 
 export { create, audioRows, fileProblem, KINDS, LABELS, AUDIO_WIDTH, AUDIO_HEIGHT };

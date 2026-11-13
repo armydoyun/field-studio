@@ -45,7 +45,7 @@ gl.activeTexture=unit=>active=[gl.TEXTURE0,gl.TEXTURE1,gl.TEXTURE2,gl.TEXTURE3].
 gl.texImage2D=(...a)=>uploads.push(["image",a[2],a[3],a[4]]);gl.texSubImage2D=(...a)=>uploads.push(["sub",a[4],a[5]]);gl.texParameteri=()=>{};gl.pixelStorei=()=>{};
 gl.createFramebuffer=()=>({id:++seq});gl.deleteFramebuffer=()=>{};gl.deleteProgram=()=>{};gl.bindFramebuffer=()=>{};gl.framebufferTexture2D=()=>{};gl.drawBuffers=()=>{};
 gl.checkFramebufferStatus=()=>gl.FRAMEBUFFER_COMPLETE;gl.viewport=()=>{};gl.clearColor=()=>{};gl.clear=()=>{};
-gl.getUniformLocation=(_,key)=>key;gl.useProgram=()=>{};gl.uniform1i=()=>{};gl.uniform3f=(name,x,y,z)=>sizes.push([name,x,y,z]);
+gl.getUniformLocation=(_,key)=>key;gl.useProgram=()=>{};gl.uniform1i=()=>{};gl.uniform3f=(name,x,y,z)=>sizes.push([name,x,y,z]);gl.uniform1fv=()=>{};
 let drawn=[];gl.drawArrays=()=>drawn.push([bindings.get(0),bindings.get(1)]);
 const textures={get:()=>null,list:()=>[]};
 const frag="#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){fragColor=vec4(1.);}";

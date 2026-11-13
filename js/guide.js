@@ -132,8 +132,8 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
       {
         list: [
           "앱 이름의 Uniform은 직접 선언합니다: `uTime` · `uResolution`(vec2) · `uMouse` · `uFrame` · `uDeltaTime`(**내장 Uniform** 참고). 자동 완성으로 고르면 선언 줄도 함께 들어갑니다.",
-          "Shadertoy 이름 `iTime` · `iTimeDelta` · `iFrame` · `iResolution`(vec3) · `iMouse`는 선언 없이 그대로 써도 됩니다. 실행할 때 앱이 위 Uniform에 연결합니다(필요하면 그 Uniform 선언도 넣습니다). 그래서 Shadertoy 코드를 붙여 넣으면 대부분 바로 돌아갑니다.",
-          "`iMouse`는 `uMouse`(vec4)와 같은 값입니다. Shadertoy와 달리 xy는 누르지 않아도 포인터를 따라가고, 포인터가 뷰포트 밖이면 -1입니다. `iDate` · `iFrameRate` · `iChannelTime`은 아직 없습니다.",
+          "Shadertoy 이름(`iTime` · `iTimeDelta` · `iFrame` · `iResolution` · `iMouse` · `iDate` · `iFrameRate` · `iChannelTime` · `iSampleRate`)은 선언 없이 그대로 써도 됩니다. 실행할 때 앱이 값을 넣습니다(**내장 Uniform** 표). 그래서 Shadertoy 코드를 붙여 넣으면 대부분 바로 돌아갑니다.",
+          "`iMouse`는 Shadertoy와 똑같이 누르고 있는 동안만 xy가 바뀝니다. 누르지 않아도 포인터를 따라가는 값은 `uMouse`입니다.",
           "`mainImage`를 쓰면서 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
           "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말 · `main()` · Common을 직접 넣고 Shadertoy 이름은 앱 이름으로 바꿔야 합니다. 작품을 그대로 보여 주려면 **HTML로 내보내기**(프로젝트 메뉴)를 쓰세요.",
         ],
@@ -243,6 +243,9 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
               "float",
               "뷰포트에서 굴린 휠의 누적 칸 수(위로 +1). 시간 초기화 시 0. 선언하면 휠이 페이지 대신 셰이더로 갑니다",
             ],
+            ["uDate", "vec4", "벽시계 (연, 월 0~11, 일, 자정부터 지난 초). 영상 렌더링 중에는 시작 시각 + 렌더 시간"],
+            ["uFrameRate", "float", "실제 초당 프레임 수(배속과 무관). 영상 렌더링 중에는 영상의 프레임 수"],
+            ["uChannelTime[4]", "float", "채널마다 재생 시간: 미디어(오디오 · 영상 파일)는 재생 위치, 나머지는 uTime"],
             [
               "iChannel0~3",
               "sampler2D",
@@ -262,11 +265,17 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
             ["iTime / iTimeDelta", "float", "uTime / uDeltaTime"],
             ["iFrame", "int", "uFrame"],
             ["iResolution", "vec3", "(uResolution.xy, 1.0)"],
-            ["iMouse", "vec4", "uMouse — xy는 누르지 않아도 포인터를 따라가고 뷰포트 밖이면 -1(Shadertoy와 다름)"],
+            ["iDate / iFrameRate", "vec4 / float", "uDate / uFrameRate"],
+            ["iChannelTime[4]", "float", "uChannelTime"],
+            ["iSampleRate", "float", "44100.0"],
+            [
+              "iMouse",
+              "vec4",
+              "Shadertoy와 똑같다: xy = 누르고 있는 동안의 위치(놓으면 마지막 위치, 처음에는 0) · zw = 클릭 위치(z > 0 누르는 중, w > 0 누른 첫 프레임). 누르지 않아도 포인터를 따라가는 값이 필요하면 uMouse를 쓰세요",
+            ],
           ],
         },
       },
-      { note: "`iDate` · `iFrameRate` · `iChannelTime` · `iSampleRate`는 아직 없습니다." },
       {
         code: `uniform vec4 uMouse;
 // ...

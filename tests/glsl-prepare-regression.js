@@ -88,7 +88,7 @@ test("출력이 하나면 예전과 같다(전역 out이 layout으로 선언돼 
 test("Shadertoy 이름: 선언 없이 쓴 iTime·iResolution·iMouse·iFrame·iTimeDelta를 FIELD Uniform에 연결한다",()=>{
   const user="void mainImage(out vec4 c, in vec2 p) {\n    c = vec4(p / iResolution.xy, 0.5 + 0.5 * sin(iTime + iTimeDelta), 1.0) + iMouse * 0.0 + float(iFrame) * 0.0;\n}";
   const out=prepareFragment(user).source;
-  for(const line of["uniform float uTime;","#define iTime uTime","uniform float uDeltaTime;","#define iTimeDelta uDeltaTime","uniform int uFrame;","#define iFrame uFrame","uniform vec2 uResolution;","#define iResolution vec3(uResolution.xy, 1.0)","uniform vec4 uMouse;","#define iMouse uMouse"])
+  for(const line of["uniform float uTime;","#define iTime uTime","uniform float uDeltaTime;","#define iTimeDelta uDeltaTime","uniform int uFrame;","#define iFrame uFrame","uniform vec2 uResolution;","#define iResolution vec3(uResolution.xy, 1.0)","uniform vec4 iMouse;"])
     assert(out.includes("\n"+line+"\n"),line+"\n"+out);
   assert(out.indexOf("precision highp float;")<out.indexOf("#define iTime"),"precision 뒤에 넣는다");
   const lines=compilerLines(out);user.split("\n").forEach((line,i)=>assert.equal(lines.get(i+1),line,`사용자 ${i+1}번 줄`));
@@ -96,7 +96,8 @@ test("Shadertoy 이름: 선언 없이 쓴 iTime·iResolution·iMouse·iFrame·iT
 test("Shadertoy 이름: 이미 선언한 FIELD Uniform은 다시 선언하지 않고 그 타입에 맞춰 연결한다",()=>{
   const out=prepareFragment("uniform vec3 uResolution;\nuniform float uFrame;\nuniform vec2 uMouse;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(iResolution.xy, float(iFrame), iMouse.x); }").source;
   assert(!/uniform vec2 uResolution;|uniform int uFrame;|uniform vec4 uMouse;/.test(out),out);
-  assert(out.includes("#define iFrame int(uFrame)")&&out.includes("#define iMouse vec4(uMouse, 0.0, 0.0)")&&out.includes("#define iResolution vec3(uResolution.xy, 1.0)"),out);
+  assert(out.includes("#define iFrame int(uFrame)")&&out.includes("#define iResolution vec3(uResolution.xy, 1.0)"),out);
+  assert(out.includes("uniform vec4 iMouse;")&&!out.includes("#define iMouse"),"iMouse는 uMouse와 따로(렌더러가 Shadertoy 값을 넣는 Uniform)");
 });
 test("Shadertoy 이름: 쓰지 않거나 직접 정의한 이름은 건드리지 않는다(주석 속 글자에도 속지 않는다)",()=>{
   const plain="out vec4 o;\nvoid main(){ o = vec4(1.0); } // iTime";
@@ -192,5 +193,16 @@ test("프로젝트 Uniform: Common이 쓰는데 이 패스 · Common에 없으�
   out=prepareFragment("uniform float uGain;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(g()); }",[],{common,uniforms}).source;
   assert.equal(out.split("uniform float uGain;").length,2,"이 패스가 선언했으면 그 선언 하나(끌어올린 것)");
   assert(!prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(1.0); }",[],{common:"float k() { return 1.0; }",uniforms}).source.includes("uGain"),"Common이 쓰지 않으면 넣지 않는다");
+});
+test("Shadertoy 이름: iDate · iFrameRate · iChannelTime(배열) · iSampleRate",()=>{
+  const out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(iDate.w, iFrameRate, iChannelTime[1], iSampleRate); }").source;
+  for(const line of["uniform vec4 uDate;","#define iDate uDate","uniform float uFrameRate;","#define iFrameRate uFrameRate","uniform float uChannelTime[4];","#define iChannelTime uChannelTime","#define iSampleRate 44100.0"])
+    assert(out.includes("\n"+line+"\n"),line+"\n"+out);
+  const declared=prepareFragment("uniform vec4 iMouse;\nuniform float iChannelTime[4];\nvoid mainImage(out vec4 c, in vec2 p) { c = iMouse + iChannelTime[0]; }").source;
+  assert(declared.split("uniform vec4 iMouse;").length===2&&declared.split("iChannelTime[4];").length===2&&!declared.includes("#define iChannelTime"),"직접 선언한 iMouse · iChannelTime은 그대로");
+});
+test("Common의 Uniform: uDate · uFrameRate · uChannelTime도 앱 Uniform으로 넣는다",()=>{
+  const out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(f()); }",[],{common:"float f() { return uDate.w + uFrameRate + uChannelTime[0]; }"}).source;
+  for(const d of["uniform vec4 uDate;","uniform float uFrameRate;","uniform float uChannelTime[4];"])assert(out.includes(d)&&out.indexOf(d)<out.indexOf("float f()"),d);
 });
 console.log(`GLSL prepare: ${passed} passed`);

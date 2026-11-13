@@ -45,6 +45,9 @@ const DEFAULT_BUILTIN_TYPES = Object.freeze({
   frame: "int",
   mouse: "vec2",
   wheel: "float",
+  date: "vec4",
+  frameRate: "float",
+  shadertoyMouse: "vec4",
 });
 
 const createRenderer = (canvas, sources, onStatus = () => {}) => {
@@ -99,11 +102,20 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 마우스는 0~1 상대 좌표로 보관하고 Uniform 전송 시 버퍼 픽셀 좌표로 환산한다.
   // uMouse를 vec4로 선언하면 zw에 클릭 위치를 전달한다: z>0 버튼 누름 중, w>0 누른 직후 첫 프레임.
   const mouse = [-1, -1],
-    click = [0, 0];
+    click = [0, 0],
+    drag = [0, 0]; // Shadertoy iMouse의 xy: 누르고 있는 동안의 위치(놓으면 마지막 위치를 유지, 처음에는 0)
   let mouseDown = false,
     clickPending = false;
   // uWheel: 뷰포트에서 굴린 휠의 누적 칸 수(위로 굴리면 +1). 시간 초기화 때 0으로 돌아간다.
   let wheel = 0;
+  // uFrameRate: 실제 초당 프레임 수(배속과 무관, 부드럽게). uDate는 벽시계 — 영상 렌더링 중에는 시작 시각 + 렌더 시간.
+  let frameRate = 60,
+    dateOrigin = null;
+  const dateValue = () => {
+    const now = new Date(dateOrigin === null ? Date.now() : dateOrigin + time * 1000);
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return [now.getFullYear(), now.getMonth(), now.getDate(), (now.getTime() - midnight) / 1000];
+  };
   // 성능 지표: cpuMs는 프레임당 GL 명령 제출 시간(JS), frameMs는 rAF 간격, GPU 시간은 gpuTimer가 측정한다.
   const clock =
     typeof performance === "object" && typeof performance.now === "function"
@@ -164,7 +176,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     (source, { internal = false } = {}) => compileFragment(source, internal ? NO_SHARED : shared),
     textureInput,
     keyboard,
-    media
+    media,
+    () => time
   );
   // 다음 프레임 예약을 취소한다. lastTime을 지워 재시작 첫 delta를 0으로 만든다.
   const cancelFrame = () => {
@@ -359,6 +372,19 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       } else gl.uniform2f(target.mouse, x, y);
     }
     if (target.wheel != null) gl.uniform1f(target.wheel, wheel);
+    if (target.date != null) gl.uniform4fv(target.date, dateValue());
+    if (target.frameRate != null) gl.uniform1f(target.frameRate, frameRate);
+    if (target.shadertoyMouse != null) {
+      const cx = click[0] * width,
+        cy = click[1] * height;
+      gl.uniform4f(
+        target.shadertoyMouse,
+        drag[0] * width,
+        drag[1] * height,
+        mouseDown ? cx : -cx,
+        clickPending ? cy : -cy
+      );
+    }
     uploadCustomUniforms(target);
   };
   // 컴파일할 소스: 등록한 Uniform 중 코드에 없는 선언을 넣고, 짧은 머리말 · 가짜 진입점(mainImage)을 붙인다(glsl-prepare.js).
@@ -424,6 +450,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stepDelta = 0;
     lastTime = now;
     time += delta;
+    if (elapsed > 0) frameRate = frameRate * 0.9 + (1 / elapsed) * 0.1;
     const cpuStart = clock();
     try {
       if (passManager.ensureTargets(gl.drawingBufferWidth, gl.drawingBufferHeight)) frameCount = 0;
@@ -682,8 +709,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       height,
       resume,
       tilePixels: Math.max(0, Math.floor(tilePixels) || 0),
-      saved: { time, frameCount, lastDelta },
+      saved: { time, frameCount, lastDelta, frameRate },
     };
+    dateOrigin = Date.now(); // uDate: 렌더링을 시작한 시각 + 렌더 시간
     tileCost.clear();
     tileStats = { tiles: 0, frames: 0 };
     resize();
@@ -703,6 +731,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     time = at;
     lastDelta = delta;
     frameCount = index;
+    if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
     keyboard.upload();
     media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
@@ -858,6 +887,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     time = at;
     lastDelta = delta;
     frameCount = index;
+    if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
     keyboard.upload();
     media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
@@ -924,6 +954,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!offline && offlineLost) {
       const { saved, resume } = offlineLost;
       offlineLost = null;
+      dateOrigin = null;
+      frameRate = saved.frameRate;
       time = saved.time;
       lastDelta = saved.lastDelta;
       lastTime = null;
@@ -935,6 +967,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     deleteOfflineTarget();
     const { saved, resume } = offline;
     offline = null;
+    dateOrigin = null;
+    frameRate = saved.frameRate;
     time = saved.time;
     lastDelta = saved.lastDelta;
     lastTime = null;
@@ -1022,11 +1056,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!rect.width || !rect.height) return;
     mouse[0] = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     mouse[1] = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
+    if (mouseDown) [drag[0], drag[1]] = mouse;
   };
   const onPointerDown = event => {
     if (offline || event.button !== 0) return;
     onPointerMove(event);
     if (mouse[0] < 0) return;
+    [drag[0], drag[1]] = mouse;
     click[0] = mouse[0];
     click[1] = mouse[1];
     mouseDown = clickPending = true;

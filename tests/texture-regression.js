@@ -19,7 +19,7 @@ gl.bindTexture=(_,tex)=>bindings.set(active,tex);gl.activeTexture=unit=>active=[
 gl.texImage2D=()=>{};gl.texParameteri=()=>{};
 gl.createFramebuffer=()=>({id:++seq});gl.deleteFramebuffer=()=>{};gl.deleteProgram=()=>{};gl.bindFramebuffer=()=>{};gl.framebufferTexture2D=()=>{};
 gl.checkFramebufferStatus=()=>gl.FRAMEBUFFER_COMPLETE;gl.viewport=()=>{};gl.clearColor=()=>{};gl.clear=()=>{};
-gl.getUniformLocation=(_,key)=>key;gl.useProgram=p=>program=p;gl.uniform1i=()=>{};gl.uniform3f=(name,x,y,z)=>sizes.push([name,x,y,z]);
+gl.getUniformLocation=(_,key)=>key;gl.useProgram=p=>program=p;gl.uniform1i=()=>{};gl.uniform3f=(name,x,y,z)=>sizes.push([name,x,y,z]);gl.uniform1fv=()=>{};
 gl.drawArrays=()=>draws.push({program,texture:bindings.get(0)});
 (async()=>{
   const textures=load("texture-input").createTextureInput(gl);

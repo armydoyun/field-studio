@@ -12,6 +12,10 @@ const BUILTINS = {
   frame: ["uFrame", ["int", "float", "uint"]],
   mouse: ["uMouse", ["vec2", "vec4"]],
   wheel: ["uWheel", ["float"]],
+  date: ["uDate", ["vec4"]],
+  frameRate: ["uFrameRate", ["float"]],
+  // Shadertoy의 iMouse 그대로(xy는 누르고 있을 때만 바뀌고 놓으면 마지막 위치). uMouse와 따로 둔다.
+  shadertoyMouse: ["iMouse", ["vec4"]],
 };
 // 출력 형식별 GPU 저장 방식. float 계열은 EXT_color_buffer_float가 있어야 FBO로 렌더링할 수 있다.
 const FORMATS = {
@@ -44,12 +48,15 @@ const makeLocations = (gl, program) => {
   }
   result.channels = [0, 1, 2, 3].map(i => gl.getUniformLocation(program, `iChannel${i}`));
   result.channelResolution = [0, 1, 2, 3].map(i => gl.getUniformLocation(program, `iChannelResolution[${i}]`));
+  // uChannelTime[4]: 채널마다 재생 시간(미디어는 그 미디어의 재생 위치, 나머지는 uTime)
+  result.channelTime = gl.getUniformLocation(program, "uChannelTime");
   return result;
 };
 // keyboard(선택): keyboard-input.js의 create(gl) 결과. 채널 {keyboard:true}가 이 텍스처를 읽는다.
 // media(선택): media-input.js의 create(gl) 결과. 채널 {media:"mic"|"audio"|"webcam"|"video"}가 그 텍스처를 읽는다.
 const MEDIA_KINDS = ["mic", "audio", "webcam", "video"];
-const createPassManager = (gl, createProgram, textureStore, keyboard = null, media = null) => {
+// clock(선택): 지금 uTime(초). uChannelTime에서 미디어가 아닌 채널의 시간이다.
+const createPassManager = (gl, createProgram, textureStore, keyboard = null, media = null, clock = () => 0) => {
   let passes = [],
     imageChannels = {},
     preview = null,
@@ -536,6 +543,11 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
       if (locations.channelResolution[i] !== null)
         gl.uniform3f(locations.channelResolution[i], width, height, width ? 1 : 0);
     }
+    if (locations.channelTime != null)
+      gl.uniform1fv(
+        locations.channelTime,
+        [0, 1, 2, 3].map(i => (channels[i]?.media ? media.time(channels[i].media) : clock()))
+      );
     gl.activeTexture(gl.TEXTURE0);
   }; // timer(선택): GPU 시간 측정기. 패스 이름으로 begin/end하며 예외 시에도 Query를 닫는다.
   const drawPasses = (width, height, uploadGlobals, timer = null) => {

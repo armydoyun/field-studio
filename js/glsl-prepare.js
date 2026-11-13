@@ -9,9 +9,10 @@
 //     매개변수 순서대로 출력 0, 1, …이 된다(layout(location = N) out vec4를 만들어 연결한다).
 //     같은 수의 출력을 이미 선언해 두었으면 location 순서대로 그 변수들에 쓴다.
 //  3. 사용자 Uniform 선언(파라미터 패널에 등록했지만 코드에 없는 것)을 precision 뒤에 넣는다.
-//  4. Shadertoy 이름: 코드가 iTime · iTimeDelta · iFrame · iResolution · iMouse를 선언 없이 쓰면
-//     FIELD Uniform(uTime · uDeltaTime · uFrame · uResolution · uMouse)에 #define으로 연결하고,
+//  4. Shadertoy 이름: 코드가 iTime · iTimeDelta · iFrame · iResolution · iDate · iFrameRate · iChannelTime을 선언 없이 쓰면
+//     FIELD Uniform(uTime · uDeltaTime · uFrame · uResolution · uDate · uFrameRate · uChannelTime)에 #define으로 연결하고,
 //     그 FIELD Uniform이 코드에 없으면 선언도 넣는다. 선언 줄과 같은 자리(3번 뒤)에 들어간다.
+//     iMouse는 렌더러가 Shadertoy와 똑같은 값(xy는 누르고 있을 때만 바뀜)을 넣는 Uniform이라 선언만 넣고, iSampleRate는 44100.0이다.
 //     코드가 그 이름을 직접 선언했거나(#define · 변수 · 매개변수) 쓰지 않으면 아무것도 넣지 않는다.
 //
 // 줄 번호: 넣은 줄 때문에 컴파일 오류의 줄 번호가 어긋나지 않도록 #line으로 사용자 코드의 줄 번호를 되돌린다
@@ -77,12 +78,13 @@ const SHADERTOY = [
   { name: "iTimeDelta", field: "uDeltaTime", declare: "float", link: () => "uDeltaTime" },
   { name: "iFrame", field: "uFrame", declare: "int", link: type => (type === "int" ? "uFrame" : "int(uFrame)") },
   { name: "iResolution", field: "uResolution", declare: "vec2", link: () => "vec3(uResolution.xy, 1.0)" },
-  {
-    name: "iMouse",
-    field: "uMouse",
-    declare: "vec4",
-    link: type => (type === "vec2" ? "vec4(uMouse, 0.0, 0.0)" : "uMouse"),
-  },
+  { name: "iDate", field: "uDate", declare: "vec4", link: () => "uDate" },
+  { name: "iFrameRate", field: "uFrameRate", declare: "float", link: () => "uFrameRate" },
+  { name: "iChannelTime", field: "uChannelTime", declare: "float", array: "[4]", link: () => "uChannelTime" },
+  // iMouse는 렌더러가 Shadertoy와 똑같은 값을 이 이름으로 넣는다(uMouse와 xy 규칙이 다르다) — 선언만 넣는다.
+  { name: "iMouse", field: "iMouse", declare: "vec4", link: null },
+  // iSampleRate: Shadertoy의 사운드 샘플레이트(상수)
+  { name: "iSampleRate", define: "44100.0" },
 ];
 // 코드가 이 이름을 직접 정의했는가: #define, 또는 타입 바로 뒤에 온 이름(전역·지역 변수, 함수 매개변수, uniform).
 const definesName = (code, name) =>
@@ -91,11 +93,15 @@ const definesName = (code, name) =>
 // 넣을 줄: FIELD Uniform 선언(없을 때만)과 #define.
 const shadertoyLines = code => {
   const lines = [];
-  for (const { name, field, declare, link } of SHADERTOY) {
+  for (const { name, field, declare, array = "", link, define } of SHADERTOY) {
     if (!new RegExp(`\\b${name}\\b`).test(code) || definesName(code, name)) continue;
+    if (define) {
+      lines.push(`#define ${name} ${define}`);
+      continue;
+    }
     const type = uniformType(code, field);
-    if (!type) lines.push(`uniform ${declare} ${field};`);
-    lines.push(`#define ${name} ${link(type || declare)}`);
+    if (!type) lines.push(`uniform ${declare} ${field}${array};`);
+    if (link) lines.push(`#define ${name} ${link(type || declare)}`);
   }
   return lines;
 };
@@ -142,6 +148,9 @@ const APP_UNIFORMS = [
   ["uFrame", "int"],
   ["uMouse", "vec4"],
   ["uWheel", "float"],
+  ["uDate", "vec4"],
+  ["uFrameRate", "float"],
+  ["uChannelTime", "float", "[4]"],
   ["iChannel0", "sampler2D"],
   ["iChannel1", "sampler2D"],
   ["iChannel2", "sampler2D"],

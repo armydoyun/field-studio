@@ -60,6 +60,10 @@ const player = data => {
       frame: at("uFrame"),
       mouse: at("uMouse"),
       wheel: at("uWheel"),
+      date: at("uDate"),
+      frameRate: at("uFrameRate"),
+      shadertoyMouse: at("iMouse"),
+      channelTime: at("uChannelTime"),
       samplers: [0, 1, 2, 3].map(i => at(`iChannel${i}`)),
       samplerSizes: [0, 1, 2, 3].map(i => at(`iChannelResolution[${i}]`)),
       custom: data.uniforms.map(item => at(item.name)),
@@ -196,7 +200,8 @@ const player = data => {
 
   // ---- 입력: 마우스 · 휠 · 키보드(renderer.js와 같은 값) ----
   const mouse = [-1, -1],
-    click = [0, 0];
+    click = [0, 0],
+    drag = [0, 0]; // iMouse의 xy: 누르고 있는 동안의 위치(Shadertoy와 같음)
   let mouseDown = false,
     clickPending = false,
     wheel = 0;
@@ -204,12 +209,14 @@ const player = data => {
     const rect = canvas.getBoundingClientRect();
     mouse[0] = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     mouse[1] = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
+    if (mouseDown) [drag[0], drag[1]] = mouse;
   };
   canvas.addEventListener("pointermove", pointer);
   canvas.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
     canvas.setPointerCapture?.(event.pointerId);
     pointer(event);
+    [drag[0], drag[1]] = mouse;
     click[0] = mouse[0];
     click[1] = mouse[1];
     mouseDown = clickPending = true;
@@ -247,7 +254,8 @@ const player = data => {
   });
 
   // ---- 그리기 ----
-  let time = 0,
+  let frameRate = 60,
+    time = 0,
     delta = 0,
     frame = 0,
     last = null;
@@ -271,6 +279,24 @@ const player = data => {
       } else if (types.get("uMouse") === "vec2") gl.uniform2f(target.mouse, x, y);
     }
     if (target.wheel && types.get("uWheel") === "float") gl.uniform1f(target.wheel, wheel);
+    if (target.date && types.get("uDate") === "vec4") {
+      const now = new Date(),
+        midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      gl.uniform4f(target.date, now.getFullYear(), now.getMonth(), now.getDate(), (now.getTime() - midnight) / 1000);
+    }
+    if (target.frameRate && types.get("uFrameRate") === "float") gl.uniform1f(target.frameRate, frameRate);
+    if (target.shadertoyMouse && types.get("iMouse") === "vec4") {
+      const cx = click[0] * width,
+        cy = click[1] * height;
+      gl.uniform4f(
+        target.shadertoyMouse,
+        drag[0] * width,
+        drag[1] * height,
+        mouseDown ? cx : -cx,
+        clickPending ? cy : -cy
+      );
+    }
+    if (target.channelTime) gl.uniform1fv(target.channelTime, [time, time, time, time]); // 미디어는 담지 않는다
     data.uniforms.forEach((item, i) => {
       const location = target.custom[i];
       if (location === null) return;
@@ -324,6 +350,7 @@ const player = data => {
     last = now;
     delta = elapsed * data.timeScale;
     time += delta;
+    if (elapsed > 0) frameRate = frameRate * 0.9 + (1 / elapsed) * 0.1;
     const dpr = Math.min(devicePixelRatio || 1, 2) * data.resolutionScale,
       width = Math.max(1, Math.round(canvas.clientWidth * dpr)),
       height = Math.max(1, Math.round(canvas.clientHeight * dpr));
