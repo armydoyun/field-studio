@@ -12,7 +12,7 @@ precision highp float;
 // Copyright (c) 2013 Pablo Roman Andrioli. MIT 라이선스 전문은 docs/THIRD_PARTY_LICENSES.md에 있다.
 //
 // FIELD Studio로 옮기며 바꾼 점:
-//  · mainImage/iResolution/iTime/iMouse → main/uResolution/uTime/uMouse
+//  · iResolution/iTime/iMouse → uResolution/uTime/uMouse (mainImage는 그대로 — 앱이 진입점 main을 붙인다)
 //  · 마우스를 누르지 않아도 커서 위치로 방향을 돌린다(커서가 뷰포트 밖이면 원본의 기본 방향)
 //  · speed · brightness · darkmatter · saturation · formuparam · zoom · tile · distfading을 파라미터로 꺼냈다(기본값 = 원본)
 //
@@ -29,7 +29,6 @@ uniform float uDarkMatter; // 암흑 물질(원본 darkmatter) · @range 0 1 @st
 uniform float uFade;       // 멀수록 흐려지는 정도(원본 distfading) · @range 0.5 0.9 @step 0.005 @default 0.73 @group 빛
 uniform float uBrightness; // 밝기(원본 brightness) · @log @range 0.0002 0.004 @default 0.0015 @group 빛
 uniform float uSaturation; // 채도(원본 saturation) · @range 0 1 @step 0.01 @default 0.85 @group 빛
-out vec4 fragColor;
 
 #define iterations 17
 #define formuparam uFormula
@@ -42,8 +41,7 @@ out vec4 fragColor;
 
 #define distfading uFade
 
-void main() {
-	vec2 fragCoord = gl_FragCoord.xy;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 	//get coords and direction
 	vec2 uv=fragCoord.xy/uResolution.xy-.5;
 	uv.y*=uResolution.y/uResolution.x;
@@ -103,7 +101,6 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uSpeed; // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 #define PI              3.141592654
 #define TAU             (2.0*PI)
@@ -475,8 +472,8 @@ vec3 color(vec2 p, vec2 q) {
   return col;
 }
 
-void main() {
-  vec2 q = gl_FragCoord.xy/uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 q = fragCoord/uResolution;
   vec2 p = -1. + 2. * q;
   p.x *= RESOLUTION.x/RESOLUTION.y;
 
@@ -494,7 +491,7 @@ precision highp float;
 // 야외 조명)을 바탕으로 교육용으로 새로 짠 코드. 기법 출처: https://iquilezles.org/articles/terrainmarching/
 //
 // FIELD Studio로 옮기며 바꾼 점:
-//  · mainImage/iResolution/iTime → main/uResolution/uTime, JS가 넣던 값들을 파라미터 패널 Uniform으로
+//  · iResolution/iTime → uResolution/uTime(mainImage는 그대로), JS가 넣던 값들을 파라미터 패널 Uniform으로
 //  · 'Day' 프리셋을 기본값으로, Randomize(두 지형 섞기) 대신 uSeed 슬라이더
 //  · 해시를 정수 해시(pcg3d)로 바꿈 → 같은 seed라도 원본과 산 모양이 다르다
 //  · 원본은 640×640 고정 해상도. 무거우면 설정에서 렌더 배율을 낮춘다
@@ -510,7 +507,6 @@ uniform vec3 uSky1;      // 지평선 쪽 하늘 · @color @default 0.34 0.56 0.
 uniform vec3 uSky2;      // 천정 쪽 하늘 · @color @default 0.06 0.18 0.46 @group 빛과 하늘
 uniform vec3 uFogC;      // 안개 · @color @default 0.55 0.66 0.82 @group 빛과 하늘
 uniform vec3 uSunDir;    // 해 방향 · @dir hemi @default -0.95 0.28 0.2 @group 빛과 하늘
-out vec4 fragColor;
 #define H uHeight
 #define uExp uExposure
 
@@ -573,8 +569,7 @@ vec3 sky(vec3 ro, vec3 rd, vec3 sun){
   }
   return col;
 }
-void main(){
-  vec2 fragCoord=gl_FragCoord.xy;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   // 원본은 커서를 부드럽게 따라가는 0~1 좌표(y는 위에서 아래). 커서가 뷰포트 밖이면 원본의 시작 위치.
   float uMouseX = uMouse.x<0.0 ? 0.5 : uMouse.x/uResolution.x;
   float uMouseY = uMouse.x<0.0 ? 0.42 : 1.0-uMouse.y/uResolution.y;
@@ -619,8 +614,8 @@ precision highp float;
 //
 // FIELD Studio로 옮기며 바꾼 점:
 //  · Shadertoy의 Common 탭 내용을 이 버퍼 앞부분에 그대로 붙였다(FIELD에는 Common 탭이 없다)
-//  · mainImage/iResolution/iTime/iFrame/iMouse → main/uResolution/uTime/uFrame/uMouse
-//  · 카메라는 뷰포트를 누른 채 끌 때만 돌린다(아래 main 주석)
+//  · iResolution/iTime/iFrame/iMouse → uResolution/uTime/uFrame/uMouse (mainImage는 그대로)
+//  · 카메라는 뷰포트를 누른 채 끌 때만 돌린다(아래 mainImage 주석)
 //  · 재질 해시를 정수 해시로 바꿈 → 물체 재질이 원본과 다르다
 //
 // 원리: 프레임마다 픽셀당 광선 하나를 장면에 쏘아 최대 12번 튕기며(난반사·금속·유리) 색을 모으고,
@@ -630,7 +625,6 @@ uniform float uTime;
 uniform int uFrame;
 uniform vec4 uMouse;          // xy = 커서, z > 0 = 버튼 누름 중
 uniform sampler2D iChannel0;  // A · previous
-out vec4 fragColor;
 
 // ---------------------------------------------------------------------------
 // Common (원본의 Common 탭)
@@ -1595,8 +1589,7 @@ mat3 setCamera( in vec3 ro, in vec3 ta, float cr ) {
     return mat3( cu, cv, cw );
 }
 
-void main() {
-    vec2 fragCoord = gl_FragCoord.xy;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     bool reset = uFrame == 0;
 
     // (0,0) 픽셀에 상태를 둔다: x = 초점 거리, yz = 카메라 각도(마우스, -0.5~0.5), w = 버퍼 너비.
@@ -1654,10 +1647,9 @@ precision highp float;
 // 뷰포트를 누른 채 끌면 카메라가 돈다. 놓고 기다리면 점점 깨끗해진다.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
-out vec4 fragColor;
 
-void main() {
-    vec4 data = texelFetch(iChannel0, ivec2(gl_FragCoord.xy), 0);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec4 data = texelFetch(iChannel0, ivec2(fragCoord), 0);
     vec3 col = data.rgb / data.w;
     
     // gamma correction
@@ -1685,7 +1677,6 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -1917,10 +1908,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 }
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 const skyline = `#version 300 es
 precision highp float;
 // Skyline by Otavio Good — License: CC0
@@ -1939,7 +1927,6 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -2817,10 +2804,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 }
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 const clouds2d = `#version 300 es
 precision highp float;
 // 2D Clouds by drift — License: Permission — 원작자의 자유 사용 허락
@@ -2836,7 +2820,6 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -2980,10 +2963,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 }
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 const selfReflect = `#version 300 es
 precision highp float;
 // Let's self reflect by mrange — License: CC0
@@ -2998,7 +2978,6 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -3382,10 +3361,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 }
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 const starsGalaxy = `#version 300 es
 precision highp float;
 // Stars and galaxy by mrange — License: CC0
@@ -3401,7 +3377,6 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -3716,10 +3691,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 }
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 const elementalRing = `#version 300 es
 precision highp float;
 // Elemental Ring by Otavio Good — License: CC0
@@ -3737,7 +3709,6 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -4072,10 +4043,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 }
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 const hexPlasma = `#version 300 es
 precision highp float;
 // Hexagon Plasma by Nemerix — License: MIT
@@ -4090,7 +4058,6 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -4155,10 +4122,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 }
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 const noxFire = `#version 300 es
 precision highp float;
 // Nox Fire by Matt Vianueva — License: MIT
@@ -4174,7 +4138,6 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
-out vec4 fragColor;
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -4261,10 +4224,7 @@ void mainImage(out vec4 o, vec2 u) {
 */
 
 // FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
-void main() {
-    mainImage(fragColor, gl_FragCoord.xy);
-    fragColor.a = 1.0;
-}`;
+`;
 
 const MIT = "https://opensource.org/license/mit";
 const COMMUNITY = [
@@ -4500,7 +4460,7 @@ const READING = {
   ],
   terrain: [
     {
-      at: "void main(){",
+      at: "void mainImage(out vec4 fragColor, in vec2 fragCoord) {",
       text: "카메라: 화면 좌표에서 광선 rd를 만들고, 커서로 yaw·pitch를 바꾼다. ro.z가 시간에 따라 늘어 앞으로 날아간다.",
     },
     {
@@ -4526,7 +4486,7 @@ const READING = {
   ],
   raytrace: [
     {
-      at: "void main() {",
+      at: "void mainImage(out vec4 fragColor, in vec2 fragCoord) {",
       text: "Buffer A의 시작: (0,0) 픽셀에 저장한 상태(초점 거리·카메라 각도·너비)를 읽고, 카메라가 바뀌었으면 누적을 처음부터(reset).",
     },
     {

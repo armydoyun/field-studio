@@ -30,7 +30,6 @@ uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform float uDragSpeed;   // 드래그 감도(화면 너비를 끌면 몇 바퀴) · @range 0.2 3 @step 0.01 @default 1 @group 카메라
 uniform float uInertia;     // 놓은 뒤 미끄러지는 정도(0 = 바로 멈춤) · @range 0 1 @step 0.01 @default 0.8 @group 카메라
-out vec4 fragColor;
 
 const vec3 HOME = vec3(${home.join(", ")});
 const float TAU = 6.2831853;
@@ -40,8 +39,8 @@ const int KEY_A = 65, KEY_D = 68, KEY_R = 82, KEY_S = 83, KEY_W = 87;
 float keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x; }
 float keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x; }
 
-void main() {
-    int pixel = int(gl_FragCoord.x);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    int pixel = int(fragCoord.x);
     vec4 camera = texelFetch(iChannel0, ivec2(0, 0), 0);
     vec4 motion = texelFetch(iChannel0, ivec2(1, 0), 0);
     vec4 last   = texelFetch(iChannel0, ivec2(2, 0), 0);
@@ -171,7 +170,7 @@ precision highp float;
 //  2. readOrbit       → (방위각, 높이각, 거리)를 읽는다. 버퍼가 비어 있으면 처음 시점.
 //  3. orbitPosition   → 구면 좌표로 카메라 위치를 정한다. 목표점(흰 공) 둘레의 구 위를 움직인다.
 //  4. lookAt          → 카메라가 목표점을 보도록 앞 · 오른쪽 · 위 축을 만든다.
-//  5. main            → 화면 좌표마다 광선을 쏘아(레이마칭) 장면을 그리고, 오른쪽 위에 위에서 본 지도를 겹친다.
+//  5. mainImage       → 화면 좌표마다 광선을 쏘아(레이마칭) 장면을 그리고, 오른쪽 위에 위에서 본 지도를 겹친다.
 // 지도에서 흰 점 = 목표점, 노란 점 = 카메라, 노란 부채꼴 = 보는 방향과 화각이다. 끌면서 지도를 함께 보자.
 // 조작(뷰포트를 클릭한 뒤): 끌기 = 회전 · 휠 = 확대/축소 · A·D/←→ · ↑↓ · W·S · Shift · R(처음 시점)
 uniform vec2 uResolution;
@@ -180,7 +179,6 @@ uniform sampler2D iChannel0;
 uniform float uFocal;   // 초점 거리(클수록 망원, 좁게 보인다) · @range 0.8 3.5 @step 0.01 @default 1.7 @group 카메라
 uniform bool uMap;      // 오른쪽 위에 위에서 본 지도 · @default true @group 보기
 uniform bool uAxes;     // 목표점에 x(빨강)·y(초록)·z(파랑) 축 표시 · @default true @group 보기
-out vec4 fragColor;
 
 ${orbitCamera(ORBIT_HOME)}
 
@@ -291,15 +289,15 @@ vec3 drawMap(vec3 col, vec2 frag, vec3 orbit, vec3 eye) {
     return mix(col, c, 0.92);
 }
 
-void main() {
-    vec2 uv = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;   // 세로 -1~1, 가운데 0
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (2.0 * fragCoord - uResolution) / uResolution.y;   // 세로 -1~1, 가운데 0
     vec3 target = vec3(0.0);
     vec3 orbit = readOrbit();
     vec3 eye = orbitPosition(orbit, target);
     vec3 rd = normalize(lookAt(eye, target) * vec3(uv, uFocal));      // z = 초점 거리(화각)
     vec3 col = render(eye, rd);
     col = pow(col, vec3(0.4545));                                       // 선형 → 화면(감마)
-    if (uMap) col = drawMap(col, gl_FragCoord.xy, orbit, eye - target);
+    if (uMap) col = drawMap(col, fragCoord, orbit, eye - target);
     fragColor = vec4(col, 1.0);
 }`;
 
@@ -313,7 +311,7 @@ precision highp float;
 // 유리 굴절 — 빛이 유리에 들어가 꺾이고, 안에서 튕기고, 다시 꺾여 나오는 길을 레이마칭으로 따라간다.
 //
 // 읽는 순서:
-//  1. main         → 처음 광선이 유리에 닿으면 shadeGlass, 아니면 불투명 장면(shadeScene).
+//  1. mainImage    → 처음 광선이 유리에 닿으면 shadeGlass, 아니면 불투명 장면(shadeScene).
 //  2. fresnel      → 표면이 빛을 얼마나 "반사"하는지. 정면은 4%쯤, 스치듯 보면 거의 100%. 유리가 유리로 보이는 가장 큰 이유다.
 //  3. shadeGlass   → 반사(겉면에서 튕긴 빛)와 굴절(안을 지나온 빛)을 프레넬 비율로 섞는다.
 //  4. refractPath  → 들어갈 때 굴절 → 안에서 레이마칭(marchInside) → 나갈 면에서 다시 굴절.
@@ -337,7 +335,6 @@ uniform float uDensity;      // 흡수 세기(0 = 완전히 맑음) · @range 0 
 uniform int uBounces;        // 안에서 튕길 수 있는 최대 횟수(내부 전반사) · @range 1 8 @step 1 @default 4 @group 유리
 uniform float uSpin;         // 유리가 도는 속도 · @range 0 1 @step 0.01 @default 0.15 @group 유리
 uniform int uView;           // 보기(▶: 차례로) · @enum 결과 반사만 굴절만 프레넬 두께 @default 0 @anim 2
-out vec4 fragColor;
 
 ${orbitCamera(GLASS_HOME)}
 
@@ -496,8 +493,8 @@ vec3 shadeGlass(vec3 p, vec3 rd, out float F, out vec3 reflection, out vec3 refr
     return mix(refraction, reflection, F);
 }
 
-void main() {
-    vec2 uv = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (2.0 * fragCoord - uResolution) / uResolution.y;
     vec3 target = vec3(0.0, 0.1, 0.0);
     vec3 eye = orbitPosition(readOrbit(), target);
     vec3 rd = normalize(lookAt(eye, target) * vec3(uv, 1.9));
@@ -557,7 +554,6 @@ uniform float uFloorRough;   // 바닥 거칠기(0 = 매끈한 바닥에 비친�
 uniform vec3 uSunCol;        // 햇빛 색 · @color @default 1 0.93 0.82 @group 빛
 uniform float uSunAngle;     // 해의 방위(천천히 돌려 하이라이트가 움직이는 것을 보자) · @range 0 6.283 @step 0.01 @default 2.2 @anim 20 @group 빛
 uniform int uView;           // 보기(▶: 차례로) · @enum 결과 법선 그림자 틈새어둠 반사횟수 반사만 @default 0 @anim 2
-out vec4 fragColor;
 
 ${orbitCamera(MATERIAL_HOME)}
 
@@ -705,8 +701,8 @@ vec3 render(vec3 ro, vec3 rd, out vec3 normal0, out vec3 info, out vec3 firstOnl
     return col;
 }
 
-void main() {
-    vec2 uv = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (2.0 * fragCoord - uResolution) / uResolution.y;
     vec3 target = vec3(0.0, -0.2, -0.6);
     vec3 eye = orbitPosition(readOrbit(), target);
     vec3 rd = normalize(lookAt(eye, target) * vec3(uv, 2.0));
@@ -792,7 +788,6 @@ uniform float uSpeed;       // 걷는 속도(초당 칸) · @range 1 12 @step 0.
 uniform float uJump;        // 점프 세기(처음 위로 튀는 속도) · @range 0 15 @step 0.1 @default 7.5 @group 움직임
 uniform float uGravity;     // 중력 · @range 2 40 @step 0.1 @default 20 @group 움직임
 uniform float uGrip;        // 땅을 잡는 힘(작을수록 빙판처럼 미끄럽다) · @range 0.5 20 @step 0.1 @default 10 @group 움직임
-out vec4 fragColor;
 
 ${WORLD}
 
@@ -804,8 +799,8 @@ const int KEY_A = 65, KEY_D = 68, KEY_E = 69, KEY_Q = 81, KEY_R = 82, KEY_S = 83
 float keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x; }
 float keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x; }
 
-void main() {
-    int pixel = int(gl_FragCoord.x);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    int pixel = int(fragCoord.x);
     vec4 s0 = texelFetch(iChannel0, ivec2(0, 0), 0);
     vec4 s1 = texelFetch(iChannel0, ivec2(1, 0), 0);
     vec4 cam = texelFetch(iChannel0, ivec2(2, 0), 0);
@@ -891,14 +886,13 @@ uniform sampler2D iChannel0;
 uniform vec3 uBallColor;      // 공 색 · @color @default 1 0.42 0.18 @group 보기
 uniform bool uCameraCollide;  // 벽이 가리면 카메라를 앞으로 당기기 · @default true @group 카메라
 uniform float uFocal;         // 초점 거리(클수록 망원) · @range 0.8 3 @step 0.01 @default 1.5 @group 카메라
-out vec4 fragColor;
 
 ${WORLD}
 
 ${CAMERA_MATH}
 
 const vec3 SUN = normalize(vec3(0.55, 0.8, 0.3));
-vec3 player;                  // main에서 읽어 두고 map이 쓴다
+vec3 player;                  // mainImage에서 읽어 두고 map이 쓴다
 
 vec2 map(vec3 p) { return pick(world(p), vec2(sdSphere(p - player, RADIUS), 10.0)); }
 vec3 normalAt(vec3 p) {
@@ -974,8 +968,8 @@ vec3 albedo(float id, vec3 p) {
     return ballColor(p);
 }
 
-void main() {
-    vec2 uv = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (2.0 * fragCoord - uResolution) / uResolution.y;
     // 상태 읽기: 카메라 거리(픽셀 2의 z)가 0이면 버퍼가 비어 있다 → 처음 자리.
     vec4 cam = texelFetch(iChannel0, ivec2(2, 0), 0);
     bool ready = cam.z > 0.0;

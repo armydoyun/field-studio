@@ -5,6 +5,7 @@ import * as Community from "./community-examples.js";
 import * as Perf from "./gallery-perf.js";
 import * as Ramp from "./ramp.js";
 import * as Lazy from "./lazy-render.js";
+import * as Prepare from "./glsl-prepare.js";
 import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
 import * as Technique from "./technique-examples.js";
@@ -26,8 +27,7 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-${params}out vec4 fragColor;
-`;
+${params}`;
 // 예제 공용 해시: 정수 해시(pcg3d)라 시간이 흘러 좌표가 커져도(스크롤·드리프트) 격자 무늬나 편향이 생기지 않는다.
 const PCG = `uvec3 pcg3d(uvec3 v) {
     v = v * 1664525u + 1013904223u;
@@ -60,8 +60,8 @@ float fbm(vec2 p) {
     for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
     return v;
 }
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     float t = uTime * uSpeed;
     vec2 p = uv * uZoom;
     vec2 q = vec2(fbm(p + t * 0.1), fbm(p + vec2(5.2, 1.3) - t * 0.08));
@@ -80,8 +80,8 @@ const kaleido =
 // 극좌표를 uSegments 조각으로 접어 만든 만화경. 마우스를 움직이면 중심이 따라간다.
 // 빛깔은 uPalette 그라데이션을 한 바퀴 돌며 읽는다(fract). 끝 색과 처음 색을 같게 두면 이음매가 없다.
 vec3 palette(float t) { return texture(uPalette, vec2(fract(t), 0.5)).rgb; }
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     if (uMouse.x >= 0.0) uv -= 0.25 * (uMouse - 0.5 * uResolution) / uResolution.y;
     float a = atan(uv.y, uv.x) + uTwist, r = length(uv), t = uTime * uFlow;
     float seg = 6.28318 / max(uSegments, 1.0);
@@ -103,8 +103,8 @@ const lava =
   `
 // 2D 메타볼: 원 거리장을 smooth-min으로 합쳐 서로 녹아 붙는 덩어리를 만든다.
 float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     float d = 1e3;
     float t = uTime * uFlow;
     for (int i = 0; i < 12; i++) {
@@ -127,8 +127,8 @@ const horizon =
   ) +
   `
 // 원근 격자와 줄무늬 태양: 화면 아래 절반을 바닥 평면으로 투영한다.
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     // 하늘·해 색은 그라데이션에서 읽는다. smooth 모드의 정지점 두 개 = 예전 mix(a, b, smoothstep(…))와 같다.
     vec3 sky = texture(uSky, vec2(clamp((uv.y + 0.2) / 0.6, 0.0, 1.0), 0.5)).rgb;
     vec3 col = sky;
@@ -156,8 +156,8 @@ const truchet =
   `
 // Truchet 타일: 셀마다 무작위로 회전한 사분원 두 개가 끊김 없는 미로를 만든다.
 ${HASH}
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y * uScale + uFlow * uTime * uFlowSpeed;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y * uScale + uFlow * uTime * uFlowSpeed;
     vec2 id = floor(uv), f = fract(uv) - 0.5;
     float h = hash(id + vec2(uSeed * 101.0, 0.0));   // uSeed가 바뀌면 칸마다 다른 해시 → 다른 미로
     if (h > 0.5) f.x = -f.x;
@@ -168,7 +168,7 @@ void main() {
     float line = smoothstep(w + px, w - px, d);
     float shade = 0.5 + 0.5 * sin(atan(c.y, c.x) * 2.0 + uTime * 3.0);
     vec3 col = mix(uPaper, uInk * (0.6 + 0.4 * shade), line);
-    fragColor = vec4(col * (1.0 - 0.25 * length((gl_FragCoord.xy / uResolution) - 0.5)), 1.0);
+    fragColor = vec4(col * (1.0 - 0.25 * length((fragCoord / uResolution) - 0.5)), 1.0);
 }`;
 const voronoi =
   head(
@@ -180,8 +180,8 @@ const voronoi =
 ${HASH3}
 // 유리 빛깔은 uGlass 그라데이션을 한 바퀴 돌며 읽는다(fract).
 vec3 palette(float t) { return texture(uGlass, vec2(fract(t), 0.5)).rgb; }
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     vec2 p = uv * uScale + uTime * vec2(0.15, 0.05);   // 계속 흐르므로 칸 번호가 커진다 → 정수 해시
     vec2 g = floor(p), f = fract(p);
     float d1 = 8.0, d2 = 8.0;
@@ -220,8 +220,8 @@ float stars(vec2 p, float t) {
     float glow = 0.004 / (d * d + 0.004) * smoothstep(0.45, 0.1, d);   // 칸 경계 전에 0으로 줄인다
     return twinkle * (core + 0.35 * glow);
 }
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     vec3 col = texture(uSky, vec2(clamp((uv.y + 0.6) / 1.2, 0.0, 1.0), 0.5)).rgb;
     for (int i = 0; i < 4; i++) {
         if (i >= uLayers) break;
@@ -319,16 +319,15 @@ uniform float uTwinkle;  // 위성 깜빡임(▶: 범위를 왕복) · @range 0 
 // ── 보기 ──
 uniform int   uView;     // 보기(▶: 차례로) · @enum 결과 명암만 거리장 램프 @default 0 @anim 2
 uniform bool  uOrbitLine;// 궤도선 · @default true
-out vec4 fragColor;
 ${HASH}
 // 램프 읽기: 그라데이션은 .rgb(0~1 위치의 색), 곡선은 .r(x의 y). 0~1 밖은 끝 값으로 고정된다.
 vec3 ramp(sampler2D s, float t) { return texture(s, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb; }
 float curve(sampler2D s, float x) { return texture(s, vec2(clamp(x, 0.0, 1.0), 0.5)).r; }
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y / uZoom - uCenter * 0.5;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y / uZoom - uCenter * 0.5;
     float px = 1.5 / uResolution.y / uZoom;
     // 하늘 + 흐르는 별(uSeed가 배치를, uDrift가 방향을 정한다)
-    vec3 col = uBack + ramp(uSky, gl_FragCoord.y / uResolution.y);
+    vec3 col = uBack + ramp(uSky, fragCoord.y / uResolution.y);
     vec2 sp = uv * 14.0 + uDrift * uTime * 0.5;
     vec2 id = floor(sp), f = fract(sp) - 0.5;
     float h = hash(id + vec2(uSeed * 101.0, 0.0));
@@ -363,7 +362,7 @@ void main() {
     if (uView == 1) col = vec3(0.06 + 0.94 * light) * step(dPlanet, 0.0);   // 그림자 쪽도 옅게 남겨 윤곽이 보이게
     else if (uView == 2) col = mix(vec3(0.25, 0.55, 1.0), vec3(1.0, 0.55, 0.2), step(dScene, 0.0)) * (0.55 + 0.45 * cos(dScene * 120.0));
     else if (uView == 3) {
-        vec2 q = gl_FragCoord.xy / uResolution;
+        vec2 q = fragCoord / uResolution;
         float band = floor(q.y * 4.0);
         col = band == 3.0 ? ramp(uSky, q.x) : band == 2.0 ? ramp(uToon, q.x) : band == 1.0 ? ramp(uMoons, q.x) : vec3(0.06);
         if (band == 0.0) col += vec3(1.0, 0.8, 0.3) * (1.0 - smoothstep(0.0, 0.012, abs(q.y * 4.0 - curve(uGlow, q.x))));
@@ -379,7 +378,6 @@ uniform vec2 uResolution;
 uniform float uOffset;  // 칸 번호에 더할 값(▶로 0 ↔ 1천만을 오간다) · @range 0 10000000 @step 1000 @default 10000000 @anim 20
 uniform float uCell;    // 칸 크기(px) · @range 1 8 @step 1 @default 2
 uniform int   uShowRaw; // 보기 · @enum 상위_4%만_점으로 해시_값_그대로 @default 0
-out vec4 fragColor;
 // 예전 방식: fract로 소수부만 남겨 섞는다(Hoskins "Hash without Sine"). float의 유효숫자 24비트에 묶인다.
 float hashFloat(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -389,12 +387,12 @@ float hashFloat(vec2 p) {
 // 정수 해시: float의 비트를 uint로 읽어 곱셈·xor·시프트로 섞는다. 크기와 관계없이 고르다.
 ${PCG}
 float hashInt(vec2 p) { return float(pcg3d(uvec3(floatBitsToUint(p), 0u)).x >> 8u) * (1.0 / 16777216.0); }
-void main() {
-    vec2 cell = floor(gl_FragCoord.xy / uCell) + uOffset;       // 칸 번호 (정수값, 1천만까지 float로 정확)
-    bool right = gl_FragCoord.x > 0.5 * uResolution.x;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 cell = floor(fragCoord / uCell) + uOffset;       // 칸 번호 (정수값, 1천만까지 float로 정확)
+    bool right = fragCoord.x > 0.5 * uResolution.x;
     float h = right ? hashInt(cell) : hashFloat(cell);
     vec3 col = uShowRaw == 1 ? vec3(h) : vec3(step(0.96, h));   // 0: 상위 4%만 점으로 · 1: 해시 값 그대로
-    float divider = 1.0 - smoothstep(1.0, 2.0, abs(gl_FragCoord.x - 0.5 * uResolution.x));
+    float divider = 1.0 - smoothstep(1.0, 2.0, abs(fragCoord.x - 0.5 * uResolution.x));
     fragColor = vec4(mix(col, vec3(1.0, 0.55, 0.2), divider), 1.0);
 }
 // 참고: 노이즈처럼 소수부가 필요한 계산은 좌표 자체가 수백만이면 float에 소수부가 남지 않는다.
@@ -409,7 +407,6 @@ uniform int uFrame;
 uniform float uDeltaTime;
 uniform sampler2D iChannel0;   // A · previous
 uniform sampler2D iChannel1;   // 키보드
-out vec4 fragColor;
 
 const int KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40, KEY_SPACE = 32;
 const int KEY_A = 65, KEY_D = 68, KEY_S = 83, KEY_W = 87;
@@ -417,7 +414,7 @@ float keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x; }
 float keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x; }
 float keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x; }
 
-void main() {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 state = uFrame == 0 ? vec4(0.5, 0.5, 0.0, 0.0) : texelFetch(iChannel0, ivec2(0), 0);
     vec2 dir = vec2(max(keyDown(KEY_RIGHT), keyDown(KEY_D)) - max(keyDown(KEY_LEFT), keyDown(KEY_A)),
                     max(keyDown(KEY_UP), keyDown(KEY_W)) - max(keyDown(KEY_DOWN), keyDown(KEY_S)));
@@ -433,13 +430,12 @@ precision highp float;
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;   // A · current
 uniform sampler2D iChannel1;   // 키보드
-out vec4 fragColor;
 
 float keyDown(int k) { return texelFetch(iChannel1, ivec2(k, 0), 0).x; }
 float box(vec2 p, vec2 c, float r) { vec2 d = abs(p - c) - r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
 
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution, aspect = vec2(uResolution.x / uResolution.y, 1.0);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution, aspect = vec2(uResolution.x / uResolution.y, 1.0);
     vec4 state = texelFetch(iChannel0, ivec2(0), 0);
     vec3 col = mix(vec3(0.05, 0.06, 0.09), vec3(0.11, 0.13, 0.2), uv.y);
     // 점: Space 토글로 색이 바뀐다. 누른 횟수(w)만큼 고리가 생긴다.
@@ -481,9 +477,8 @@ precision highp float;
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     if (uv.x < 0.5) { fragColor = texture(iChannel0, uv); return; }
     float d = texture(iChannel1, uv).r;
     vec3 col = d < 0.0 ? vec3(1.0, 0.55, 0.2) : vec3(0.25, 0.55, 1.0);
@@ -496,9 +491,8 @@ precision highp float;
 // Buffer A · Mip 켜짐. 선명한 패턴을 그리면 매 프레임 밉맵(축소 사본)이 자동 생성된다.
 uniform vec2 uResolution;
 uniform float uTime;
-out vec4 fragColor;
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     vec2 g = fract(uv * 6.0 + uTime * 0.2) - 0.5;
     float ring = abs(fract(length(uv) * 8.0 - uTime * 0.5) - 0.5);
     vec3 col = 0.5 + 0.5 * cos(6.28 * length(uv) + vec3(0, 2, 4) + uTime);
@@ -511,9 +505,8 @@ uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 uniform float uBlur;  // 가장 흐린 곳의 밉 레벨 · @range 0 8 @step 0.1 @default 5
 uniform float uFocus; // 또렷한 줄의 높이(▶로 위아래로 훑는다) · @range 0 1 @step 0.01 @default 0.5 @anim 8
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     float lod = uBlur * smoothstep(0.05, 0.45, abs(uv.y - uFocus));
     fragColor = textureLod(iChannel0, uv, lod);
 }`;
@@ -526,12 +519,11 @@ precision highp float;
 // RGBA8 버퍼였다면 3짜리 네온과 0.9짜리 흰 사각형이 똑같이 1로 잘려, 무엇이 번져야 하는지 알 수 없다.
 uniform vec2 uResolution;
 uniform float uTime;
-out vec4 fragColor;
 vec3 hue(float t) { return 0.5 + 0.5 * cos(6.2831853 * (t + vec3(0.0, 0.33, 0.67))); }
-void main() {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // 짧은 변 기준 좌표: 화면이 가로로 길든 세로로 길든 가운데 -1~1 정사각형 안의 것이 다 보인다
     float side = min(uResolution.x, uResolution.y);
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / side;
+    vec2 p = (2.0 * fragCoord - uResolution) / side;
     float px = 2.0 / side;                                // 픽셀 하나의 크기(테두리를 부드럽게)
     vec3 col = vec3(0.015, 0.02, 0.035) * (1.3 - 0.4 * length(p));   // 어두운 배경(1보다 한참 작다 → 번지지 않는다)
     // 네온 고리: 밝기 4
@@ -561,9 +553,8 @@ uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 uniform float uThreshold; // 이 밝기부터 번진다 · @range 0 4 @step 0.01 @default 1 @group 밝은 부분 추출
 uniform float uKnee;      // 경계를 부드럽게 하는 폭 · @range 0 1 @step 0.01 @default 0.5 @group 밝은 부분 추출
-out vec4 fragColor;
-void main() {
-    vec3 c = texture(iChannel0, gl_FragCoord.xy / uResolution).rgb;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec3 c = texture(iChannel0, fragCoord / uResolution).rgb;
     float bright = max(c.r, max(c.g, c.b));
     // soft knee: 기준값 - knee부터 서서히 커지다가 기준값 위에서는 (밝기 - 기준값)이 된다
     float knee = max(uKnee, 1e-4), soft = clamp(bright - uThreshold + knee, 0.0, 2.0 * knee);
@@ -586,7 +577,6 @@ uniform float uRadius;    // 겹칠 밉 레벨 수(클수록 넓게 번짐) · @
 uniform float uExposure;  // 노출(배율) · @log @range 0.05 8 @default 1 @group 화면에 담기
 uniform int uToneMap;     // 톤 매핑(▶로 차례로 비교) · @enum 자르기 Reinhard ACES @default 2 @anim 2 @group 화면에 담기
 uniform bool uCompare;    // 왼쪽 절반은 블룸 없이 보여 준다 · @default false @group 화면에 담기
-out vec4 fragColor;
 vec3 blurLevel(vec2 uv, int lod) {
     vec2 texel = 1.0 / vec2(textureSize(iChannel1, lod));
     float l = float(lod);
@@ -603,8 +593,8 @@ vec3 toneMap(vec3 c) {
     if (uToneMap == 2) return clamp(c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);   // ACES(근사): 영화 같은 대비
     return clamp(c, 0.0, 1.0);                                                      // 자르기: 1보다 밝으면 하얗게 날아간다
 }
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     vec3 scene = texture(iChannel0, uv).rgb, bloom = vec3(0.0);
     float total = 0.0;
     for (int lod = 0; lod < 7; lod++) {
@@ -629,12 +619,11 @@ uniform vec4 uMouse;          // 누르고 있는 동안 커서 주변에 V를 �
 uniform sampler2D iChannel0;
 uniform float uFeed;          // 먹이 공급률 F(U를 채운다) · @range 0.01 0.09 @step 0.0005 @default 0.037 @group 반응
 uniform float uKill;          // 제거율 k(V를 없앤다) · @range 0.04 0.07 @step 0.0005 @default 0.06 @group 반응
-out vec4 fragColor;
 ${HASH}
-void main() {
-    vec2 px = 1.0 / uResolution, uv = gl_FragCoord.xy * px;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 px = 1.0 / uResolution, uv = fragCoord * px;
     if (uFrame == 0) {   // 초기 상태: U=1, 무작위 점과 중앙 사각형에만 V
-        float seed = step(0.997, hash(floor(gl_FragCoord.xy / 6.0))) + step(abs(uv.x - 0.5), 0.04) * step(abs(uv.y - 0.5), 0.04);
+        float seed = step(0.997, hash(floor(fragCoord / 6.0))) + step(abs(uv.x - 0.5), 0.04) * step(abs(uv.y - 0.5), 0.04);
         fragColor = vec4(1.0, min(seed, 1.0), 0.0, 1.0);
         return;
     }
@@ -648,7 +637,7 @@ void main() {
     float u = c.r, v = c.g, uvv = u * v * v;
     u += 1.0 * lap.r - uvv + uFeed * (1.0 - u);
     v += 0.5 * lap.g + uvv - (uKill + uFeed) * v;
-    if (uMouse.z > 0.0 && length(gl_FragCoord.xy - uMouse.xy) < 10.0) v = 1.0;
+    if (uMouse.z > 0.0 && length(fragCoord - uMouse.xy) < 10.0) v = 1.0;
     fragColor = vec4(clamp(u, 0.0, 1.0), clamp(v, 0.0, 1.0), 0.0, 1.0);
 }`;
 const reactionImage = `#version 300 es
@@ -658,9 +647,8 @@ uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 // 농도 V(0~1)를 그라데이션에서 색으로 읽는다. 정지점 위치가 곧 "어느 농도부터 이 색"이다.
 uniform sampler2D uPalette; // 농도 V → 색 · @gradient smooth @default 0.12 #080514 0.4 #59f2ff 0.6 #d9ffff
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     float v = texture(iChannel0, uv).g;
     fragColor = vec4(texture(uPalette, vec2(v, 0.5)).rgb, 1.0);
 }`;
@@ -963,10 +951,13 @@ const mount = ({ studio, Shader, preview = null }) => {
       if (!programs.has(fragment))
         programs.set(
           fragment,
-          Lazy.compileProgram(gl, vs, fragment, { signal: abort.signal }).then(({ program, log }) => {
-            if (!program && log) console.warn("썸네일 컴파일 실패", log);
-            return program;
-          })
+          // 렌더러와 같이 컴파일 직전에 다듬는다(짧은 머리말 · mainImage 진입점 — glsl-prepare.js).
+          Lazy.compileProgram(gl, vs, Prepare.prepareFragment(fragment).source, { signal: abort.signal }).then(
+            ({ program, log }) => {
+              if (!program && log) console.warn("썸네일 컴파일 실패", log);
+              return program;
+            }
+          )
         );
       return programs.get(fragment);
     };

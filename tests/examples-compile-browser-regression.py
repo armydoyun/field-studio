@@ -13,7 +13,9 @@ root=Path(__file__).resolve().parent.parent
 html=(root/'index.html').read_text();html=html[:html.index('    <!-- ES Modules:')]+'</body></html>'
 COMPILE='''src => {
   const gl = (window.__gl ??= document.createElement("canvas").getContext("webgl2")); if(!gl) throw Error("WebGL2 unavailable");
-  const s = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s, src); gl.compileShader(s);
+  // 앱과 같이 컴파일 직전에 다듬는다(짧은 머리말 · mainImage 진입점 — glsl-prepare.js).
+  const prepare = window.__testModules?.["glsl-prepare"]; if(!prepare) throw Error("glsl-prepare 모듈이 없습니다");
+  const s = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s, prepare.prepareFragment(src).source); gl.compileShader(s);
   const ok = gl.getShaderParameter(s, gl.COMPILE_STATUS), log = gl.getShaderInfoLog(s); gl.deleteShader(s); return ok ? "" : log;
 }'''
 # 코드 조각을 감싸는 공통 머리: 앱이 제공하는 Uniform과 main 조각이 흔히 쓰는 지역 변수(uv·p·col)를 준비한다.
@@ -36,7 +38,7 @@ with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,
         args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
     page=browser.new_page(viewport={'width':1280,'height':800});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.set_content(html);load_modules(page,root,['shader','gallery','course','snippets','snippet-preview'])
+    page.set_content(html);load_modules(page,root,['glsl-prepare','shader','gallery','course','snippets','snippet-preview'])
     n=[0]
     def check(cond,label):
         assert cond,label;n[0]+=1;print('PASS',f'{n[0]:02d}',label,flush=True)
