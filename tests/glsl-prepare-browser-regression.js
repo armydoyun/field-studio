@@ -55,6 +55,16 @@
     test(studio.setProject(project("#version 300 es\nprecision highp float;\nout vec4 o;\nvoid main() { o = vec4(0.0, 1.0, 0.0, 1.0); }")), "#version이 있는 코드");
     await frames(3);
     test(pixel()[1] === 1, "예전 형식 그대로 동작");
+
+    // 8) Shadertoy 이름: 선언 없이 쓴 iResolution(vec3) · iFrame · iTime · iTimeDelta · iMouse가 FIELD Uniform 값으로 들어온다
+    test(studio.setProject(project(
+      "// Shadertoy에서 그대로 붙여 넣은 코드\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n    float ok = float(iFrame > 0 && iTime >= 0.0 && iTimeDelta >= 0.0) + iMouse.x * 0.0;\n    fragColor = vec4(iResolution.xy / 8.0, iResolution.z, ok);\n}")), "선언 없이 Shadertoy 이름을 쓴 mainImage");
+    await frames(3);
+    test(JSON.stringify(pixel()) === JSON.stringify([0.5, 0.5, 1, 1]), `iResolution = (4, 4, 1) · iFrame > 0: ${pixel()}`);
+
+    // 9) Shadertoy 이름을 쓴 코드의 오류도 편집기 줄 번호로 나온다
+    test(!studio.setProject(project("void mainImage(out vec4 c, in vec2 p) {\n    c = vec4(iTime);\n    c = oops;\n}")), "오류가 있는 Shadertoy 코드는 적용되지 않음");
+    test(diagnostics().some(text => /Line 3 · .*oops/.test(text)), `오류는 편집기 3번 줄: ${diagnostics()}`);
   } finally {
     studio.setProject(before);
     studio.close();

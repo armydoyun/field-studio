@@ -19,7 +19,7 @@ const params = sources =>
     .map(({ name, type, value, options }) => ({ name, type, value, options }));
 const sourcesOf = item => {
   const project = item.project || { image: item.image, passes: [] };
-  return [project.image, ...project.passes.map(pass => pass.fragment)];
+  return [project.image, ...(project.common ? [project.common] : []), ...project.passes.map(pass => pass.fragment)];
 };
 const ONBOARD_KEY = "field.onboarded.v1";
 const head = params => `#version 300 es
@@ -920,7 +920,7 @@ const mount = ({ studio, Shader, preview = null }) => {
     item.image
       ? { fragment: item.image, uniforms: params([item.image]) }
       : item.liveThumb && item.project
-        ? { fragment: item.project.image, uniforms: params(sourcesOf(item)) }
+        ? { fragment: item.project.image, common: item.project.common, uniforms: params(sourcesOf(item)) }
         : item.action === "exampleRaymarch"
           ? { fragment: Shader.raymarch, uniforms: perfProject(item).uniforms }
           : null;
@@ -928,7 +928,8 @@ const mount = ({ studio, Shader, preview = null }) => {
     const surface = document.createElement("canvas");
     surface.width = 320;
     surface.height = 200;
-    const gl = surface.getContext("webgl2", { preserveDrawingBuffer: true, antialias: false });
+    // 불투명(alpha: false): 메인 렌더러와 같게, 셰이더가 알파를 1로 두지 않아도 썸네일이 비치거나 사라지지 않는다.
+    const gl = surface.getContext("webgl2", { alpha: false, preserveDrawingBuffer: true, antialias: false });
     if (!gl) {
       for (const item of [...ART, ...COMMUNITY, ...LESSONS])
         setBadge(item.id, {
@@ -945,20 +946,21 @@ const mount = ({ studio, Shader, preview = null }) => {
       programs = new Map(), // fragment → Promise<program | null>
       abort = new AbortController();
     gl.bindVertexArray(vao);
-    // 같은 소스는 한 번만 컴파일한다(썸네일과 성능 측정이 같이 쓴다).
-    const program = fragment => {
-      if (!programs.has(fragment))
+    // 같은 소스는 한 번만 컴파일한다(썸네일과 성능 측정이 같이 쓴다). common = 프로젝트의 Common 코드.
+    const program = (fragment, common = "") => {
+      const key = common ? `${common}\u0000${fragment}` : fragment;
+      if (!programs.has(key))
         programs.set(
-          fragment,
-          // 렌더러와 같이 컴파일 직전에 다듬는다(짧은 머리말 · mainImage 진입점 — glsl-prepare.js).
-          Lazy.compileProgram(gl, vs, Prepare.prepareFragment(fragment).source, { signal: abort.signal }).then(
-            ({ program, log }) => {
-              if (!program && log) console.warn("썸네일 컴파일 실패", log);
-              return program;
-            }
-          )
+          key,
+          // 렌더러와 같이 컴파일 직전에 다듬는다(짧은 머리말 · mainImage 진입점 · Common — glsl-prepare.js).
+          Lazy.compileProgram(gl, vs, Prepare.prepareFragment(fragment, [], { common }).source, {
+            signal: abort.signal,
+          }).then(({ program, log }) => {
+            if (!program && log) console.warn("썸네일 컴파일 실패", log);
+            return program;
+          })
         );
-      return programs.get(fragment);
+      return programs.get(key);
     };
     // 렌더러가 넣는 기본 Uniform과 예제 파라미터. uMouse·uResolution은 선언한 타입에 맞춰 넣는다(vec2/vec4, vec2/vec3).
     // 썸네일용 램프 텍스처(이름별, 대화상자가 닫힐 때 컨텍스트와 함께 사라진다).
@@ -1069,7 +1071,7 @@ const mount = ({ studio, Shader, preview = null }) => {
           ...project.passes.map(pass => ({ source: pass.fragment, pass })),
           { source: project.image, pass: {} },
         ],
-        linked = await Promise.all(passes.map(({ source }) => program(source)));
+        linked = await Promise.all(passes.map(({ source }) => program(source, project.common || "")));
       if (linked.some(entry => !entry)) return null;
       // 픽셀당 시간만 보관한다. 배지는 그때그때 지금 미리보기 크기로 환산한다(showPerf).
       const timed = [];
@@ -1099,7 +1101,7 @@ const mount = ({ studio, Shader, preview = null }) => {
       if (abort.signal.aborted) return;
       const thumb = thumbSource(item);
       if (thumb) {
-        const linked = await program(thumb.fragment);
+        const linked = await program(thumb.fragment, thumb.common || "");
         if (linked && !abort.signal.aborted) drawThumb(linked, thumb.uniforms, item.thumb || item.id);
         await Lazy.nextFrame();
       }

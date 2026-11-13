@@ -24,6 +24,18 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / uResolution;
     fragColor = vec4(uv, 0.5 + 0.5 * sin(uTime), 1.0);
 }`;
+// Common 탭의 시작 코드: 모든 패스(Image · Buffer) 앞에 붙는다. 함수 · 상수 · 구조체를 두는 곳이다.
+const common = `// Common: 여기에 쓴 함수 · 상수 · #define은 모든 패스(Image · Buffer)에서 쓸 수 있습니다.
+// 패스의 #version · precision · Uniform 선언 다음, 패스 코드 바로 앞에 붙습니다(mainImage는 각 패스에 둡니다).
+#define PI 3.14159265
+
+// 0~1 정수 해시(칸 번호가 커져도 무늬가 무너지지 않는다)
+float hash12(vec2 p) {
+    uvec2 q = uvec2(ivec2(floor(p))) * uvec2(1597334673u, 3812015801u);
+    uint n = (q.x ^ q.y) * 1597334673u;
+    return float(n) * (1.0 / float(0xffffffffu));
+}
+`;
 const movingDot = `#version 300 es
 precision highp float;
 // Buffer A: 외부 입력 없이 움직이는 원을 만든다. B가 A의 current를 읽는다.
@@ -92,4 +104,4 @@ const feedbackProject = () => ({
   imageChannels: { 0: { buffer: "B", frame: "current" }, 1: { buffer: "A", frame: "current" } },
 });
 
-export { blank, pipelineProject, feedbackProject };
+export { blank, common, pipelineProject, feedbackProject };

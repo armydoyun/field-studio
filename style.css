@@ -401,6 +401,9 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-channel-chip .chip-badge.glyph-icon { padding:0;background:transparent;color:var(--text-soft); }
 .studio-channel-chip .chip-tag { min-width:0;overflow:hidden;color:var(--text-soft);font-weight:400;text-overflow:ellipsis;white-space:nowrap; }
 .studio-channel-chip[data-kind="missing"] .chip-tag { color:var(--danger); }
+/* 미디어 입력: 꺼져 있으면 흐리게, 오류면 빨갛게(칩을 눌러 다시 켠다) */
+.studio-channel-chip[data-kind="media"]:is([data-state="off"],[data-state="starting"]) .chip-tag { color:var(--muted);font-style:italic; }
+.studio-channel-chip[data-kind="media"][data-state="error"] .chip-tag { color:var(--danger); }
 /* 코드가 읽는데 비어 있음(경고) · 연결했는데 코드가 안 읽음(약한 표시) */
 .studio-channel-chip[data-warn="empty"]::after,.studio-channel-chip[data-warn="unused"]::after { content:"";position:absolute;top:-3px;right:-3px;width:7px;height:7px;border:1.5px solid var(--bg);border-radius:50%; }
 .studio-channel-chip[data-warn="empty"]::after { background:var(--warning); }
@@ -779,6 +782,11 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .studio-tabs { display:flex;align-items:center;gap:4px;min-width:0; }
 .studio-tabs .studio-pass-tabs { flex:0 1 auto;scrollbar-width:thin; }
 .studio-top .studio-add { flex:0 0 30px;width:30px;min-height:30px;height:30px;padding:0; }
+/* Common 추가: 아이콘 + 짧은 글자. Common이 있으면 숨기고 탭으로 보여 준다. */
+.studio-top .studio-add-common { flex:0 0 auto;min-height:30px;height:30px;padding:0 8px;gap:4px;color:var(--muted);font:600 11px/1 var(--mono);white-space:nowrap; }
+.studio-top .studio-add-common[hidden] { display:none; }
+/* Common 탭: 버퍼가 아니라 공용 코드임을 기울임으로 구분한다 */
+.studio-pass-tabs button.is-common { font-style:italic; }
 .studio-window-tools { flex-wrap:nowrap;gap:2px; }
 .studio-window-tools>.glyph-icon,.studio-run-tools>.glyph-icon:not(.studio-primary) { flex:0 0 32px;width:32px;min-height:32px;height:32px;padding:0; }
 .studio-top .studio-run-tools { flex-wrap:nowrap;gap:2px;margin:0; }

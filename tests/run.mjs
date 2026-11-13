@@ -127,7 +127,9 @@ const runBrowser = async () => {
   let browser;
   try {
     browser = await chromium.launch({headless:true, executablePath:process.env.CHROMIUM_PATH || undefined,
-      args:["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]});
+      // 가짜 카메라 · 마이크(권한 창 없이 허용)와 사용자 동작 없는 재생: 미디어 입력 채널 테스트용(media-browser-regression.js)
+      args:["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
+        "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"]});
   } catch(error) { skipSuite("browser", `Chromium을 띄우지 못했습니다(\`npx playwright install chromium\`): ${String(error.message).split("\n")[0]}`); return; }
   const server = await serve(), base = `http://127.0.0.1:${server.address().port}/`;
   try {

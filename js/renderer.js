@@ -4,6 +4,7 @@ import * as PassManager from "./pass-manager.js";
 import * as TextureInput from "./texture-input.js";
 import * as Diagnostics from "./gpu-diagnostics.js";
 import * as Keyboard from "./keyboard-input.js";
+import * as Media from "./media-input.js";
 import * as Ramp from "./ramp.js";
 import * as Prepare from "./glsl-prepare.js";
 
@@ -155,7 +156,16 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const textureInput = TextureInput.createTextureInput(gl);
   // 키보드 입력 텍스처(쉐이더토이 호환 256×3). 키를 넘길지는 input.js가 정하고 setKey로 알려 준다.
   const keyboard = Keyboard.create(gl);
-  const passManager = PassManager.createPassManager(gl, source => compileFragment(source), textureInput, keyboard);
+  // 미디어 입력(마이크 · 오디오 파일 · 웹캠 · 영상 파일). 상태가 바뀌면 편집기가 칩을 다시 칠하도록 알린다.
+  const media = Media.create(gl, { onChange: () => document.dispatchEvent(new Event("shader-media-changed")) });
+  // 앱 내부 셰이더(버퍼 미리보기)는 { internal: true }로 컴파일한다 — 사용자의 Common을 붙이지 않는다.
+  const passManager = PassManager.createPassManager(
+    gl,
+    (source, { internal = false } = {}) => compileFragment(source, internal ? "" : commonSource),
+    textureInput,
+    keyboard,
+    media
+  );
   // 다음 프레임 예약을 취소한다. lastTime을 지워 재시작 첫 delta를 0으로 만든다.
   const cancelFrame = () => {
     if (frame) cancelAnimationFrame(frame);
@@ -352,10 +362,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     uploadCustomUniforms(target);
   };
   // 컴파일할 소스: 등록한 Uniform 중 코드에 없는 선언을 넣고, 짧은 머리말 · 가짜 진입점(mainImage)을 붙인다(glsl-prepare.js).
-  const buildFragment = source => {
+  // Common: 모든 패스(Image · Buffer) 앞에 붙는 공용 코드. 바뀌면 모든 프로그램을 다시 만든다(applyProject).
+  let commonSource = "";
+  const commonOf = scene => (typeof scene?.common === "string" ? scene.common : "");
+  const buildFragment = (source, common = commonSource) => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
     const declarations = [],
-      code = Prepare.blankComments(source);
+      code = Prepare.blankComments(common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
     const uniforms = [...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+([^;{}]+);/g)];
     for (const [name, item] of userUniforms) {
       const match = uniforms.find(m => m[2].split(",").some(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name));
@@ -365,10 +378,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           throw new Error(`${name}: GLSL 선언(${match[1]})과 등록 타입(${item.type})이 다릅니다.`);
       } else declarations.push(`uniform ${item.type} ${name};`);
     }
-    return Prepare.prepareFragment(source, declarations);
+    return Prepare.prepareFragment(source, declarations, { common });
   };
-  const compileFragment = source => {
-    const compiled = buildFragment(source);
+  const compileFragment = (source, common = commonSource) => {
+    const compiled = buildFragment(source, common);
     try {
       return createProgram(compiled.source);
     } catch (error) {
@@ -403,6 +416,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       if (passManager.ensureTargets(gl.drawingBufferWidth, gl.drawingBufferHeight)) frameCount = 0;
       lastDelta = delta;
       keyboard.upload();
+      media.update(passManager.mediaKinds());
       gl.bindVertexArray(vao);
       passManager.drawPasses(gl.drawingBufferWidth, gl.drawingBufferHeight, uploadGlobals, gpuTimer);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -541,9 +555,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     const message = mismatchMessage();
     if (message) onStatus(message);
   };
-  const validateFragment = source => {
+  // common: 검사할 때 쓸 Common 코드(문자열이 아니면 지금 적용된 Common).
+  const validateFragment = (source, common) => {
     if (disposed || lost) throw new Error("셰이더를 검사할 수 없는 상태입니다.");
-    const candidate = compileFragment(source);
+    const candidate = compileFragment(source, typeof common === "string" ? common : commonSource);
     gl.deleteProgram(candidate);
     return true;
   };
@@ -676,6 +691,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     lastDelta = delta;
     frameCount = index;
     keyboard.upload();
+    media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
     passManager.drawPasses(w, h, uploadGlobals);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -830,6 +846,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     lastDelta = delta;
     frameCount = index;
     keyboard.upload();
+    media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
     const measure = tileStats.frames < 3 || tileStats.frames % REMEASURE === 0 || !!offline.tilePixels;
     // 잴 프레임은 앞에서 기다리지 않고 쌓아 둔 GPU 작업을 먼저 비운다(그 시간이 첫 타일의 비용으로 잡히지 않게).
@@ -1063,6 +1080,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       gpuTimer.restore();
       textureInput.restore();
       keyboard.restore();
+      media.restore();
       setFragment(fragmentSource);
       passManager.restore();
       reportMismatches();
@@ -1103,6 +1121,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       for (const entry of rampTextures.values()) gl.deleteTexture(entry.texture);
     }
     rampTextures.clear();
+    media.dispose(); // 마이크 · 카메라를 놓는다(컨텍스트를 잃었어도)
     if (lost) textureInput.dispose();
     program = vao = uniforms = null;
   };
@@ -1360,7 +1379,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       swapUsers(next);
       for (const source of [scene.image, ...scene.passes.map(p => p.fragment)]) {
-        const candidate = compileFragment(source);
+        const candidate = compileFragment(source, commonOf(scene));
         gl.deleteProgram(candidate);
       }
     } finally {
@@ -1371,36 +1390,114 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const applyPortable = (scene, items) => {
     if (disposed || lost) throw new Error("Pack을 적용할 수 없는 Renderer 상태입니다.");
     const next = prepareUsers(items),
-      old = new Map(userUniforms);
+      old = new Map(userUniforms),
+      previousCommon = commonSource;
     try {
       swapUsers(next);
+      commonSource = commonOf(scene);
       replacePrograms(scene.image, () => passManager.setPasses(scene.passes, scene.imageChannels));
       frameCount = 0;
+      retainMedia();
       return true;
     } catch (error) {
       swapUsers(old);
+      commonSource = previousCommon;
+      throw error;
+    }
+  };
+  // Common이 바뀌면 모든 패스 소스를 새 Common으로 먼저 컴파일해 보고(실패한 패스 이름을 붙여 던진다),
+  // 모두 통과한 뒤에 Common을 바꾸고 apply(true)로 모든 프로그램을 다시 만든다. 같으면 apply(false).
+  const withCommon = (scene, apply) => {
+    const common = commonOf(scene);
+    if (common === commonSource) return apply(false);
+    for (const [name, source] of [["Image", scene.image], ...scene.passes.map(p => [p.name, p.fragment])]) {
+      let candidate;
+      try {
+        candidate = compileFragment(source, common);
+      } catch (error) {
+        error.passName ??= name;
+        throw error;
+      }
+      gl.deleteProgram(candidate);
+    }
+    const previous = commonSource;
+    commonSource = common;
+    try {
+      return apply(true);
+    } catch (error) {
+      commonSource = previous;
       throw error;
     }
   };
   const applyProject = scene => {
     if (disposed || lost) throw new Error("현재 프로젝트를 적용할 수 없습니다.");
     assertOnline();
-    const imageChanged = scene.image !== fragmentSource;
-    let result;
-    const update = () => {
-      result = passManager.updatePasses(scene.passes, scene.imageChannels);
-    };
-    try {
-      if (imageChanged) replacePrograms(scene.image, update);
-      else update();
-    } catch (error) {
-      if (imageChanged) error.passName ??= "Image";
-      throw error;
-    }
-    if (result.structural) frameCount = 0;
-    if (!imageChanged) reportMismatches();
-    return imageChanged || result.changed;
+    return withCommon(scene, commonChanged => {
+      const imageChanged = commonChanged || scene.image !== fragmentSource;
+      let result;
+      const update = () => {
+        result = passManager.updatePasses(scene.passes, scene.imageChannels);
+        // 구조가 그대로면 updatePasses는 소스가 바뀐 패스만 다시 만든다. Common이 바뀌었으면 나머지도 다시 만든다.
+        if (commonChanged && !result.structural) passManager.refreshPrograms();
+      };
+      try {
+        if (imageChanged) replacePrograms(scene.image, update);
+        else update();
+      } catch (error) {
+        if (imageChanged) error.passName ??= "Image";
+        throw error;
+      }
+      if (result.structural) frameCount = 0;
+      if (!imageChanged) reportMismatches();
+      retainMedia();
+      return imageChanged || result.changed;
+    });
   };
+  // HTML 내보내기(html-export.js)용: 지금 적용된 그대로의 장면. 소스는 컴파일 직전 모양(머리말 · Shadertoy 이름 ·
+  // Common · 파라미터 선언 · mainImage 진입점까지 붙은 것)이라 재생기는 그대로 컴파일만 한다.
+  // 파라미터는 지금 값(벡터는 올릴 배열, 램프는 구운 256×1 자료와 텍스처 유닛)으로 담는다.
+  const exportScene = () => {
+    if (disposed || lost || !program)
+      throw new Error("내보낼 장면이 없습니다(셰이더가 적용되지 않았거나 컨텍스트를 잃음).");
+    const fragments = passManager.getFragments();
+    let rampUnit = RAMP_FIRST_UNIT;
+    const uniforms = [...userUniforms].map(([name, item]) => {
+      const spec = UNIFORM_TYPES[item.type];
+      if (spec.kind === "t")
+        return {
+          name,
+          ramp: {
+            unit: rampUnit++,
+            gradient: !!item.options.gradient,
+            nearest: item.options.gradient === "step",
+            data: Array.from(item.data),
+          },
+        };
+      const values = spec.n === 1 ? [spec.kind === "b" ? (item.value ? 1 : 0) : item.value] : Array.from(item.data);
+      return { name, kind: spec.kind, fn: spec.fn || null, values };
+    });
+    return {
+      vertex: vertexSource,
+      image: { source: buildFragment(fragmentSource).source, channels: passManager.getImageChannels() },
+      passes: passManager.getPasses().map(({ name, format, scale, size, outputs, filter, wrap, mipmap, channels }) => ({
+        name,
+        source: buildFragment(fragments.get(name)).source,
+        format,
+        scale,
+        size: size || null,
+        outputs,
+        filter,
+        wrap,
+        mipmap,
+        channels,
+      })),
+      uniforms,
+      resolutionScale,
+      timeScale,
+    };
+  };
+  // 적용한 구성의 채널이 더는 읽지 않는 미디어(마이크 · 카메라 · 파일)는 끈다.
+  const retainMedia = () => media.retain(passManager.mediaKinds());
   const validatePassConfiguration = (passes, imageChannels = {}) =>
     passManager.validateConfiguration(passes, imageChannels);
   const setPasses = (passes, imageChannels = {}) => {
@@ -1560,6 +1657,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     onFrame,
     redraw,
     validateFragment,
+    getCommon: () => commonSource,
+    exportScene,
+    // 미디어 입력: startMedia(종류, 파일?) → Promise<boolean> · 상태는 mediaState(종류)
+    startMedia: (kind, file) => media.start(kind, file),
+    stopMedia: kind => media.stop(kind),
+    mediaState: kind => media.state(kind),
     validatePassConfiguration,
     setFragment,
     setResolutionScale,

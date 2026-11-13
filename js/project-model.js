@@ -1,6 +1,8 @@
 // 프로젝트(Image + Buffer 패스 + 채널 연결) 데이터 규칙. DOM·GPU에 의존하지 않는 순수 함수만 둔다.
-// 프로젝트 모양: {image:GLSL, passes:[{name, fragment, format, scale, channels, size?, outputs?, filter?, wrap?, mipmap?}], imageChannels:{0..3: ref}}
+// 프로젝트 모양: {image:GLSL, common?:GLSL, passes:[{name, fragment, format, scale, channels, size?, outputs?, filter?, wrap?, mipmap?}], imageChannels:{0..3: ref}}
 // 채널 ref: {texture:id} 또는 {buffer:이름, frame:"current"|"previous", attachment?:출력 번호}
+// common: 모든 패스(Image · Buffer) 앞에 붙는 공용 코드(Common 탭). 없으면 Common 탭도 없다.
+// 패스 이름 "Image"와 "Common"은 탭 이름이라 Buffer 이름으로 쓸 수 없다.
 
 const MAX_PASSES = 8,
   MAX_SOURCE = 262144;
@@ -32,6 +34,8 @@ const validateProject = candidate => {
   // #version 300 es는 쓰지 않아도 된다(없으면 renderer가 컴파일 직전에 붙인다 — glsl-prepare.js).
   if (typeof candidate.image !== "string" || !candidate.image.trim() || candidate.image.length > MAX_SOURCE)
     throw new Error("Image GLSL 소스가 올바르지 않습니다.");
+  if (candidate.common !== undefined && (typeof candidate.common !== "string" || candidate.common.length > MAX_SOURCE))
+    throw new Error("Common GLSL 소스가 올바르지 않습니다.");
   if (!Array.isArray(candidate.passes) || candidate.passes.length > MAX_PASSES)
     throw new Error("버퍼는 최대 8개입니다.");
   const names = new Set();
@@ -41,6 +45,7 @@ const validateProject = candidate => {
       typeof p.name !== "string" ||
       !/^[A-Za-z][A-Za-z0-9_]*$/.test(p.name) ||
       p.name === "Image" ||
+      p.name === "Common" ||
       names.has(p.name) ||
       typeof p.fragment !== "string" ||
       !p.fragment.trim() ||

@@ -9,6 +9,10 @@
 //     매개변수 순서대로 출력 0, 1, …이 된다(layout(location = N) out vec4를 만들어 연결한다).
 //     같은 수의 출력을 이미 선언해 두었으면 location 순서대로 그 변수들에 쓴다.
 //  3. 사용자 Uniform 선언(파라미터 패널에 등록했지만 코드에 없는 것)을 precision 뒤에 넣는다.
+//  4. Shadertoy 이름: 코드가 iTime · iTimeDelta · iFrame · iResolution · iMouse를 선언 없이 쓰면
+//     FIELD Uniform(uTime · uDeltaTime · uFrame · uResolution · uMouse)에 #define으로 연결하고,
+//     그 FIELD Uniform이 코드에 없으면 선언도 넣는다. 선언 줄과 같은 자리(3번 뒤)에 들어간다.
+//     코드가 그 이름을 직접 선언했거나(#define · 변수 · 매개변수) 쓰지 않으면 아무것도 넣지 않는다.
 //
 // 줄 번호: 넣은 줄 때문에 컴파일 오류의 줄 번호가 어긋나지 않도록 #line으로 사용자 코드의 줄 번호를 되돌린다
 // (GLSL ES 3.00: "#line N" 다음 줄이 N번 줄). 그래서 짧은 머리말 경로에서는 오류 줄이 편집기 줄과 바로 같다.
@@ -60,11 +64,58 @@ const entryPoint = (code, lineNumber, at) => {
   );
 };
 
+// 코드에서 uniform으로 선언한 이름의 타입(없으면 null). uniform vec2 a, b; 처럼 한 줄에 여럿 선언해도 찾는다.
+const uniformType = (code, name) => {
+  for (const m of code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+([^;{}]+);/g))
+    if (m[2].split(",").some(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name)) return m[1];
+  return null;
+};
+// Shadertoy 이름 → FIELD Uniform. link(선언된 FIELD 타입) = #define 본문, declare = FIELD Uniform이 없을 때 넣을 선언.
+// iResolution은 Shadertoy에서 vec3이다. uResolution을 vec2·vec3 어느 쪽으로 선언해도 .xy로 맞춘다.
+const SHADERTOY = [
+  { name: "iTime", field: "uTime", declare: "float", link: () => "uTime" },
+  { name: "iTimeDelta", field: "uDeltaTime", declare: "float", link: () => "uDeltaTime" },
+  { name: "iFrame", field: "uFrame", declare: "int", link: type => (type === "int" ? "uFrame" : "int(uFrame)") },
+  { name: "iResolution", field: "uResolution", declare: "vec2", link: () => "vec3(uResolution.xy, 1.0)" },
+  {
+    name: "iMouse",
+    field: "uMouse",
+    declare: "vec4",
+    link: type => (type === "vec2" ? "vec4(uMouse, 0.0, 0.0)" : "uMouse"),
+  },
+];
+// 코드가 이 이름을 직접 정의했는가: #define, 또는 타입 바로 뒤에 온 이름(전역·지역 변수, 함수 매개변수, uniform).
+const definesName = (code, name) =>
+  new RegExp(`#\\s*define\\s+${name}\\b`).test(code) ||
+  new RegExp(`\\b(?:float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?)\\s+${name}\\b`).test(code);
+// 넣을 줄: FIELD Uniform 선언(없을 때만)과 #define.
+const shadertoyLines = code => {
+  const lines = [];
+  for (const { name, field, declare, link } of SHADERTOY) {
+    if (!new RegExp(`\\b${name}\\b`).test(code) || definesName(code, name)) continue;
+    const type = uniformType(code, field);
+    if (!type) lines.push(`uniform ${declare} ${field};`);
+    lines.push(`#define ${name} ${link(type || declare)}`);
+  }
+  return lines;
+};
+
+// Common 코드 묶음: GLSL의 "#line 줄 소스번호"로 Common 줄을 소스 1번의 1번 줄부터 세게 한다.
+// 그래서 Common에서 난 오류는 "ERROR: 1:줄:"로 나오고(패스 코드는 소스 0번), studio가 Common 탭의 그 줄로 보낸다.
+// resume = 묶음 다음 줄이 컴파일러에서 가질 줄 번호(소스 0번).
+const COMMON_SOURCE = 1;
+const commonBlock = (common, resume) => ["#line 1 " + COMMON_SOURCE, ...common.split("\n"), `#line ${resume} 0`];
+
 // source: 편집기 코드, declarations: 넣어야 할 Uniform 선언 줄 목록.
-// 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 선언을 넣었을 때만.
-const prepareFragment = (source, declarations = []) => {
+// options.common: 모든 패스가 같이 쓰는 코드(Common 탭). precision · Uniform 선언 뒤, 패스 코드 앞에 들어간다.
+// 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 줄을 넣었을 때만.
+const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
   if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
-  const code = blankComments(source);
+  if (typeof common !== "string") throw new TypeError("Common 코드는 문자열이어야 합니다.");
+  const code = blankComments(source),
+    hasCommon = !!common.trim();
+  // Shadertoy 이름은 Common에서 쓰거나 정의해도 알아본다.
+  declarations = [...declarations, ...shadertoyLines(hasCommon ? blankComments(common) + "\n" + code : code)];
   const needsEntry = !hasMain(code) && !!mainImageAt(code);
   const versioned = /^\s*#\s*version\b/.test(code);
 
@@ -80,7 +131,7 @@ const prepareFragment = (source, declarations = []) => {
       "#line 1",
       ...lines.slice(0, first),
       ...header,
-      `#line ${first + 1}`,
+      ...(hasCommon ? commonBlock(common, first + 1) : [`#line ${first + 1}`]),
       ...lines.slice(first),
     ];
     let out = parts.join("\n");
@@ -90,19 +141,21 @@ const prepareFragment = (source, declarations = []) => {
 
   let out = source,
     injected = null;
-  if (declarations.length) {
+  if (declarations.length || hasCommon) {
     const marker = /\bprecision\s+(?:lowp|mediump|highp)\s+float\s*;/.exec(code);
     if (!source.startsWith("#version 300 es") || !marker)
-      throw new Error("사용자 Uniform을 추가하려면 GLSL ES 3.00과 float precision 선언이 필요합니다.");
+      throw new Error("사용자 Uniform이나 Common 코드를 넣으려면 GLSL ES 3.00과 float precision 선언이 필요합니다.");
     const end = marker.index + marker[0].length,
       tail = source.slice(end),
-      extra = /^[^\r\n]*\S/.test(tail.split(/\r?\n/)[0]) ? "\n" : "";
-    out = source.slice(0, end) + "\n" + declarations.join("\n") + extra + tail;
-    injected = {
-      after: source.slice(0, end).split("\n").length,
-      count: declarations.length + extra.length,
-      generated: declarations.length,
-    };
+      extra = /^[^\r\n]*\S/.test(tail.split(/\r?\n/)[0]) ? "\n" : "",
+      after = source.slice(0, end).split("\n").length,
+      count = declarations.length + extra.length;
+    // Common 묶음은 #line으로 줄 번호를 되돌리므로 넣은 줄 수(count)에 들어가지 않는다.
+    // 묶음 뒤 첫 줄(precision 줄의 나머지 또는 그다음 줄)은 선언만 넣었을 때와 같은 번호(after + 선언 수 + 1)로 맞춰,
+    // studio의 줄 되돌리기(count 빼기)가 그대로 맞는다.
+    const block = hasCommon ? [...declarations, ...commonBlock(common, after + declarations.length + 1)] : declarations;
+    out = source.slice(0, end) + "\n" + block.join("\n") + extra + tail;
+    injected = { after, count, generated: declarations.length };
   }
   if (needsEntry) {
     // 컴파일러 기준 줄 번호: 선언을 넣은 위치보다 아래면 넣은 줄 수만큼 밀려 있다(studio가 다시 빼서 보여 준다).
@@ -113,4 +166,4 @@ const prepareFragment = (source, declarations = []) => {
   return { source: out, ...(injected ? { injected } : {}), header: false, entry: needsEntry };
 };
 
-export { prepareFragment, blankComments };
+export { prepareFragment, blankComments, COMMON_SOURCE };

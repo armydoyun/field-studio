@@ -47,7 +47,9 @@ const makeLocations = (gl, program) => {
   return result;
 };
 // keyboard(선택): keyboard-input.js의 create(gl) 결과. 채널 {keyboard:true}가 이 텍스처를 읽는다.
-const createPassManager = (gl, createProgram, textureStore, keyboard = null) => {
+// media(선택): media-input.js의 create(gl) 결과. 채널 {media:"mic"|"audio"|"webcam"|"video"}가 그 텍스처를 읽는다.
+const MEDIA_KINDS = ["mic", "audio", "webcam", "video"];
+const createPassManager = (gl, createProgram, textureStore, keyboard = null, media = null) => {
   let passes = [],
     imageChannels = {},
     preview = null,
@@ -129,6 +131,12 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null) => 
       if (ref.keyboard === true && Object.keys(ref).length === 1) {
         if (!keyboard) throw new Error("키보드 입력을 쓸 수 없는 렌더러입니다.");
         result[key] = { keyboard: true };
+        continue;
+      }
+      // 미디어는 켜져 있지 않아도 연결할 수 있다(그동안은 빈 텍스처를 읽는다).
+      if (MEDIA_KINDS.includes(ref.media) && Object.keys(ref).length === 1) {
+        if (!media) throw new Error("미디어 입력을 쓸 수 없는 렌더러입니다.");
+        result[key] = { media: ref.media };
         continue;
       }
       if (!validName(ref.buffer) || !["current", "previous"].includes(ref.frame))
@@ -499,6 +507,8 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null) => 
         texture = keyboard.texture();
         width = keyboard.width;
         height = keyboard.height;
+      } else if (ref?.media) {
+        ({ texture, width, height } = media.binding(ref.media));
       } else if (ref?.texture) {
         const asset = textureStore.get(ref.texture);
         if (asset) {
@@ -609,7 +619,7 @@ void main(){
 }`;
   const ensurePreviewProgram = () => {
     if (previewProgram) return;
-    const next = createProgram(previewFragment);
+    const next = createProgram(previewFragment, { internal: true }); // 사용자의 Common을 붙이지 않는다
     try {
       previewLocations = {
         texture: gl.getUniformLocation(next, "uPreview"),
@@ -759,6 +769,8 @@ void main(){
     for (const key of Object.keys(imageChannels)) if (imageChannels[key].texture === id) delete imageChannels[key];
   };
   const getImageChannels = () => JSON.parse(JSON.stringify(imageChannels));
+  // 지금 실행 중인 패스의 소스(이름 → GLSL). HTML 내보내기가 적용된 그대로를 담는다.
+  const getFragments = () => new Map(passes.map(p => [p.name, p.fragment]));
   const getPreview = () => preview;
   // 밉맵 체인은 기본 레벨의 약 1/3을 추가로 사용한다.
   const getMemoryBytes = () =>
@@ -835,10 +847,20 @@ void main(){
     resetTargets,
     getPasses,
     getImageChannels,
+    getFragments,
     // 지금 실행 중인 구성에 키보드 입력을 읽는 채널이 있는지(input.js가 키를 셰이더에 넘길지 정한다)
     usesKeyboard: () =>
       [imageChannels, ...passes.map(pass => pass.channels)].some(channels =>
         Object.values(channels || {}).some(ref => ref?.keyboard)
+      ),
+    // 지금 실행 중인 구성의 채널이 읽는 미디어 종류(Set). 렌더러가 그 종류만 매 프레임 올린다.
+    mediaKinds: () =>
+      new Set(
+        [imageChannels, ...passes.map(pass => pass.channels)].flatMap(channels =>
+          Object.values(channels || {})
+            .map(ref => ref?.media)
+            .filter(Boolean)
+        )
       ),
     getPreview,
     getMemoryBytes,

@@ -132,7 +132,9 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
       },
       {
         list: [
-          "Uniform은 직접 선언합니다. Shadertoy의 `iTime` · `iResolution`은 이 앱에서 `uTime` · `uResolution`(vec2)입니다.",
+          "Uniform은 직접 선언합니다. 이 앱의 이름은 `uTime` · `uResolution`(vec2) · `uMouse` · `uFrame` · `uDeltaTime`입니다.",
+          "Shadertoy 이름 `iTime` · `iTimeDelta` · `iFrame` · `iResolution`(vec3) · `iMouse`는 선언 없이 그대로 써도 됩니다. 실행할 때 앱이 위 Uniform에 연결합니다(필요하면 그 Uniform 선언도 넣습니다). 그래서 Shadertoy 코드를 붙여 넣으면 대부분 바로 돌아갑니다.",
+          "`iMouse`는 `uMouse`(vec4)와 같은 값입니다. Shadertoy와 달리 xy는 누르지 않아도 포인터를 따라가고, 포인터가 뷰포트 밖이면 -1입니다. `iDate` · `iFrameRate` · `iChannelTime`은 아직 없습니다.",
           "`mainImage`를 쓰면서 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
           "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말과 `main()`을 직접 넣어야 합니다.",
         ],
@@ -374,6 +376,16 @@ fragColor = max(newColor, history * 0.97);   // 잔상 누적`,
         insert: "cursor",
       },
       {
+        p: "**Common** — 패스 탭 옆의 **+ Common**을 누르면 모든 패스(Image · Buffer)가 같이 쓰는 공용 코드 탭이 생깁니다. 여기에 쓴 함수 · 상수 · `#define` · 구조체는 실행할 때 각 패스의 머리말(`#version` · precision · Uniform 선언) 바로 뒤에 붙으므로, 해시 · 노이즈 같은 함수를 패스마다 복사하지 않아도 됩니다. `mainImage`는 각 패스에 둡니다.",
+      },
+      {
+        list: [
+          "Common만 고쳐도 모든 패스가 다시 컴파일됩니다. Common에서 난 오류는 **Common** 탭의 그 줄로 표시됩니다(어느 패스를 컴파일하다 났는지도 함께 적습니다).",
+          "Common에는 입력 채널이 없습니다. 채널 연결 · `iChannel` 선언은 그것을 읽는 각 패스에 둡니다.",
+          "Common 탭을 고른 뒤 설정 줄의 **삭제**로 지울 수 있습니다(Undo로 복원). `Common`은 Buffer 이름으로 쓸 수 없습니다.",
+        ],
+      },
+      {
         p: "Buffer 탭을 선택하면 코드 위에 **버퍼 설정** 요약 줄(예: `A · RGBA8 · 100% · Linear · Clamp`)이 나타나고, 누르면 아래 설정이 펼쳐집니다.",
       },
       {
@@ -434,8 +446,8 @@ layout(location = 1) out vec4 outData;`,
   },
   {
     id: "inputs",
-    title: "이미지 · 키보드 입력",
-    summary: "이미지 파일과 키보드를 채널에 연결",
+    title: "이미지 · 키보드 · 미디어 입력",
+    summary: "이미지 · 키보드 · 마이크 · 오디오 · 웹캠 · 영상을 채널에 연결",
     blocks: [
       { heading: "이미지" },
       {
@@ -481,6 +493,42 @@ bool keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x > 0.5; }
 bool keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x > 0.5; }
 bool keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x > 0.5; }`,
         title: "키 읽기",
+        insert: "cursor",
+      },
+      { heading: "마이크 · 오디오 · 웹캠 · 영상" },
+      {
+        p: "채널 칩의 **입력**에서 **마이크** · **웹캠**을 고르면 권한을 묻고 켭니다. **오디오 파일…** · **영상 파일…**은 파일을 고르면 그 채널에 연결하고 재생합니다(반복 재생, 오디오는 소리도 납니다).",
+      },
+      {
+        table: {
+          head: ["입력", "텍스처", "읽는 법"],
+          rows: [
+            [
+              "마이크 · 오디오 파일",
+              "512×2 (Shadertoy와 같음)",
+              "y = 0.25 줄: 주파수 크기(x = 0 낮은 음 → 1 높은 음) · y = 0.75 줄: 파형(0.5 = 무음)",
+            ],
+            [
+              "웹캠 · 영상 파일",
+              "영상 크기",
+              "이미지처럼 `texture(iChannel0, uv)` · 위쪽이 v = 1 · 크기는 `iChannelResolution`",
+            ],
+          ],
+        },
+      },
+      {
+        list: [
+          "켜지 않은 채널은 검정 · `iChannelResolution` = 0으로 읽힙니다. 칩에 **꺼짐**이 보이면 칩을 눌러 같은 입력을 다시 고르세요.",
+          "마이크 · 카메라 권한과 고른 파일은 **저장되지 않습니다**. 프로젝트에는 연결만 남으므로, 다시 열면 다시 켜거나 파일을 다시 고릅니다.",
+          "어떤 채널도 읽지 않게 되면(연결 해제 · 프로젝트 바꾸기) 마이크 · 카메라를 바로 끕니다.",
+          "마이크 · 카메라는 `http://localhost`나 `https`, 또는 파일로 연 배포본에서 쓸 수 있습니다. 영상 렌더링(오프라인)에서는 렌더링하는 순간의 화면 · 소리가 들어갑니다.",
+        ],
+      },
+      {
+        code: `uniform sampler2D iChannel0;   // 마이크 또는 오디오 파일 연결
+float spectrum(float x) { return texture(iChannel0, vec2(x, 0.25)).x; }   // 0~1 주파수 크기
+float waveform(float x) { return texture(iChannel0, vec2(x, 0.75)).x; }   // 0.5 = 무음`,
+        title: "소리 읽기",
         insert: "cursor",
       },
     ],
@@ -609,6 +657,10 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           rows: [
             ["브라우저 자동 저장", "코드·버퍼 구성(미적용 편집본 포함), 렌더 설정, 파라미터. 새로고침해도 유지"],
             ["프로젝트 파일 내보내기 (Pack)", "코드·버퍼·파라미터·연결된 이미지·렌더 설정 — 다른 컴퓨터로 옮길 때"],
+            [
+              "HTML로 내보내기 (재생 전용)",
+              "지금 적용된 작품을 HTML 한 파일로 — 서버·인터넷 없이 더블클릭해 전체 화면으로 재생(더블클릭 · F: 전체 화면). 코드·버퍼·Common·파라미터 값·이미지 포함, 마우스·휠·키보드 동작. 편집은 안 되고 미디어 입력(마이크·카메라·파일)은 빠집니다",
+            ],
             ["코드만 내보내기 (고급)", "코드와 버퍼 연결 구성만(이미지·파라미터 제외)"],
             [".frag 파일로 저장", "현재 패스의 코드만 .frag 파일로 (편집기 ⋯ 메뉴)"],
             ["스크린샷", "툴바의 캡처(카메라) › 스크린샷 저장 → 현재 화면 PNG"],

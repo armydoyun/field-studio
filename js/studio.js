@@ -17,6 +17,9 @@ import * as ProjectMenu from "./project-menu.js";
 import * as ChannelPicker from "./channel-picker.js";
 import * as PreviewDOM from "./preview-dom.js";
 import * as Scope from "./glsl-scope.js";
+import * as Prepare from "./glsl-prepare.js";
+import * as Media from "./media-input.js";
+import * as HtmlExport from "./html-export.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -24,6 +27,8 @@ const STORAGE_KEY = "webgl.shader-studio.project.v1",
   JSON_LIMIT = Pack.LIMITS.json,
   PACK_LIMIT = Pack.LIMITS.pack;
 const { copy, same, validateProject } = Model;
+const ERROR_LINE = /(?:ERROR|WARNING):\s*(\d+):(\d+):\s*([^\r\n]*)/g; // 소스 번호 : 줄 : 메시지
+const COMMON = "Common"; // Common 탭 이름(project.common). Buffer 이름으로는 쓸 수 없다(project-model.js).
 // options.lookup(name): 내장 함수 설명 {sig, desc} 또는 null — 편집기 시그니처 힌트에 쓴다(main.js가 레퍼런스에서 만들어 넘긴다).
 const mount = (renderer, Shader, settings = null, options = {}) => {
   const $ = PreviewDOM.createLookup();
@@ -158,7 +163,23 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   );
   for (const type of ["beforeinput", "select", "click", "keyup", "scroll"]) on($("studioCode"), type, captureCursor);
-  const find = name => (name === "Image" ? null : project.passes.find(p => p.name === name));
+  const find = name => (name === "Image" || name === COMMON ? null : project.passes.find(p => p.name === name));
+  // Common 탭: 모든 패스 앞에 붙는 공용 코드(project.common). 버퍼가 아니라서 채널·버퍼 설정이 없다.
+  const hasCommon = () => typeof project.common === "string";
+  const tabExists = name => name === "Image" || (name === COMMON ? hasCommon() : !!find(name));
+  const tabNames = () => ["Image", ...(hasCommon() ? [COMMON] : []), ...project.passes.map(p => p.name)];
+  const sourceOf = (scene, name) =>
+    name === "Image" ? scene.image : name === COMMON ? scene.common : scene.passes.find(p => p.name === name)?.fragment;
+  const setSourceOf = (scene, name, code) => {
+    if (name === "Image") scene.image = code;
+    else if (name === COMMON) {
+      if (typeof scene.common === "string") scene.common = code;
+    } else {
+      const pass = scene.passes.find(p => p.name === name);
+      if (pass) pass.fragment = code;
+    }
+  };
+  const tabLabel = name => (name === "Image" || name === COMMON ? name : `Buffer ${name}`);
   const clearChange = () => {
     changeText = "";
     $("studioChangeNotice").hidden = true;
@@ -181,7 +202,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     node.setAttribute("aria-label", node.title);
   };
   const references = name => Model.references(project, name);
-  const activeSource = () => (selected === "Image" ? project.image : find(selected)?.fragment);
+  const activeSource = () => sourceOf(project, selected);
   // ---- 프로젝트 스냅샷 규칙 ----
   // 보관함·Pack에 '담기는 것'과 '저장한 뒤 바뀌었는지' 판단이 어긋나지 않도록 둘 다 이 한 규칙에서 만든다.
   //   scene    코드(편집기에서 아직 실행하지 않은 것 포함)·버퍼 구성·채널 연결
@@ -190,13 +211,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   //   selected 보고 있던 탭(Pack에는 담지만 지문에서는 뺀다)
   // 새 속성을 Pack에 넣을 때는 여기에 넣으면 지문에도 함께 들어간다.
   const captureScene = () => {
-    const scene = copy(project),
-      code = $("studioCode").value;
-    if (selected === "Image") scene.image = code;
-    else {
-      const pass = scene.passes.find(p => p.name === selected);
-      if (pass) pass.fragment = code;
-    }
+    const scene = copy(project);
+    setSourceOf(scene, selected, $("studioCode").value);
     return scene;
   };
   const textureInfo = scene => {
@@ -281,6 +297,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       syncDiagnostics();
     }
   };
+  // 오류가 가리키는 탭: 첫 오류 줄이 Common(소스 1번)이면 Common, 아니면 컴파일하던 패스.
+  const errorTab = error => {
+    const first = ERROR_LINE.exec(String(error?.message || error));
+    ERROR_LINE.lastIndex = 0;
+    return first && Number(first[1]) === Prepare.COMMON_SOURCE && hasCommon() ? COMMON : error?.passName;
+  };
   const showError = error => {
     const text = String(error?.message || error),
       panel = $("studioDiagnostics");
@@ -288,24 +310,28 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioError").hidden = true;
     $("studioErrorToggle").hidden = false;
     panel.replaceChildren();
-    const matches = [...text.matchAll(/(?:ERROR|WARNING):\s*\d+:(\d+):\s*([^\r\n]*)/g)];
+    const matches = [...text.matchAll(ERROR_LINE)];
     diagnostics = [];
     for (const match of matches.slice(0, 15)) {
-      const row = element("button"),
-        info = error?.glslInjected,
-        original = Number(match[1]);
+      // 소스 1번은 Common(glsl-prepare.js가 #line으로 매긴다): 줄 번호가 Common 탭의 줄 그대로다.
+      const inCommon = Number(match[1]) === Prepare.COMMON_SOURCE,
+        pass = inCommon ? COMMON : error?.passName || selected,
+        row = element("button"),
+        info = inCommon ? null : error?.glslInjected,
+        original = Number(match[2]),
+        message = inCommon && error?.passName ? `${match[3]} (${error.passName} 컴파일 중)` : match[3];
       let line = original;
       const generated = info && original > info.after && original <= info.after + (info.generated ?? info.count);
       if (info && original > info.after + (info.generated ?? info.count)) line -= info.count;
       if (!generated)
         diagnostics.push({
-          pass: error?.passName || selected,
+          pass,
           line,
-          message: match[2],
+          message,
           severity: match[0].startsWith("WARNING") ? "warning" : "error",
         });
       row.type = "button";
-      row.textContent = `${error?.passName || selected} · ${generated ? "Auto Uniform" : `Line ${line}`} · ${match[2]}`;
+      row.textContent = `${pass} · ${generated ? "Auto Uniform" : `Line ${line}`} · ${message}`;
       if (generated) {
         row.disabled = true;
         row.title = "자동 생성된 Uniform 선언에서 발생한 오류입니다.";
@@ -313,7 +339,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         row.title = "원본 GLSL 줄로 이동";
         row.addEventListener("click", () => {
           open();
-          if (error?.passName) select(error.passName);
+          if (inCommon || error?.passName) select(pass);
           editor.goToLine(line);
         });
       }
@@ -421,7 +447,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     } catch (error) {
       dirty = true;
       compileFailed = true;
-      if (error.passName && error.passName !== selected) select(error.passName);
+      const tab = errorTab(error);
+      if (tab && tab !== selected) select(tab);
       showError(error);
       scheduleDraft();
       return false;
@@ -430,7 +457,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 컴파일 성공 후 GLSL 주석 어노테이션(@range/@step/@default/@color)을 파라미터에 반영한다.
   // 미등록 Uniform은 새로 등록하고, 등록된 것은 옵션만 갱신한다(값은 새 범위로 보정). 한 번의 재컴파일로 처리한다.
   const syncAnnotations = () => {
-    const specs = Annotations.collect([project.image, ...project.passes.map(p => p.fragment)]);
+    const specs = Annotations.collect([
+      project.image,
+      ...(hasCommon() ? [project.common] : []),
+      ...project.passes.map(p => p.fragment),
+    ]);
     if (!specs.length) return "";
     const users = renderer.getUserUniforms(),
       next = users.map(u => ({ ...u, options: { ...u.options } })),
@@ -481,16 +512,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (timer) clearTimeout(timer);
     if ($("studioLive").checked) timer = setTimeout(apply, 900);
   };
-  const rememberEditor = () => {
-    const p = find(selected);
-    if (selected === "Image") project.image = $("studioCode").value;
-    else if (p) p.fragment = $("studioCode").value;
-  };
+  const rememberEditor = () => setSourceOf(project, selected, $("studioCode").value);
   const activeChannels = () => (selected === "Image" ? project.imageChannels : find(selected)?.channels);
-  const freeChannel = () => [0, 1, 2, 3].find(index => !activeChannels()?.[index]);
+  // Common에는 입력 채널이 없다(채널은 그것을 붙여 쓰는 각 패스에 연결한다).
+  const freeChannel = () => (activeChannels() ? [0, 1, 2, 3].find(index => !activeChannels()[index]) : undefined);
   const syncTextureTargets = () => {
     const slot = freeChannel(),
-      target = selected === "Image" ? "Image" : `Buffer ${selected}`;
+      target = tabLabel(selected);
     for (const button of textureButtons) {
       button.disabled = slot === undefined;
       button.textContent = slot === undefined ? `${target} · 빈 채널 없음` : `${target} · iChannel${slot}에 연결`;
@@ -511,42 +539,101 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
             frame: "입력",
             help: "키 상태 텍스처(256×3). x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글. 뷰포트를 클릭하면 키가 셰이더로 갑니다.",
           }
-        : ref.texture
-          ? {
-              source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
-              frame: "이미지",
-              help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
-            }
-          : {
-              source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
-              frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
-              help:
-                ref.frame === "current"
-                  ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
-                  : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
-            };
+        : ref.media
+          ? mediaInfo(ref.media)
+          : ref.texture
+            ? {
+                source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
+                frame: "이미지",
+                help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
+              }
+            : {
+                source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
+                frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
+                help:
+                  ref.frame === "current"
+                    ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
+                    : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
+              };
+  // 미디어 채널 설명: 켜짐이면 이름(파일 이름) · 크기, 아니면 켜는 방법.
+  const mediaInfo = kind => {
+    const media = renderer.mediaState(kind),
+      audio = kind === "mic" || kind === "audio",
+      label = Media.LABELS[kind];
+    const shape = audio
+      ? "512×2 텍스처: y = 0.25 주파수 크기(왼쪽 = 낮은 음) · y = 0.75 파형(0.5 = 무음)"
+      : "영상 텍스처: 이미지처럼 위쪽이 v = 1";
+    const status =
+      media.state === "on"
+        ? `켜짐${media.name !== label ? ` · ${media.name}` : ""}${!audio && media.width ? ` · ${media.width}×${media.height}` : ""}`
+        : media.state === "starting"
+          ? "켜는 중"
+          : media.state === "error"
+            ? `오류 · ${media.error}`
+            : kind === "audio" || kind === "video"
+              ? "꺼짐 · 파일은 저장되지 않습니다. 칩을 눌러 파일을 다시 고르세요"
+              : "꺼짐 · 칩을 눌러 다시 고르면 켭니다(권한 필요)";
+    return { source: label, frame: status, help: shape };
+  };
+  // 채널 연결을 바꾸고, 자동이면 바로 적용한다(칩 고르기 · 미디어 켜기가 같이 쓴다).
+  const setChannel = (i, ref) => {
+    const channels = activeChannels();
+    if (!channels) return;
+    if (ref) channels[i] = ref;
+    else delete channels[i];
+    schedule();
+    renderGraph();
+    syncTextureTargets();
+    syncInputs();
+    if (!$("studioLive").checked) return;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    apply();
+  };
+  // 미디어: 연결한 뒤 켠다(마이크 · 카메라는 권한을 묻고, 파일 종류는 먼저 파일을 고른다).
+  const MEDIA_ACCEPT = { audio: "audio/*", video: "video/*" };
+  const startMedia = async (i, kind, file) => {
+    const label = Media.LABELS[kind];
+    setStatus(`${label} 켜는 중…`, "is-dirty");
+    try {
+      if (await renderer.startMedia(kind, file)) setStatus(`${label} 켜짐 → ${selected}.iChannel${i}`);
+    } catch (error) {
+      setStatus(`${label}: ${error.message}`, "is-error");
+    }
+  };
+  const onMedia = (i, kind) => {
+    if (!MEDIA_ACCEPT[kind]) {
+      setChannel(i, { media: kind });
+      return startMedia(i, kind);
+    }
+    const input = element("input");
+    input.type = "file";
+    input.accept = MEDIA_ACCEPT[kind];
+    input.addEventListener(
+      "change",
+      () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const problem = Media.fileProblem(kind, file);
+        if (problem) return setStatus(problem, "is-error");
+        setChannel(i, { media: kind });
+        startMedia(i, kind, file);
+      },
+      { once: true }
+    );
+    input.click();
+  };
   // 입력 채널 칩과 고르기 팝오버(channel-picker.js). 바뀐 연결은 여기서 초안에 넣고, 자동이면 바로 적용한다.
   const channelPicker = ChannelPicker.create({
     $,
     on,
     element,
     inputInfo,
-    onChange: (i, ref) => {
-      const channels = activeChannels();
-      if (!channels) return;
-      if (ref) channels[i] = ref;
-      else delete channels[i];
-      schedule();
-      renderGraph();
-      syncTextureTargets();
-      syncInputs();
-      if (!$("studioLive").checked) return;
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      apply();
-    },
+    onMedia,
+    mediaState: kind => renderer.mediaState(kind),
+    onChange: setChannel,
     onLoadImage: i => pickImage(i),
     onDropImage: (i, file) => runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, i)),
   });
@@ -587,6 +674,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     toggle.title = `이 패스의 입력 채널(iChannel0–3) ${inputsOpen ? "접기" : "펼치기"}${inputsCount ? ` · ${inputsCount}개 연결됨` : " · 연결 없음"}${empty.length ? ` · 코드가 읽는 iChannel${empty.join(", ")}이 비어 있음` : ""}`;
   };
   const renderChannels = () => {
+    // Common에는 입력 채널이 없으므로 입력 줄과 버튼을 숨긴다.
+    const common = selected === COMMON;
+    $("studioInputsToggle").hidden = common;
+    if (common) {
+      showInputs(false);
+      syncTextureTargets();
+      return;
+    }
     const channels = activeChannels(),
       assets = renderer.getTextures(),
       blocked = project.passes.filter(pass => !validCurrent(selected, pass.name));
@@ -614,12 +709,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       inputs = Object.entries(channels)
         .sort(([a], [b]) => Number(a) - Number(b))
         .map(([i, ref]) => `iChannel${i} ← ${inputInfo(ref, assets).source}`);
+    if (name === COMMON)
+      return "Common 편집 · 모든 패스(Image · Buffer) 앞에 붙는 공용 코드 (Alt+PageUp/Down · Alt+, / Alt+.)";
     return `${name} 패스 편집 (Alt+PageUp/Down · Alt+, / Alt+.)${inputs.length ? `\n${inputs.join("\n")}` : ""}`;
   };
   const renderGraph = () => {
     const holder = $("studioGraph"),
       assets = renderer.getTextures();
-    for (const name of ["Image", ...project.passes.map(pass => pass.name)]) {
+    for (const name of tabNames()) {
       const tab = $(`studioTab-${name}`);
       if (tab) tab.title = tabTitle(name);
     }
@@ -880,7 +977,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const renderTabs = () => {
     const parent = $("studioPassTabs");
     parent.replaceChildren();
-    for (const name of ["Image", ...project.passes.map(p => p.name)]) {
+    for (const name of tabNames()) {
       const btn = element("button");
       btn.type = "button";
       btn.setAttribute("role", "tab");
@@ -889,7 +986,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       btn.classList.toggle("is-active", selected === name);
       btn.setAttribute("aria-selected", String(selected === name));
       btn.tabIndex = selected === name ? 0 : -1;
-      btn.textContent = name === "Image" ? "Image" : `Buffer ${name}`;
+      btn.textContent = tabLabel(name);
+      btn.classList.toggle("is-common", name === COMMON);
       btn.title = tabTitle(name);
       btn.addEventListener("click", () => select(name));
       parent.append(btn);
@@ -902,13 +1000,17 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       if (tab.left < box.left) parent.scrollLeft -= box.left - tab.left;
       else if (tab.right > box.right) parent.scrollLeft += tab.right - box.right;
     }
-    for (const name of views.keys()) if (name !== "Image" && !find(name)) views.delete(name);
+    for (const name of views.keys()) if (!tabExists(name)) views.delete(name);
     $("studioCode").setAttribute("aria-labelledby", `studioTab-${selected}`);
     $("studioAdd").disabled = project.passes.length >= 8;
+    $("studioAddCommon").hidden = hasCommon();
     const p = find(selected),
+      common = selected === COMMON,
       idx = project.passes.findIndex(pass => pass.name === selected);
-    $("studioPassTools").hidden = !p;
-    $("studioRemove").disabled = !p;
+    // Common을 고르면 설정 줄에는 삭제만 남긴다(버퍼 설정 · 순서 · 복제는 버퍼에만 있다).
+    $("studioPassTools").hidden = !p && !common;
+    $("studioRemove").disabled = !p && !common;
+    for (const id of ["studioUp", "studioDown", "studioDuplicate", "studioPassImpact"]) $(id).hidden = common;
     $("studioDuplicate").disabled = !p || project.passes.length >= 8;
     $("studioUp").disabled = !p || idx === 0;
     $("studioDown").disabled = !p || idx === project.passes.length - 1;
@@ -923,10 +1025,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       $(id).hidden = !p;
     const refs = p ? references(selected) : [];
     $("studioPassImpact").hidden = !p;
+    $("studioPassToolsLabel").textContent = common ? "Common" : "버퍼 설정";
     $("studioPassImpact").textContent = refs.length ? `삭제 시 연결 ${refs.length}개 해제` : "다른 패스의 참조 없음";
     $("studioRemove").title = p
       ? `${selected} 삭제${refs.length ? ` · 함께 해제: ${refs.join(", ")}` : ""} · Undo로 복원`
-      : "Image는 삭제할 수 없습니다.";
+      : common
+        ? "Common 삭제 · 패스들이 쓰던 함수가 없어지면 컴파일 오류가 납니다 · Undo로 복원"
+        : "Image는 삭제할 수 없습니다.";
+    if (common) $("studioPassSummary").textContent = "모든 패스(Image · Buffer) 앞에 붙는 공용 코드";
     if (p) {
       $("studioFormat").value = p.format;
       // 해상도: 화면 비율(scale) 또는 고정 크기(size). 목록에 없는 고정 크기는 임시 선택지로 보여준다.
@@ -946,7 +1052,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       $("studioWrap").value = p.wrap || "clamp";
       $("studioMip").checked = !!p.mipmap;
     }
-    $("studioCodeTitle").textContent = selected === "Image" ? "Image.frag" : `Buffer ${selected}.frag`;
+    $("studioCodeTitle").textContent = common
+      ? "Common.glsl"
+      : selected === "Image"
+        ? "Image.frag"
+        : `Buffer ${selected}.frag`;
     // 버퍼 설정은 접힌 한 줄 요약으로 보여준다: "A · RGBA8 · 100% · Linear · Clamp"
     if (p) {
       const size = p.size ? `${p.size[0]}×${p.size[1]}` : `${Math.round(p.scale * 100)}%`,
@@ -971,7 +1081,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const area = $("studioCode"),
       source = activeSource() || "";
     if (shown !== selected || area.value !== source) {
-      if (shown !== null && shown !== selected && (shown === "Image" || find(shown)))
+      if (shown !== null && shown !== selected && tabExists(shown))
         views.set(shown, { source: area.value, ...cursorState(), folds: editor.getFolds?.() || [] });
       const view = views.get(selected),
         keep = view?.source === source;
@@ -989,7 +1099,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderGraph();
   };
   const select = name => {
-    if (name !== "Image" && !find(name)) return;
+    if (!tabExists(name)) return;
     if (name === selected) return;
     rememberEditor();
     selected = name;
@@ -1017,6 +1127,17 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     schedule();
     apply();
   };
+  // Common 추가: 없을 때만. 빈 틀을 넣고 Common 탭을 연다(비어 있으면 컴파일에 아무 영향이 없다).
+  const addCommon = () => {
+    if (hasCommon()) return select(COMMON);
+    rememberEditor();
+    project.common = Examples.common;
+    selected = COMMON;
+    renderEditor();
+    schedule();
+    apply();
+    showChange("Common 추가 · 여기에 쓴 함수·상수는 모든 패스에서 씁니다");
+  };
   const duplicate = () => {
     const source = find(selected);
     if (!source || project.passes.length >= 8) return;
@@ -1037,6 +1158,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const remove = () => {
     if (selected === "Image") return;
     rememberEditor();
+    if (selected === COMMON) {
+      delete project.common;
+      selected = "Image";
+      renderEditor();
+      schedule();
+      apply();
+      showChange("Common 삭제 · Undo로 복원");
+      return;
+    }
     const name = selected,
       refs = references(name);
     project.passes = project.passes.filter(p => p.name !== name);
@@ -1153,6 +1283,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const current = Scope.applyRename(code, spots, from, to);
     if (selected === "Image") project.image = current;
     else project.image = renameIn(project.image);
+    if (hasCommon()) project.common = selected === COMMON ? current : renameIn(project.common);
     for (const pass of project.passes) pass.fragment = pass.name === selected ? current : renameIn(pass.fragment);
     const nextUsers = registered ? users.map(item => (item.name === from ? { ...item, name: to } : item)) : null;
     // 커서는 바뀐 글자 수만큼 옮긴다.
@@ -1211,7 +1342,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     views.clear();
     shown = null;
     project = copy(next);
-    selected = tab === "Image" || find(tab) ? tab : "Image";
+    selected = tabExists(tab) ? tab : "Image";
     dirty = false;
     clearError();
     clearDraft();
@@ -1418,6 +1549,38 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     download("shader-studio-pack.json", pack.text, "application/json", PACK_LIMIT);
     setStatus(`Pack 내보냄 · 코드·파라미터·설정·이미지 ${pack.images}개 포함`);
   };
+  // 작품 하나를 재생 전용 HTML 한 파일로(html-export.js). 지금 적용된 그대로를 담는다: 고치고 실행하지 않은 코드가 있으면
+  // 먼저 실행하고, 컴파일 오류가 있으면 내보내지 않는다. 연결된 이미지는 파일 안에 data URL로 넣는다.
+  const buildPlayerHTML = async () => {
+    rememberEditor();
+    if ((dirty || compileFailed) && !apply()) throw new Error("컴파일 오류를 고친 뒤 HTML로 내보내세요.");
+    const scene = renderer.exportScene(),
+      assets = renderer.getTextures(),
+      textures = {};
+    const ids = new Set(
+      [scene.image.channels, ...scene.passes.map(pass => pass.channels)]
+        .flatMap(channels => Object.values(channels))
+        .map(ref => ref.texture)
+        .filter(Boolean)
+    );
+    for (const id of ids) {
+      const file = renderer.getTextureFile(id),
+        meta = assets.find(asset => asset.id === id);
+      if (file && meta) textures[id] = { url: await Pack.readData(file), sampling: meta.sampling };
+    }
+    const title = projects?.current()?.name || "FIELD Shader",
+      data = HtmlExport.buildPlayerData(scene, textures);
+    return { html: HtmlExport.buildPlayerHTML(data, title), title, data };
+  };
+  const exportHTML = async () => {
+    const { html, title, data } = await buildPlayerHTML();
+    if (disposed) return;
+    download(`${title.replace(/[\\/:*?"<>|]+/g, "_").trim() || "field-shader"}.html`, html, "text/html;charset=utf-8");
+    const images = Object.keys(data.textures).length;
+    setStatus(
+      `HTML 내보냄 · 버퍼 ${data.passes.length}개${images ? ` · 이미지 ${images}개` : ""} · 더블클릭해 브라우저에서 재생${data.media.length ? " · 미디어 입력은 빠짐" : ""}`
+    );
+  };
   let loadSerial = 0;
   const beginLoad = (full = false) => {
     const serial = ++loadSerial,
@@ -1467,8 +1630,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
     if (state) renderer.validatePortable(Pack.withoutTextures(next), state.user);
     else {
-      renderer.validateFragment(next.image);
-      for (const pass of next.passes) renderer.validateFragment(pass.fragment, true);
+      renderer.validateFragment(next.image, next.common ?? "");
+      for (const pass of next.passes) renderer.validateFragment(pass.fragment, next.common ?? "");
     }
     if (!(await confirmReplace())) return false;
     check();
@@ -1558,7 +1721,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         renderEditor();
         setStatus("저장 프로젝트 실행 실패 · 기본 장면 유지", "is-error");
       } else {
-        selected = data.selected === "Image" || find(data.selected) ? data.selected : "Image";
+        selected = tabExists(data.selected) ? data.selected : "Image";
         renderEditor();
         preview(true); // 새 프로젝트: 고정과 상관없이 고른 탭을 보여 준다
         if (detached) setStatus(`${detached}개 이미지 연결이 해제됐습니다. 파일을 다시 불러오세요.`, "is-dirty");
@@ -1579,7 +1742,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       Store.writeTab(DRAFT_KEY, raw);
       on($("studioDraftRestore"), "click", () => {
         project = copy(data.project);
-        selected = data.selected === "Image" || find(data.selected) ? data.selected : "Image";
+        selected = tabExists(data.selected) ? data.selected : "Image";
         renderEditor();
         recordEdit();
         dirty = true;
@@ -1633,7 +1796,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     open();
     setStatus(`${file.name} 불러옴 · 실행(Alt+Enter)으로 적용`, "is-dirty");
   };
-  const saveGLSL = () => download(`${selected}.frag`, $("studioCode").value, "text/plain;charset=utf-8");
+  const glslFileName = () => (selected === COMMON ? "Common.glsl" : `${selected}.frag`);
+  const saveGLSL = () => download(glslFileName(), $("studioCode").value, "text/plain;charset=utf-8");
   const insertSample = text => {
     const area = $("studioCode");
     area.focus();
@@ -1644,7 +1808,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   on($("studioSaveGLSL"), "click", () => {
     try {
       saveGLSL();
-      setStatus(`${selected}.frag 내보냄 · 현재 패스 코드만 포함`);
+      setStatus(`${glslFileName()} 내보냄 · 현재 패스 코드만 포함`);
     } catch (error) {
       showError(error);
     }
@@ -1714,7 +1878,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       historyMove(event.key.toLowerCase() === "z" && !event.shiftKey);
     } else if (passStep(event)) {
       event.preventDefault();
-      const tabs = ["Image", ...project.passes.map(p => p.name)],
+      const tabs = tabNames(),
         index = tabs.indexOf(selected);
       select(tabs[(index + passStep(event) + tabs.length) % tabs.length]);
       $("studioCode").focus();
@@ -1752,10 +1916,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         : event.key === "End"
           ? tabs.length - 1
           : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    select(next === 0 ? "Image" : project.passes[next - 1].name);
+    select(tabNames()[next]);
     $("studioPassTabs").children[next].focus();
   });
   on($("studioAdd"), "click", add);
+  on($("studioAddCommon"), "click", addCommon);
   on($("studioDuplicate"), "click", duplicate);
   on($("studioRemove"), "click", remove);
   on($("studioUp"), "click", () => move(-1));
@@ -1875,6 +2040,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   });
   on($("studioExportPack"), "click", event => runFile(event.currentTarget, "Pack 준비 중…", exportPack));
+  on($("studioExportHTML"), "click", event => runFile(event.currentTarget, "HTML 준비 중…", exportHTML));
   on($("studioImportPack"), "click", () => $("studioPackFile").click());
   on($("studioPackFile"), "change", async event => {
     const file = event.target.files?.[0];
@@ -2164,6 +2330,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
   on(document, "shader-preview-changed", syncPreviewControls);
+  // 미디어(마이크 · 웹캠 · 파일)가 켜지거나 꺼지면 칩 · 설명 · 연결 그래프를 다시 칠한다.
+  on(document, "shader-media-changed", () => {
+    channelPicker.refresh();
+    renderGraph();
+  });
   syncPreviewControls();
   editor.registerCommands?.([
     press("셰이더 실행 (적용)", "studioRun", "Alt+Enter"),
@@ -2199,6 +2370,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press(".frag 파일 열기", "studioOpenGLSL"),
     press("다른 이름으로 프로젝트 저장", "studioProjectSaveAs", "Ctrl+Shift+S"),
     press("프로젝트 파일 내보내기 (코드·파라미터·이미지)", "studioExportPack"),
+    press("HTML로 내보내기 (재생 전용 한 파일)", "studioExportHTML"),
     press("프로젝트 파일 열기", "studioImportPack"),
     press("이미지 파일 불러오기", "studioTextureAdd"),
     press("새 프로젝트 (기본 장면)", "studioReset"),
@@ -2235,6 +2407,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     getProject: () => copy(project),
     exportPack,
     importPack,
+    // 재생 전용 HTML: {html, title, data}(내려받지 않는다 — 테스트 · 확장용) · exportHTML()은 내려받는다
+    buildPlayerHTML,
+    exportHTML,
     // 브라우저 프로젝트 보관함: save(asNew) · list() · open(id) · rename(id) · remove(id) · current()
     projects: {
       save: asNew => projects.save(asNew),

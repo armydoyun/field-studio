@@ -10,8 +10,8 @@ const load=file=>{let mod;vm.runInNewContext(fs.readFileSync(path.join(__dirname
 const {prepareFragment}=load("glsl-prepare.js");
 let passed=0;const test=(name,fn)=>{fn();passed++;console.log("PASS",name);};
 // "#line N" 지시문을 따라 컴파일러가 매길 줄 번호 → 그 줄의 내용 (GLSL ES 3.00: #line N 다음 줄이 N번)
-// 나중 줄이 같은 번호를 다시 쓰면(#line) 나중 것이 그 번호다. 끝에 붙인 진입점 줄(mainImage 줄 번호를 일부러 다시 씀)은 뺀다.
-const compilerLines=src=>{const map=new Map();let n=1;for(const line of src.split("\n")){const m=/^#line (\d+)$/.exec(line);if(m){n=Number(m[1]);continue;}if(!/void main\(\) \{ vec4 color/.test(line))map.set(n,line);n++;}return map;};
+// 나중 줄이 같은 번호를 다시 쓰면(#line) 나중 것이 그 번호다. 끝에 붙인 진입점 줄(mainImage 줄 번호를 일부러 다시 씀)과 그 뒤는 뺀다.
+const compilerLines=src=>{const map=new Map();let n=1;for(const line of src.split("\n")){const m=/^#line (\d+)$/.exec(line);if(m){n=Number(m[1]);continue;}if(/void main\(\) \{ vec4 color/.test(line))break;map.set(n,line);n++;}return map;};
 
 test("#version이 없으면 머리말을 붙이고 사용자 줄 번호를 그대로 둔다",()=>{
   const user="uniform vec2 uResolution;\nout vec4 fragColor;\nvoid main() {\n    fragColor = vec4(gl_FragCoord.xy / uResolution, 0.0, 1.0);\n}";
@@ -84,5 +84,68 @@ test("여러 출력을 이미 같은 수만큼 선언했으면 location 순서�
 test("출력이 하나면 예전과 같다(전역 out이 layout으로 선언돼 있어도 그 변수에 쓴다)",()=>{
   const out=prepareFragment("layout(location = 0) out vec4 result;\nvoid mainImage(out highp vec4 c, in vec2 p) { c = vec4(1.0); }").source;
   assert(/mainImage\(color, gl_FragCoord\.xy\); result = color; \}/.test(out),out);
+});
+test("Shadertoy 이름: 선언 없이 쓴 iTime·iResolution·iMouse·iFrame·iTimeDelta를 FIELD Uniform에 연결한다",()=>{
+  const user="void mainImage(out vec4 c, in vec2 p) {\n    c = vec4(p / iResolution.xy, 0.5 + 0.5 * sin(iTime + iTimeDelta), 1.0) + iMouse * 0.0 + float(iFrame) * 0.0;\n}";
+  const out=prepareFragment(user).source;
+  for(const line of["uniform float uTime;","#define iTime uTime","uniform float uDeltaTime;","#define iTimeDelta uDeltaTime","uniform int uFrame;","#define iFrame uFrame","uniform vec2 uResolution;","#define iResolution vec3(uResolution.xy, 1.0)","uniform vec4 uMouse;","#define iMouse uMouse"])
+    assert(out.includes("\n"+line+"\n"),line+"\n"+out);
+  assert(out.indexOf("precision highp float;")<out.indexOf("#define iTime"),"precision 뒤에 넣는다");
+  const lines=compilerLines(out);user.split("\n").forEach((line,i)=>assert.equal(lines.get(i+1),line,`사용자 ${i+1}번 줄`));
+});
+test("Shadertoy 이름: 이미 선언한 FIELD Uniform은 다시 선언하지 않고 그 타입에 맞춰 연결한다",()=>{
+  const out=prepareFragment("uniform vec3 uResolution;\nuniform float uFrame;\nuniform vec2 uMouse;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(iResolution.xy, float(iFrame), iMouse.x); }").source;
+  assert(!/uniform vec2 uResolution;|uniform int uFrame;|uniform vec4 uMouse;/.test(out),out);
+  assert(out.includes("#define iFrame int(uFrame)")&&out.includes("#define iMouse vec4(uMouse, 0.0, 0.0)")&&out.includes("#define iResolution vec3(uResolution.xy, 1.0)"),out);
+});
+test("Shadertoy 이름: 쓰지 않거나 직접 정의한 이름은 건드리지 않는다(주석 속 글자에도 속지 않는다)",()=>{
+  const plain="out vec4 o;\nvoid main(){ o = vec4(1.0); } // iTime";
+  assert(!prepareFragment(plain).source.includes("#define"),"쓰지 않으면 없음");
+  const own="uniform float uTime;\n#define iTime uTime\nfloat iFrame = 3.0;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(iTime, iFrame, 0.0, 1.0); }";
+  const out=prepareFragment(own).source;
+  assert.equal(out.split("#define iTime").length,2,"#define iTime은 사용자 것 하나");
+  assert(!out.includes("#define iFrame")&&!out.includes("uniform int uFrame"),out);
+});
+test("Shadertoy 이름: #version이 있는 코드는 precision 뒤에 넣고 injected 줄 정보에 센다",()=>{
+  const user="#version 300 es\nprecision highp float;\nout vec4 o;\nvoid main(){ o = vec4(iTime); }";
+  const out=prepareFragment(user);
+  assert.equal(out.source,"#version 300 es\nprecision highp float;\nuniform float uTime;\n#define iTime uTime\nout vec4 o;\nvoid main(){ o = vec4(iTime); }");
+  assert.deepEqual(out.injected,{after:2,count:2,generated:2});
+});
+// "#line N S"까지 따라 (소스번호, 줄) → 내용. 진입점 줄과 그 뒤는 뺀다.
+const sourceLines=src=>{const map=new Map();let n=1,s=0;for(const line of src.split("\n")){const m=/^#line (\d+)(?: (\d+))?$/.exec(line);if(m){n=Number(m[1]);if(m[2]!==undefined)s=Number(m[2]);continue;}if(/void main\(\) \{ vec4 color/.test(line))break;map.set(`${s}:${n}`,line);n++;}return map;};
+test("Common: 머리말 뒤 · 패스 코드 앞에 넣고, Common 줄은 소스 1번 · 패스 줄은 소스 0번 번호를 그대로 쓴다",()=>{
+  const common="// 공용\nfloat hash(float x) { return fract(sin(x) * 43758.5); }\n#define TAU 6.2831853";
+  const user="// 패스\nuniform float uTime;\nvoid mainImage(out vec4 c, in vec2 p) {\n    c = vec4(hash(iTime) * TAU);\n}";
+  const out=prepareFragment(user,["uniform float uGain;"],{common}).source;
+  assert(out.indexOf("precision highp float;")<out.indexOf("uniform float uGain;")&&out.indexOf("uniform float uGain;")<out.indexOf("float hash"),"precision → 선언 → Common");
+  assert(out.indexOf("#define iTime uTime")<out.indexOf("float hash"),"Shadertoy 연결도 Common 앞");
+  assert(!out.includes("uniform float uTime;\n#define"),"패스가 선언한 uTime은 다시 선언하지 않는다");
+  const lines=sourceLines(out);
+  common.split("\n").forEach((line,i)=>assert.equal(lines.get(`1:${i+1}`),line,`Common ${i+1}번 줄`));
+  user.split("\n").forEach((line,i)=>assert.equal(lines.get(`0:${i+1}`),line,`패스 ${i+1}번 줄`));
+  assert(/\n#line 3\nout vec4 field_FragColor_; void main\(\)/.test(out),"진입점은 패스의 mainImage 줄(소스 0번)");
+});
+test("Common: Shadertoy 이름을 Common에서만 써도 연결하고, Common의 #define은 존중한다",()=>{
+  let out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(t()); }",[],{common:"float t() { return iTime; }"}).source;
+  assert(out.includes("#define iTime uTime")&&out.includes("uniform float uTime;"),out);
+  out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(iTime); }",[],{common:"uniform float uSpeed;\n#define iTime (uTime * uSpeed)\nuniform float uTime;"}).source;
+  assert(!out.includes("#define iTime uTime")&&!/uniform float uTime;[\s\S]*uniform float uTime;/.test(out),out);
+});
+test("Common: 비었거나 공백뿐이면 아무것도 넣지 않는다",()=>{
+  const user="out vec4 o;\nvoid main(){ o = vec4(1.0); }";
+  assert.equal(prepareFragment(user,[],{common:"  \n"}).source,prepareFragment(user).source);
+});
+test("Common: #version이 있는 코드는 precision 뒤에 넣고, 패스 줄은 예전처럼 count만큼 밀린 번호(studio가 되돌림)",()=>{
+  for(const precision of["precision highp float;","precision highp float; // 같은 줄에 주석"]){
+    const user=`#version 300 es\n${precision}\nuniform float uTime;\nout vec4 o;\nvoid main(){ o = vec4(f()); }`;
+    const out=prepareFragment(user,["uniform float uGain;"],{common:"float f() { return 1.0; }"});
+    const lines=sourceLines(out.source),{after,count}=out.injected;
+    assert.equal(lines.get("1:1"),"float f() { return 1.0; }");
+    user.split("\n").forEach((line,i)=>{const n=i+1;if(n>after)assert.equal(lines.get(`0:${n+count}`),line,`패스 ${n}번 줄 → 컴파일러 ${n+count}`);});
+  }
+  const noDecl=prepareFragment("#version 300 es\nprecision highp float;\nout vec4 o;\nvoid main(){ o = vec4(f()); }",[],{common:"float f() { return 1.0; }"});
+  assert.deepEqual(noDecl.injected,{after:2,count:0,generated:0});
+  assert.equal(sourceLines(noDecl.source).get("0:3"),"out vec4 o;");
 });
 console.log(`GLSL prepare: ${passed} passed`);

@@ -5,18 +5,22 @@
 // 코드가 읽는 채널은 진하게, 읽지 않는 채널은 흐리게 두고, "읽는데 비어 있음 / 연결했는데 안 읽음"은 경고 점으로 알린다.
 // 연결 규칙(current는 앞선 패스만)은 project-model.js가 정하고, 바뀐 연결을 적용하는 일은 studio.js가 한다.
 
-// 값 형식(이전 select와 같음): "" 연결 없음 · "tex:<id>" 이미지 · "keyboard" 키보드 · "<버퍼>:<current|previous>[:<출력>]"
+// 값 형식(이전 select와 같음): "" 연결 없음 · "tex:<id>" 이미지 · "keyboard" 키보드 · "media:<종류>" 미디어
+// · "<버퍼>:<current|previous>[:<출력>]"
 const valueOf = ref =>
   !ref
     ? ""
     : ref.keyboard
       ? "keyboard"
-      : ref.texture
-        ? `tex:${ref.texture}`
-        : `${ref.buffer}:${ref.frame}${ref.attachment ? `:${ref.attachment}` : ""}`;
+      : ref.media
+        ? `media:${ref.media}`
+        : ref.texture
+          ? `tex:${ref.texture}`
+          : `${ref.buffer}:${ref.frame}${ref.attachment ? `:${ref.attachment}` : ""}`;
 const refOf = value => {
   if (!value) return null;
   if (value === "keyboard") return { keyboard: true };
+  if (value.startsWith("media:")) return { media: value.slice(6) };
   if (value.startsWith("tex:")) return { texture: value.slice(4) };
   const [buffer, frame, att] = value.split(":");
   return att ? { buffer, frame, attachment: Number(att) } : { buffer, frame };
@@ -29,9 +33,29 @@ const usedChannels = source => {
   return new Set([...code.matchAll(/\biChannel([0-3])\b/g)].map(m => Number(m[1])));
 };
 
+// 미디어 입력(media-input.js): 칩 배지 · 고르기 단추 이름
+const MEDIA = {
+  mic: { badge: "MIC", label: "마이크" },
+  audio: { badge: "♪", label: "오디오 파일…" },
+  webcam: { badge: "CAM", label: "웹캠" },
+  video: { badge: "▶", label: "영상 파일…" },
+};
+const MEDIA_STATE = { off: "꺼짐", starting: "켜는 중", error: "오류" };
+
 // inputInfo(ref, assets) → {source, frame, help}: studio.js와 같은 설명 문구
 // onChange(i, ref|null): 연결을 바꾼다 · onLoadImage(i): 파일을 골라 i에 연결 · onDropImage(i, file)
-const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage }) => {
+// onMedia(i, 종류): 미디어를 켜고(파일 종류는 파일을 골라) i에 연결 · mediaState(종류) → {state, name, error}
+const create = ({
+  $,
+  on,
+  element,
+  inputInfo,
+  onChange,
+  onLoadImage,
+  onDropImage,
+  onMedia = () => {},
+  mediaState = () => ({ state: "off" }),
+}) => {
   const holder = $("studioChannels"),
     bar = $("studioInputs"),
     picker = element("div");
@@ -52,6 +76,15 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
   const short = ref => {
     if (!ref) return { badge: "＋", tag: "", kind: "empty" };
     if (ref.keyboard) return { badge: "⌨", tag: "키보드", kind: "keyboard" };
+    if (ref.media) {
+      const media = mediaState(ref.media);
+      return {
+        badge: MEDIA[ref.media]?.badge || "?",
+        tag: media.state === "on" ? media.name : MEDIA_STATE[media.state] || media.state,
+        kind: "media",
+        state: media.state,
+      };
+    }
     if (ref.texture) {
       const asset = state.assets.find(item => item.id === ref.texture);
       return { badge: "", tag: asset?.name || "없는 이미지", kind: asset ? "image" : "missing" };
@@ -73,6 +106,7 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
       tag = element("span");
     chip.value = valueOf(ref);
     chip.dataset.kind = view.kind;
+    chip.dataset.state = view.state || "";
     badge.className =
       view.kind === "image" || view.kind === "missing" ? "chip-badge glyph-icon icon-image" : "chip-badge";
     badge.textContent = view.badge;
@@ -107,6 +141,11 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
     if (value === "load") {
       close({ refocus: true });
       onLoadImage(i);
+      return;
+    }
+    if (value.startsWith("media:")) {
+      close({ refocus: true });
+      onMedia(i, value.slice(6));
       return;
     }
     onChange(i, refOf(value));
@@ -219,6 +258,25 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
     images.push(button("load", "이미지 불러오기…", { className: "channel-load glyph-icon icon-plus" }));
     // 입력: 키보드(쉐이더토이 호환 256×3 텍스처). 뷰포트를 클릭하면 키가 셰이더로 간다.
     const inputs = [button("keyboard", "키보드", { pressed: current === "keyboard", className: "channel-keyboard" })];
+    // 미디어: 고르면 켜고(권한 · 파일 고르기) 연결한다. 연결돼 있지만 꺼져 있으면 다시 골라 켠다.
+    for (const [kind, { label }] of Object.entries(MEDIA)) {
+      const media = mediaState(kind),
+        reason =
+          media.state === "on"
+            ? `켜짐 · ${media.name}`
+            : media.state === "error"
+              ? media.error
+              : current === `media:${kind}`
+                ? "꺼짐 · 눌러 켜기"
+                : "";
+      inputs.push(
+        button(`media:${kind}`, label, {
+          pressed: current === `media:${kind}`,
+          reason,
+          className: `channel-media channel-${kind}`,
+        })
+      );
+    }
     const clear = button("", "연결 해제", { disabled: !ref, className: "channel-clear" });
     const sections = [
       head,
@@ -231,7 +289,11 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
           : ""
       ),
       group("이미지", images),
-      group("입력", inputs, "키 상태 256×3: x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글"),
+      group(
+        "입력",
+        inputs,
+        "키보드 256×3: x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글 · 소리 512×2: y = 0.25 주파수 · 0.75 파형 · 카메라 · 영상: 위쪽이 v = 1"
+      ),
       clear,
     ];
     picker.replaceChildren(...sections);
@@ -349,7 +411,12 @@ const create = ({ $, on, element, inputInfo, onChange, onLoadImage, onDropImage 
     used = next;
     chips.forEach((_, i) => paint(i));
   };
-  return { render, syncUsage, close, isOpen: () => openIndex >= 0 };
+  // 미디어 상태가 바뀌면 칩만 다시 칠한다(열린 팝오버도 다시 만든다).
+  const refresh = () => {
+    chips.forEach((_, i) => paint(i));
+    if (openIndex >= 0) build();
+  };
+  return { render, syncUsage, close, refresh, isOpen: () => openIndex >= 0 };
 };
 
 export { create, valueOf, refOf, usedChannels };

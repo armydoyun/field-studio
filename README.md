@@ -42,9 +42,10 @@ js/
   # 렌더링 (GPU 자원 소유)
   renderer.js         # WebGL 리소스 · 애니메이션 루프 · 입력 · 컨텍스트 복구
   pass-manager.js     # 버퍼 패스의 프로그램 · 출력 Texture · FBO
-  glsl-prepare.js     # 컴파일 직전 GLSL 다듬기 — #version · precision 생략 시 자동 추가 · mainImage 진입점 · #line으로 오류 줄 유지
+  glsl-prepare.js     # 컴파일 직전 GLSL 다듬기 — #version · precision 생략 시 자동 추가 · mainImage 진입점 · Shadertoy 이름(iTime…) 연결 · Common 붙이기 · #line으로 오류 줄 유지
   texture-input.js    # 로컬 이미지 Texture (본문은 IndexedDB)
   keyboard-input.js   # 키보드 입력 텍스처(쉐이더토이 호환 256×3) — 키를 넘길지는 input.js가 정함
+  media-input.js      # 미디어 입력 채널: 마이크 · 오디오 파일(512×2 FFT · 파형) · 웹캠 · 영상 파일(영상 텍스처)
   gpu-diagnostics.js  # GL 오류 격리 · Uniform 리플렉션 · GPU 타이머
   shader.js           # 시작 화면 기본 GLSL
   # 편집기 (Shader Studio)
