@@ -33,20 +33,42 @@
     for (let i = 0; i < n; i++) bytes.setInt16(44 + i * 2, Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 20000), true);
     return new File([bytes.buffer], "sine440.wav", { type: "audio/wav" });
   };
-  // 캔버스를 0.6초 녹화한 160×90 WebM(빨간 화면)
-  const redWebm = async () => {
+  // 빨간 화면 160×90 WebM. 바쁜 CI에서는 타이머로 그린 캔버스 녹화가 빈 파일이나 프레임을 풀 수 없는 아주 짧은 파일이 되곤
+  // 했다(재생은 되지만 readyState가 1에 머물러 텍스처가 올라가지 않음 → '영상 프레임' 시간 초과).
+  // 그래서 프레임을 직접 밀어 넣고(captureStream(0) + requestFrame), 만든 파일이 실제로 첫 프레임까지 풀리는지 확인해
+  // 안 되면 다시 만든다.
+  const recordRed = async frames => {
     const canvas = document.createElement("canvas");
     canvas.width = 160; canvas.height = 90;
-    const ctx = canvas.getContext("2d"), stream = canvas.captureStream(30), chunks = [];
+    const ctx = canvas.getContext("2d"), stream = canvas.captureStream(0), track = stream.getVideoTracks()[0], chunks = [];
+    const paint = () => { ctx.fillStyle = "#ff0000"; ctx.fillRect(0, 0, 160, 90); track.requestFrame?.(); };
+    paint();
     const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
     recorder.ondataavailable = event => event.data.size && chunks.push(event.data);
-    const draw = setInterval(() => { ctx.fillStyle = "#ff0000"; ctx.fillRect(0, 0, 160, 90); }, 16);
     recorder.start(100);
-    await new Promise(resolve => setTimeout(resolve, 600));
+    for (let i = 0; i < frames; i++) { paint(); await new Promise(resolve => setTimeout(resolve, 33)); }
     await new Promise(resolve => { recorder.onstop = resolve; recorder.stop(); });
-    clearInterval(draw);
-    stream.getTracks().forEach(track => track.stop());
+    stream.getTracks().forEach(each => each.stop());
     return new File(chunks, "red.webm", { type: "video/webm" });
+  };
+  // 첫 프레임이 풀리는지(readyState ≥ 2) 따로 열어 본다
+  const decodes = file => new Promise(resolve => {
+    if (!file.size) return resolve(false);
+    const video = document.createElement("video"), url = URL.createObjectURL(file);
+    const done = ok => { clearTimeout(timer); video.removeAttribute("src"); video.load(); URL.revokeObjectURL(url); resolve(ok); };
+    const timer = setTimeout(() => done(video.readyState >= 2 && video.videoWidth > 0), 4000);
+    video.muted = true;
+    video.onloadeddata = () => done(video.videoWidth > 0);
+    video.onerror = () => done(false);
+    video.src = url;
+  });
+  const redWebm = async () => {
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const file = await recordRed(24 * attempt);
+      if (await decodes(file)) return file;
+      console.log(`빨간 WebM ${attempt}번째가 풀리지 않아 다시 만듦 (${file.size} B)`);
+    }
+    throw new Error("FAIL: 테스트용 WebM을 만들지 못함(MediaRecorder)");
   };
   const chipTag = () => $("studioChannel0")?.querySelector(".chip-tag")?.textContent;
   const before = studio.getProject(), wasRunning = r.getStats().running;
@@ -106,7 +128,7 @@
     // 6) 영상 파일: 빨간 WebM의 크기와 색
     test(studio.setProject(project({ media: "video" })), "영상 파일 채널 연결");
     test(await r.startMedia("video", await redWebm()), "영상 파일 켜기");
-    await until(() => pixel()[0] === 160, "영상 프레임");
+    await until(() => pixel()[0] === 160, "영상 프레임", 15000);
     test(pixel()[1] === 90 && pixel()[2] > 0.8, `영상 160×90 · 빨강 ${pixel()[2]}`);
 
     // 7) 종류에 맞지 않는 파일은 거부한다
