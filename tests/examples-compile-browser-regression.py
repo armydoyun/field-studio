@@ -11,11 +11,11 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parent.parent
 html=(root/'index.html').read_text();html=html[:html.index('    <!-- ES Modules:')]+'</body></html>'
-COMPILE='''src => {
+COMPILE='''([src, common]) => {
   const gl = (window.__gl ??= document.createElement("canvas").getContext("webgl2")); if(!gl) throw Error("WebGL2 unavailable");
-  // 앱과 같이 컴파일 직전에 다듬는다(짧은 머리말 · mainImage 진입점 — glsl-prepare.js).
+  // 앱과 같이 컴파일 직전에 다듬는다(짧은 머리말 · mainImage 진입점 · 프로젝트의 Common — glsl-prepare.js).
   const prepare = window.__testModules?.["glsl-prepare"]; if(!prepare) throw Error("glsl-prepare 모듈이 없습니다");
-  const s = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s, prepare.prepareFragment(src).source); gl.compileShader(s);
+  const s = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s, prepare.prepareFragment(src, [], {common}).source); gl.compileShader(s);
   const ok = gl.getShaderParameter(s, gl.COMPILE_STATUS), log = gl.getShaderInfoLog(s); gl.deleteShader(s); return ok ? "" : log;
 }'''
 # 코드 조각을 감싸는 공통 머리: 앱이 제공하는 Uniform과 main 조각이 흔히 쓰는 지역 변수(uv·p·col)를 준비한다.
@@ -42,9 +42,10 @@ with sync_playwright() as p:
     n=[0]
     def check(cond,label):
         assert cond,label;n[0]+=1;print('PASS',f'{n[0]:02d}',label,flush=True)
-    compile_=lambda src:page.evaluate(COMPILE,src)
+    compile_=lambda src,common='':page.evaluate(COMPILE,[src,common])
+    # named: (이름, 소스) 또는 (이름, 소스, Common)
     def compile_all(named):
-        failures=[f'{name}: {log.strip()[:300]}' for name,src in named if (log:=compile_(src))]
+        failures=[f'{item[0]}: {log.strip()[:300]}' for item in named if (log:=compile_(*item[1:]))]
         return failures
 
     # ---- 갤러리: 카드를 눌러 Studio가 받는 프로젝트를 모은다 ----
@@ -64,12 +65,21 @@ with sync_playwright() as p:
     sources=[]
     for id,proj in zip(cards,projects):
         if proj.get('studioOwned') in ('pipeline','feedback'):continue   # Studio 소유 예제는 아래에서 Studio 소스로 확인
-        sources.append((f'gallery {id} · Image',proj['image']))
-        sources+= [(f'gallery {id} · Buffer {pass_["name"]}',pass_['fragment']) for pass_ in proj['passes']]
+        common=proj.get('common') or ''
+        sources.append((f'gallery {id} · Image',proj['image'],common))
+        sources+= [(f'gallery {id} · Buffer {pass_["name"]}',pass_['fragment'],common) for pass_ in proj['passes']]
     failures=compile_all(sources)
     check(not failures,f'all {len(sources)} gallery shaders compile: {failures}')
+    # 여러 패스가 같이 쓰는 함수는 Common에 한 번만: 패스에 다시 정의하지 않는다(복사본이 어긋나지 않게)
+    shared={'fluid':['at','jet'],'explorer':['world','worldNormal','pick']}
+    for id,names in shared.items():
+        proj=projects[cards.index(id)]
+        copies=[f'{id}/{pass_name}:{fn}' for pass_name,src in [('Image',proj['image'])]+[(x['name'],x['fragment']) for x in proj['passes']]
+                for fn in names if re.search(rf'\b(?:vec[234]|float|void)\s+{fn}\s*\(',src)]
+        check(all(re.search(rf'\b{fn}\s*\(',proj.get('common') or '') for fn in names) and not copies,
+              f'gallery {id}: {", ".join(names)} live only in Common (copies in passes: {copies})')
     # Hash Precision 레슨은 비교를 위해 예전 실수 해시를 일부러 담고 있다.
-    stale=[name for name,src in sources if OLD_HASH.search(src) and not name.startswith('gallery hashprecision')]
+    stale=[name for name,src,common in sources if OLD_HASH.search(src+common) and not name.startswith('gallery hashprecision')]
     check(not stale,f'no gallery shader uses the old float hash (except the comparison lesson): {stale}')
 
     # ---- Studio 소유 예제: 기본 장면 · Ray Marching · 버퍼 예제(studio-examples.js의 문자열) ----
@@ -77,6 +87,9 @@ with sync_playwright() as p:
     shader=page.evaluate('() => ({fragment:__testModules.shader.fragment, raymarch:__testModules.shader.raymarch})')
     owned=[('default scene',shader['fragment']),('ray marching',shader['raymarch'])]
     owned+=[(f'studio-examples.js {name}',src) for name,src in re.findall(r'const (\w+)\s*=\s*`(#version 300 es[\s\S]*?)`;',studio_js)]
+    # Common 탭의 시작 코드: 그 함수를 부르는 패스와 함께 컴파일한다
+    common_start=re.search(r'const common = `([\s\S]*?)`;',studio_js).group(1)
+    owned.append(('studio-examples.js common (Common 시작 코드)','void mainImage(out vec4 c, in vec2 p) { c = vec4(hash12(p) * PI); }',common_start))
     failures=compile_all(owned)
     check(len(owned)>=7 and not failures,f'default scene, Ray Marching and Studio buffer examples compile ({len(owned)}): {failures}')
 

@@ -727,9 +727,12 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 const PLAYER_HOME = [0.0, 0.5, 6.0];
 const FOLLOW_HOME = [0.0, 0.42, 7.0];
 // 세계 SDF: Buffer A(충돌 계산)와 Image(그리기)가 "똑같은" 함수를 써야 보이는 벽과 부딪히는 벽이 일치한다.
-// 그래서 JS에서 한 번만 적고 두 셰이더에 넣는다(코드를 고칠 때도 두 곳을 같이 고쳐야 한다는 뜻이다).
-const WORLD = `// ---- 세계: Buffer A(충돌)와 Image(그리기)가 똑같은 함수를 쓴다. x = 거리, y = 재질 ----
+// 그래서 Common 탭(project.common)에 한 번만 두고 두 패스가 같이 쓴다. 고칠 때도 한 곳만 고치면 된다.
+const explorerCommon = `// 키보드 탐험 · Common: Buffer A(충돌)와 Image(그리기)가 똑같이 쓰는 세계. 모든 패스의 머리말 바로 뒤에 붙는다.
+// 보이는 벽과 부딪히는 벽이 어긋나지 않도록 세계 SDF를 여기 한 곳에만 둔다. x = 거리, y = 재질
 const float RADIUS = 0.5;   // 플레이어(공) 반지름
+const vec3 HOME = vec3(${PLAYER_HOME.join(", ")});          // 처음 자리(R로 돌아간다)
+const vec3 CAMERA_HOME = vec3(${FOLLOW_HOME.join(", ")});   // 처음 카메라(방위각, 높이각, 거리)
 ${SHAPES}
 vec2 pick(vec2 a, vec2 b) { return a.x < b.x ? a : b; }
 vec2 world(vec3 p) {
@@ -788,11 +791,8 @@ uniform float uSpeed;       // 걷는 속도(초당 칸) · @range 1 12 @step 0.
 uniform float uJump;        // 점프 세기(처음 위로 튀는 속도) · @range 0 15 @step 0.1 @default 7.5 @group 움직임
 uniform float uGravity;     // 중력 · @range 2 40 @step 0.1 @default 20 @group 움직임
 uniform float uGrip;        // 땅을 잡는 힘(작을수록 빙판처럼 미끄럽다) · @range 0.5 20 @step 0.1 @default 10 @group 움직임
+// 세계(world · worldNormal · RADIUS)와 처음 자리(HOME · CAMERA_HOME)는 Common 탭에 있다 — Image와 같은 함수다.
 
-${WORLD}
-
-const vec3 HOME = vec3(${PLAYER_HOME.join(", ")});
-const vec3 CAMERA_HOME = vec3(${FOLLOW_HOME.join(", ")});
 const float TAU = 6.2831853;
 const int KEY_SHIFT = 16, KEY_SPACE = 32, KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40;
 const int KEY_A = 65, KEY_D = 68, KEY_E = 69, KEY_Q = 81, KEY_R = 82, KEY_S = 83, KEY_W = 87;
@@ -874,7 +874,7 @@ precision highp float;
 //
 // 읽는 순서:
 //  1. Buffer A     → 입력 · 물리 · 충돌. 이 예제의 핵심이다(머리말에 한 프레임의 순서가 있다).
-//  2. WORLD(world) → 계단 · 경사로 · 떠 있는 발판 · 기둥 · 울타리. Buffer A와 같은 함수라 보이는 곳에 부딪힌다.
+//  2. Common(world) → 계단 · 경사로 · 떠 있는 발판 · 기둥 · 울타리. Buffer A와 같은 함수라 보이는 곳에 부딪힌다.
 //  3. readState    → 플레이어 위치와 카메라를 읽는다. 비어 있으면(썸네일 · 첫 프레임) 처음 자리.
 //  4. 카메라       → 플레이어 조금 위를 목표로 궤도 카메라를 둔다. 카메라와 플레이어 사이에 벽이 있으면
 //                    카메라를 벽 앞으로 당긴다(uCameraCollide: 3인칭 게임의 기본 기법).
@@ -886,8 +886,7 @@ uniform sampler2D iChannel0;
 uniform vec3 uBallColor;      // 공 색 · @color @default 1 0.42 0.18 @group 보기
 uniform bool uCameraCollide;  // 벽이 가리면 카메라를 앞으로 당기기 · @default true @group 카메라
 uniform float uFocal;         // 초점 거리(클수록 망원) · @range 0.8 3 @step 0.01 @default 1.5 @group 카메라
-
-${WORLD}
+// 세계(world · RADIUS · HOME)는 Common 탭에 있다.
 
 ${CAMERA_MATH}
 
@@ -973,8 +972,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // 상태 읽기: 카메라 거리(픽셀 2의 z)가 0이면 버퍼가 비어 있다 → 처음 자리.
     vec4 cam = texelFetch(iChannel0, ivec2(2, 0), 0);
     bool ready = cam.z > 0.0;
-    player = ready ? texelFetch(iChannel0, ivec2(0, 0), 0).xyz : vec3(${PLAYER_HOME.join(", ")});
-    vec3 orbit = ready ? cam.xyz : vec3(${FOLLOW_HOME.join(", ")});
+    player = ready ? texelFetch(iChannel0, ivec2(0, 0), 0).xyz : HOME;
+    vec3 orbit = ready ? cam.xyz : CAMERA_HOME;
 
     vec3 target = player + vec3(0.0, 0.6, 0.0);           // 공보다 조금 위를 본다(앞이 더 보이게)
     vec3 eye = orbitPosition(orbit, target);
@@ -1002,6 +1001,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 }`;
 const explorerProject = () => ({
   image: explorerImage,
+  common: explorerCommon,
   passes: [
     {
       name: "A",
