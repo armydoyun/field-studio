@@ -485,7 +485,9 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .stage-header { position:absolute;inset:0 0 auto;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;pointer-events:none; }
 .stage-label { display:flex;align-items:center;gap:8px;min-width:0;border:1px solid var(--line-strong);white-space:nowrap; }
 #stageToolbar { display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;max-width:100%;border:1px solid var(--line-strong);pointer-events:auto; }
-.project-menu-wrap { position:relative;flex:0 1 auto;min-width:0;margin-right:auto;pointer-events:auto; }
+/* 프로젝트 버튼이 늘 맨 왼쪽에 온다. 상태 칩("일시정지")은 그 오른쪽에 나타나므로, 재생 중에 칩이 숨어도 버튼이 밀려 보이지 않는다. */
+.project-menu-wrap { position:relative;order:-1;flex:0 1 auto;min-width:0;pointer-events:auto; }
+.stage-header #stageToolbar { margin-left:auto; }
 .project-toggle { max-width:260px;min-height:32px;padding:6px 10px;border-color:var(--line);border-radius:var(--radius);background:var(--hud-bg);color:var(--text-soft);font:500 11px/1.4 var(--sans); }
 .project-toggle span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .project-toggle[data-saved="false"] span { color:var(--muted); }
