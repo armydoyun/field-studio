@@ -95,6 +95,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     project: copy(project),
     users: renderer.getUserUniforms(),
     presets: settings?.getPresets?.() ?? [], // 프로젝트를 바꾼 뒤 Undo하면 그 프로젝트의 프리셋도 돌아온다
+    links: settings?.getLinks?.() ?? [], // 파라미터 연결도
     selected,
     ...cursorState(),
   });
@@ -107,6 +108,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!usersChanged) {
       checkpoint.users = current.users;
       checkpoint.presets = current.presets;
+      checkpoint.links = current.links;
     }
     if (same(current.project, checkpoint.project) && same(current.users, checkpoint.users)) return;
     const now = Date.now(),
@@ -1281,6 +1283,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const applied = apply(target.users);
     if (applied && !same(current.users, target.users)) document.dispatchEvent(new Event("shader-settings-applied"));
     if (applied && target.presets && !same(current.presets, target.presets)) settings?.setPresets?.(target.presets);
+    if (applied && target.links && !same(current.links, target.links)) settings?.setLinks?.(target.links);
     navigatingHistory = false;
     checkpoint = historyState();
     editTime = 0;
@@ -1327,6 +1330,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioCode").setSelectionRange(head + shift, head + shift);
     const applied = apply(nextUsers);
     if (applied && nextUsers) document.dispatchEvent(new Event("shader-settings-applied"));
+    if (applied) settings?.renameParameter?.(from, to); // 프리셋 값 · 파라미터 연결도 새 이름으로
     if (!applied && same(before, project)) return null;
     recordEdit(false, true);
     return { passes, parameter: registered && applied };
@@ -1438,7 +1442,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       rememberEditor();
       checkpoint = historyState();
       renderer.applyPortable(next, users);
-      settings?.setPresets?.([]); // 새 프로젝트 · 예제는 프리셋 없이 시작한다(Undo로 이전 작업의 프리셋까지 돌아온다)
+      settings?.setPresets?.([]); // 새 프로젝트 · 예제는 프리셋 · 연결 없이 시작한다(Undo로 이전 작업의 것까지 돌아온다)
+      settings?.setLinks?.([]);
       adoptProject(next);
       // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
       syncAnnotations();

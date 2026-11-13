@@ -7,6 +7,8 @@ import * as Keyboard from "./keyboard-input.js";
 import * as Media from "./media-input.js";
 import * as Ramp from "./ramp.js";
 import * as Prepare from "./glsl-prepare.js";
+import * as Links from "./links.js";
+import * as Midi from "./midi-input.js";
 
 // 사용자 Uniform 타입 표. n: 성분 수, kind: f(float) i(int) u(uint) b(bool) m(행렬, column-major), fn: 배열 업로드 함수.
 // 새 타입은 이 표에 추가하면 검증·GLSL 자동 선언·업로드·UI가 함께 따라간다.
@@ -170,6 +172,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const keyboard = Keyboard.create(gl);
   // 미디어 입력(마이크 · 오디오 파일 · 웹캠 · 영상 파일). 상태가 바뀌면 편집기가 칩을 다시 칠하도록 알린다.
   const media = Media.create(gl, { onChange: () => document.dispatchEvent(new Event("shader-media-changed")) });
+  // MIDI 컨트롤러(파라미터 연결의 'MIDI' 소스). 처음 쓸 때 startMidi()로 권한을 받는다.
+  const midi = Midi.create({ onChange: () => document.dispatchEvent(new Event("shader-midi-changed")) });
   // 앱 내부 셰이더(버퍼 미리보기)는 { internal: true }로 컴파일한다 — 사용자의 Common을 붙이지 않는다.
   const passManager = PassManager.createPassManager(
     gl,
@@ -465,7 +469,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       if (passManager.ensureTargets(gl.drawingBufferWidth, gl.drawingBufferHeight)) frameCount = 0;
       lastDelta = delta;
       keyboard.upload();
-      media.update(passManager.mediaKinds());
+      media.update(mediaKindsForFrame());
+      applyLinks(lastDelta);
       gl.bindVertexArray(vao);
       passManager.drawPasses(gl.drawingBufferWidth, gl.drawingBufferHeight, uploadGlobals, gpuTimer);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -727,6 +732,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       saved: { time, frameCount, lastDelta, frameRate },
     };
     dateOrigin = Date.now(); // uDate: 렌더링을 시작한 시각 + 렌더 시간
+    linkValues.clear(); // 연결의 부드럽게 따라가기는 렌더링 처음부터 다시(영상이 매번 같게)
     tileCost.clear();
     tileStats = { tiles: 0, frames: 0 };
     resize();
@@ -748,7 +754,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     frameCount = index;
     if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
     keyboard.upload();
-    media.update(passManager.mediaKinds());
+    media.update(mediaKindsForFrame());
+    applyLinks(lastDelta);
     gl.bindVertexArray(vao);
     passManager.drawPasses(w, h, uploadGlobals);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -904,7 +911,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     frameCount = index;
     if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
     keyboard.upload();
-    media.update(passManager.mediaKinds());
+    media.update(mediaKindsForFrame());
+    applyLinks(lastDelta);
     gl.bindVertexArray(vao);
     const measure = tileStats.frames < 3 || tileStats.frames % REMEASURE === 0 || !!offline.tilePixels;
     // 잴 프레임은 앞에서 기다리지 않고 쌓아 둔 GPU 작업을 먼저 비운다(그 시간이 첫 타일의 비용으로 잡히지 않게).
@@ -1575,6 +1583,47 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       timeScale,
     };
   };
+  // ---- 파라미터 연결(links.js): 소리 · MIDI · 흔들기 · 키프레임이 파라미터 값을 정한다 ----
+  // 프레임마다(실시간 · 영상 렌더링 모두) 미디어를 올린 직후에 계산한다. 흔들기 · 키프레임은 uTime, 소리는 그 프레임의
+  // 분석값(영상 렌더링에서는 렌더 시간에 맞춘 값)을 쓰므로 영상 렌더링에서도 맞는다. 연결된 파라미터는 직접 바꿔도 덮어쓴다.
+  let links = [];
+  const linkValues = new Map(); // 이름 → 부드럽게 따라가는 지금 값
+  const usesAudioLinks = () => links.some(link => link.source === "audio");
+  // 이번 프레임에 올릴 미디어: 채널이 읽는 것 + 소리 연결이 있으면 켜진 오디오
+  const mediaKindsForFrame = () => {
+    const kinds = passManager.mediaKinds();
+    if (usesAudioLinks()) for (const kind of media.audioKinds()) kinds.add(kind);
+    return kinds;
+  };
+  const applyLinks = dt => {
+    if (!links.length) return;
+    const audio = usesAudioLinks() ? media.audioData() : null;
+    const inputs = {
+      time,
+      audio: audio ? Links.audioLevels(audio.rows, audio.rate) : null,
+      midi: (channel, cc) => midi.value(channel, cc),
+    };
+    for (const link of links) {
+      const item = userUniforms.get(link.name);
+      if (!item || !Links.LINKABLE.has(item.type)) continue;
+      const goal = Links.target(link, inputs);
+      if (goal === null || !Number.isFinite(goal)) continue;
+      const value = Links.follow(linkValues.get(link.name) ?? null, goal, link.smooth, dt);
+      linkValues.set(link.name, value);
+      try {
+        item.value = normalizeUniform(item.type, Links.toParameter(item.type, value));
+        writeData(item);
+      } catch (_) {
+        // 타입에 맞지 않는 값(예: uint 범위 밖)은 이번 프레임만 건너뛴다
+      }
+    }
+  };
+  const setLinks = list => {
+    links = Links.validate(list);
+    linkValues.clear();
+    scheduleFrame();
+    return links.map(link => ({ ...link }));
+  };
   // 적용한 구성의 채널이 더는 읽지 않는 미디어(마이크 · 카메라 · 파일)는 끈다.
   const retainMedia = () => media.retain(passManager.mediaKinds());
   const validatePassConfiguration = (passes, imageChannels = {}) =>
@@ -1740,6 +1789,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     redraw,
     validateFragment,
     getCommon: () => shared.common,
+    // 파라미터 연결(links.js) · MIDI
+    setLinks,
+    getLinks: () => links.map(link => ({ ...link })),
+    startMidi: () => midi.start(),
+    midiStatus: () => midi.status(),
+    learnMidi: callback => midi.learn(callback),
+    cancelMidiLearn: () => midi.cancelLearn(),
     exportScene,
     // 미디어 입력: startMedia(종류, 파일?) → Promise<boolean> · 상태는 mediaState(종류)
     startMedia: (kind, file) => media.start(kind, file),

@@ -140,6 +140,22 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .seed-uniform.glyph-icon::before,.play-uniform.glyph-icon::before { flex-basis:14px;width:14px;height:14px; }
 .seed-uniform:hover,.play-uniform:hover { color:var(--text); }
 .play-uniform[aria-pressed="true"] { color:var(--accent-strong); }
+/* 연결(links.js): 사슬 버튼 · 이름 옆 배지 · 줄 아래 편집 칸 */
+.link-uniform { flex:0 0 24px;width:24px;min-height:24px;height:24px;padding:0;border-color:transparent;background:transparent;color:var(--faint); }
+.link-uniform.glyph-icon::before { flex-basis:14px;width:14px;height:14px; }
+.link-uniform:hover,.link-uniform[aria-expanded="true"] { color:var(--text); }
+.link-uniform[aria-pressed="true"] { color:var(--accent-strong); }
+.icon-link { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/%3E%3C/svg%3E"); }
+.link-badge { padding:0 6px;border-radius:999px;background:var(--panel);color:var(--accent-strong);font:10px/1.6 var(--sans);white-space:nowrap; }
+.link-editor { display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 8px;padding:8px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);font-size:11px; }
+.link-field { display:grid;gap:2px;min-width:0;color:var(--muted); }
+.link-field input,.link-field select { width:88px;min-width:0;min-height:26px;font:11px var(--mono); }
+.link-editor>button { min-height:26px;padding:3px 8px;font-size:11px; }
+.link-hint,.link-status { flex:1 1 100%;margin:0;color:var(--muted);line-height:1.5;word-break:keep-all; }
+.link-keys { display:flex;flex:1 1 100%;flex-wrap:wrap;gap:4px; }
+.link-key { display:inline-flex;align-items:center;gap:2px;padding:1px 2px 1px 8px;border:1px solid var(--line);border-radius:999px;font:10px/1.6 var(--mono); }
+.link-key button { width:18px;min-height:18px;height:18px;padding:0;border-color:transparent;background:transparent;color:var(--faint); }
+.link-key button.glyph-icon::before { flex-basis:10px;width:10px;height:10px; }
 .icon-dice { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='3.5'/%3E%3Cg fill='black' stroke='none'%3E%3Ccircle cx='8.8' cy='8.8' r='1.4'/%3E%3Ccircle cx='15.2' cy='8.8' r='1.4'/%3E%3Ccircle cx='12' cy='12' r='1.4'/%3E%3Ccircle cx='8.8' cy='15.2' r='1.4'/%3E%3Ccircle cx='15.2' cy='15.2' r='1.4'/%3E%3C/g%3E%3C/svg%3E"); }
 /* @group: 접히는 묶음. 머리는 목록 행과 같은 폭, 접히면 갈매기표가 오른쪽을 본다 */
 .uniform-group+.uniform-group,.uniform-row+.uniform-group,.uniform-group+.uniform-row { border-top:1px solid var(--line); }

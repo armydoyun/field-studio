@@ -361,6 +361,14 @@ const create = (gl, { onChange = () => {} } = {}) => {
   };
   // 녹화(recorder.js)에 넣을 소리: 켜진 오디오(오디오 파일 · 마이크)가 하나라도 있으면 그 소리를 섞은 트랙 하나.
   // 처음 부를 때 출구를 만들고 지금 켜진 오디오를 잇는다(나중에 켜는 오디오는 startAudio가 잇는다). 없으면 [].
+  // 켜진 오디오(오디오 파일 · 마이크)의 종류 목록과, 그 소리의 지금 텍스처 자료(512×2)와 샘플레이트.
+  // 파라미터 연결(links.js)의 '소리' 소스가 읽는다. 오디오 파일을 마이크보다 먼저 고른다.
+  const audioKinds = () => ["audio", "mic"].filter(kind => sources.get(kind)?.state === "on");
+  const audioData = () => {
+    const entry = audioKinds().map(kind => sources.get(kind))[0];
+    if (!entry?.data) return null;
+    return { rows: entry.data, rate: entry.offline?.buffer?.sampleRate || audioContext?.sampleRate || 48000 };
+  };
   const audioTracks = () => {
     const live = [...sources.values()].filter(entry => entry.analyser && entry.state === "on");
     if (!live.length || !audioContext) return [];
@@ -485,6 +493,8 @@ const create = (gl, { onChange = () => {} } = {}) => {
     state,
     time,
     audioTracks,
+    audioKinds,
+    audioData,
     prepareOffline,
     seekOffline,
     endOffline,
