@@ -99,10 +99,14 @@
     key("Escape");
     await until(() => q(".timeline-selection").textContent.startsWith("키를 고르면"), "Esc로 선택 해제");
     const area = lane("uGain").querySelector(".timeline-area");
+    // 고르기 전·후에 막대·키 칸·레인의 자리가 같아야 끌어 고르는 도중 화면이 움직이지 않는다.
+    const layoutBox = () => [q(".timeline-bar"), q(".timeline-inspector"), area].map(node => { const r = node.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round).join(","); }).join(" | ");
+    const emptyBox = layoutBox();
     pointer(area, "pointerdown", at(area, 0.01, 0.02));
     pointer(document, "pointermove", at(area, 0.5, 0.98));
     pointer(document, "pointerup", at(area, 0.5, 0.98));
     await until(() => q(".timeline-selection").textContent === "uGain 키", "상자 선택: 앞쪽 키 하나");
+    test(layoutBox() === emptyBox, `키를 골라도 막대·키 칸·레인이 움직이지 않음 (${emptyBox} → ${layoutBox()})`);
     key("Delete");
     await until(() => JSON.parse(keysOf("uGain")).length === 1, "Delete로 지우기");
 

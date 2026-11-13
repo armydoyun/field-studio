@@ -491,6 +491,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         ? `${single.link.name} 키`
         : `키 ${list.length}개`
       : "키를 고르면 시간 · 값 · 잇기를 숫자로 고칩니다";
+    selection.title = list.length ? selection.textContent : "";
     for (const node of [keyValue, keyEase, keyDelete]) node.disabled = !list.length;
     keyTime.disabled = !single;
     if (document.activeElement !== keyTime) keyTime.value = single ? String(round(single.key[0], 3)) : "";
