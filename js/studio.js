@@ -585,9 +585,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           ? "켜는 중"
           : media.state === "error"
             ? `오류 · ${media.error}`
-            : kind === "audio" || kind === "video"
-              ? "꺼짐 · 파일은 저장되지 않습니다. 칩을 눌러 파일을 다시 고르세요"
-              : "꺼짐 · 칩을 눌러 다시 고르면 켭니다(권한 필요)";
+            : (kind === "audio" || kind === "video") && media.savedName
+              ? `꺼짐 · 보관한 파일 ${media.savedName} — 칩을 눌러 '▶ ${media.savedName}'으로 다시 켜세요`
+              : kind === "audio" || kind === "video"
+                ? "꺼짐 · 칩을 눌러 파일을 고르세요"
+                : "꺼짐 · 칩을 눌러 다시 고르면 켭니다(권한 필요)";
     return { source: label, frame: status, help: shape };
   };
   // 채널 연결을 바꾸고, 자동이면 바로 적용한다(칩 고르기 · 미디어 켜기가 같이 쓴다).
@@ -609,16 +611,22 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   // 미디어: 연결한 뒤 켠다(마이크 · 카메라는 권한을 묻고, 파일 종류는 먼저 파일을 고른다).
   const MEDIA_ACCEPT = { audio: "audio/*", video: "video/*" };
-  const startMedia = async (i, kind, file) => {
+  const startMedia = async (i, kind, file, useSaved = false) => {
     const label = Media.LABELS[kind];
     setStatus(`${label} 켜는 중…`, "is-dirty");
     try {
-      if (await renderer.startMedia(kind, file)) setStatus(`${label} 켜짐 → ${selected}.iChannel${i}`);
+      const started = useSaved ? await renderer.startSavedMedia(kind) : await renderer.startMedia(kind, file);
+      if (started) setStatus(`${label} 켜짐 → ${selected}.iChannel${i}`);
     } catch (error) {
       setStatus(`${label}: ${error.message}`, "is-error");
     }
   };
-  const onMedia = (i, kind) => {
+  // useSaved: 파일 종류를 보관한 파일로 다시 켠다(파일 고르기 없이)
+  const onMedia = (i, kind, useSaved = false) => {
+    if (useSaved) {
+      setChannel(i, { media: kind });
+      return startMedia(i, kind, null, true);
+    }
     if (!MEDIA_ACCEPT[kind]) {
       setChannel(i, { media: kind });
       return startMedia(i, kind);

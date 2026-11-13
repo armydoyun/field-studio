@@ -32,8 +32,49 @@ const fileProblem = (kind, file) => {
   return "";
 };
 
-// gl: WebGL2. onChange(): 켜짐 · 꺼짐 · 오류가 바뀔 때마다 부른다(편집기 칩을 다시 칠한다).
+// ---- 고른 파일 보관(IndexedDB) ----
+// 오디오 · 영상 파일은 종류마다 마지막으로 고른 것 하나를 브라우저에 보관한다. 새로 고침 뒤에도 파일을 다시 고르지 않고
+// 채널 고르기의 '▶ 파일 이름'으로 다시 켤 수 있다(소리가 갑자기 나지 않도록 저절로 켜지는 않는다).
+const DB_NAME = "shader-studio-media-v1",
+  DB_STORE = "files";
+const mediaDB = async (mode, action) => {
+  if (!globalThis.indexedDB) throw new Error("IndexedDB 사용 불가");
+  const db = await new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE, { keyPath: "kind" });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, mode),
+        req = action(tx.objectStore(DB_STORE));
+      tx.oncomplete = () => resolve(req.result);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("미디어 파일 저장 취소"));
+    });
+  } finally {
+    db.close();
+  }
+};
+
+// gl: WebGL2. onChange(): 켜짐 · 꺼짐 · 오류 · 보관한 파일이 바뀔 때마다 부른다(편집기 칩을 다시 칠한다).
 const create = (gl, { onChange = () => {} } = {}) => {
+  const saved = new Map(); // 종류 → {kind, name, blob}
+  // 보관한 파일 목록을 읽어 둔다(앱이 뜰 때 한 번, 기다리지 않는다).
+  const loaded = mediaDB("readonly", store => store.getAll())
+    .then(records => {
+      for (const record of records || []) if (FILE_TYPES[record.kind] && record.blob) saved.set(record.kind, record);
+      if (saved.size) onChange();
+    })
+    .catch(() => {});
+  const keep = (kind, file) => {
+    const record = { kind, name: file.name, blob: file };
+    saved.set(kind, record);
+    mediaDB("readwrite", store => store.put(record)).catch(error =>
+      console.warn("미디어 파일을 보관하지 못했습니다(이 탭에서만 씁니다):", error?.message || error)
+    );
+  };
   const sources = new Map(); // 종류 → {state, name, error, element, stream, analyser, url, texture, width, height, …}
   let audioContext = null,
     disposed = false;
@@ -169,6 +210,7 @@ const create = (gl, { onChange = () => {} } = {}) => {
       else await startVideo(entry, kind, file);
       if (entry.stopped) return false;
       entry.state = "on";
+      if (file && saved.get(kind)?.blob !== file) keep(kind, file);
       notify();
       return true;
     } catch (error) {
@@ -255,11 +297,29 @@ const create = (gl, { onChange = () => {} } = {}) => {
     return (performance.now() - entry.started) / 1000;
   };
   // 편집기용 상태: 종류 → {state: "off" | "starting" | "on" | "error", name, error, width, height}
+  // 보관한 파일로 다시 켜기(파일을 고르지 않고). 보관한 파일이 없으면 던진다.
+  const startSaved = async kind => {
+    await loaded;
+    const record = saved.get(kind);
+    if (!record) throw new Error(`보관한 ${LABELS[kind]}이 없습니다. 파일을 고르세요.`);
+    const file =
+      record.blob instanceof File ? record.blob : new File([record.blob], record.name, { type: record.blob.type });
+    saved.set(kind, { ...record, blob: file });
+    return start(kind, file);
+  };
   const state = kind => {
-    const entry = sources.get(kind);
+    const entry = sources.get(kind),
+      savedName = saved.get(kind)?.name || "";
     return entry
-      ? { state: entry.state, name: entry.name, error: entry.error, width: entry.width, height: entry.height }
-      : { state: "off", name: LABELS[kind], error: "", width: 0, height: 0 };
+      ? {
+          state: entry.state,
+          name: entry.name,
+          error: entry.error,
+          width: entry.width,
+          height: entry.height,
+          savedName,
+        }
+      : { state: "off", name: LABELS[kind], error: "", width: 0, height: 0, savedName };
   };
   // 컨텍스트를 잃으면 텍스처는 사라진다. 다음 update에서 새로 만든다.
   const restore = () => {
@@ -272,7 +332,7 @@ const create = (gl, { onChange = () => {} } = {}) => {
     audioContext?.close?.().catch(() => {});
     audioContext = null;
   };
-  return { start, stop, retain, update, binding, state, time, restore, dispose };
+  return { start, startSaved, stop, retain, update, binding, state, time, restore, dispose, loaded: () => loaded };
 };
 
 export { create, audioRows, fileProblem, KINDS, LABELS, AUDIO_WIDTH, AUDIO_HEIGHT };

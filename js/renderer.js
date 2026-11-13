@@ -1743,6 +1743,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     exportScene,
     // 미디어 입력: startMedia(종류, 파일?) → Promise<boolean> · 상태는 mediaState(종류)
     startMedia: (kind, file) => media.start(kind, file),
+    // 보관한 파일(오디오 · 영상 파일 종류마다 마지막 하나)로 다시 켜기
+    startSavedMedia: kind => media.startSaved(kind),
     stopMedia: kind => media.stop(kind),
     mediaState: kind => media.state(kind),
     validatePassConfiguration,

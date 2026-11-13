@@ -89,6 +89,20 @@
     await until(() => pixel()[2] > 0.5, `440Hz 칸(${bin})의 주파수 크기`);
     test(r.mediaState("audio").name === "sine440.wav", "상태에 파일 이름");
 
+    // 5-1) 고른 파일은 브라우저에 보관된다: 끈 뒤 파일을 고르지 않고 '보관한 파일'로 다시 켠다
+    await new Promise(resolve => setTimeout(resolve, 200)); // 보관(IndexedDB 쓰기)은 기다리지 않고 진행된다
+    const stored = await new Promise((resolve, reject) => {
+      const open = indexedDB.open("shader-studio-media-v1");
+      open.onsuccess = () => { const req = open.result.transaction("files").objectStore("files").get("audio"); req.onsuccess = () => { open.result.close(); resolve(req.result); }; req.onerror = () => reject(req.error); };
+      open.onerror = () => reject(open.error);
+    });
+    test(stored?.name === "sine440.wav" && stored.blob.size > 80000, `IndexedDB에 오디오 파일 보관: ${stored?.name} ${stored?.blob?.size}`);
+    r.stopMedia("audio");
+    test(r.mediaState("audio").state === "off" && r.mediaState("audio").savedName === "sine440.wav", "끈 뒤에도 보관한 파일 이름을 안다");
+    test(await r.startSavedMedia("audio"), "보관한 파일로 다시 켜기");
+    await until(() => pixel()[2] > 0.5, "다시 켠 440Hz");
+    test(r.mediaState("audio").name === "sine440.wav", "다시 켠 파일 이름");
+
     // 6) 영상 파일: 빨간 WebM의 크기와 색
     test(studio.setProject(project({ media: "video" })), "영상 파일 채널 연결");
     test(await r.startMedia("video", await redWebm()), "영상 파일 켜기");

@@ -154,7 +154,8 @@ const create = ({
     }
     if (value.startsWith("media:")) {
       close({ refocus: true });
-      onMedia(i, value.slice(6));
+      const [kind, saved] = value.slice(6).split(":");
+      onMedia(i, kind, saved === "saved");
       return;
     }
     onChange(i, refOf(value));
@@ -296,6 +297,14 @@ const create = ({
           className: `channel-media channel-${kind}`,
         })
       );
+      // 보관한 파일(오디오 · 영상 파일)이 있고 꺼져 있으면: 파일을 고르지 않고 다시 켜기
+      if (media.savedName && media.state !== "on")
+        inputs.push(
+          button(`media:${kind}:saved`, `▶ ${media.savedName}`, {
+            reason: `보관한 ${kind === "audio" ? "오디오" : "영상"} 파일로 켜기`,
+            className: `channel-media channel-${kind}-saved`,
+          })
+        );
     }
     const clear = button("", "연결 해제", { disabled: !ref, className: "channel-clear" });
     const sections = [
