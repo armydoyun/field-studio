@@ -13,7 +13,9 @@ const base=s=>{const r=rules.get('base|'+s);assert(r,'Missing '+s);return r;};
 assert.equal(base('button').get('align-items'),'center');assert.equal(base('button').get('justify-content'),'center');assert.equal(base('button').get('margin'),'0');
 assert.equal(base('input[type="checkbox"]').get('margin'),'0');
 assert.equal(base('.fps-control').get('display'),'grid');assert.equal(base('.input-unit').get('place-items'),'center');assert(!base('.input-unit').has('top'),'FPS unit must not have a fixed vertical offset');
-assert(!base('.uniform-search-wrap kbd').has('position'),'Shortcut badge must not overlap native search clear control');
+// 단축키 표시는 검색 칸 안 오른쪽에 있다: 글자가 있어 기본 지우기(×) 버튼이 나타나거나 칸에 초점이 있으면 숨겨 겹치지 않는다.
+assert.equal(base('.uniform-search-wrap input:not(:placeholder-shown)~kbd').get('display'),'none','Shortcut badge must not overlap native search clear control');
+assert.equal(base('.uniform-search-wrap input:focus~kbd').get('display'),'none','Shortcut badge hides while typing');
 assert.equal(base('.studio-dialog-actions').get('grid-template-columns'),'repeat(2,minmax(0,1fr))');
 assert.equal(base('.studio-dialog-head h2').get('min-height'),'36px');assert.equal(base('#studioDialogClose').get('height'),'36px');
 assert.equal(base('.uniform-type').has('margin-left'),false,'Wrapped labels must use their parent gap');

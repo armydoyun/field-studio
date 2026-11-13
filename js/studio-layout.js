@@ -14,6 +14,11 @@ const GROUPS = ["studioCodeTools"];
 const HEIGHT = { min: 25, max: 85 },
   WIDTH = { min: 30, max: 75, initial: 46 };
 const clamp = (value, { min, max }) => Math.max(min, Math.min(max, value));
+// 옆 배치에서 편집기와 미리보기가 각각 쓸 수 있어야 하는 최소 폭(px, style.css의 min-width와 같다).
+// 미리보기 영역(#stage)이 이 둘을 합친 것보다 좁으면(설정 패널을 넓히거나 창을 줄였을 때) 편집기를 잠시 아래로 내린다.
+// 사용자가 고른 배치는 그대로 두므로, 다시 넓어지면 원래 자리로 돌아간다.
+const SPLIT_MIN = { dock: 340, preview: 240, gap: 20 };
+const SPLIT_FITS = SPLIT_MIN.dock + SPLIT_MIN.preview + SPLIT_MIN.gap;
 const SIDES = ["right", "left", "bottom", "top"];
 const HORIZONTAL = new Set(["right", "left"]);
 // 메뉴 버튼·Ctrl+\: 옆 ↔ 위아래를 오간다(오른쪽 ↔ 아래, 왼쪽 ↔ 위).
@@ -53,8 +58,11 @@ const create = ({ $, on, editor, editorOpen, onCollapse = () => {} }) => {
 
   // 좁은 화면(≤820px)에서는 CSS가 아래 배치로 되돌리므로 리사이저도 세로 방향으로 동작한다.
   const narrow = () => window.matchMedia("(max-width:820px)").matches;
-  // 실제로 보이는 자리(좁은 화면이면 아래)
-  const side = () => (narrow() ? "bottom" : layout);
+  // 옆 배치가 들어갈 폭이 없어 잠시 아래로 내렸는지
+  let cramped = false;
+  const shown = () => (cramped && HORIZONTAL.has(layout) ? "bottom" : layout);
+  // 실제로 보이는 자리(좁은 화면이거나 옆 배치할 폭이 없으면 아래)
+  const side = () => (narrow() ? "bottom" : shown());
   // 편집기가 미리보기 옆에 있어 너비로 조절하는지
   const splitRight = () => HORIZONTAL.has(side());
   const saveLayout = () => {
@@ -85,8 +93,9 @@ const create = ({ $, on, editor, editorOpen, onCollapse = () => {} }) => {
   // 리사이저의 ARIA 방향·값은 실제로 움직이는 방향을 따른다: 옆 배치라도 좁은 화면(≤820px)에서는 CSS가 아래 배치로
   // 되돌리므로 위아래(높이)로 움직인다.
   const applyLayout = () => {
-    for (const each of SIDES)
-      $("stage").classList.toggle(`studio-layout-${each}`, layout === each && each !== "bottom");
+    const at = shown();
+    for (const each of SIDES) $("stage").classList.toggle(`studio-layout-${each}`, at === each && each !== "bottom");
+    $("stage").classList.toggle("studio-layout-stacked", at !== layout);
     const right = splitRight();
     const handle = $("studioResize");
     handle.setAttribute("aria-orientation", right ? "vertical" : "horizontal");
@@ -103,7 +112,8 @@ const create = ({ $, on, editor, editorOpen, onCollapse = () => {} }) => {
     $("studioLayout").textContent = `편집기를 ${DockDrag.LABEL[next]}에 배치`;
     const grip = $("studioDockGrip");
     if (grip) {
-      grip.title = `끌어서 편집기를 미리보기의 왼쪽·오른쪽·위·아래로 옮기기 · 방향키로도 옮김 (지금 ${DockDrag.LABEL[layout]})`;
+      const why = at !== layout ? " · 미리보기 영역이 좁아 잠시 아래에 둠" : "";
+      grip.title = `끌어서 편집기를 미리보기의 왼쪽·오른쪽·위·아래로 옮기기 · 방향키로도 옮김 (지금 ${DockDrag.LABEL[layout]}${why})`;
       grip.setAttribute("aria-label", `편집기 위치 옮기기 (지금 ${DockDrag.LABEL[layout]})`);
     }
     editor.update();
@@ -243,6 +253,22 @@ const create = ({ $, on, editor, editorOpen, onCollapse = () => {} }) => {
     } else if (narrow !== wasNarrow) applyLayout(); // 좁은 화면 경계를 넘으면 리사이저 방향을 다시 맞춘다
     wasNarrow = narrow;
   });
+  // 설정 패널 너비·타임라인처럼 창 크기와 상관없이 미리보기 영역의 폭이 바뀌어도 옆 배치가 들어가는지 다시 잰다.
+  const measureSplit = () => {
+    const width = $("stage")?.getBoundingClientRect?.().width;
+    if (!width) return;
+    // 경계에서 몇 px 사이를 오가며 깜빡이지 않게, 내렸다가 되돌릴 때는 조금 더 넓어야 한다.
+    const next = cramped ? width < SPLIT_FITS + 24 : width < SPLIT_FITS;
+    if (next === cramped) return;
+    cramped = next;
+    if (HORIZONTAL.has(layout)) applyLayout();
+  };
+  let splitObserver = null;
+  if (typeof ResizeObserver === "function") {
+    splitObserver = new ResizeObserver(measureSplit);
+    splitObserver.observe($("stage"));
+  }
+  measureSplit();
   const state = Store.readJSON(WORKSPACE_KEY, {});
   for (const id of GROUPS) if (typeof state?.open?.[id] === "boolean") $(id).open = state.open[id];
   for (const id of GROUPS) on($(id), "toggle", saveWorkspace);
@@ -252,7 +278,10 @@ const create = ({ $, on, editor, editorOpen, onCollapse = () => {} }) => {
     side,
     setLayout,
     resetLayout,
-    dispose: () => dockDrag.dispose(),
+    dispose: () => {
+      dockDrag.dispose();
+      splitObserver?.disconnect();
+    },
     saveWorkspace,
     // 지난번에 편집기를 연 채로 떠났는지
     reopenEditor: state?.editor === true,
@@ -263,4 +292,4 @@ const create = ({ $, on, editor, editorOpen, onCollapse = () => {} }) => {
   };
 };
 
-export { create, responsiveHeight, fitLayout, SIDES, HEIGHT_KEY, LAYOUT_KEY, WORKSPACE_KEY };
+export { create, responsiveHeight, fitLayout, SIDES, SPLIT_MIN, HEIGHT_KEY, LAYOUT_KEY, WORKSPACE_KEY };
