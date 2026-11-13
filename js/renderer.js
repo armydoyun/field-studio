@@ -1747,6 +1747,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     startSavedMedia: kind => media.startSaved(kind),
     // 녹화에 넣을 소리(켜진 오디오 파일 · 마이크를 섞은 트랙). 없으면 []
     mediaAudioTracks: () => media.audioTracks(),
+    // 영상 렌더링: 오디오 · 영상 파일을 렌더 시간에 맞춘다(video-render.js가 부른다)
+    prepareOfflineMedia: () => media.prepareOffline(),
+    seekOfflineMedia: time => media.seekOffline(time),
+    endOfflineMedia: () => media.endOffline(),
     stopMedia: kind => media.stop(kind),
     mediaState: kind => media.state(kind),
     validatePassConfiguration,

@@ -157,7 +157,7 @@ const mount = ({ renderer, download, isBusy = () => "", onDone = () => {}, signa
         },
       });
       download(result.blob, result.name);
-      const message = `저장함: ${result.name} · ${formatBytes(result.blob.size)} · ${formatTime((performance.now() - began) / 1000)} 걸림`;
+      const message = `저장함: ${result.name} · ${formatBytes(result.blob.size)}${result.audio ? " · 소리 포함" : ""} · ${formatTime((performance.now() - began) / 1000)} 걸림`;
       showProgress(1, message);
       onDone(message);
     } catch (error) {

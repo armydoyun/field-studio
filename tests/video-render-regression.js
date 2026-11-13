@@ -368,5 +368,34 @@ const bytesOf = async parts => new Uint8Array(await new Blob(parts).arrayBuffer(
   const probe = await V.probeFormats({ Encoder: FakeEncoder });
   check(probe["webm-vp9"] === "vp09.00.41.08" && probe["webm-vp8"] === "vp8" && probe.png === "png", "형식 조사");
   check((await V.probeFormats({ Encoder: undefined }))["webm-vp9"] === null, "WebCodecs가 없으면 PNG만");
+  {
+  // ---- 소리 트랙(Opus) ----
+  const opus = V.opusHead(2, 48000);
+  check(new TextDecoder().decode(opus.subarray(0, 8)) === "OpusHead", "OpusHead 머리");
+  check(opus[9] === 2 && new DataView(opus.buffer).getUint16(10, true) === 312 && new DataView(opus.buffer).getUint32(12, true) === 48000, "OpusHead: 채널 · pre-skip · 샘플레이트(작은 끝)");
+  const withSound = V.createWebmMuxer({ codecId: "V_VP9", width: 16, height: 16, fps: 10 });
+  for (let i = 0; i < 25; i++) withSound.addChunk({ type: i % 10 === 0 ? "key" : "delta", timestamp: i * 100000, data: Uint8Array.of(1, i) });
+  withSound.setAudio({ codecPrivate: opus, sampleRate: 48000, channels: 2 });
+  for (let i = 0; i < 125; i++) withSound.addAudioChunk({ timestamp: i * 20000, data: Uint8Array.of(9, i) });
+  const sound = await bytesOf(withSound.finish()), soundSeg = parse(sound, parse(sound)[1].body, parse(sound)[1].end);
+  const entries = child(sound, soundSeg[1], 0xae);
+  check(entries.length === 2 && text(sound, child(sound, entries[1], 0x86)[0]) === "A_OPUS" && uintOf(sound, child(sound, entries[1], 0x83)[0]) === 2, "WebM: 트랙 2 = A_OPUS 소리");
+  const clusters = soundSeg.filter(e => e.id === 0x1f43b675);
+  const blocks = clusters.flatMap(c => child(sound, c, 0xa3).map(b => ({ cluster: uintOf(sound, child(sound, c, 0xe7)[0]), track: sound[b.body] & 0x7f, rel: (sound[b.body + 1] << 8) | sound[b.body + 2] })));
+  check(blocks.filter(b => b.track === 1).length === 25 && blocks.filter(b => b.track === 2).length === 125, "WebM: 비디오 25 · 소리 125 블록");
+  check(clusters.every(c => { const rels = child(sound, c, 0xa3).map(b => (sound[b.body + 1] << 8) | sound[b.body + 2]); return rels.every((v, i) => !i || v >= rels[i - 1]); }), "WebM: 클러스터 안 블록은 시간 순");
+  check(blocks.filter(b => b.track === 2).map(b => b.cluster + b.rel).sort((a, b) => a - b).every((ms, i) => ms === i * 20), "WebM: 소리 블록 시간(클러스터 + 상대) = 원래 시간");
+  const mp4 = V.createMp4Muxer({ width: 16, height: 16, fps: 10 });
+  mp4.setDescription(Uint8Array.of(1, 2, 3));
+  for (let i = 0; i < 10; i++) mp4.addChunk({ type: i ? "delta" : "key", timestamp: i * 100000, data: Uint8Array.of(7, i) });
+  mp4.setAudio({ codecPrivate: opus, sampleRate: 48000, channels: 2 });
+  for (let i = 0; i < 50; i++) mp4.addAudioChunk({ timestamp: i * 20000, duration: 20000, data: Uint8Array.of(5, i, 5) });
+  const mp4Bytes = await bytesOf(mp4.finish()), mp4Text = String.fromCharCode(...mp4Bytes.subarray(0, 2000));
+  check(["soun", "Opus", "dOps", "smhd"].every(tag => mp4Text.includes(tag)) && (mp4Text.match(/trak/g) || []).length === 2, "MP4: 소리 트랙(soun · Opus · dOps)");
+  const tail = mp4Bytes.subarray(mp4Bytes.length - 150);
+  check(tail[0] === 5 && tail[1] === 0 && tail[147] === 5 && tail[148] === 49, "MP4: 소리 샘플은 mdat의 비디오 뒤");
+  const wav = V.wavBytes({ numberOfChannels: 1, length: 4, sampleRate: 48000, getChannelData: () => Float32Array.of(0, 1, -1, 0.5) });
+  check(String.fromCharCode(...wav.subarray(0, 4)) === "RIFF" && wav.length === 44 + 8 && new DataView(wav.buffer).getInt16(46, true) === 0x7fff, "WAV: 16비트 PCM");
+  }
   console.log(`video-render: ${passed} checks passed`);
 })().catch(error => { console.error(error); process.exit(1); });
