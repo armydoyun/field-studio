@@ -35,6 +35,16 @@ const UNIFORM_TYPES = Object.freeze({
   // 램프 텍스처: @gradient(색 정지점 [t r g b a]…) · @curve(점 [x y]…)를 256×1 텍스처로 구워 넘긴다. n은 가변(0).
   sampler2D: { n: 0, kind: "t" },
 });
+// 배열 Uniform: "float[4]" · "vec3[8]"처럼 기본 타입(램프 제외) 뒤에 [개수 2~64]. 값은 원소를 이어 붙인 평평한 배열이고
+// 한 번의 uniform*v 호출로 모두 올린다(성분 수 합계 최대 1024). 셰이더에서는 uniform float uW[4]; 로 선언한다.
+const ARRAY_FN = { float: "uniform1fv", int: "uniform1iv", uint: "uniform1uiv", bool: "uniform1iv" };
+const arraySpec = type => {
+  const match = /^([a-z]\w*)\[(\d+)\]$/.exec(typeof type === "string" ? type : "");
+  const base = match && Object.hasOwn(UNIFORM_TYPES, match[1]) ? UNIFORM_TYPES[match[1]] : null,
+    count = match ? Number(match[2]) : 0;
+  if (!base || base.kind === "t" || count < 2 || count > 64 || base.n * count > 1024) return null;
+  return { n: base.n * count, kind: base.kind, fn: base.fn || ARRAY_FN[match[1]], base: match[1], count };
+};
 // 램프(@gradient · @curve) 동시에 쓸 수 있는 개수. 텍스처 유닛은 iChannel 0~3 다음인 4번부터 쓴다. 굽기는 ramp.js.
 const RAMP_MAX_COUNT = 8,
   RAMP_FIRST_UNIT = 4,
@@ -207,7 +217,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     }
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   };
-  const uniformSpec = type => (Object.hasOwn(UNIFORM_TYPES, type) ? UNIFORM_TYPES[type] : null);
+  const uniformSpec = type => (Object.hasOwn(UNIFORM_TYPES, type) ? UNIFORM_TYPES[type] : arraySpec(type));
   const normalizeUniform = (type, value) => {
     const spec = uniformSpec(type),
       valid = v =>
@@ -246,6 +256,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!(length > 1e-9)) throw new Error("방향 벡터는 0 벡터일 수 없습니다.");
     return v.map(x => x / length);
   };
+  // 배열(vec2[N] · vec3[N])이면 원소마다 길이 1로
+  const unitDirections = (type, value, mode) => {
+    const spec = uniformSpec(type);
+    if (!spec?.count) return unitDirection(value, mode);
+    const size = UNIFORM_TYPES[spec.base].n,
+      out = [];
+    for (let i = 0; i < value.length; i += size) out.push(...unitDirection(value.slice(i, i + size), mode));
+    return out;
+  };
   // 램프 값 정리: 정지점 단위로 묶어 위치(0~1) 순으로 정렬한다. gradient 색은 0~1, curve y는 그대로(범위는 편집기 표시용).
   const normalizeRamp = (value, options) => {
     const stride = options.gradient ? 5 : 2;
@@ -268,7 +287,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 벡터/행렬은 등록·변경 시점에 Typed Array로 한 번 변환해 두어 매 프레임 할당 없이 업로드한다.
   // 램프는 256×1 텍스처 자료(gradient RGBA8 · curve R16F용 Float32)를 미리 구워 둔다.
   const makeData = (type, options = {}) => {
-    const spec = UNIFORM_TYPES[type];
+    const spec = uniformSpec(type);
     if (spec.kind === "t") return options.gradient ? new Uint8Array(RAMP_SIZE * 4) : new Float32Array(RAMP_SIZE);
     if (spec.n === 1) return null;
     return spec.kind === "u"
@@ -280,12 +299,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   let rampSerial = 0;
   const writeData = item => {
     if (!item.data) return item;
-    if (UNIFORM_TYPES[item.type].kind === "t") {
+    if (uniformSpec(item.type).kind === "t") {
       bakeRamp(item.options, item.value, item.data);
       item.serial = ++rampSerial;
       return item;
     }
-    const bool = UNIFORM_TYPES[item.type].kind === "b";
+    const bool = uniformSpec(item.type).kind === "b";
     for (let i = 0; i < item.data.length; i++) item.data[i] = bool ? (item.value[i] ? 1 : 0) : item.value[i];
     return item;
   };
@@ -319,7 +338,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const pruneRamps = () => {
     for (const [name, entry] of rampTextures)
-      if (UNIFORM_TYPES[userUniforms.get(name)?.type]?.kind !== "t") {
+      if (uniformSpec(userUniforms.get(name)?.type)?.kind !== "t") {
         if (!lost) gl.deleteTexture(entry.texture);
         rampTextures.delete(name);
       }
@@ -330,7 +349,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     for (const [name, item] of userUniforms) {
       if (!target.custom.has(name)) target.custom.set(name, gl.getUniformLocation(target.program, name));
       const location = target.custom.get(name);
-      const spec = UNIFORM_TYPES[item.type],
+      const spec = uniformSpec(item.type),
         v = item.value;
       // 램프는 쓰지 않는 패스에서도 유닛 번호를 차지해 패스마다 같은 유닛을 쓴다.
       if (spec.kind === "t") {
@@ -417,13 +436,19 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
     const declarations = [],
       code = Prepare.blankComments(context.common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
-    const uniforms = [...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+([^;{}]+);/g)];
+    // 배열: uniform float uW[4]; · uniform float[4] uW; 둘 다 타입 "float[4]"
+    const uniforms = [
+      ...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)(\s*\[\s*\d+\s*\])?\s+([^;{}]+);/g),
+    ];
+    const sizeOf = text => (text ? /\d+/.exec(text)[0] : "");
     for (const [name, item] of userUniforms) {
-      const match = uniforms.find(m => m[2].split(",").some(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name));
+      const match = uniforms.find(m => m[3].split(",").some(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name));
       if (match) {
-        const part = match[2].split(",").find(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name);
-        if (match[1] !== item.type || part.includes("["))
-          throw new Error(`${name}: GLSL 선언(${match[1]})과 등록 타입(${item.type})이 다릅니다.`);
+        const part = match[3].split(",").find(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name),
+          size = sizeOf(/\[[^\]]*\]/.exec(part)?.[0]) || sizeOf(match[2]),
+          declared = size ? `${match[1]}[${size}]` : match[1];
+        if (declared !== item.type)
+          throw new Error(`${name}: GLSL 선언(${declared})과 등록 타입(${item.type})이 다릅니다.`);
       } else declarations.push(`uniform ${item.type} ${name};`);
     }
     return Prepare.prepareFragment(source, declarations, {
@@ -1262,7 +1287,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     const normalized = normalizeUniform(type, value),
       { min, max, step, color, dir, angle, pos, log, hdr, seed, anim } = options,
       labels = options.enum,
-      spec = UNIFORM_TYPES[type];
+      spec = uniformSpec(type),
+      // 배열이면 표시 방식 검사는 원소 타입으로 한다(값 · 범위는 원소마다 같다).
+      element = spec?.base || type;
     // sampler2D는 램프 전용: gradient(linear|smooth|step) 또는 curve(smooth|linear, 편집기 y 범위 min·max)만 받는다.
     if (spec.kind === "t") {
       const { gradient, curve } = options,
@@ -1301,25 +1328,25 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         (spec.kind === "u" && min < 0))
     )
       throw new Error("Uniform 슬라이더 범위가 올바르지 않습니다.");
-    if (color !== undefined && (color !== true || !["vec3", "vec4"].includes(type)))
+    if (color !== undefined && (color !== true || !["vec3", "vec4"].includes(element)))
       throw new Error("color 표시는 vec3/vec4에만 사용할 수 있습니다.");
     // dir("full"|"hemi")는 vec2/vec3 단위 방향에만. 값은 늘 길이 1로 저장한다.
     let direction = normalized;
     if (dir !== undefined) {
-      if (!["full", "hemi"].includes(dir) || !["vec2", "vec3"].includes(type))
+      if (!["full", "hemi"].includes(dir) || !["vec2", "vec3"].includes(element))
         throw new Error("방향(dir) 표시는 vec2/vec3에만 사용할 수 있습니다.");
       if (color || min !== undefined) throw new Error("방향(dir) 표시는 색상·슬라이더 범위와 함께 쓸 수 없습니다.");
-      direction = unitDirection(normalized, dir);
+      direction = unitDirections(type, normalized, dir);
     }
     // 표시 방식: angle(float 라디안 다이얼) · pos(vec2 2D 패드) · log(양수 범위 float 로그 슬라이더) · enum(int/uint 선택지 이름).
     // color·dir와 함께 표시 방식은 하나만 고를 수 있다.
     const widgets = [color, dir, angle, pos, log, labels].filter(x => x !== undefined).length;
     if (widgets > 1) throw new Error("표시 방식(color·dir·angle·pos·log·enum)은 하나만 고를 수 있습니다.");
-    if (angle !== undefined && (angle !== true || type !== "float" || min !== undefined))
+    if (angle !== undefined && (angle !== true || element !== "float" || min !== undefined))
       throw new Error("각도(angle) 표시는 범위 없는 float에만 사용할 수 있습니다.");
-    if (pos !== undefined && (pos !== true || type !== "vec2" || min === undefined))
+    if (pos !== undefined && (pos !== true || element !== "vec2" || min === undefined))
       throw new Error("2D 패드(pos) 표시는 범위가 있는 vec2에만 사용할 수 있습니다.");
-    if (log !== undefined && (log !== true || type !== "float" || !(min > 0)))
+    if (log !== undefined && (log !== true || element !== "float" || !(min > 0)))
       throw new Error("로그 슬라이더(log)는 0보다 큰 범위의 float에만 사용할 수 있습니다.");
     if (
       labels !== undefined &&
@@ -1327,7 +1354,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         labels.length < 2 ||
         labels.length > 32 ||
         !labels.every(label => typeof label === "string" && label.length > 0 && label.length <= 40) ||
-        !["int", "uint"].includes(type) ||
+        !["int", "uint"].includes(element) ||
         min !== 0 ||
         max !== labels.length - 1 ||
         step !== 1)
@@ -1348,7 +1375,33 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       throw new Error(
         "재생(anim)은 범위가 있는 float/int/uint(enum 포함)나 angle에만, 주기 0.1~600초로 사용할 수 있습니다."
       );
+    // ranges: 성분별 [min, max, step](일반 범위 벡터만). 전체 min · max · step은 성분 범위를 감싸야 한다.
+    const { ranges } = options;
+    if (
+      ranges !== undefined &&
+      (!Array.isArray(ranges) ||
+        spec.n < 2 ||
+        min === undefined ||
+        color ||
+        dir ||
+        pos ||
+        spec.count ||
+        ranges.length !== spec.n ||
+        !ranges.every(
+          range =>
+            Array.isArray(range) &&
+            range.length === 3 &&
+            range.every(Number.isFinite) &&
+            range[0] < range[1] &&
+            range[2] > 0 &&
+            range[0] >= min &&
+            range[1] <= max &&
+            (!integer || range.every(Number.isInteger))
+        ))
+    )
+      throw new Error("성분별 범위(ranges)는 범위가 있는 일반 벡터에 성분마다 [min, max, step]으로만 쓸 수 있습니다.");
     const nextOptions = min === undefined ? {} : { min, max, step };
+    if (ranges) nextOptions.ranges = ranges.map(range => [...range]);
     if (color) nextOptions.color = true;
     if (hdr) nextOptions.hdr = hdr;
     if (seed) nextOptions.seed = true;
@@ -1381,7 +1434,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!item) throw new Error(`등록되지 않은 Uniform: ${name}`);
     const normalized = normalizeUniform(item.type, value);
     item.value = item.options?.dir
-      ? unitDirection(normalized, item.options.dir)
+      ? unitDirections(item.type, normalized, item.options.dir)
       : item.type === "sampler2D"
         ? normalizeRamp(normalized, item.options)
         : normalized;
@@ -1406,7 +1459,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       name,
       type: item.type,
       value: Array.isArray(item.value) ? [...item.value] : item.value,
-      options: item.options.enum ? { ...item.options, enum: [...item.options.enum] } : { ...item.options },
+      options: {
+        ...item.options,
+        ...(item.options.enum ? { enum: [...item.options.enum] } : {}),
+        ...(item.options.ranges ? { ranges: item.options.ranges.map(range => [...range]) } : {}),
+      },
     }));
   // Pack 복원: 사용자 Uniform을 새 GLSL과 함께 사전 컴파일하고, 통과한 경우에만 교체한다.
   const checkRampCount = items => {
@@ -1546,7 +1603,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     const fragments = passManager.getFragments();
     let rampUnit = RAMP_FIRST_UNIT;
     const uniforms = [...userUniforms].map(([name, item]) => {
-      const spec = UNIFORM_TYPES[item.type];
+      const spec = uniformSpec(item.type);
       if (spec.kind === "t")
         return {
           name,

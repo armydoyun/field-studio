@@ -11,8 +11,23 @@
 // 램프(uniform sampler2D, 셰이더에서 texture(u, vec2(t, 0.5))로 읽는다):
 //  · @gradient [linear|smooth|step] @default 0 #000000 0.5 #ff8000 1 #ffffff(위치 + #RRGGBB[AA], 또는 위치 r g b a 다섯 개씩)
 //  · @curve [smooth|linear] [@range ymin ymax] @default 0 0 0.5 0.8 1 1(x y 쌍) — 값은 .r에 들어간다
-// 같은 줄의 단일 선언만 인식한다. 값 검증(타입·범위)은 Renderer.normalizeEntry가 최종 판단한다.
-const DECLARATION = /^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*;\s*\/\/(.*)$/;
+// 한 줄에 여러 이름을 선언하면(uniform float uA, uB; // @range 0 1) 같은 어노테이션을 이름마다 따로 적용한다.
+// @if 조건: 다른 파라미터 값에 따라 패널에 보이거나 숨긴다(값과 셰이더는 그대로).
+//   @if uOn · @if !uOn · @if uMode == 2 · @if uMode != 0 · @if uLevel > 0.5(== != > < >= <=) · @if uMode == 둘(@enum 이름)
+// 값 검증(타입·범위)은 Renderer.normalizeEntry가 최종 판단한다.
+// 배열: uniform float uW[4]; 또는 uniform float[4] uW; → 타입 "float[4]"(원소 2~64개, 램프 제외). 원소마다 같은 위젯을 하나씩 보여 준다.
+//   @default는 원소 하나 분량(모든 원소에 같은 값)이나 전체 분량(원소를 차례로)으로 쓴다. @seed · @anim · 성분별 @range는 쓸 수 없다.
+const DECLARATION =
+  /^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?([A-Za-z_]\w*)(\s*\[\s*\d+\s*\])?\s+([A-Za-z_]\w*(?:\s*\[\s*\d+\s*\])?(?:\s*,\s*[A-Za-z_]\w*(?:\s*\[\s*\d+\s*\])?)*)\s*;\s*\/\/(.*)$/;
+const sizeOf = text => (text ? Number(/\d+/.exec(text)[0]) : 0);
+const CONDITION = /^(!?)\s*([A-Za-z_]\w*)\s*(?:(==|!=|>=|<=|>|<)\s*(\S+))?$/;
+// @if 글 → { not, name, op, value(글 그대로) } · 형식이 틀리면 null
+const parseCondition = text => {
+  const match = CONDITION.exec(text.trim());
+  if (!match) return null;
+  const [, not, name, op = "", value = ""] = match;
+  return { not: !!not, name, op, value };
+};
 const SIZES = {
   float: 1,
   int: 1,
@@ -121,12 +136,42 @@ const parseRamp = (name, tags, description, group) => {
   }
   return { name, type, value, options, error, description, group };
 };
+// 한 줄 → 이름마다 하나씩(여러 이름 선언이면 같은 설정의 사본)
 const parseLine = line => {
   const match = DECLARATION.exec(line);
-  if (!match || !match[3].includes("@")) return null;
-  const [, type, name, comment] = match;
-  if (!Object.hasOwn(SIZES, type) && type !== "sampler2D") return null;
-  const tags = {};
+  if (!match || !match[4].includes("@")) return [];
+  const [, type, typeSize, names, comment] = match;
+  if (!Object.hasOwn(SIZES, type) && type !== "sampler2D") return [];
+  return names.split(",").map(part => {
+    const [, name, nameSize] = /^\s*([A-Za-z_]\w*)(\s*\[\s*\d+\s*\])?\s*$/.exec(part);
+    return parseOne(type, name, comment, sizeOf(nameSize) || sizeOf(typeSize));
+  });
+};
+// 배열 파라미터: 원소 하나를 기본 타입으로 읽어 count개로 늘린다. @default가 전체 분량이면 원소마다 따로 읽는다.
+const parseArray = (type, name, comment, tags, count) => {
+  const n = SIZES[type],
+    full = tags.default && tags.default.length === n * count ? tags.default : null,
+    item = parseItem(type, name, comment, full ? { ...tags, default: full.slice(0, n) } : tags);
+  if (!item) return item;
+  let error = item.error,
+    value = Array.from({ length: count }, () => item.value).flat();
+  if (full && !error) {
+    const parts = Array.from({ length: count }, (_, i) =>
+      parseItem(type, name, comment, { ...tags, default: full.slice(i * n, i * n + n) })
+    );
+    error = parts.find(part => part.error)?.error || null;
+    value = parts.map(part => part.value).flat();
+  }
+  if (type === "sampler2D") error = "램프(@gradient · @curve)는 배열로 쓸 수 없습니다.";
+  else if (count < 2 || count > 64) error = "배열 파라미터의 원소는 2~64개여야 합니다.";
+  else if (n * count > 1024) error = "배열 파라미터의 성분은 모두 1024개 이하여야 합니다.";
+  else if (item.options.seed || item.options.anim) error = "배열 파라미터에는 @seed · @anim을 쓸 수 없습니다.";
+  else if (item.options.ranges) error = "배열 파라미터에는 성분별 @range를 쓸 수 없습니다.";
+  return { ...item, type: `${type}[${count}]`, value, error };
+};
+const parseOne = (type, name, comment, count = 0) => {
+  const tags = {},
+    raw = {};
   let error = null;
   for (const part of comment.split("@").slice(1)) {
     const [key, ...args] = part
@@ -135,7 +180,19 @@ const parseLine = line => {
       .filter(Boolean);
     if (!key) continue;
     tags[key.toLowerCase()] = args;
+    raw[key.toLowerCase()] = part.trim().slice(key.length).trim();
   }
+  let when = null;
+  if (tags.if !== undefined) {
+    when = parseCondition(raw.if);
+    if (!when) error = "@if는 '이름', '!이름', '이름 == 값'(== != > < >= <=) 형식이어야 합니다. 예: @if uMode == 2";
+    else if (when.name === name) error = "@if는 자기 자신을 조건으로 쓸 수 없습니다.";
+  }
+  const finish = item => (item ? { ...item, when, error: item.error || error } : item);
+  return finish(count ? parseArray(type, name, comment, tags, count) : parseItem(type, name, comment, tags));
+};
+const parseItem = (type, name, comment, tags) => {
+  let error = null;
   // 설명: 첫 태그 앞의 주석 글. 끝의 구분 기호(· : - |)는 뗀다.
   const description = comment
     .split("@")[0]
@@ -148,7 +205,24 @@ const parseLine = line => {
     kind = kindOf(type),
     num = parseNumber,
     options = {};
-  if (tags.range) {
+  // 성분별 범위: vecN · ivecN · uvecN에 @range를 성분마다 min max 쌍으로(숫자 2N개) 쓴다.
+  // 예: uniform vec3 uBox; // @range 0 1 -5 5 0 100 → X 0~1 · Y -5~5 · Z 0~100(min · max · step은 전체를 감싸는 값)
+  if (tags.range && n > 1 && kind !== "m" && kind !== "b" && tags.range.length === n * 2) {
+    const values = tags.range.map(num);
+    options.ranges = Array.from({ length: n }, (_, i) => {
+      const low = values[i * 2],
+        high = values[i * 2 + 1];
+      return [low, high, kind === "f" ? Number(((high - low) / 1000).toPrecision(2)) || 0.001 : 1];
+    });
+    if (!values.every(Number.isFinite) || options.ranges.some(([low, high]) => !(low < high)))
+      error = "성분별 @range는 성분마다 min < max인 숫자 쌍이어야 합니다.";
+    else if (kind !== "f" && !values.every(Number.isInteger)) error = "정수 벡터의 성분별 @range는 정수여야 합니다.";
+    else if (kind === "u" && values.some(v => v < 0)) error = "uvec의 성분별 @range는 0 이상이어야 합니다.";
+    if (tags.min || tags.max || tags.step) error = "성분별 @range에는 @min · @max · @step을 함께 쓰지 않습니다.";
+    options.min = Math.min(...options.ranges.map(r => r[0]));
+    options.max = Math.max(...options.ranges.map(r => r[1]));
+    options.step = Math.min(...options.ranges.map(r => r[2]));
+  } else if (tags.range) {
     [options.min, options.max] = tags.range.map(num);
     if (tags.range[2] !== undefined) options.step = num(tags.range[2]);
   }
@@ -209,6 +283,8 @@ const parseLine = line => {
     else if (!options.angle && (options.min === undefined || options.log))
       error = "@anim에는 @range(로그 눈금 제외)·@enum이나 @angle이 필요합니다.";
   }
+  if (options.ranges && (options.color || options.pos || options.dir))
+    error = "성분별 @range는 @color · @pos · @dir 없이 일반 벡터에만 쓸 수 있습니다.";
   const shown = WIDGETS.filter(key => options[key] !== undefined);
   if (shown.length > 1) error = `표시 방식 태그는 하나만 쓸 수 있습니다: ${shown.map(key => `@${key}`).join(" ")}`;
   let value;
@@ -223,6 +299,7 @@ const parseLine = line => {
   } else if (kind === "b") value = Array(n).fill(false);
   else if (options.color) value = Array(n).fill(1);
   else if (options.dir) value = n === 2 ? [1, 0] : [0, 1, 0];
+  else if (options.ranges) value = options.ranges.map(([low, high]) => Math.min(Math.max(0, low), high));
   else value = Array(n).fill(options.min !== undefined ? Math.min(Math.max(0, options.min), options.max) : 0);
   if (options.dir && !error) {
     value = normalizeDirection(value, options.dir);
@@ -236,18 +313,29 @@ const collect = sources => {
   for (const source of sources)
     if (typeof source === "string")
       for (const line of source.split("\n")) {
-        const item = parseLine(line);
-        if (item && !found.has(item.name)) found.set(item.name, item);
+        for (const item of parseLine(line)) if (item && !found.has(item.name)) found.set(item.name, item);
       }
   return [...found.values()];
 };
 // 범위가 바뀌었을 때 기존 값을 새 범위 안으로 끌어들인다.
-const clampValue = (value, options) => {
+// type이 배열("vec2[3]")이고 @dir이면 원소마다 길이 1로 맞춘다.
+const clampValue = (value, options, type = "") => {
   if (options.gradient || options.curve) return value; // 램프의 범위는 편집기 표시용이다
+  const array = /^(vec[23])\[\d+\]$/.exec(type);
+  if (options.dir && array && Array.isArray(value)) {
+    const size = SIZES[array[1]],
+      out = [];
+    for (let i = 0; i < value.length; i += size) out.push(...clampValue(value.slice(i, i + size), options));
+    return out;
+  }
   if (options.dir)
     return Array.isArray(value)
       ? normalizeDirection(value, options.dir) || (value.length === 2 ? [1, 0] : [0, 1, 0])
       : value;
+  if (Array.isArray(options.ranges) && Array.isArray(value))
+    return value.map((v, i) =>
+      typeof v === "number" && options.ranges[i] ? Math.min(options.ranges[i][1], Math.max(options.ranges[i][0], v)) : v
+    );
   if (!Number.isFinite(options.min) || !Number.isFinite(options.max)) return value;
   const clamp = v => (typeof v === "number" ? Math.min(options.max, Math.max(options.min, v)) : v);
   return Array.isArray(value) ? value.map(clamp) : clamp(value);
@@ -255,5 +343,36 @@ const clampValue = (value, options) => {
 const sameOptions = (a = {}, b = {}) =>
   ["min", "max", "step", "color", "dir", "angle", "pos", "log", "hdr", "seed", "anim", "gradient", "curve"].every(
     key => a[key] === b[key]
-  ) && JSON.stringify(a.enum) === JSON.stringify(b.enum);
-export { collect, clampValue, sameOptions, normalizeDirection };
+  ) &&
+  JSON.stringify(a.enum) === JSON.stringify(b.enum) &&
+  JSON.stringify(a.ranges) === JSON.stringify(b.ranges);
+// @if 조건을 지금 값으로 판단한다. specs = 이름 → 어노테이션(enum 이름 풀이용), value(이름) → 지금 값.
+// 조건이 가리키는 파라미터가 없으면 보인다(true).
+const visible = (when, value, specs = new Map()) => {
+  if (!when) return true;
+  const current = value(when.name);
+  if (current === undefined || Array.isArray(current)) return true;
+  const number = typeof current === "boolean" ? (current ? 1 : 0) : current;
+  let result;
+  if (!when.op) result = number !== 0;
+  else {
+    const labels = specs.get(when.name)?.options?.enum,
+      label = labels ? labels.indexOf(when.value.replace(/_/g, " ")) : -1,
+      target = label >= 0 ? label : when.value === "true" ? 1 : when.value === "false" ? 0 : parseNumber(when.value);
+    if (!Number.isFinite(target)) return true;
+    result =
+      when.op === "=="
+        ? Math.abs(number - target) < 1e-9
+        : when.op === "!="
+          ? Math.abs(number - target) >= 1e-9
+          : when.op === ">"
+            ? number > target
+            : when.op === "<"
+              ? number < target
+              : when.op === ">="
+                ? number >= target
+                : number <= target;
+  }
+  return when.not ? !result : result;
+};
+export { collect, clampValue, sameOptions, normalizeDirection, visible };

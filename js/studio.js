@@ -494,7 +494,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         added.push(spec.name);
       } else if (current.type === spec.type && !Annotations.sameOptions(current.options, spec.options)) {
         current.options = spec.options;
-        current.value = Annotations.clampValue(current.value, spec.options);
+        current.value = Annotations.clampValue(current.value, spec.options, spec.type);
         updated.push(spec.name);
       }
     }

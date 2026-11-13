@@ -36,12 +36,25 @@ const mount = (renderer, input, settings) => {
   const focusSearch = () => (touchOnly ? $("tab-uniforms") : $("uniformSearch")).focus();
   // 타입 정보(성분 수, f/i/u/b/m 종류)는 Renderer의 표를 따른다. 새 타입이 추가돼도 UI 분기는 바뀌지 않는다.
   const typeTable = new Map((renderer.getUniformTypes?.() || []).map(item => [item.type, item]));
-  const typeInfo = type =>
-    typeTable.get(type) || {
-      type,
-      components: Number(/^vec([234])$/.exec(type)?.[1]) || 1,
-      kind: type === "bool" ? "b" : type === "int" ? "i" : "f",
-    };
+  const typeInfo = type => {
+    // 배열("vec3[4]"): 원소 타입의 정보 + base · count, 성분 수는 전체
+    const array = /^(\w+)\[(\d+)\]$/.exec(type);
+    if (array) {
+      const base = typeInfo(array[1]),
+        count = Number(array[2]);
+      return { ...base, type, base: array[1], count, components: base.components * count };
+    }
+    return (
+      typeTable.get(type) || {
+        type,
+        components: Number(/^vec([234])$/.exec(type)?.[1]) || 1,
+        kind: type === "bool" ? "b" : type === "int" ? "i" : "f",
+      }
+    );
+  };
+  // 파라미터의 지금 값. 배열 원소 편집기가 만든 가짜 항목(read가 있는 것)은 전체 배열에서 자기 몫을 읽는다.
+  const liveValue = item =>
+    item.read ? item.read() : renderer.getUserUniforms().find(u => u.name === item.name)?.value;
   const parseBool = (raw, type) => {
     if (!["true", "false", "1", "0"].includes(raw.toLowerCase()))
       throw new Error(`${type}은 true/false 또는 1/0으로 입력하세요.`);
@@ -644,7 +657,7 @@ const mount = (renderer, input, settings) => {
   // @enum: int/uint를 이름 붙은 선택지로. 짧은 목록은 버튼 묶음(세그먼트), 길면 드롭다운. 값은 0부터의 순번.
   const enumControl = (item, commit) => {
     const labels = item.options.enum,
-      current = () => renderer.getUserUniforms().find(u => u.name === item.name)?.value ?? item.value,
+      current = () => liveValue(item) ?? item.value,
       segmented = labels.length <= 6 && labels.join("").length <= 24;
     const wrap = element("div");
     if (segmented) {
@@ -1715,12 +1728,27 @@ const mount = (renderer, input, settings) => {
     const next = [...$("uniformList").querySelectorAll(".link-editor")].find(node => node.dataset.name === name);
     if (next) (controls(next)[index] || controls(next)[0])?.focus();
   });
+  // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
+  let hiddenKey = "";
+  const conditionHidden = (items, defaults) => {
+    const values = new Map(items.map(item => [item.name, item.value]));
+    return items
+      .filter(item => {
+        const spec = defaults.get(item.name);
+        return (
+          spec?.when && spec.type === item.type && !Annotations.visible(spec.when, name => values.get(name), defaults)
+        );
+      })
+      .map(item => item.name);
+  };
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
     const search = $("uniformSearch").value.trim().toLowerCase();
     uniformSnapshot = JSON.stringify(items);
-    const defaults = annotatedDefaults();
+    const defaults = annotatedDefaults(),
+      hidden = new Set(search ? [] : conditionHidden(items, defaults));
+    hiddenKey = [...hidden].join();
     directionRedraws = [];
     curveResizeObserver?.disconnect();
     curveRedraws.clear();
@@ -1742,9 +1770,11 @@ const mount = (renderer, input, settings) => {
     $("uniformCreate").disabled = items.length >= 64;
     for (const item of items) {
       if (search && !`${item.name} ${item.type}`.toLowerCase().includes(search)) continue;
+      if (hidden.has(item.name)) continue;
       const row = element("div");
       row.className = "uniform-row";
       row.dataset.type = item.type;
+      row.dataset.name = item.name;
       const top = element("div");
       top.className = "uniform-top";
       const title = element("div");
@@ -1786,19 +1816,19 @@ const mount = (renderer, input, settings) => {
         syncReset = null;
       if (annotated) {
         // 기본값으로 되돌리기: 버튼 또는 슬라이더 더블클릭. 이미 기본값이면 버튼을 비활성화한다.
-        const fallback = Annotations.clampValue(spec.value, item.options || {});
+        const fallback = Annotations.clampValue(spec.value, item.options || {}, item.type);
         reset = element("button");
         reset.className = "reset-uniform glyph-icon icon-reset";
         reset.type = "button";
         reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
         reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
-        syncReset = (value = renderer.getUserUniforms().find(u => u.name === item.name)?.value) => {
+        syncReset = (value = liveValue(item)) => {
           reset.disabled = sameValue(value, fallback);
         };
         syncReset();
         resetSyncs.set(item.name, syncReset);
         const restore = () => {
-          if (sameValue(renderer.getUserUniforms().find(u => u.name === item.name)?.value, fallback)) return;
+          if (sameValue(liveValue(item), fallback)) return;
           if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
           renderUniforms();
           $("uniformNotice").textContent = `${item.name} 기본값으로 되돌림`;
@@ -1887,6 +1917,18 @@ const mount = (renderer, input, settings) => {
           syncReset?.();
           field.removeAttribute("aria-invalid");
           showError("");
+          // 이 값이 다른 파라미터의 @if를 바꾸면 목록을 다시 그리고 초점은 이 파라미터 줄로 돌려 둔다.
+          if (!$("uniformSearch").value.trim()) {
+            const users = renderer.getUserUniforms();
+            if (conditionHidden(users, annotatedDefaults()).join() !== hiddenKey)
+              queueMicrotask(() => {
+                renderUniforms();
+                [...$("uniformList").querySelectorAll(".uniform-row")]
+                  .find(node => node.dataset.name === item.name)
+                  ?.querySelector("input,button,select")
+                  ?.focus();
+              });
+          }
           return true;
         } catch (error) {
           field.setAttribute("aria-invalid", "true");
@@ -1895,388 +1937,421 @@ const mount = (renderer, input, settings) => {
         }
       };
       row.append(top);
-      if (item.type === "bool") {
-        const label = element("label");
-        label.className = "uniform-switch";
-        const input = element("input");
-        input.type = "checkbox";
-        input.checked = item.value;
-        input.setAttribute("role", "switch");
-        const text = element("span");
-        text.textContent = String(item.value);
-        input.setAttribute("aria-label", item.name);
-        input.addEventListener("change", () => {
-          if (!commit(input, input.checked)) input.checked = item.value;
-          text.textContent = String(input.checked);
-        });
-        label.append(input, text);
-        row.append(label);
-      } else if (item.type === "sampler2D") {
-        const current = () => [...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value)];
-        row.append(
-          item.options?.gradient ? gradientControl(item, commit, current) : curveControl(item, commit, current)
-        );
-      } else if (item.options?.color) {
-        // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
-        const wrap = element("div");
-        wrap.className = "uniform-color";
-        const picker = element("input");
-        picker.type = "color";
-        picker.setAttribute("aria-label", `${item.name} 색상`);
-        const hexField = element("input");
-        hexField.type = "text";
-        hexField.className = "uniform-hex";
-        hexField.spellcheck = false;
-        hexField.maxLength = 7;
-        hexField.setAttribute("aria-label", `${item.name} HEX`);
-        const code = element("code");
-        const hex = values =>
-          "#" +
-          values
-            .slice(0, 3)
-            .map(v =>
-              Math.round(Math.max(0, Math.min(1, v)) * 255)
-                .toString(16)
-                .padStart(2, "0")
-            )
-            .join("");
-        const channels = item.type === "vec4" ? "RGBA" : "RGB";
-        // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
-        const hdr = item.options.hdr;
-        let alpha = null,
-          alphaNumber = null,
-          intensity = null,
-          intensityNumber = null,
-          lastBase = [1, 1, 1];
-        const split = values => {
-          const level = Math.max(0, ...values.slice(0, 3));
-          if (level > 1e-6) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
-          return { level, base: lastBase };
-        };
-        const show = values => {
-          if (hdr) {
-            const { level, base } = split(values);
-            picker.value = hex(base);
-            intensity.value = String(level);
-            showNumber(intensityNumber, Number(level.toFixed(4)));
-          } else picker.value = hex(values);
-          hexField.value = picker.value;
-          hexField.removeAttribute("aria-invalid");
-          code.textContent = values
-            .slice(0, 3)
-            .map(v => Number(v).toFixed(2))
-            .join(" ");
-          code.title = `${channels} ${values.map(v => Number(v).toFixed(4)).join(", ")}`;
-          if (alpha) {
-            alpha.value = String(values[3]);
-            showNumber(alphaNumber, values[3]);
-          }
-        };
-        const current = () => [...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value)];
-        const setRGB = (field, text) => {
-          const match = /^#?([0-9a-f]{6})$/i.exec(text.trim());
-          if (!match) {
-            field.setAttribute("aria-invalid", "true");
-            showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`);
-            return;
-          }
-          const values = current(),
-            picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
-          // HDR: 고른 색에 지금 밝기 배율을 곱한다(배율이 0이면 1로 되살린다).
-          const level = hdr ? split(values).level || 1 : 1;
-          values.splice(0, 3, ...picked.map(v => Number((v * level).toFixed(6))));
-          if (commit(field, values)) show(values);
-        };
-        picker.addEventListener("input", () => setRGB(picker, picker.value));
-        hexField.addEventListener("change", () => setRGB(hexField, hexField.value));
-        hexField.addEventListener("keydown", event => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            setRGB(hexField, hexField.value);
-          } else if (event.key === "Escape") {
-            show(current());
-            showError("");
-          }
-        });
-        wrap.append(picker, hexField, code);
-        row.append(wrap);
-        if (hdr) {
-          const line = element("div");
-          line.className = "uniform-axis is-ranged uniform-alpha uniform-intensity";
+      // 값 편집기(위젯). 배열이면 원소마다 하나씩 그린다: 원소 몫만 읽고(read) 바꾸면 전체 배열을 고쳐 올린다.
+      const widget = (row, item, commit, name) => {
+        if (item.type === "bool") {
           const label = element("label");
-          label.className = "uniform-axis-label";
-          label.textContent = "I";
-          label.title = "밝기 배율";
-          intensity = element("input");
-          intensity.type = "range";
-          intensity.min = "0";
-          intensity.max = String(hdr);
-          intensity.step = String(Number((hdr / 1000).toPrecision(2)));
-          intensity.setAttribute("aria-label", `${item.name} 밝기 배율`);
-          intensityNumber = element("input");
-          intensityNumber.type = "number";
-          intensityNumber.min = "0";
-          intensityNumber.step = "any";
-          intensityNumber.setAttribute("aria-label", `${item.name} 밝기 배율 값`);
-          const setLevel = (field, level) => {
-            if (!Number.isFinite(level)) return show(current());
-            const values = current(),
-              { base } = split(values);
-            values.splice(0, 3, ...base.map(v => Number((v * Math.max(0, level)).toFixed(6))));
-            if (commit(field, values)) show(values);
-            else show(current());
-          };
-          intensity.addEventListener("input", () => setLevel(intensity, Number(intensity.value)));
-          intensityNumber.addEventListener("change", () =>
-            setLevel(intensityNumber, intensityNumber.value.trim() ? Number(intensityNumber.value) : NaN)
-          );
-          scrubbable(label, {
-            kind: "f",
-            read: () => Number(split(current()).level.toFixed(3)),
-            write: value => setLevel(intensity, value),
-            min: 0,
-            step: hdr / 200,
-          });
-          line.append(label, intensity, intensityNumber);
-          row.append(line);
-        }
-        if (item.type === "vec4") {
-          const line = element("div");
-          line.className = "uniform-axis is-ranged uniform-alpha";
-          const label = element("label");
-          label.className = "uniform-axis-label";
-          label.textContent = "A";
-          alpha = element("input");
-          alpha.type = "range";
-          alpha.min = "0";
-          alpha.max = "1";
-          alpha.step = "0.001";
-          alpha.setAttribute("aria-label", `${item.name} 알파`);
-          alphaNumber = element("input");
-          alphaNumber.type = "number";
-          alphaNumber.min = "0";
-          alphaNumber.max = "1";
-          alphaNumber.step = "0.01";
-          alphaNumber.setAttribute("aria-label", `${item.name} 알파 값`);
-          const setAlpha = (field, value) => {
-            const values = current();
-            values[3] = Math.max(0, Math.min(1, value));
-            if (Number.isFinite(value) && commit(field, values)) show(values);
-            else show(current());
-          };
-          alpha.addEventListener("input", () => setAlpha(alpha, Number(alpha.value)));
-          alphaNumber.addEventListener("change", () =>
-            setAlpha(alphaNumber, alphaNumber.value.trim() ? Number(alphaNumber.value) : NaN)
-          );
-          scrubbable(label, {
-            kind: "f",
-            read: () => current()[3],
-            write: value => setAlpha(alpha, value),
-            min: 0,
-            max: 1,
-            step: 0.01,
-          });
-          line.append(label, alpha, alphaNumber);
-          row.append(line);
-        }
-        show(item.value);
-      } else if (item.options?.enum) {
-        const choices = enumControl(item, commit);
-        playViews.set(item.name, choices.refresh);
-        row.append(choices);
-      } else if (item.options?.pos) {
-        row.append(
-          positionControl(item, commit, () => [
-            ...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value),
-          ])
-        );
-      } else if (item.options?.angle) {
-        const dial = directionControl(item, commit, () => {
-          const value = renderer.getUserUniforms().find(u => u.name === item.name)?.value;
-          return typeof value === "number" ? value : item.value;
-        });
-        playViews.set(item.name, dial.refresh);
-        row.append(dial);
-      } else if (item.options?.dir) {
-        row.append(
-          directionControl(item, commit, () => [
-            ...(renderer.getUserUniforms().find(u => u.name === item.name)?.value || item.value),
-          ])
-        );
-      } else if (typeInfo(item.type).components > 1) {
-        // 벡터는 X/Y/Z/W, 행렬은 column-major 순서의 [열,행] 칸으로 편집한다. bvec 성분은 체크박스.
-        // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
-        const { kind } = typeInfo(item.type),
-          dim = kind === "m" ? Math.round(Math.sqrt(item.value.length)) : 0;
-        // 배치: bvec은 X·Y… 토글 칩 한 줄, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
-        // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자], 행렬은 열 단위 격자.
-        const opts = item.options || {},
-          ranged = !dim && kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
-        const layout = dim
-          ? "is-matrix"
-          : kind === "b"
-            ? "is-bool"
-            : ranged
-              ? "is-ranged"
-              : item.value.length <= 2
-                ? "is-inline"
-                : "is-stacked";
-        const grid = element("div");
-        grid.className = `uniform-vector ${layout}`;
-        if (dim) grid.style.setProperty("--uniform-columns", String(dim));
-        item.value.forEach((value, index) => {
-          const field = element(kind === "b" ? "label" : "div");
-          field.className = ranged ? "uniform-axis is-ranged" : "uniform-axis";
-          const label = element(kind === "b" ? "span" : "label");
-          label.className = "uniform-axis-label";
-          label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
+          label.className = "uniform-switch";
           const input = element("input");
-          input.setAttribute(
-            "aria-label",
-            `${item.name} ${dim ? `열 ${Math.floor(index / dim)} 행 ${index % dim}` : label.textContent}`
+          input.type = "checkbox";
+          input.checked = item.value;
+          input.setAttribute("role", "switch");
+          const text = element("span");
+          text.textContent = String(item.value);
+          input.setAttribute("aria-label", item.name);
+          input.addEventListener("change", () => {
+            if (!commit(input, input.checked)) input.checked = item.value;
+            text.textContent = String(input.checked);
+          });
+          label.append(input, text);
+          row.append(label);
+        } else if (item.type === "sampler2D") {
+          const current = () => [...(liveValue(item) || item.value)];
+          row.append(
+            item.options?.gradient ? gradientControl(item, commit, current) : curveControl(item, commit, current)
           );
-          if (kind === "b") {
-            input.type = "checkbox";
-            input.checked = value;
-          } else {
-            input.type = "number";
-            input.step = kind === "f" || kind === "m" ? "any" : "1";
-            if (kind === "u") input.min = "0";
-            showNumber(input, value);
-          }
-          const update = (source, next) => {
-            const values = renderer.getUserUniforms().find(u => u.name === item.name)?.value;
-            if (!values) return renderUniforms();
-            item.value = [...values];
-            values[index] = next;
-            if (!commit(source, values)) {
-              if (kind === "b") input.checked = item.value[index];
-              else showNumber(input, item.value[index]);
-              return false;
+        } else if (item.options?.color) {
+          // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
+          const wrap = element("div");
+          wrap.className = "uniform-color";
+          const picker = element("input");
+          picker.type = "color";
+          picker.setAttribute("aria-label", `${item.name} 색상`);
+          const hexField = element("input");
+          hexField.type = "text";
+          hexField.className = "uniform-hex";
+          hexField.spellcheck = false;
+          hexField.maxLength = 7;
+          hexField.setAttribute("aria-label", `${item.name} HEX`);
+          const code = element("code");
+          const hex = values =>
+            "#" +
+            values
+              .slice(0, 3)
+              .map(v =>
+                Math.round(Math.max(0, Math.min(1, v)) * 255)
+                  .toString(16)
+                  .padStart(2, "0")
+              )
+              .join("");
+          const channels = item.type === "vec4" ? "RGBA" : "RGB";
+          // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
+          const hdr = item.options.hdr;
+          let alpha = null,
+            alphaNumber = null,
+            intensity = null,
+            intensityNumber = null,
+            lastBase = [1, 1, 1];
+          const split = values => {
+            const level = Math.max(0, ...values.slice(0, 3));
+            if (level > 1e-6) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
+            return { level, base: lastBase };
+          };
+          const show = values => {
+            if (hdr) {
+              const { level, base } = split(values);
+              picker.value = hex(base);
+              intensity.value = String(level);
+              showNumber(intensityNumber, Number(level.toFixed(4)));
+            } else picker.value = hex(values);
+            hexField.value = picker.value;
+            hexField.removeAttribute("aria-invalid");
+            code.textContent = values
+              .slice(0, 3)
+              .map(v => Number(v).toFixed(2))
+              .join(" ");
+            code.title = `${channels} ${values.map(v => Number(v).toFixed(4)).join(", ")}`;
+            if (alpha) {
+              alpha.value = String(values[3]);
+              showNumber(alphaNumber, values[3]);
             }
+          };
+          const current = () => [...(liveValue(item) || item.value)];
+          const setRGB = (field, text) => {
+            const match = /^#?([0-9a-f]{6})$/i.exec(text.trim());
+            if (!match) {
+              field.setAttribute("aria-invalid", "true");
+              showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`);
+              return;
+            }
+            const values = current(),
+              picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
+            // HDR: 고른 색에 지금 밝기 배율을 곱한다(배율이 0이면 1로 되살린다).
+            const level = hdr ? split(values).level || 1 : 1;
+            values.splice(0, 3, ...picked.map(v => Number((v * level).toFixed(6))));
+            if (commit(field, values)) show(values);
+          };
+          picker.addEventListener("input", () => setRGB(picker, picker.value));
+          hexField.addEventListener("change", () => setRGB(hexField, hexField.value));
+          hexField.addEventListener("keydown", event => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              setRGB(hexField, hexField.value);
+            } else if (event.key === "Escape") {
+              show(current());
+              showError("");
+            }
+          });
+          wrap.append(picker, hexField, code);
+          row.append(wrap);
+          if (hdr) {
+            const line = element("div");
+            line.className = "uniform-axis is-ranged uniform-alpha uniform-intensity";
+            const label = element("label");
+            label.className = "uniform-axis-label";
+            label.textContent = "I";
+            label.title = "밝기 배율";
+            intensity = element("input");
+            intensity.type = "range";
+            intensity.min = "0";
+            intensity.max = String(hdr);
+            intensity.step = String(Number((hdr / 1000).toPrecision(2)));
+            intensity.setAttribute("aria-label", `${item.name} 밝기 배율`);
+            intensityNumber = element("input");
+            intensityNumber.type = "number";
+            intensityNumber.min = "0";
+            intensityNumber.step = "any";
+            intensityNumber.setAttribute("aria-label", `${item.name} 밝기 배율 값`);
+            const setLevel = (field, level) => {
+              if (!Number.isFinite(level)) return show(current());
+              const values = current(),
+                { base } = split(values);
+              values.splice(0, 3, ...base.map(v => Number((v * Math.max(0, level)).toFixed(6))));
+              if (commit(field, values)) show(values);
+              else show(current());
+            };
+            intensity.addEventListener("input", () => setLevel(intensity, Number(intensity.value)));
+            intensityNumber.addEventListener("change", () =>
+              setLevel(intensityNumber, intensityNumber.value.trim() ? Number(intensityNumber.value) : NaN)
+            );
+            scrubbable(label, {
+              kind: "f",
+              read: () => Number(split(current()).level.toFixed(3)),
+              write: value => setLevel(intensity, value),
+              min: 0,
+              step: hdr / 200,
+            });
+            line.append(label, intensity, intensityNumber);
+            row.append(line);
+          }
+          if (item.type === "vec4") {
+            const line = element("div");
+            line.className = "uniform-axis is-ranged uniform-alpha";
+            const label = element("label");
+            label.className = "uniform-axis-label";
+            label.textContent = "A";
+            alpha = element("input");
+            alpha.type = "range";
+            alpha.min = "0";
+            alpha.max = "1";
+            alpha.step = "0.001";
+            alpha.setAttribute("aria-label", `${item.name} 알파`);
+            alphaNumber = element("input");
+            alphaNumber.type = "number";
+            alphaNumber.min = "0";
+            alphaNumber.max = "1";
+            alphaNumber.step = "0.01";
+            alphaNumber.setAttribute("aria-label", `${item.name} 알파 값`);
+            const setAlpha = (field, value) => {
+              const values = current();
+              values[3] = Math.max(0, Math.min(1, value));
+              if (Number.isFinite(value) && commit(field, values)) show(values);
+              else show(current());
+            };
+            alpha.addEventListener("input", () => setAlpha(alpha, Number(alpha.value)));
+            alphaNumber.addEventListener("change", () =>
+              setAlpha(alphaNumber, alphaNumber.value.trim() ? Number(alphaNumber.value) : NaN)
+            );
+            scrubbable(label, {
+              kind: "f",
+              read: () => current()[3],
+              write: value => setAlpha(alpha, value),
+              min: 0,
+              max: 1,
+              step: 0.01,
+            });
+            line.append(label, alpha, alphaNumber);
+            row.append(line);
+          }
+          show(item.value);
+        } else if (item.options?.enum) {
+          const choices = enumControl(item, commit);
+          playViews.set(item.name, choices.refresh);
+          row.append(choices);
+        } else if (item.options?.pos) {
+          row.append(positionControl(item, commit, () => [...(liveValue(item) || item.value)]));
+        } else if (item.options?.angle) {
+          const dial = directionControl(item, commit, () => {
+            const value = liveValue(item);
+            return typeof value === "number" ? value : item.value;
+          });
+          playViews.set(item.name, dial.refresh);
+          row.append(dial);
+        } else if (item.options?.dir) {
+          row.append(directionControl(item, commit, () => [...(liveValue(item) || item.value)]));
+        } else if (typeInfo(item.type).components > 1) {
+          // 벡터는 X/Y/Z/W, 행렬은 column-major 순서의 [열,행] 칸으로 편집한다. bvec 성분은 체크박스.
+          // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
+          const { kind } = typeInfo(item.type),
+            dim = kind === "m" ? Math.round(Math.sqrt(item.value.length)) : 0;
+          // 배치: bvec은 X·Y… 토글 칩 한 줄, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
+          // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자], 행렬은 열 단위 격자.
+          const opts = item.options || {},
+            ranged = !dim && kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
+          const layout = dim
+            ? "is-matrix"
+            : kind === "b"
+              ? "is-bool"
+              : ranged
+                ? "is-ranged"
+                : item.value.length <= 2
+                  ? "is-inline"
+                  : "is-stacked";
+          const grid = element("div");
+          grid.className = `uniform-vector ${layout}`;
+          if (dim) grid.style.setProperty("--uniform-columns", String(dim));
+          item.value.forEach((value, index) => {
+            const field = element(kind === "b" ? "label" : "div");
+            field.className = ranged ? "uniform-axis is-ranged" : "uniform-axis";
+            const label = element(kind === "b" ? "span" : "label");
+            label.className = "uniform-axis-label";
+            label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
+            const input = element("input");
+            input.setAttribute(
+              "aria-label",
+              `${item.name} ${dim ? `열 ${Math.floor(index / dim)} 행 ${index % dim}` : label.textContent}`
+            );
+            if (kind === "b") {
+              input.type = "checkbox";
+              input.checked = value;
+            } else {
+              input.type = "number";
+              input.step = kind === "f" || kind === "m" ? "any" : "1";
+              if (kind === "u") input.min = "0";
+              showNumber(input, value);
+            }
+            const update = (source, next) => {
+              const values = liveValue(item);
+              if (!values) return renderUniforms();
+              item.value = [...values];
+              values[index] = next;
+              if (!commit(source, values)) {
+                if (kind === "b") input.checked = item.value[index];
+                else showNumber(input, item.value[index]);
+                return false;
+              }
+              return true;
+            };
+            let slider = null;
+            input.addEventListener("change", () => {
+              if (
+                update(input, kind === "b" ? input.checked : input.value.trim() ? Number(input.value) : NaN) &&
+                slider
+              )
+                slider.value = input.value;
+            });
+            // 성분별 범위(@range를 성분마다)면 이 성분의 범위를 쓴다.
+            const axis = opts.ranges?.[index]
+              ? { min: opts.ranges[index][0], max: opts.ranges[index][1], step: opts.ranges[index][2] }
+              : opts;
+            if (kind !== "b" && !dim)
+              scrubbable(label, {
+                kind,
+                min: axis.min,
+                max: axis.max,
+                step: axis.step,
+                read: () => liveValue(item)?.[index],
+                write: next => {
+                  if (update(label, next)) {
+                    showNumber(input, next);
+                    if (slider) slider.value = String(next);
+                  }
+                },
+              });
+            if (ranged) {
+              slider = element("input");
+              slider.type = "range";
+              slider.min = String(axis.min);
+              slider.max = String(axis.max);
+              slider.step = String(axis.step);
+              slider.value = String(value);
+              slider.setAttribute("aria-label", `${item.name} ${label.textContent} 슬라이더`);
+              if (opts.ranges)
+                field.title = `${label.textContent}: ${displayNumber(axis.min)} ~ ${displayNumber(axis.max)}`;
+              slider.addEventListener("input", () => {
+                if (update(slider, Number(slider.value))) showNumber(input, Number(slider.value));
+              });
+              field.append(label, slider, input);
+            } else if (kind === "b") field.append(input, label);
+            else field.append(label, input);
+            grid.append(field);
+          });
+          row.append(grid);
+          if (ranged) {
+            row.style.setProperty("--number-width", rangedWidth(opts));
+            if (!opts.ranges) row.append(rangeEnds(opts, true));
+          }
+        } else {
+          // 숫자 하나: 범위가 있으면 [슬라이더 | 숫자] + 아래에 최소·최대, 없으면 숫자 칸이 줄 전체를 쓴다. 이름을 끌면 값이 바뀐다.
+          const pair = element("div");
+          const { kind } = typeInfo(item.type);
+          const number = element("input");
+          number.type = "number";
+          number.step = kind === "f" ? "any" : "1";
+          if (item.type === "uint") number.min = "0";
+          showNumber(number, item.value);
+          number.setAttribute("aria-label", item.name);
+          const opts = item.options || {},
+            ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
+          // @log: 슬라이더는 0~1 위치를 쓰고 값은 min·(max/min)^t로 바꾼다. 0.001~100처럼 넓은 범위의 아래쪽도 고르게 다룬다.
+          const logScale = ranged && opts.log === true && opts.min > 0,
+            logSpan = logScale ? Math.log(opts.max / opts.min) : 1,
+            toSlider = value =>
+              logScale ? Math.min(1, Math.max(0, Math.log(Math.max(value, opts.min) / opts.min) / logSpan)) : value,
+            fromSlider = t => (logScale ? Number((opts.min * Math.exp(t * logSpan)).toPrecision(4)) : t);
+          let range;
+          pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
+          const changeNumber = () => {
+            let value;
+            try {
+              value = parseValue(item.type, number.value);
+            } catch (error) {
+              showError(`${item.name}: ${error.message}`);
+              number.setAttribute("aria-invalid", "true");
+              showNumber(number, item.value);
+              return;
+            }
+            if (commit(number, value)) {
+              if (range) range.value = String(toSlider(value));
+              showNumber(number, value);
+            } else showNumber(number, item.value);
+          };
+          number.addEventListener("change", changeNumber);
+          if (ranged) {
+            range = element("input");
+            range.type = "range";
+            range.min = String(logScale ? 0 : opts.min);
+            range.max = String(logScale ? 1 : opts.max);
+            range.step = logScale ? "0.001" : String(opts.step);
+            range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
+            if (logScale) {
+              range.classList.add("is-log");
+              range.title = "로그 눈금 · 같은 거리를 움직이면 같은 배율로 바뀐다";
+            }
+            range.value = String(toSlider(item.value));
+            range.addEventListener("input", () => {
+              if (commit(range, fromSlider(Number(range.value)))) showNumber(number, item.value);
+            });
+            pair.append(range);
+          }
+          pair.append(number);
+          row.append(pair);
+          if (ranged) {
+            row.style.setProperty("--number-width", rangedWidth(opts));
+            row.append(rangeEnds(opts, false));
+          }
+          const readValue = () => liveValue(item);
+          scrubbable(name, {
+            kind,
+            // 로그 눈금이면 이름 끌기도 슬라이더 위치(0~1)로 움직여 배율 단위로 바뀌게 한다.
+            min: logScale ? 0 : opts.min,
+            max: logScale ? 1 : opts.max,
+            step: logScale ? 0.005 : opts.step,
+            read: () => (logScale ? Number(toSlider(readValue()).toFixed(3)) : readValue()),
+            write: next => {
+              const value = fromSlider(next);
+              if (commit(number, value)) {
+                showNumber(number, value);
+                if (range) range.value = String(toSlider(value));
+              }
+            },
+          });
+          // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
+          playViews.set(item.name, value => {
+            showNumber(number, value);
+            if (range) range.value = String(toSlider(value));
+          });
+        }
+      };
+      const array = typeInfo(item.type).count;
+      if (array) {
+        const size = typeInfo(typeInfo(item.type).base).components,
+          list = element("div");
+        list.className = "uniform-array";
+        for (let index = 0; index < array; index++) {
+          const cell = element("div"),
+            label = element("span");
+          cell.className = "uniform-array-item";
+          cell.dataset.type = typeInfo(item.type).base;
+          label.className = "uniform-array-index";
+          label.textContent = `[${index}]`;
+          cell.append(label);
+          const whole = () => [...(liveValue(item) || item.value)],
+            read = () => (size === 1 ? whole()[index] : whole().slice(index * size, index * size + size)),
+            part = { name: `${item.name}[${index}]`, type: typeInfo(item.type).base, options: item.options, read };
+          part.value = read();
+          const commitPart = (field, value) => {
+            const next = whole();
+            next.splice(index * size, size, ...(size === 1 ? [value] : value));
+            if (!commit(field, next)) return false;
+            part.value = value;
             return true;
           };
-          let slider = null;
-          input.addEventListener("change", () => {
-            if (update(input, kind === "b" ? input.checked : input.value.trim() ? Number(input.value) : NaN) && slider)
-              slider.value = input.value;
-          });
-          if (kind !== "b" && !dim)
-            scrubbable(label, {
-              kind,
-              min: opts.min,
-              max: opts.max,
-              step: opts.step,
-              read: () => renderer.getUserUniforms().find(u => u.name === item.name)?.value?.[index],
-              write: next => {
-                if (update(label, next)) {
-                  showNumber(input, next);
-                  if (slider) slider.value = String(next);
-                }
-              },
-            });
-          if (ranged) {
-            slider = element("input");
-            slider.type = "range";
-            slider.min = String(opts.min);
-            slider.max = String(opts.max);
-            slider.step = String(opts.step);
-            slider.value = String(value);
-            slider.setAttribute("aria-label", `${item.name} ${label.textContent} 슬라이더`);
-            slider.addEventListener("input", () => {
-              if (update(slider, Number(slider.value))) showNumber(input, Number(slider.value));
-            });
-            field.append(label, slider, input);
-          } else if (kind === "b") field.append(input, label);
-          else field.append(label, input);
-          grid.append(field);
-        });
-        row.append(grid);
-        if (ranged) {
-          row.style.setProperty("--number-width", rangedWidth(opts));
-          row.append(rangeEnds(opts, true));
+          widget(cell, part, commitPart, label);
+          list.append(cell);
         }
-      } else {
-        // 숫자 하나: 범위가 있으면 [슬라이더 | 숫자] + 아래에 최소·최대, 없으면 숫자 칸이 줄 전체를 쓴다. 이름을 끌면 값이 바뀐다.
-        const pair = element("div");
-        const { kind } = typeInfo(item.type);
-        const number = element("input");
-        number.type = "number";
-        number.step = kind === "f" ? "any" : "1";
-        if (item.type === "uint") number.min = "0";
-        showNumber(number, item.value);
-        number.setAttribute("aria-label", item.name);
-        const opts = item.options || {},
-          ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
-        // @log: 슬라이더는 0~1 위치를 쓰고 값은 min·(max/min)^t로 바꾼다. 0.001~100처럼 넓은 범위의 아래쪽도 고르게 다룬다.
-        const logScale = ranged && opts.log === true && opts.min > 0,
-          logSpan = logScale ? Math.log(opts.max / opts.min) : 1,
-          toSlider = value =>
-            logScale ? Math.min(1, Math.max(0, Math.log(Math.max(value, opts.min) / opts.min) / logSpan)) : value,
-          fromSlider = t => (logScale ? Number((opts.min * Math.exp(t * logSpan)).toPrecision(4)) : t);
-        let range;
-        pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
-        const changeNumber = () => {
-          let value;
-          try {
-            value = parseValue(item.type, number.value);
-          } catch (error) {
-            showError(`${item.name}: ${error.message}`);
-            number.setAttribute("aria-invalid", "true");
-            showNumber(number, item.value);
-            return;
-          }
-          if (commit(number, value)) {
-            if (range) range.value = String(toSlider(value));
-            showNumber(number, value);
-          } else showNumber(number, item.value);
-        };
-        number.addEventListener("change", changeNumber);
-        if (ranged) {
-          range = element("input");
-          range.type = "range";
-          range.min = String(logScale ? 0 : opts.min);
-          range.max = String(logScale ? 1 : opts.max);
-          range.step = logScale ? "0.001" : String(opts.step);
-          range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
-          if (logScale) {
-            range.classList.add("is-log");
-            range.title = "로그 눈금 · 같은 거리를 움직이면 같은 배율로 바뀐다";
-          }
-          range.value = String(toSlider(item.value));
-          range.addEventListener("input", () => {
-            if (commit(range, fromSlider(Number(range.value)))) showNumber(number, item.value);
-          });
-          pair.append(range);
-        }
-        pair.append(number);
-        row.append(pair);
-        if (ranged) {
-          row.style.setProperty("--number-width", rangedWidth(opts));
-          row.append(rangeEnds(opts, false));
-        }
-        const readValue = () => renderer.getUserUniforms().find(u => u.name === item.name)?.value;
-        scrubbable(name, {
-          kind,
-          // 로그 눈금이면 이름 끌기도 슬라이더 위치(0~1)로 움직여 배율 단위로 바뀌게 한다.
-          min: logScale ? 0 : opts.min,
-          max: logScale ? 1 : opts.max,
-          step: logScale ? 0.005 : opts.step,
-          read: () => (logScale ? Number(toSlider(readValue()).toFixed(3)) : readValue()),
-          write: next => {
-            const value = fromSlider(next);
-            if (commit(number, value)) {
-              showNumber(number, value);
-              if (range) range.value = String(toSlider(value));
-            }
-          },
-        });
-        // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
-        playViews.set(item.name, value => {
-          showNumber(number, value);
-          if (range) range.value = String(toSlider(value));
-        });
-      }
+        row.append(list);
+      } else widget(row, item, commit, name);
       if (openLink === item.name && Links.LINKABLE.has(item.type)) row.append(linkEditor(item));
       place(row, annotated ? spec.group : "");
     }
@@ -2316,13 +2391,19 @@ const mount = (renderer, input, settings) => {
     // 방향 패드는 문서에 붙은 뒤에야 테마 색을 읽을 수 있으므로 한 번 더 그린다.
     for (const draw of directionRedraws) draw();
     const count = shown;
-    $("uniformResults").textContent = search ? `${items.length}개 중 ${count}개 표시` : "";
+    $("uniformResults").textContent = search
+      ? `${items.length}개 중 ${count}개 표시`
+      : hidden.size
+        ? `조건(@if)으로 숨긴 파라미터 ${hidden.size}개: ${[...hidden].join(", ")}`
+        : "";
     if (!count) {
       const hint = element("div");
       hint.className = "uniform-empty";
       hint.textContent = search
         ? "검색 결과가 없습니다. 이름이나 타입을 확인하세요."
-        : "아직 파라미터가 없습니다. 위에서 추가하거나 갤러리 예제로 시작하세요.";
+        : hidden.size
+          ? "모든 파라미터가 조건(@if)으로 숨겨져 있습니다."
+          : "아직 파라미터가 없습니다. 위에서 추가하거나 갤러리 예제로 시작하세요.";
       userList.append(hint);
     }
   };

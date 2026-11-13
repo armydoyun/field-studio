@@ -64,6 +64,7 @@ const blendValue = (item, from, to, t) => {
   }
   if (!Array.isArray(from) || !Array.isArray(to) || from.length !== to.length) return half;
   const mixed = from.map((a, i) => lerp(a, to[i], t));
+  if (options.dir && item.type.includes("[")) return mixed; // 배열 방향: 렌더러가 원소마다 길이 1로 맞춘다
   if (options.dir) {
     const length = Math.hypot(...mixed);
     return length > 1e-6 ? mixed.map(v => v / length) : half;
