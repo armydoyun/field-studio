@@ -1,3 +1,4 @@
+import * as Presets from "./presets.js";
 // localStorage 저장은 렌더러와 분리한다. WebGL 상태 대신 복원 가능한 설정만 직렬화한다.
 // 브라우저 저장소가 제한될 수 있으므로 실패해도 렌더링을 중단하지 않는다.
 // 저장소 키 이름은 초기 버전에서 정해졌다. 바꾸면 사용자의 저장된 설정이 사라지므로 그대로 둔다.
@@ -13,6 +14,16 @@ const mount = renderer => {
     errorMessage = "",
     savedText = null,
     disposed = false;
+  // 파라미터 프리셋(presets.js): 이 프로젝트의 파라미터 값 묶음. 설정과 함께 저장소 · 보관함 · Pack에 담긴다.
+  let presets = [];
+  const changed = () => document.dispatchEvent(new Event("shader-presets-changed"));
+  const getPresets = () => presets.map(preset => ({ name: preset.name, values: { ...preset.values } }));
+  const setPresets = list => {
+    presets = Presets.validate(list);
+    changed();
+    save();
+    return getPresets();
+  };
   const readState = () => {
     const stats = renderer.getStats();
     return {
@@ -24,6 +35,7 @@ const mount = renderer => {
         timeScale: stats.timeScale,
       },
       user: renderer.getUserUniforms().map(({ name, type, value, options }) => ({ name, type, value, options })),
+      presets: getPresets(),
       panelHidden: document.body.classList.contains("panel-hidden"),
     };
   };
@@ -104,6 +116,14 @@ const mount = renderer => {
         }
       }
     }
+    // 프리셋(예전 저장에는 없다). 잘못된 목록은 버린다.
+    try {
+      presets = Presets.validate(Array.isArray(data.presets) ? data.presets : []);
+    } catch (error) {
+      console.warn("저장된 프리셋 무시:", error.message);
+      presets = [];
+    }
+    changed();
     // 좁은 화면에서 패널은 뷰포트를 덮는 서랍이므로, 저장 상태와 관계없이 닫힌 채로 시작한다.
     const overlayPanel = globalThis.matchMedia?.("(max-width:820px)").matches === true;
     document.body.classList.toggle("panel-hidden", data.panelHidden === true || overlayPanel);
@@ -141,6 +161,8 @@ const mount = renderer => {
     const scale = data.rendering.timeScale;
     if (scale !== undefined && (typeof scale !== "number" || !Number.isFinite(scale) || scale < 0.05 || scale > 8))
       throw new Error("Pack 설정 범위 오류: timeScale");
+    // 프리셋은 나중에 더한 항목이라 예전 Pack에는 없다(없으면 빈 목록).
+    if (data.presets !== undefined) Presets.validate(data.presets);
     return data;
   };
   const applyPack = data => {
@@ -150,6 +172,8 @@ const mount = renderer => {
     renderer.setResolutionScale(s.resolutionScale);
     renderer.setMaxPixels(s.maxPixels);
     renderer.setTimeScale(s.timeScale ?? defaults.timeScale);
+    presets = Presets.validate(data.presets ?? []);
+    changed();
     // panelHidden은 Pack 형식 호환을 위해 검증·저장만 한다. 패널 표시는 이 기기의 화면 배치이므로 프로젝트를 열어도 바꾸지 않는다.
     document.dispatchEvent(new Event("shader-settings-applied"));
     save();
@@ -176,6 +200,17 @@ const mount = renderer => {
     clearInterval(timer);
     window.removeEventListener("pagehide", onPageHide);
   };
-  return { load, save, reset, status, dispose, snapshot: readState, validatePack, applyPack };
+  return {
+    load,
+    save,
+    reset,
+    status,
+    dispose,
+    snapshot: readState,
+    validatePack,
+    applyPack,
+    getPresets,
+    setPresets,
+  };
 };
 export { mount };

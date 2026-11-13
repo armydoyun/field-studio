@@ -94,6 +94,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const historyState = () => ({
     project: copy(project),
     users: renderer.getUserUniforms(),
+    presets: settings?.getPresets?.() ?? [], // 프로젝트를 바꾼 뒤 Undo하면 그 프로젝트의 프리셋도 돌아온다
     selected,
     ...cursorState(),
   });
@@ -103,7 +104,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const recordEdit = (typing = false, usersChanged = false) => {
     if (navigatingHistory) return;
     const current = historyState();
-    if (!usersChanged) checkpoint.users = current.users;
+    if (!usersChanged) {
+      checkpoint.users = current.users;
+      checkpoint.presets = current.presets;
+    }
     if (same(current.project, checkpoint.project) && same(current.users, checkpoint.users)) return;
     const now = Date.now(),
       group = typing && editTab === selected && now - editTime < 700 && undoStack.length;
@@ -1276,6 +1280,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     editor.update();
     const applied = apply(target.users);
     if (applied && !same(current.users, target.users)) document.dispatchEvent(new Event("shader-settings-applied"));
+    if (applied && target.presets && !same(current.presets, target.presets)) settings?.setPresets?.(target.presets);
     navigatingHistory = false;
     checkpoint = historyState();
     editTime = 0;
@@ -1433,6 +1438,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       rememberEditor();
       checkpoint = historyState();
       renderer.applyPortable(next, users);
+      settings?.setPresets?.([]); // 새 프로젝트 · 예제는 프리셋 없이 시작한다(Undo로 이전 작업의 프리셋까지 돌아온다)
       adoptProject(next);
       // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
       syncAnnotations();
@@ -2483,6 +2489,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     getProject: () => copy(project),
     exportPack,
     importPack,
+    // 앱 공용 확인 · 입력 대화상자(studio-dialog.js) — 파라미터 패널(프리셋 이름) 등 다른 화면도 같은 창을 쓴다
+    ask,
     // 재생 전용 HTML: {html, title, data}(내려받지 않는다 — 테스트 · 확장용) · exportHTML()은 내려받는다
     buildPlayerHTML,
     exportHTML,

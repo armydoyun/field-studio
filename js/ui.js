@@ -4,6 +4,7 @@ import * as Recorder from "./recorder.js";
 import * as Annotations from "./annotations.js";
 import * as VideoDialog from "./video-dialog.js";
 import * as PreviewDOM from "./preview-dom.js";
+import * as Presets from "./presets.js";
 const mount = (renderer, input, settings) => {
   const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
@@ -1314,6 +1315,170 @@ const mount = (renderer, input, settings) => {
   };
   // @group 접힘 상태(이 화면에서만 기억).
   const collapsedGroups = new Set();
+  // ---- 파라미터 프리셋(presets.js · settings.getPresets/setPresets) ----
+  // 칩을 누르면 그 값 묶음으로 바꾼다(전환 시간만큼 부드럽게). ↺ = 지금 값으로 덮어쓰기, ✕ = 삭제(되돌리기 가능),
+  // 이름을 두 번 누르면 이름 바꾸기. 지금 값이 프리셋과 같으면 그 칩이 눌린 상태로 보인다.
+  let morph = 0,
+    deletedPreset = null;
+  const presetNotice = (text, undo = false) => {
+    $("presetNoticeText").textContent = text;
+    $("presetUndo").hidden = !undo;
+  };
+  const stopMorph = () => {
+    if (morph) cancelAnimationFrame(morph);
+    morph = 0;
+  };
+  const askName = async (title, value, others) => {
+    const ask = window.shaderStudio?.ask;
+    if (!ask) return value;
+    const name = await ask({
+      title,
+      message: "파라미터 값 전체를 이 이름으로 저장합니다. 같은 프로젝트에 저장되고 프로젝트 파일에도 담깁니다.",
+      value,
+      label: "프리셋 이름",
+      validate: text => {
+        const trimmed = text.trim();
+        if (!trimmed) return "이름을 적으세요.";
+        if (trimmed.length > Presets.MAX_NAME) return `${Presets.MAX_NAME}자 이하로 적으세요.`;
+        return others.includes(trimmed) ? "같은 이름의 프리셋이 있습니다." : "";
+      },
+    });
+    return name === null || name === undefined ? null : name.trim();
+  };
+  const matchesPreset = (preset, users) =>
+    users.some(item => Object.hasOwn(preset.values, item.name)) &&
+    users.every(item => !Object.hasOwn(preset.values, item.name) || sameValue(item.value, preset.values[item.name]));
+  const applyPreset = preset => {
+    stopMorph();
+    const users = renderer.getUserUniforms(),
+      from = Object.fromEntries(users.map(item => [item.name, item.value])),
+      names = Object.keys(preset.values),
+      used = users.filter(item => names.includes(item.name)).length,
+      skipped = names.length - used;
+    // 프리셋이 바꾸는 파라미터의 자동 재생(@anim)은 멈춘다(재생이 값을 덮어쓰지 않게).
+    let stopped = false;
+    for (const item of users) if (names.includes(item.name) && playing.delete(item.name)) stopped = true;
+    if (stopped) syncPlayButtons();
+    const write = t => {
+      for (const [name, value] of Presets.blend(users, from, preset, Presets.ease(t)))
+        try {
+          renderer.setUniform(name, value);
+        } catch (error) {
+          console.warn(`프리셋 값 무시 (${name}):`, error.message);
+        }
+    };
+    const finish = () => {
+      morph = 0;
+      settings.save();
+      renderUniforms();
+    };
+    const seconds = Number($("presetBlend").value) || 0;
+    presetNotice(
+      `'${preset.name}' · 파라미터 ${used}개${skipped ? ` · 이 프로젝트에 없는 ${skipped}개는 건너뜀` : ""}${seconds ? ` · ${seconds}초 동안 전환` : ""}`
+    );
+    if (!seconds) {
+      write(1);
+      return finish();
+    }
+    const start = performance.now();
+    const tick = now => {
+      const t = Math.min(1, (now - start) / (seconds * 1000));
+      write(t);
+      if (t < 1) morph = requestAnimationFrame(tick);
+      else finish();
+    };
+    morph = requestAnimationFrame(tick);
+  };
+  const renderPresets = () => {
+    const list = $("presetList"),
+      presets = settings.getPresets?.() || [],
+      users = renderer.getUserUniforms();
+    list.replaceChildren();
+    $("presetSave").disabled = !users.length || presets.length >= Presets.MAX_PRESETS;
+    $("presetSave").title = !users.length
+      ? "저장할 파라미터가 없습니다"
+      : presets.length >= Presets.MAX_PRESETS
+        ? `프리셋은 최대 ${Presets.MAX_PRESETS}개입니다`
+        : "지금 파라미터 값 전체를 이름 붙여 저장";
+    if (!presets.length) {
+      const empty = element("span");
+      empty.className = "preset-empty";
+      empty.textContent = "저장한 프리셋이 없습니다. 값을 맞춘 뒤 '지금 값 저장'을 누르세요.";
+      list.append(empty);
+      return;
+    }
+    presets.forEach((preset, index) => {
+      const chip = element("div"),
+        apply = element("button"),
+        update = element("button"),
+        remove = element("button");
+      chip.className = "preset-chip";
+      chip.setAttribute("role", "listitem");
+      apply.type = update.type = remove.type = "button";
+      apply.className = "preset-apply";
+      apply.textContent = preset.name;
+      apply.setAttribute("aria-pressed", String(matchesPreset(preset, users)));
+      apply.title = `'${preset.name}' 값으로 바꾸기 · 두 번 누르면 이름 바꾸기`;
+      apply.addEventListener("click", () => applyPreset(preset));
+      apply.addEventListener("dblclick", async () => {
+        stopMorph();
+        const others = presets.filter((_, i) => i !== index).map(item => item.name);
+        const name = await askName("프리셋 이름 바꾸기", preset.name, others);
+        if (!name || name === preset.name) return;
+        attempt(() => {
+          settings.setPresets(presets.map((item, i) => (i === index ? { ...item, name } : item)));
+          presetNotice(`'${preset.name}' → '${name}'`);
+        });
+      });
+      update.className = "preset-update glyph-icon icon-reset";
+      update.title = `'${preset.name}'을 지금 값으로 덮어쓰기`;
+      update.setAttribute("aria-label", update.title);
+      update.addEventListener("click", () =>
+        attempt(() => {
+          settings.setPresets(
+            presets.map((item, i) => (i === index ? Presets.capture(item.name, renderer.getUserUniforms()) : item))
+          );
+          presetNotice(`'${preset.name}'을 지금 값으로 바꿨습니다`);
+        })
+      );
+      remove.className = "preset-remove glyph-icon icon-close";
+      remove.title = `'${preset.name}' 삭제`;
+      remove.setAttribute("aria-label", remove.title);
+      remove.addEventListener("click", () =>
+        attempt(() => {
+          deletedPreset = { preset, index };
+          settings.setPresets(presets.filter((_, i) => i !== index));
+          presetNotice(`'${preset.name}' 삭제됨`, true);
+          $("presetUndo").focus();
+        })
+      );
+      chip.append(apply, update, remove);
+      list.append(chip);
+    });
+  };
+  listen($("presetSave"), "click", async () => {
+    const presets = settings.getPresets(),
+      names = presets.map(item => item.name);
+    let n = presets.length + 1;
+    while (names.includes(`프리셋 ${n}`)) n++;
+    const name = await askName("프리셋 저장", `프리셋 ${n}`, names);
+    if (!name) return;
+    attempt(() => {
+      settings.setPresets([...settings.getPresets(), Presets.capture(name, renderer.getUserUniforms())]);
+      presetNotice(`'${name}' 저장 · 파라미터 ${renderer.getUserUniforms().length}개`);
+    });
+  });
+  listen($("presetUndo"), "click", () => {
+    if (!deletedPreset) return;
+    const list = settings.getPresets(),
+      { preset, index } = deletedPreset;
+    deletedPreset = null;
+    attempt(() => {
+      settings.setPresets([...list.slice(0, index), preset, ...list.slice(index)]);
+      presetNotice(`'${preset.name}' 되돌림`);
+    });
+  });
+  listen(document, "shader-presets-changed", () => renderPresets());
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
@@ -1337,6 +1502,7 @@ const mount = (renderer, input, settings) => {
       groups.get(group).push(row);
     };
     $("uniformCount").textContent = `${items.length} / 64`;
+    renderPresets();
     $("uniformCreate").disabled = items.length >= 64;
     for (const item of items) {
       if (search && !`${item.name} ${item.type}`.toLowerCase().includes(search)) continue;
@@ -1450,8 +1616,9 @@ const mount = (renderer, input, settings) => {
       top.append(title, ...extras, ...(reset ? [reset] : []), remove);
       if (description) top.append(description);
       const commit = (field, value) => {
-        // 사용자가 직접 바꾸면 그 파라미터의 재생을 멈춘다.
+        // 사용자가 직접 바꾸면 그 파라미터의 재생과 프리셋 전환을 멈춘다.
         if (playing.delete(item.name)) syncPlayButtons();
+        stopMorph();
         try {
           renderer.setUniform(item.name, value);
           item.value = value;

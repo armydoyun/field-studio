@@ -401,6 +401,23 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-channel-chip .chip-badge.glyph-icon { padding:0;background:transparent;color:var(--text-soft); }
 .studio-channel-chip .chip-tag { min-width:0;overflow:hidden;color:var(--text-soft);font-weight:400;text-overflow:ellipsis;white-space:nowrap; }
 .studio-channel-chip[data-kind="missing"] .chip-tag { color:var(--danger); }
+/* 파라미터 프리셋: 칩 = 이름(누르면 전환) · ↺ 덮어쓰기 · ✕ 삭제. 지금 값과 같은 프리셋은 강조 */
+.preset-bar { display:grid;gap:6px;margin:4px 0 10px;padding:8px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel); }
+.preset-head { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.preset-title { font-weight:600;font-size:12px; }
+.preset-blend { display:inline-flex;align-items:center;gap:4px;margin-left:auto;color:var(--muted);font-size:11px;white-space:nowrap; }
+.preset-blend select { min-height:26px;padding:0 4px;font-size:11px; }
+#presetSave { min-height:26px;padding:0 8px;gap:4px;font-size:11px; }
+.preset-list { display:flex;flex-wrap:wrap;gap:6px; }
+.preset-empty { color:var(--muted);font-size:11px; }
+.preset-chip { display:inline-flex;align-items:stretch;border:1px solid var(--line-strong);border-radius:999px;overflow:hidden; }
+.preset-chip button { min-height:26px;border:0;border-radius:0;background:transparent;font-size:11px; }
+.preset-apply { max-width:160px;padding:0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600; }
+.preset-apply[aria-pressed="true"] { background:var(--accent-soft);color:var(--accent-strong); }
+.preset-update,.preset-remove { width:24px;padding:0;color:var(--muted); }
+.preset-update.glyph-icon::before,.preset-remove.glyph-icon::before { flex-basis:12px;width:12px;height:12px; }
+.preset-notice { display:flex;align-items:center;gap:8px;margin:0;min-height:0; }
+.preset-notice:empty,.preset-notice:has(#presetNoticeText:empty) { display:none; }
 /* 미디어 입력: 꺼져 있으면 흐리게, 오류면 빨갛게(칩을 눌러 다시 켠다) */
 .studio-channel-chip[data-kind="media"]:is([data-state="off"],[data-state="starting"]) .chip-tag { color:var(--muted);font-style:italic; }
 .studio-channel-chip[data-kind="media"][data-state="error"] .chip-tag { color:var(--danger); }
