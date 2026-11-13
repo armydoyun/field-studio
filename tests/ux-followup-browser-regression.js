@@ -90,6 +90,26 @@
       const room = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       test(canvas.measureText(input.value || "-123.4567").width <= room, `타임라인 ${input.className}: '${input.value}'가 칸에 다 보임`);
     }
+    // 선택 칸(배속 · 스냅 · 잇기): 어떤 항목을 골라도 글자가 잘리지 않는다. 고른 항목 하나만 넣은 같은 모양의 칸을
+    // 브라우저가 width:auto로 잰 폭(글꼴 · 화살표 포함)보다 지금 칸이 좁으면 잘린 것이다.
+    const naturalWidth = (select, text) => {
+      const probe = select.cloneNode(false);
+      probe.removeAttribute("id");
+      probe.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;width:auto;min-width:0;max-width:none";
+      probe.append(new Option(text));
+      select.parentNode.append(probe);
+      const width = probe.getBoundingClientRect().width;
+      probe.remove();
+      return width;
+    };
+    for (const select of document.querySelectorAll(".timeline-bar select")) {
+      const have = select.getBoundingClientRect().width;
+      for (const option of select.options)
+        if (!option.hidden || option.value === "*")
+          test(have >= naturalWidth(select, option.textContent) - 0.5, `타임라인 ${select.className}: '${option.textContent}'가 잘리지 않음 (${Math.round(have)}px)`);
+    }
+    for (const label of ["기본 (천천히 시작)", "기본 (레인 설정)", "서로 다름"])
+      test(ease.getBoundingClientRect().width >= naturalWidth(ease, label) - 0.5, `잇기 칸: 바뀔 수 있는 이름 '${label}'도 들어간다`);
     $("timelineToggle").click();
 
     // ---- 5) 프리셋 전환 ----
