@@ -394,26 +394,28 @@ fragColor = max(newColor, history * 0.97);   // 잔상 누적`,
         insert: "cursor",
       },
       {
-        p: "**Common** — 패스 탭 옆의 **+ Common**을 누르면 모든 패스(Image · Buffer)가 같이 쓰는 공용 코드 탭이 생깁니다. 여기에 쓴 함수 · 상수 · `#define` · 구조체는 실행할 때 각 패스의 머리말(`#version` · precision) 바로 뒤, **패스 코드보다 앞**에 붙으므로, 해시 · 노이즈 같은 함수를 패스마다 복사하지 않아도 됩니다. `mainImage`는 각 패스에 둡니다.",
+        p: "**Common** — 패스 탭 옆의 **+ Common**을 누르면 모든 패스(Image · Buffer)가 같이 쓰는 공용 코드 탭이 생깁니다. 여기에 쓴 함수 · 상수 · `#define` · 구조체는 실행할 때 각 패스의 머리말 바로 뒤, 패스 코드보다 앞에 붙으므로, 해시 · 노이즈 같은 함수를 패스마다 복사하지 않아도 됩니다. `mainImage`는 각 패스에 둡니다.",
       },
       {
-        code: `// Common — 패스가 선언한 Uniform(uTime · uResolution …)은 Common보다 뒤에 있으므로 값을 매개변수로 받는다
-float wave(vec2 p, float time) { return sin(p.x * 10.0 + time); }
+        code: `// Common — uTime · uResolution · iChannel0 · iTime 같은 이름을 그대로 쓴다
+uniform float uSpeed;   // Common이 쓰는 파라미터는 Common에 선언 · @range 0 4 @default 1
+float wave(vec2 p) { return sin(p.x * 10.0 + uTime * uSpeed); }
+vec4 history(vec2 fragCoord) { return texture(iChannel0, fragCoord / uResolution); }
 
 // Buffer A · Image — 여느 함수처럼 부른다
-uniform float uTime;
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    fragColor = vec4(vec3(0.5 + 0.5 * wave(fragCoord / 100.0, uTime)), 1.0);
+    fragColor = vec4(vec3(0.5 + 0.5 * wave(fragCoord / uResolution.y)), 1.0);
 }`,
         title: "Common의 함수를 패스에서 쓰기",
       },
       {
         list: [
-          "Common은 각 패스가 선언한 Uniform보다 **앞**에 붙습니다. 그래서 Common의 함수는 `uTime` · `uResolution` · 파라미터 같은 패스 Uniform을 직접 쓰지 못합니다 — 필요한 값은 매개변수로 넘기세요(채널 크기는 `textureSize(채널, 0)`으로도 읽을 수 있습니다). 예제 갤러리의 **2D Fluid** · **키보드 탐험**이 이렇게 씁니다.",
+          "Common에서 앱 Uniform(`uTime` · `uResolution` · `uMouse` · `uFrame` · `uDeltaTime` · `uWheel` · `iChannel0~3` · `iChannelResolution`)과 Shadertoy 이름(`iTime` …)을 선언 없이 그대로 씁니다. 패스가 선언하지 않았으면 실행할 때 그 패스에 선언을 넣고, 패스가 선언했으면 그 선언(타입)을 씁니다.",
+          "패스가 선언한 Uniform도 Common에서 쓸 수 있습니다: 실행할 때 패스의 `uniform` 선언을 Common 앞으로 옮깁니다(편집기 코드는 그대로이고, 오류 줄 번호도 원래 줄입니다). 다만 Common은 **모든** 패스에 붙으므로, 한 패스에만 선언한 Uniform을 쓰면 다른 패스에서 오류가 납니다 — 여러 패스가 쓰는 **파라미터는 Common에 선언**하세요(어노테이션도 Common에서 읽습니다).",
+          "`iChannelN`은 패스마다 그 패스에 연결된 입력을 읽습니다. Common의 함수가 `iChannel1`을 읽으면, 그 함수를 부르는 패스마다 iChannel1에 같은 종류(예: 키보드)를 연결하세요. 예제 갤러리의 **Keyboard Control**이 이렇게 씁니다.",
+          "Image · Buffer 탭의 자동 완성 · 마우스 설명 · 시그니처 도움말이 Common의 함수 · 상수 · 구조체 · `#define`도 압니다. `F12`(또는 `Ctrl+클릭`)로 Common에 있는 정의로 바로 갑니다.",
           "Common만 고쳐도 모든 패스가 다시 컴파일됩니다. Common에서 난 오류는 **Common** 탭의 그 줄로 표시됩니다(어느 패스를 컴파일하다 났는지도 함께 적습니다).",
-          "Common에는 입력 채널이 없습니다. 채널 연결 · `iChannel` 선언은 그것을 읽는 각 패스에 둡니다.",
           "Common 탭을 고른 뒤 설정 줄의 **삭제**로 지울 수 있습니다(Undo로 복원). `Common`은 Buffer 이름으로 쓸 수 없습니다.",
-          "Buffer · Image 탭의 자동 완성 · 정의로 이동(`F12`)은 아직 Common의 함수를 모릅니다. 이름은 Common 탭에서 확인하세요.",
         ],
       },
       {
