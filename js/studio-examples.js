@@ -8,9 +8,8 @@ precision highp float;
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     bool original = uv.x < 0.5;
     uv.x = fract(uv.x * 2.0);
     vec3 color = original ? texture(iChannel1, uv).rgb : texture(iChannel0, uv).rgb;
@@ -31,9 +30,8 @@ precision highp float;
 // Buffer A: 외부 입력 없이 움직이는 원을 만든다. B가 A의 current를 읽는다.
 uniform vec2 uResolution;
 uniform float uTime;
-out vec4 fragColor;
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     vec2 center = 0.5 * vec2(cos(uTime), sin(uTime * 1.4));
     float dotMask = 1.0 - smoothstep(0.09, 0.11, length(p - center));
     fragColor = vec4(vec3(0.1, 0.65, 1.0) * dotMask, 1.0);
@@ -44,9 +42,8 @@ precision highp float;
 // A의 이번 프레임 결과를 읽어 RGB 순서를 바꾼다. 자기 자신은 읽지 않는다.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     vec3 source = texture(iChannel0, uv).rgb;
     fragColor = vec4(source.brg, 1.0);
 }`;
@@ -60,9 +57,8 @@ uniform float uDeltaTime;
 uniform int uFrame;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     vec3 source = texture(iChannel0, uv).rgb;
     // 첫 프레임에는 이전 누적 결과를 사용하지 않는다. Reset으로 다시 시작한다.
     vec3 history = uFrame == 0 ? vec3(0.0) : texture(iChannel1, uv).rgb;

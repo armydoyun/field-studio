@@ -19,7 +19,7 @@ precision highp float;
 // PBR 재질 구 — 물리 기반 셰이딩(Cook-Torrance)을 한 단계씩 나눠 본다.
 //
 // 읽는 순서:
-//  1. main            → 화면을 칸으로 나눠 칸마다 구 하나. 구는 레이마칭 없이 식으로 바로 그린다(정사영).
+//  1. mainImage       → 화면을 칸으로 나눠 칸마다 구 하나. 구는 레이마칭 없이 식으로 바로 그린다(정사영).
 //  2. shade           → 빛 하나의 반사 = 난반사(Lambert) + 정반사(D·G·F / 4(n·l)(n·v)). 에너지 보존: 반사된 만큼 난반사를 줄인다.
 //  3. distributionGGX → D: 미세면 중 빛을 눈으로 튕길 방향의 비율. 거칠수록 하이라이트가 넓고 흐려진다.
 //  4. geometrySmith   → G: 미세면끼리 가려 빛이 막히는 정도. 거칠고 비스듬할수록 어두워진다.
@@ -39,7 +39,6 @@ uniform vec3 uLightColor; // 빛 색 · @color @default 1 1 1 @group 빛
 uniform float uSwing;     // 빛이 좌우로 흔들리는 폭(마우스를 쓰지 않을 때) · @range 0 1.5 @step 0.01 @default 0.6 @group 빛
 uniform bool uGrid;       // 거칠기 × 금속성 격자로 보기 · @default true
 uniform int uView;        // 보기(▶: 항 하나씩 차례로) · @enum 결과 D G F 난반사만 정반사만 @default 0 @anim 2
-out vec4 fragColor;
 
 const float PI = 3.14159265;
 
@@ -95,9 +94,9 @@ vec3 shade(vec3 n, vec3 v, vec3 l, vec3 albedo, float roughness, float metallic,
     diffuse = kd * albedo / PI * NdotL;
     return diffuse + specular;
 }
-void main() {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float side = min(uResolution.x, uResolution.y);
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / side;
+    vec2 p = (2.0 * fragCoord - uResolution) / side;
     // 칸 나누기: 격자 보기면 5 × 3칸, 아니면 가운데 구 하나
     vec2 grid = uGrid ? vec2(5.0, 3.0) : vec2(1.0);
     vec2 area = uResolution / side * 2.0;                        // 화면 전체 크기(p 단위)
@@ -134,7 +133,7 @@ precision highp float;
 // 볼류메트릭 구름 — 표면이 없는 것(구름·안개·연기)을 그리는 법: 광선을 따라 밀도를 모은다.
 //
 // 읽는 순서:
-//  1. main       → 카메라 광선이 구름층(높이 uBottom~uTop)을 지나는 구간을 구하고 그 사이만 행진한다.
+//  1. mainImage  → 카메라 광선이 구름층(높이 uBottom~uTop)을 지나는 구간을 구하고 그 사이만 행진한다.
 //  2. density    → 그 자리의 구름 밀도 = fbm 노이즈 - (1 - 덮인 정도), 아래·위 끝은 부드럽게 줄인다.
 //  3. 행진 루프   → 한 걸음마다 투과율 T(뒤가 비쳐 보이는 정도)를 Beer 법칙 exp(-밀도·흡수·걸음)으로 줄이고,
 //                  그 걸음이 받은 빛 × (이번에 막힌 양)을 색에 더한다. T가 거의 0이면 뒤는 안 보이니 멈춘다.
@@ -155,7 +154,6 @@ uniform vec3 uSunCol;      // 햇빛 · @color @default 1 0.92 0.8 @group 빛
 uniform vec3 uSkyCol;      // 하늘빛(그늘을 채움) · @color @default 0.45 0.6 0.85 @group 빛
 uniform vec3 uSunDir;      // 해 방향 · @dir hemi @default 0.6 0.35 0.7 @group 빛
 uniform int uView;         // 보기(▶: 차례로) · @enum 결과 밀도 투과율 받은_해빛 @default 0 @anim 3
-out vec4 fragColor;
 
 const float BOTTOM = 1.5, TOP = 4.0;                           // 구름층 높이
 #define SUN uSunDir                                             // 해 방향(@dir라 늘 길이 1)
@@ -201,8 +199,8 @@ vec3 skyColor(vec3 rd) {
     vec3 col = mix(vec3(0.62, 0.7, 0.8), vec3(0.18, 0.36, 0.7), smoothstep(0.0, 0.6, rd.y));
     return col + uSunCol * (pow(max(dot(rd, SUN), 0.0), 400.0) * 3.0 + pow(max(dot(rd, SUN), 0.0), 8.0) * 0.2);
 }
-void main() {
-    vec2 p = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 p = (2.0 * fragCoord - uResolution) / uResolution.y;
     // 카메라: 땅 위에서 하늘을 올려다본다. 커서로 둘러본다.
     float yaw = uMouse.x >= 0.0 ? (uMouse.x / uResolution.x - 0.5) * 6.0 : -1.6;   // 기본 시점은 해를 옆으로 둔다(그늘이 보이게)
     float pitch = uMouse.x >= 0.0 ? uMouse.y / uResolution.y * 0.8 : 0.35;
@@ -216,7 +214,7 @@ void main() {
         float t0 = (BOTTOM - ro.y) / rd.y, t1 = min((TOP - ro.y) / rd.y, 40.0);
         float dt = (t1 - t0) / float(uSteps);
         // 시작 위치를 픽셀마다 걸음의 0~1배만큼 흔든다(dither) → 띠 무늬 대신 고운 노이즈
-        float t = t0 + dt * (float(pcg3d(uvec3(gl_FragCoord.xy, 7u)).x >> 8u) * (1.0 / 16777216.0));
+        float t = t0 + dt * (float(pcg3d(uvec3(fragCoord, 7u)).x >> 8u) * (1.0 / 16777216.0));
         // 위상: 앞쪽 산란(g)과 약한 뒤쪽 산란을 섞는다(한쪽만 쓰면 해를 등질 때 구름이 너무 어둡다). 4π를 곱해 등방이면 1.
         float cosTheta = dot(rd, SUN);
         float phase = mix(phaseHG(cosTheta, uAnisotropy), phaseHG(cosTheta, -0.25), 0.4) * 4.0 * 3.14159265;
@@ -273,7 +271,6 @@ uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform float uForce;         // 분사구 힘 · @range 0 2 @step 0.01 @default 0.6 @group 속도
 uniform float uDissipation;   // 속도 유지율(1 = 줄지 않음) · @range 0.95 1 @step 0.001 @default 0.995 @group 속도
-out vec4 fragColor;
 ${FLUID_COMMON}
 // 분사구 i의 위치와 방향: 화면을 천천히 돌며 안쪽을 향해 뿜는다.
 void jet(int i, out vec2 pos, out vec2 dir) {
@@ -281,21 +278,21 @@ void jet(int i, out vec2 pos, out vec2 dir) {
     pos = uResolution * (0.5 + 0.32 * vec2(cos(a), sin(a * 1.3)));
     dir = normalize(uResolution * 0.5 - pos + 60.0 * vec2(-sin(a * 2.0), cos(a * 2.0)));
 }
-void main() {
-    ivec2 c = ivec2(gl_FragCoord.xy);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    ivec2 c = ivec2(fragCoord);
     if (uFrame == 0) { fragColor = vec4(0.0); return; }
     // 1) 이류: 한 프레임 전 (위치 - 속도)에서 읽는다(이중선형 보간)
     vec2 vel = at(iChannel0, c).xy;
-    vel = texture(iChannel0, (gl_FragCoord.xy - vel) / uResolution).xy * uDissipation;
+    vel = texture(iChannel0, (fragCoord - vel) / uResolution).xy * uDissipation;
     // 2) 힘
     for (int i = 0; i < 2; i++) {
         vec2 pos, dir;
         jet(i, pos, dir);
         float r = 0.025 * uResolution.y;
-        vel += dir * uForce * exp(-dot(gl_FragCoord.xy - pos, gl_FragCoord.xy - pos) / (r * r));
+        vel += dir * uForce * exp(-dot(fragCoord - pos, fragCoord - pos) / (r * r));
     }
     if (uMouse.z > 0.0) {
-        vec2 d = gl_FragCoord.xy - uMouse.xy;
+        vec2 d = fragCoord - uMouse.xy;
         float r = 0.04 * uResolution.y;
         vel += normalize(d + 1e-4) * 1.5 * exp(-dot(d, d) / (r * r));
     }
@@ -314,10 +311,9 @@ precision highp float;
 // 발산 = 이 칸에서 나가는 양 - 들어오는 양. 양수면 퍼져 나가고, 음수면 모여든다. 물은 압축되지 않으니 0이어야 한다.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
-out vec4 fragColor;
 ${FLUID_COMMON}
-void main() {
-    ivec2 c = ivec2(gl_FragCoord.xy);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    ivec2 c = ivec2(fragCoord);
     float div = 0.5 * (at(iChannel0, c + ivec2(1, 0)).x - at(iChannel0, c - ivec2(1, 0)).x +
                        at(iChannel0, c + ivec2(0, 1)).y - at(iChannel0, c - ivec2(0, 1)).y);
     fragColor = vec4(div, 0.0, 0.0, 1.0);
@@ -333,10 +329,9 @@ uniform vec2 uResolution;
 uniform int uFrame;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-out vec4 fragColor;
 ${FLUID_COMMON}
-void main() {
-    ivec2 c = ivec2(gl_FragCoord.xy);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    ivec2 c = ivec2(fragCoord);
     if (uFrame == 0) { fragColor = vec4(0.0); return; }
     float p = (at(iChannel0, c + ivec2(1, 0)).x + at(iChannel0, c - ivec2(1, 0)).x +
                at(iChannel0, c + ivec2(0, 1)).x + at(iChannel0, c - ivec2(0, 1)).x - at(iChannel1, c).x) * 0.25;
@@ -353,26 +348,25 @@ uniform vec4 uMouse;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform float uDyeFade;       // 물감 유지율 · @range 0.95 1 @step 0.001 @default 0.992 @group 물감
-out vec4 fragColor;
 ${FLUID_COMMON}
 void jet(int i, out vec2 pos, out vec2 dir) {   // Buffer A와 같은 분사구
     float a = uTime * 0.35 + float(i) * 3.14159265;
     pos = uResolution * (0.5 + 0.32 * vec2(cos(a), sin(a * 1.3)));
     dir = normalize(uResolution * 0.5 - pos + 60.0 * vec2(-sin(a * 2.0), cos(a * 2.0)));
 }
-void main() {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     if (uFrame == 0) { fragColor = vec4(0.0); return; }
-    vec2 vel = at(iChannel1, ivec2(gl_FragCoord.xy)).xy;
-    vec3 dye = texture(iChannel0, (gl_FragCoord.xy - vel) / uResolution).rgb * uDyeFade;
+    vec2 vel = at(iChannel1, ivec2(fragCoord)).xy;
+    vec3 dye = texture(iChannel0, (fragCoord - vel) / uResolution).rgb * uDyeFade;
     for (int i = 0; i < 2; i++) {
         vec2 pos, dir;
         jet(i, pos, dir);
         float r = 0.02 * uResolution.y;
         vec3 tint = i == 0 ? vec3(1.0, 0.35, 0.1) : vec3(0.1, 0.45, 1.0);
-        dye += tint * 0.6 * exp(-dot(gl_FragCoord.xy - pos, gl_FragCoord.xy - pos) / (r * r));
+        dye += tint * 0.6 * exp(-dot(fragCoord - pos, fragCoord - pos) / (r * r));
     }
     if (uMouse.z > 0.0) {
-        vec2 d = gl_FragCoord.xy - uMouse.xy;
+        vec2 d = fragCoord - uMouse.xy;
         float r = 0.03 * uResolution.y;
         dye += vec3(0.9, 0.9, 0.3) * 0.5 * exp(-dot(d, d) / (r * r));
     }
@@ -389,9 +383,8 @@ uniform sampler2D iChannel1;
 uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
 uniform int uView;            // 보기(속도: 방향 = 색상, 압력: 빨강 +, 파랑 -, ▶: 차례로) · @enum 물감 속도 압력 발산 @default 0 @anim 3
-out vec4 fragColor;
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
     vec3 col;
     if (uView == 1) {
         vec2 v = texture(iChannel1, uv).xy;

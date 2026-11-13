@@ -25,7 +25,6 @@ uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
 uniform vec3 iChannelResolution[4];
 
-out vec4 fragColor;
 
 // 고정 반복 상한: WebGL2 루프 최적화를 위한 안전 장치. 실제 반복 수는 uRMMaxSteps로 제한한다.
 const int MAX_STEPS_CAP = 512;
@@ -129,9 +128,9 @@ vec3 shade(vec3 p, vec3 rd, float id) {
     return getAlbedo(id) * (0.18 + 0.82 * diffuse) + vec3(0.18) * specular;
 }
 
-void main() {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // 화면 중심을 (0,0), 세로 방향 크기를 2로 맞춰 종횡비 왜곡을 피한다.
-    vec2 uv = (2.0 * gl_FragCoord.xy - uResolution) / uResolution.y;
+    vec2 uv = (2.0 * fragCoord - uResolution) / uResolution.y;
     vec3 target = vec3(0.0, -0.2, 0.0);
     vec3 camera = readCamera();
     float yaw = camera.x, pitch = camera.y, distance = camera.z;
@@ -168,7 +167,6 @@ uniform float uDeltaTime;
 uniform vec4 uMouse;          // xy = 위치, z > 0 = 버튼 누름 중
 uniform sampler2D iChannel0;  // A · previous
 uniform sampler2D iChannel1;  // 키보드
-out vec4 fragColor;
 
 const vec3 HOME = vec3(0.0, 0.5236, 5.196);
 const int KEY_SHIFT = 16, KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40;
@@ -176,8 +174,8 @@ const int KEY_A = 65, KEY_D = 68, KEY_R = 82, KEY_S = 83, KEY_W = 87;
 float keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x; }
 float keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x; }
 
-void main() {
-    int pixel = int(gl_FragCoord.x);
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    int pixel = int(fragCoord.x);
     vec4 camera = texelFetch(iChannel0, ivec2(0, 0), 0);
     vec4 drag = texelFetch(iChannel0, ivec2(1, 0), 0);
     if (uFrame == 0 || camera.z <= 0.0 || keyPressed(KEY_R) > 0.5) camera = vec4(HOME, 0.0);
