@@ -252,8 +252,22 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 // ---------------------------------------------------------------------------
 // 순서: A 속도(이류 + 힘 + 압력 빼기) → B 발산 → C·D·E 압력(야코비 반복 3번) → F 염료(이류) → Image.
 // 모든 버퍼는 같은 크기(scale 0.5)라 픽셀 하나 = 격자 한 칸. 속도의 단위는 "칸 / 프레임"이다.
-const FLUID_COMMON = `// 이웃 칸 읽기: 가장자리 밖은 가장자리 값을 쓴다(벽에서 압력이 새지 않게 — 노이만 경계)
-vec4 at(sampler2D tex, ivec2 c) { return texelFetch(tex, clamp(c, ivec2(0), ivec2(uResolution) - 1), 0); }`;
+// 여러 버퍼가 같이 쓰는 함수는 Common 탭(project.common)에 한 번만 둔다.
+const fluidCommon = `// 2D 유체 · Common: 여러 버퍼가 같이 쓰는 함수. 실행할 때 모든 패스의 머리말(#version · precision) 바로 뒤에 붙는다.
+// Common은 각 패스의 Uniform 선언보다 앞에 붙으므로 uResolution · uTime을 직접 쓰지 않는다 — 필요한 값은 매개변수로 받는다.
+
+// 이웃 칸 읽기(A~F 모두): 가장자리 밖은 가장자리 값을 쓴다(벽에서 압력이 새지 않게 — 노이만 경계).
+// 모든 버퍼가 같은 크기라 읽는 텍스처의 크기(textureSize)가 곧 격자 크기다.
+vec4 at(sampler2D tex, ivec2 c) { return texelFetch(tex, clamp(c, ivec2(0), textureSize(tex, 0) - 1), 0); }
+
+// 분사구 i의 위치와 방향(A는 여기서 힘을, F는 같은 자리에서 물감을 넣는다): 화면을 천천히 돌며 안쪽을 향해 뿜는다.
+// time = uTime, size = uResolution(이 버퍼의 크기)
+void jet(int i, float time, vec2 size, out vec2 pos, out vec2 dir) {
+    float a = time * 0.35 + float(i) * 3.14159265;
+    pos = size * (0.5 + 0.32 * vec2(cos(a), sin(a * 1.3)));
+    dir = normalize(size * 0.5 - pos + 60.0 * vec2(-sin(a * 2.0), cos(a * 2.0)));
+}
+`;
 const fluidVelocity = `#version 300 es
 precision highp float;
 // Buffer A · 속도(rg) · RGBA16F · 0.5배. iChannel0 = A (previous), iChannel1 = E (previous, 압력)
@@ -271,13 +285,7 @@ uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform float uForce;         // 분사구 힘 · @range 0 2 @step 0.01 @default 0.6 @group 속도
 uniform float uDissipation;   // 속도 유지율(1 = 줄지 않음) · @range 0.95 1 @step 0.001 @default 0.995 @group 속도
-${FLUID_COMMON}
-// 분사구 i의 위치와 방향: 화면을 천천히 돌며 안쪽을 향해 뿜는다.
-void jet(int i, out vec2 pos, out vec2 dir) {
-    float a = uTime * 0.35 + float(i) * 3.14159265;
-    pos = uResolution * (0.5 + 0.32 * vec2(cos(a), sin(a * 1.3)));
-    dir = normalize(uResolution * 0.5 - pos + 60.0 * vec2(-sin(a * 2.0), cos(a * 2.0)));
-}
+// at() · jet()은 Common 탭에 있다.
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     ivec2 c = ivec2(fragCoord);
     if (uFrame == 0) { fragColor = vec4(0.0); return; }
@@ -287,7 +295,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // 2) 힘
     for (int i = 0; i < 2; i++) {
         vec2 pos, dir;
-        jet(i, pos, dir);
+        jet(i, uTime, uResolution, pos, dir);
         float r = 0.025 * uResolution.y;
         vel += dir * uForce * exp(-dot(fragCoord - pos, fragCoord - pos) / (r * r));
     }
@@ -311,7 +319,7 @@ precision highp float;
 // 발산 = 이 칸에서 나가는 양 - 들어오는 양. 양수면 퍼져 나가고, 음수면 모여든다. 물은 압축되지 않으니 0이어야 한다.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
-${FLUID_COMMON}
+// at()은 Common 탭에 있다.
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     ivec2 c = ivec2(fragCoord);
     float div = 0.5 * (at(iChannel0, c + ivec2(1, 0)).x - at(iChannel0, c - ivec2(1, 0)).x +
@@ -329,7 +337,7 @@ uniform vec2 uResolution;
 uniform int uFrame;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-${FLUID_COMMON}
+// at()은 Common 탭에 있다.
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     ivec2 c = ivec2(fragCoord);
     if (uFrame == 0) { fragColor = vec4(0.0); return; }
@@ -348,19 +356,14 @@ uniform vec4 uMouse;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform float uDyeFade;       // 물감 유지율 · @range 0.95 1 @step 0.001 @default 0.992 @group 물감
-${FLUID_COMMON}
-void jet(int i, out vec2 pos, out vec2 dir) {   // Buffer A와 같은 분사구
-    float a = uTime * 0.35 + float(i) * 3.14159265;
-    pos = uResolution * (0.5 + 0.32 * vec2(cos(a), sin(a * 1.3)));
-    dir = normalize(uResolution * 0.5 - pos + 60.0 * vec2(-sin(a * 2.0), cos(a * 2.0)));
-}
+// at() · jet()은 Common 탭에 있다(Buffer A와 같은 분사구).
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     if (uFrame == 0) { fragColor = vec4(0.0); return; }
     vec2 vel = at(iChannel1, ivec2(fragCoord)).xy;
     vec3 dye = texture(iChannel0, (fragCoord - vel) / uResolution).rgb * uDyeFade;
     for (int i = 0; i < 2; i++) {
         vec2 pos, dir;
-        jet(i, pos, dir);
+        jet(i, uTime, uResolution, pos, dir);
         float r = 0.02 * uResolution.y;
         vec3 tint = i == 0 ? vec3(1.0, 0.35, 0.1) : vec3(0.1, 0.45, 1.0);
         dye += tint * 0.6 * exp(-dot(fragCoord - pos, fragCoord - pos) / (r * r));
@@ -376,6 +379,7 @@ const fluidImage = `#version 300 es
 precision highp float;
 // Image · 보기. iChannel0 = F (물감), iChannel1 = A (속도), iChannel2 = E (압력), iChannel3 = B (발산)
 // 2D 유체 — 읽는 순서: Buffer A(속도) → B(발산) → C·D·E(압력) → F(물감) → 여기. 각 버퍼 머리말에 그 단계의 원리가 있다.
+// 여러 버퍼가 같이 쓰는 이웃 칸 읽기(at)와 분사구(jet)는 Common 탭에 한 번만 있다.
 // 뷰포트를 누른 채 움직이면 물을 밀고 물감을 넣는다. uView로 속도·압력·발산을 직접 보자.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
@@ -426,6 +430,7 @@ const LESSONS = [
     thumb: "fluid",
     project: {
       image: fluidImage,
+      common: fluidCommon,
       passes: [
         fluidPass("A", fluidVelocity, { 0: { buffer: "A", frame: "previous" }, 1: { buffer: "E", frame: "previous" } }),
         fluidPass("B", fluidDivergence, { 0: { buffer: "A", frame: "current" } }),
