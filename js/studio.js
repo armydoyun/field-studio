@@ -113,7 +113,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (
       same(current.project, checkpoint.project) &&
       same(current.users, checkpoint.users) &&
-      same(current.links, checkpoint.links)
+      same(current.links, checkpoint.links) &&
+      same(current.presets, checkpoint.presets)
     )
       return;
     const now = Date.now(),
@@ -128,11 +129,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     editTab = selected;
     syncHistory();
   };
-  // 파라미터 연결(키프레임 포함)을 저장할 때마다 되돌리기 한 칸(끄는 동안의 미리보기는 저장이 아니라 기록되지 않는다).
-  // 되돌리기 · 다시 실행이 연결을 되돌릴 때(navigatingHistory)는 기록하지 않는다.
-  let quietLinks = false;
+  // 파라미터 연결(키프레임 포함) · 프리셋을 저장할 때마다 되돌리기 한 칸(끄는 동안의 미리보기는 저장이 아니라 기록되지 않는다).
+  // 되돌리기 · 다시 실행이 되돌릴 때(navigatingHistory)와 프로젝트 바꾸기 · Pack 열기 중(quietSettings)에는 기록하지 않는다.
+  let quietSettings = false;
   on(document, "shader-links-changed", () => {
-    if (navigatingHistory || quietLinks || same(settings?.getLinks?.() ?? [], checkpoint.links)) return;
+    if (navigatingHistory || quietSettings || same(settings?.getLinks?.() ?? [], checkpoint.links)) return;
+    recordEdit(false, true);
+  });
+  on(document, "shader-presets-changed", () => {
+    if (navigatingHistory || quietSettings || same(settings?.getPresets?.() ?? [], checkpoint.presets)) return;
     recordEdit(false, true);
   });
   const captureCursor = () => {
@@ -1454,12 +1459,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       rememberEditor();
       checkpoint = historyState();
       renderer.applyPortable(next, users);
-      settings?.setPresets?.([]); // 새 프로젝트 · 예제는 프리셋 · 연결 없이 시작한다(Undo로 이전 작업의 것까지 돌아온다)
-      quietLinks = true; // 연결 비우기는 프로젝트 바꾸기의 한 부분 — 따로 되돌리기 칸을 만들지 않는다
+      // 새 프로젝트 · 예제는 프리셋 · 연결 없이 시작한다(Undo로 이전 작업의 것까지 돌아온다).
+      // 비우기는 프로젝트 바꾸기의 한 부분 — 따로 되돌리기 칸을 만들지 않는다.
+      quietSettings = true;
       try {
+        settings?.setPresets?.([]);
         settings?.setLinks?.([]);
       } finally {
-        quietLinks = false;
+        quietSettings = false;
       }
       adoptProject(next);
       // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
@@ -1768,11 +1775,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         checkpoint = historyState();
         renderer.applyPortable(next, state.user);
         applied = true;
-        quietLinks = true; // Pack의 연결은 Pack 열기의 한 부분(되돌리기 한 칸)
+        quietSettings = true; // Pack의 연결은 Pack 열기의 한 부분(되돌리기 한 칸)
         try {
           settings.applyPack(state);
         } finally {
-          quietLinks = false;
+          quietSettings = false;
         }
       } else if (!setProject(next)) throw new Error("Pack 셰이더를 적용하지 못했습니다.");
       adoptProject(next, data.selected);
@@ -1784,11 +1791,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       if (applied) {
         try {
           renderer.applyPortable(previous, before.user);
-          quietLinks = true;
+          quietSettings = true;
           try {
             settings.applyPack(before);
           } finally {
-            quietLinks = false;
+            quietSettings = false;
           }
           project = draftBefore;
           dirty = wasDirty;

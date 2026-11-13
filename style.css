@@ -533,12 +533,20 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 #presetSave { min-height:26px;padding:0 8px;gap:4px;font-size:11px; }
 .preset-list { display:flex;flex-wrap:wrap;gap:6px; }
 .preset-empty { color:var(--muted);font-size:11px; }
-.preset-chip { display:inline-flex;align-items:stretch;border:1px solid var(--line-strong);border-radius:999px;overflow:hidden; }
+.preset-chip { position:relative;display:inline-flex;align-items:stretch;border:1px solid var(--line-strong);border-radius:999px; }
 .preset-chip button { min-height:26px;border:0;border-radius:0;background:transparent;font-size:11px; }
-.preset-apply { max-width:160px;padding:0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600; }
+.preset-apply { max-width:160px;padding:0 10px;border-radius:999px 0 0 999px !important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600; }
 .preset-apply[aria-pressed="true"] { background:var(--accent-soft);color:var(--accent-strong); }
-.preset-update,.preset-remove { width:24px;padding:0;color:var(--muted); }
-.preset-update.glyph-icon::before,.preset-remove.glyph-icon::before { flex-basis:12px;width:12px;height:12px; }
+/* ⋯: 덮어쓰기 · 이름 바꾸기 · 삭제 메뉴(칩을 누르려다 잘못 누르지 않게 고치는 일은 이 안에만) */
+.preset-more { width:24px;padding:0;border-left:1px solid var(--line) !important;border-radius:0 999px 999px 0 !important;color:var(--faint); }
+.preset-more.glyph-icon::before { flex-basis:12px;width:12px;height:12px; }
+.preset-more:hover,.preset-more[aria-expanded="true"] { color:var(--text); }
+.preset-menu { position:absolute;top:calc(100% + 4px);left:0;z-index:5;display:grid;min-width:168px;padding:4px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--panel);box-shadow:var(--shadow); }
+.preset-chip .preset-menu-item { justify-content:flex-start;min-height:30px;padding:4px 10px;border-radius:4px;font-size:12px;text-align:left;white-space:nowrap; }
+.preset-chip .preset-menu-item:hover:not(:disabled),.preset-chip .preset-menu-item:focus-visible { background:var(--accent-soft); }
+.preset-menu.is-end { left:auto;right:0; }
+.preset-chip .preset-menu-item:disabled { opacity:.4;cursor:default; }
+.preset-chip .preset-menu-item.is-danger { color:var(--danger); }
 .preset-notice { display:flex;align-items:center;gap:8px;margin:0;min-height:0; }
 .preset-notice:empty,.preset-notice:has(#presetNoticeText:empty) { display:none; }
 /* 미디어 입력: 꺼져 있으면 흐리게, 오류면 빨갛게(칩을 눌러 다시 켠다) */
@@ -1592,3 +1600,5 @@ body.dock-dragging,body.dock-dragging * { cursor:grabbing !important;user-select
  #storageStatus { word-break:keep-all;overflow-wrap:anywhere;text-wrap:balance; }
  .footer-version { margin-left:14px; }
 }
+/* 확인 대화상자 설명은 줄바꿈을 지킨다(프리셋 덮어쓰기의 바뀌는 값 목록 등) */
+#studioDialogMessage { white-space:pre-line; }

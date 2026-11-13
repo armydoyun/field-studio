@@ -1338,13 +1338,148 @@ const mount = (renderer, input, settings) => {
   // @group 접힘 상태(이 화면에서만 기억).
   const collapsedGroups = new Set();
   // ---- 파라미터 프리셋(presets.js · settings.getPresets/setPresets) ----
-  // 칩을 누르면 그 값 묶음으로 바꾼다(전환 시간만큼 부드럽게). ↺ = 지금 값으로 덮어쓰기, ✕ = 삭제(되돌리기 가능),
-  // 이름을 두 번 누르면 이름 바꾸기. 지금 값이 프리셋과 같으면 그 칩이 눌린 상태로 보인다.
+  // 칩을 누르면 그 값 묶음으로 바꾼다(전환 시간만큼 부드럽게). 지금 값이 프리셋과 같으면 그 칩이 눌린 상태로 보인다.
+  // 고치는 일(지금 값으로 덮어쓰기 · 이름 바꾸기 · 삭제)은 칩 옆 ⋯ 메뉴 안에만 둔다 — 칩을 누르려다 잘못 누르지 않게.
+  // 덮어쓰기는 무엇이 바뀌는지 보여 주고 한 번 더 묻는다. 덮어쓰기 · 삭제는 안내 줄의 되돌리기 · Ctrl+Z로 되돌린다.
   let morph = 0,
-    deletedPreset = null;
-  const presetNotice = (text, undo = false) => {
+    presetRestore = null, // 되돌리기: 바로 전 프리셋 목록
+    presetMenu = null; // 열린 ⋯ 메뉴 { node, button }
+  // undo: 되돌릴 때 다시 쓸 프리셋 목록(없으면 되돌리기 버튼을 숨긴다)
+  const presetNotice = (text, undo = null) => {
     $("presetNoticeText").textContent = text;
+    presetRestore = undo;
     $("presetUndo").hidden = !undo;
+  };
+  const closePresetMenu = (focusButton = false) => {
+    if (!presetMenu) return;
+    const { node, button } = presetMenu;
+    presetMenu = null;
+    node.remove();
+    button.setAttribute("aria-expanded", "false");
+    if (focusButton) button.focus();
+  };
+  listen(document, "pointerdown", event => {
+    if (presetMenu && !presetMenu.node.contains(event.target) && event.target !== presetMenu.button) closePresetMenu();
+  });
+  // 덮어쓰면 바뀌는 파라미터: [이름, 프리셋 값, 지금 값]
+  const presetChanges = (preset, users) =>
+    users
+      .filter(item => !Object.hasOwn(preset.values, item.name) || !sameValue(item.value, preset.values[item.name]))
+      .map(item => [item.name, preset.values[item.name], item.value]);
+  const formatPresetValue = value =>
+    value === undefined
+      ? "(없음)"
+      : Array.isArray(value)
+        ? value.length > 4
+          ? `[${value.length}개]`
+          : `(${value.map(v => (typeof v === "number" ? displayNumber(Number(v.toFixed(4))) : String(v))).join(", ")})`
+        : typeof value === "number"
+          ? displayNumber(Number(value.toFixed(4)))
+          : String(value);
+  const overwritePreset = async index => {
+    stopMorph();
+    const presets = settings.getPresets(),
+      preset = presets[index],
+      users = renderer.getUserUniforms(),
+      changes = presetChanges(preset, users);
+    if (!preset || !changes.length) return;
+    const ask = window.shaderStudio?.ask,
+      lines = changes
+        .slice(0, 6)
+        .map(([name, from, to]) => `${name}: ${formatPresetValue(from)} → ${formatPresetValue(to)}`),
+      more = changes.length > 6 ? `\n… 외 ${changes.length - 6}개` : "";
+    const ok = ask
+      ? await ask({
+          title: `'${preset.name}' 덮어쓰기`,
+          message: `이 프리셋을 지금 파라미터 값으로 바꿉니다. 바뀌는 값 ${changes.length}개:\n${lines.join("\n")}${more}\n\n덮어쓴 뒤에도 '되돌리기'나 Ctrl+Z로 되돌릴 수 있습니다.`,
+          ok: "덮어쓰기",
+          danger: true,
+        })
+      : true;
+    if (!ok) return;
+    attempt(() => {
+      settings.setPresets(
+        settings.getPresets().map((item, i) => (i === index ? Presets.capture(item.name, users) : item))
+      );
+      presetNotice(`'${preset.name}'을 지금 값으로 덮어썼습니다(값 ${changes.length}개)`, presets);
+      $("presetUndo").focus();
+    });
+  };
+  const renamePreset = async index => {
+    stopMorph();
+    const presets = settings.getPresets(),
+      preset = presets[index],
+      others = presets.filter((_, i) => i !== index).map(item => item.name);
+    const name = await askName("프리셋 이름 바꾸기", preset.name, others);
+    if (!name || name === preset.name) return;
+    attempt(() => {
+      settings.setPresets(settings.getPresets().map((item, i) => (i === index ? { ...item, name } : item)));
+      presetNotice(`'${preset.name}' → '${name}'`, presets);
+    });
+  };
+  const removePreset = index => {
+    const presets = settings.getPresets(),
+      preset = presets[index];
+    attempt(() => {
+      settings.setPresets(presets.filter((_, i) => i !== index));
+      presetNotice(`'${preset.name}' 삭제됨`, presets);
+      $("presetUndo").focus();
+    });
+  };
+  // ⋯ 메뉴: 덮어쓰기(지금 값과 같으면 꺼짐) · 이름 바꾸기 · 삭제. ↑↓로 옮기고 Esc로 닫는다.
+  const openPresetMenu = (button, index) => {
+    if (presetMenu?.button === button) return closePresetMenu(true);
+    closePresetMenu();
+    const preset = settings.getPresets()[index],
+      same = !presetChanges(preset, renderer.getUserUniforms()).length,
+      node = element("div");
+    node.className = "preset-menu";
+    node.setAttribute("role", "menu");
+    node.setAttribute("aria-label", `'${preset.name}' 프리셋 관리`);
+    const items = [
+      [
+        "지금 값으로 덮어쓰기…",
+        () => overwritePreset(index),
+        same,
+        same ? "지금 값과 같습니다" : "바뀌는 값을 확인한 뒤 덮어씁니다",
+      ],
+      ["이름 바꾸기…", () => renamePreset(index), false, "이름을 두 번 눌러도 바꿀 수 있습니다"],
+      ["삭제", () => removePreset(index), false, "삭제한 뒤 되돌릴 수 있습니다"],
+    ].map(([text, run, disabled, title]) => {
+      const item = element("button");
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      item.className = text === "삭제" ? "preset-menu-item is-danger" : "preset-menu-item";
+      item.textContent = text;
+      item.title = title;
+      item.disabled = disabled;
+      item.addEventListener("click", () => {
+        closePresetMenu();
+        run();
+      });
+      return item;
+    });
+    node.append(...items);
+    node.addEventListener("keydown", event => {
+      const enabled = items.filter(item => !item.disabled),
+        at = enabled.indexOf(document.activeElement);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closePresetMenu(true);
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        enabled[(at + step + enabled.length) % enabled.length]?.focus();
+      } else if (event.key === "Tab") closePresetMenu();
+    });
+    button.after(node);
+    // 칩 왼쪽 끝에 맞춰 펼치고, 프리셋 막대 오른쪽을 넘으면 오른쪽 끝에 맞춘다
+    const bounds = $("presetBar").getBoundingClientRect();
+    if (node.getBoundingClientRect().right > bounds.right) node.classList.add("is-end");
+    button.setAttribute("aria-expanded", "true");
+    presetMenu = { node, button };
+    items.find(item => !item.disabled)?.focus();
   };
   const stopMorph = () => {
     if (morph) cancelAnimationFrame(morph);
@@ -1411,10 +1546,13 @@ const mount = (renderer, input, settings) => {
     };
     morph = requestAnimationFrame(tick);
   };
-  const renderPresets = () => {
+  // force: 프리셋 목록 자체가 바뀌었을 때. 값만 바뀌어 다시 그릴 때(@anim · 외부 변경)는 ⋯ 메뉴가 열려 있으면 그대로 둔다.
+  const renderPresets = (force = false) => {
+    if (presetMenu && !force) return;
     const list = $("presetList"),
       presets = settings.getPresets?.() || [],
       users = renderer.getUserUniforms();
+    closePresetMenu();
     list.replaceChildren();
     $("presetSave").disabled = !users.length || presets.length >= Presets.MAX_PRESETS;
     $("presetSave").title = !users.length
@@ -1432,49 +1570,23 @@ const mount = (renderer, input, settings) => {
     presets.forEach((preset, index) => {
       const chip = element("div"),
         apply = element("button"),
-        update = element("button"),
-        remove = element("button");
+        more = element("button");
       chip.className = "preset-chip";
       chip.setAttribute("role", "listitem");
-      apply.type = update.type = remove.type = "button";
+      apply.type = more.type = "button";
       apply.className = "preset-apply";
       apply.textContent = preset.name;
       apply.setAttribute("aria-pressed", String(matchesPreset(preset, users)));
       apply.title = `'${preset.name}' 값으로 바꾸기 · 두 번 누르면 이름 바꾸기`;
       apply.addEventListener("click", () => applyPreset(preset));
-      apply.addEventListener("dblclick", async () => {
-        stopMorph();
-        const others = presets.filter((_, i) => i !== index).map(item => item.name);
-        const name = await askName("프리셋 이름 바꾸기", preset.name, others);
-        if (!name || name === preset.name) return;
-        attempt(() => {
-          settings.setPresets(presets.map((item, i) => (i === index ? { ...item, name } : item)));
-          presetNotice(`'${preset.name}' → '${name}'`);
-        });
-      });
-      update.className = "preset-update glyph-icon icon-reset";
-      update.title = `'${preset.name}'을 지금 값으로 덮어쓰기`;
-      update.setAttribute("aria-label", update.title);
-      update.addEventListener("click", () =>
-        attempt(() => {
-          settings.setPresets(
-            presets.map((item, i) => (i === index ? Presets.capture(item.name, renderer.getUserUniforms()) : item))
-          );
-          presetNotice(`'${preset.name}'을 지금 값으로 바꿨습니다`);
-        })
-      );
-      remove.className = "preset-remove glyph-icon icon-close";
-      remove.title = `'${preset.name}' 삭제`;
-      remove.setAttribute("aria-label", remove.title);
-      remove.addEventListener("click", () =>
-        attempt(() => {
-          deletedPreset = { preset, index };
-          settings.setPresets(presets.filter((_, i) => i !== index));
-          presetNotice(`'${preset.name}' 삭제됨`, true);
-          $("presetUndo").focus();
-        })
-      );
-      chip.append(apply, update, remove);
+      apply.addEventListener("dblclick", () => renamePreset(index));
+      more.className = "preset-more glyph-icon icon-more";
+      more.title = `'${preset.name}' 관리: 덮어쓰기 · 이름 바꾸기 · 삭제`;
+      more.setAttribute("aria-label", more.title);
+      more.setAttribute("aria-haspopup", "menu");
+      more.setAttribute("aria-expanded", "false");
+      more.addEventListener("click", () => openPresetMenu(more, index));
+      chip.append(apply, more);
       list.append(chip);
     });
   };
@@ -1491,16 +1603,14 @@ const mount = (renderer, input, settings) => {
     });
   });
   listen($("presetUndo"), "click", () => {
-    if (!deletedPreset) return;
-    const list = settings.getPresets(),
-      { preset, index } = deletedPreset;
-    deletedPreset = null;
+    if (!presetRestore) return;
+    const previous = presetRestore;
     attempt(() => {
-      settings.setPresets([...list.slice(0, index), preset, ...list.slice(index)]);
-      presetNotice(`'${preset.name}' 되돌림`);
+      settings.setPresets(previous);
+      presetNotice("프리셋을 바로 전으로 되돌렸습니다");
     });
   });
-  listen(document, "shader-presets-changed", () => renderPresets());
+  listen(document, "shader-presets-changed", () => renderPresets(true));
   // ---- 파라미터 연결(links.js · renderer.setLinks · settings.getLinks/setLinks) ----
   // 파라미터 줄의 연결 버튼이 아래에 편집 칸을 연다. 바꾸면 settings.setLinks로 저장하고 렌더러가 프레임마다 적용한다.
   let openLink = null; // 연결 시트를 연 파라미터 이름
