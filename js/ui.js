@@ -1563,7 +1563,7 @@ const mount = (renderer, input, settings) => {
     if (!presets.length) {
       const empty = element("span");
       empty.className = "preset-empty";
-      empty.textContent = "저장한 프리셋이 없습니다. 값을 맞춘 뒤 '지금 값 저장'을 누르세요.";
+      empty.textContent = "저장한 프리셋이 없습니다. 값을 맞춘 뒤 저장하세요.";
       list.append(empty);
       return;
     }
@@ -1759,13 +1759,14 @@ const mount = (renderer, input, settings) => {
     // 한 줄: [한 번 | ↻ N초] ◀ ◆ ▶ [재생 위치] 초 — 둘째 줄(설명): (바퀴 안 X초 ·) 값을 바꾸면 … 키
     const caption = element("div");
     caption.className = "key-nav-caption";
-    caption.append(inner, hint);
+    caption.append(mode, inner, hint);
     const timeLabel = element("label");
     timeLabel.className = "key-nav-time-label";
     timeLabel.textContent = "재생";
     timeLabel.title = "재생 위치(uTime, 초)";
     timeLabel.append(time);
-    nav.append(mode, prev, key, next, timeLabel, caption);
+    // 첫 줄: ◀ ◆ ▶ · 재생 [초] — 둘째 줄: [한 번 | ↻ N초] (바퀴 안 X초) · 값을 바꾸면 … 키
+    nav.append(prev, key, next, timeLabel, caption);
     let shownLoop = null;
     const update = () => {
       const now = renderer.getStats().time ?? 0,
@@ -1789,7 +1790,10 @@ const mount = (renderer, input, settings) => {
           : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다";
         mode.classList.toggle("is-loop", !!loop);
         inner.hidden = !loop;
-        hint.textContent = loop ? "· 값을 바꾸면 이 바퀴 안 시간에 키" : "값을 바꾸면 이 재생 시간에 키(자동 키)";
+        hint.textContent = loop ? "· 값을 바꾸면 여기에 키" : "값을 바꾸면 이 시간에 키(자동 키)";
+        hint.title = loop
+          ? "슬라이더 · 숫자로 값을 바꾸면 이 바퀴 안 시간에 키가 찍힙니다(이미 있으면 값만)"
+          : "슬라이더 · 숫자로 값을 바꾸면 지금 재생 시간에 키가 찍힙니다(이미 있으면 값만)";
       }
       if (loop) inner.textContent = `바퀴 안 ${t.toFixed(2)}초`;
     };
