@@ -112,6 +112,26 @@ const player = data => {
       bitmap.close();
     })
   );
+  // 큐브맵: 앱이 만든 6면(+X -X +Y -Y +Z -Z)을 그대로 올리고 밉맵을 만든다.
+  const cubes = new Map(); // id → {texture, size}
+  const loadCubes = Promise.all(
+    Object.entries(data.cubemaps || {}).map(async ([id, faces]) => {
+      const bitmaps = await Promise.all(faces.map(async url => createImageBitmap(await (await fetch(url)).blob())));
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+      bitmaps.forEach((bitmap, i) => {
+        gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+        bitmap.close();
+      });
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+      cubes.set(id, { texture, size: bitmaps[0].width });
+    })
+  );
   const ramps = data.uniforms.map(item => {
     if (!item.ramp) return null;
     const texture = gl.createTexture();
@@ -317,9 +337,16 @@ const player = data => {
     for (let i = 0; i < 4; i++) {
       const ref = target.channels?.[i];
       let texture = null,
+        cube = null,
         width = 0,
         height = 0;
-      if (ref?.keyboard) [texture, width, height] = [keyboard, 256, 3];
+      if (ref?.cubemap && cubes.has(ref.cubemap))
+        [cube, width, height] = [
+          cubes.get(ref.cubemap).texture,
+          cubes.get(ref.cubemap).size,
+          cubes.get(ref.cubemap).size,
+        ];
+      else if (ref?.keyboard) [texture, width, height] = [keyboard, 256, 3];
       else if (ref?.texture && images.has(ref.texture)) ({ texture, width, height } = images.get(ref.texture));
       else if (ref?.buffer) {
         const pass = passes.find(p => p.name === ref.buffer),
@@ -330,6 +357,7 @@ const player = data => {
       }
       gl.activeTexture(gl.TEXTURE0 + i);
       gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
       if (target.samplers[i] !== null) gl.uniform1i(target.samplers[i], i);
       if (target.samplerSizes[i] !== null) gl.uniform3f(target.samplerSizes[i], width, height, width ? 1 : 0);
     }
@@ -339,6 +367,7 @@ const player = data => {
     for (let i = 0; i < 4; i++) {
       gl.activeTexture(gl.TEXTURE0 + i);
       gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
     }
     gl.activeTexture(gl.TEXTURE0);
   };
@@ -407,20 +436,21 @@ const player = data => {
     },
     ready: null,
   };
-  window.fieldPlayer.ready = loadImages.then(
+  window.fieldPlayer.ready = Promise.all([loadImages, loadCubes]).then(
     () => requestAnimationFrame(draw),
     error => fail(`이미지를 읽지 못했습니다: ${error.message}`)
   );
 };
 
-// renderer.exportScene()과 이미지(id → {url: data URL, sampling})로 재생기 자료를 만든다.
-const buildPlayerData = (scene, textures) => {
+// renderer.exportScene()과 이미지(id → {url: data URL, sampling}) · 큐브맵(id → 6면 PNG data URL)으로 재생기 자료를 만든다.
+const buildPlayerData = (scene, textures, cubemaps = {}) => {
   const refs = [scene.image.channels, ...scene.passes.map(pass => pass.channels)].flatMap(channels =>
     Object.values(channels || {})
   );
   return {
     ...scene,
     textures,
+    cubemaps,
     keyboard: refs.some(ref => ref?.keyboard),
     media: [...new Set(refs.map(ref => ref?.media).filter(Boolean))],
   };

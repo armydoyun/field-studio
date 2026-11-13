@@ -173,7 +173,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 앱 내부 셰이더(버퍼 미리보기)는 { internal: true }로 컴파일한다 — 사용자의 Common을 붙이지 않는다.
   const passManager = PassManager.createPassManager(
     gl,
-    (source, { internal = false } = {}) => compileFragment(source, internal ? NO_SHARED : shared),
+    (source, { internal = false, channels } = {}) => compileFragment(source, internal ? NO_SHARED : shared, channels),
     textureInput,
     keyboard,
     media,
@@ -393,6 +393,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // Common이 한 패스에만 선언된 Uniform(파라미터 등)을 쓰면 다른 패스에도 그 선언을 넣는 데 쓴다. 둘 중 하나라도 바뀌면
   // 모든 프로그램을 다시 만든다(withCommon).
   const NO_SHARED = Object.freeze({ common: "", uniforms: [] });
+  // Image 패스의 채널 sampler 타입(지금 적용된 것). Image 채널이 2D ↔ 큐브맵으로 바뀌면 Image를 다시 만든다.
+  const SAMPLER_2D = PassManager.channelTypes({});
+  let imageTypes = SAMPLER_2D;
+  const typesOf = channels => PassManager.channelTypes(channels);
   let shared = NO_SHARED;
   const sharedOf = scene => {
     const common = typeof scene?.common === "string" ? scene.common : "";
@@ -404,7 +408,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     };
   };
   const sameShared = (a, b) => a.common === b.common && JSON.stringify(a.uniforms) === JSON.stringify(b.uniforms);
-  const buildFragment = (source, context = shared) => {
+  // channels: 이 패스의 채널 sampler 타입 4개(PassManager.channelTypes) — 선언하지 않은 iChannelN을 그 타입으로 넣는다.
+  const buildFragment = (source, context = shared, channels = SAMPLER_2D) => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
     const declarations = [],
       code = Prepare.blankComments(context.common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
@@ -417,10 +422,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           throw new Error(`${name}: GLSL 선언(${match[1]})과 등록 타입(${item.type})이 다릅니다.`);
       } else declarations.push(`uniform ${item.type} ${name};`);
     }
-    return Prepare.prepareFragment(source, declarations, { common: context.common, uniforms: context.uniforms });
+    return Prepare.prepareFragment(source, declarations, {
+      common: context.common,
+      uniforms: context.uniforms,
+      channels,
+    });
   };
-  const compileFragment = (source, context = shared) => {
-    const compiled = buildFragment(source, context);
+  const compileFragment = (source, context = shared, channels = SAMPLER_2D) => {
+    const compiled = buildFragment(source, context, channels);
     try {
       return createProgram(compiled.source);
     } catch (error) {
@@ -541,12 +550,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (offline) return;
     if (running && !lost && !disposed && !document.hidden && program && !frame) frame = requestAnimationFrame(render);
   };
-  const replacePrograms = (source, updatePasses = () => {}) => {
+  const replacePrograms = (source, updatePasses = () => {}, types = imageTypes) => {
     if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
     assertOnline();
     if (lost) throw new Error("WebGL 컨텍스트 복구 대기 중입니다.");
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
-    const next = compileFragment(source);
+    const next = compileFragment(source, shared, types);
     let nextUniforms;
     try {
       nextUniforms = PassManager.makeLocations(gl, next);
@@ -571,6 +580,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     program = next;
     uniforms = nextUniforms;
     fragmentSource = source;
+    imageTypes = types;
     if (previous) gl.deleteProgram(previous);
     pruneRamps();
     // 셰이더가 바뀌면 누적 프레임을 리셋한다. 시간(time)은 이어서 진행한다.
@@ -596,9 +606,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (message) onStatus(message);
   };
   // scene: 검사할 때 쓸 장면(Common · 다른 패스의 Uniform 선언을 그 장면에서 읽는다). 객체가 아니면 지금 적용된 것.
-  const validateFragment = (source, scene) => {
+  // channels: 이 소스를 쓰는 패스의 채널 연결(선언하지 않은 iChannelN의 타입).
+  const validateFragment = (source, scene, channels = {}) => {
     if (disposed || lost) throw new Error("셰이더를 검사할 수 없는 상태입니다.");
-    const candidate = compileFragment(source, scene && typeof scene === "object" ? sharedOf(scene) : shared);
+    const candidate = compileFragment(
+      source,
+      scene && typeof scene === "object" ? sharedOf(scene) : shared,
+      typesOf(channels)
+    );
     gl.deleteProgram(candidate);
     return true;
   };
@@ -1428,8 +1443,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       swapUsers(next);
       const context = sharedOf(scene);
-      for (const source of [scene.image, ...scene.passes.map(p => p.fragment)]) {
-        const candidate = compileFragment(source, context);
+      for (const [source, channels] of [
+        [scene.image, scene.imageChannels],
+        ...scene.passes.map(p => [p.fragment, p.channels]),
+      ]) {
+        const candidate = compileFragment(source, context, typesOf(channels));
         gl.deleteProgram(candidate);
       }
     } finally {
@@ -1445,7 +1463,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       swapUsers(next);
       shared = sharedOf(scene);
-      replacePrograms(scene.image, () => passManager.setPasses(scene.passes, scene.imageChannels));
+      replacePrograms(
+        scene.image,
+        () => passManager.setPasses(scene.passes, scene.imageChannels),
+        typesOf(scene.imageChannels)
+      );
       frameCount = 0;
       retainMedia();
       return true;
@@ -1460,10 +1482,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const withCommon = (scene, apply) => {
     const context = sharedOf(scene);
     if (sameShared(context, shared)) return apply(false);
-    for (const [name, source] of [["Image", scene.image], ...scene.passes.map(p => [p.name, p.fragment])]) {
+    for (const [name, source, channels] of [
+      ["Image", scene.image, scene.imageChannels],
+      ...scene.passes.map(p => [p.name, p.fragment, p.channels]),
+    ]) {
       let candidate;
       try {
-        candidate = compileFragment(source, context);
+        candidate = compileFragment(source, context, typesOf(channels));
       } catch (error) {
         error.passName ??= name;
         throw error;
@@ -1483,7 +1508,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed || lost) throw new Error("현재 프로젝트를 적용할 수 없습니다.");
     assertOnline();
     return withCommon(scene, commonChanged => {
-      const imageChanged = commonChanged || scene.image !== fragmentSource;
+      const types = typesOf(scene.imageChannels),
+        imageChanged = commonChanged || scene.image !== fragmentSource || types.join() !== imageTypes.join();
       let result;
       const update = () => {
         result = passManager.updatePasses(scene.passes, scene.imageChannels);
@@ -1491,7 +1517,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         if (commonChanged && !result.structural) passManager.refreshPrograms();
       };
       try {
-        if (imageChanged) replacePrograms(scene.image, update);
+        if (imageChanged) replacePrograms(scene.image, update, types);
         else update();
       } catch (error) {
         if (imageChanged) error.passName ??= "Image";
@@ -1528,10 +1554,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     });
     return {
       vertex: vertexSource,
-      image: { source: buildFragment(fragmentSource).source, channels: passManager.getImageChannels() },
+      image: {
+        source: buildFragment(fragmentSource, shared, imageTypes).source,
+        channels: passManager.getImageChannels(),
+      },
       passes: passManager.getPasses().map(({ name, format, scale, size, outputs, filter, wrap, mipmap, channels }) => ({
         name,
-        source: buildFragment(fragments.get(name)).source,
+        source: buildFragment(fragments.get(name), shared, typesOf(channels)).source,
         format,
         scale,
         size: size || null,
@@ -1569,7 +1598,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const setImageChannels = channels => {
     if (disposed || lost) throw new Error("현재 Image 채널을 변경할 수 없습니다.");
-    passManager.setImageChannels(channels);
+    const types = typesOf(channels);
+    if (types.join() !== imageTypes.join())
+      replacePrograms(fragmentSource, () => passManager.setImageChannels(channels), types);
+    else passManager.setImageChannels(channels);
   };
   const setPreviewPass = (name, attachment = 0) => {
     if (disposed || lost) throw new Error("현재 미리보기를 변경할 수 없습니다.");
@@ -1751,6 +1783,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     failedTextures: () => textureInput.failedIds(),
     getTextures,
     getTextureFile: id => textureInput.get(id)?.file || null,
+    // 큐브맵 채널로 쓸 때의 6면 캔버스(+X -X +Y -Y +Z -Z) — HTML 내보내기가 담는다
+    getCubeFaces: id => textureInput.cubeFaces(id),
     setTextureSampling,
     getPasses: passManager.getPasses,
     getPassDefinitions: passManager.getSpecs,

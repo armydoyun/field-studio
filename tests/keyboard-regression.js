@@ -40,7 +40,7 @@ test("키 상태: 바뀐 프레임에만 다시 올린다(dirty)",()=>{
 const gl={};let seq=0,active=0;const bindings=new Map(),sizes=[],uploads=[];
 for(const k of ["MAX_TEXTURE_SIZE","TEXTURE_2D","TEXTURE0","TEXTURE1","TEXTURE2","TEXTURE3","RGBA","RED","R8","UNSIGNED_BYTE","UNPACK_ALIGNMENT","TEXTURE_MIN_FILTER","TEXTURE_MAG_FILTER","TEXTURE_WRAP_S","TEXTURE_WRAP_T","NEAREST","LINEAR","CLAMP_TO_EDGE","FRAMEBUFFER","COLOR_ATTACHMENT0","FRAMEBUFFER_COMPLETE","TRIANGLES","RGBA8"])gl[k]=k;
 gl.NO_ERROR=0;gl.getError=()=>0;gl.getParameter=key=>key===gl.MAX_TEXTURE_SIZE?4096:null;
-gl.createTexture=()=>({id:++seq});gl.deleteTexture=()=>{};gl.bindTexture=(_,tex)=>bindings.set(active,tex);
+gl.createTexture=()=>({id:++seq});gl.deleteTexture=()=>{};gl.bindTexture=(target,tex)=>{if(target===gl.TEXTURE_2D)bindings.set(active,tex);};
 gl.activeTexture=unit=>active=[gl.TEXTURE0,gl.TEXTURE1,gl.TEXTURE2,gl.TEXTURE3].indexOf(unit);
 gl.texImage2D=(...a)=>uploads.push(["image",a[2],a[3],a[4]]);gl.texSubImage2D=(...a)=>uploads.push(["sub",a[4],a[5]]);gl.texParameteri=()=>{};gl.pixelStorei=()=>{};
 gl.createFramebuffer=()=>({id:++seq});gl.deleteFramebuffer=()=>{};gl.deleteProgram=()=>{};gl.bindFramebuffer=()=>{};gl.framebufferTexture2D=()=>{};gl.drawBuffers=()=>{};

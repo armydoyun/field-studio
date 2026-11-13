@@ -248,8 +248,8 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
             ["uChannelTime[4]", "float", "채널마다 재생 시간: 미디어(오디오 · 영상 파일)는 재생 위치, 나머지는 uTime"],
             [
               "iChannel0~3",
-              "sampler2D",
-              "편집기에서 연결한 버퍼 · 이미지 · 키보드 · 미디어(마이크 · 오디오 · 웹캠 · 영상)",
+              "sampler2D · samplerCube",
+              "편집기에서 연결한 버퍼 · 이미지 · 큐브맵 · 키보드 · 미디어. 선언하지 않고 쓰면 연결된 종류(큐브맵은 samplerCube)로 자동 선언",
             ],
             ["iChannelResolution[4]", "vec3", "각 채널 입력의 크기(연결이 없거나 꺼진 미디어는 0)"],
           ],
@@ -488,8 +488,8 @@ layout(location = 1) out vec4 outData;`,
   },
   {
     id: "inputs",
-    title: "이미지 · 키보드 · 미디어 입력",
-    summary: "이미지 · 키보드 · 마이크 · 오디오 · 웹캠 · 영상을 채널에 연결",
+    title: "이미지 · 큐브맵 · 키보드 · 미디어 입력",
+    summary: "이미지 · 큐브맵 · 키보드 · 마이크 · 오디오 · 웹캠 · 영상을 채널에 연결",
     blocks: [
       { heading: "이미지" },
       {
@@ -535,6 +535,35 @@ bool keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x > 0.5; }
 bool keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x > 0.5; }
 bool keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x > 0.5; }`,
         title: "키 읽기",
+        insert: "cursor",
+      },
+      { heading: "큐브맵" },
+      {
+        p: "채널 칩의 **큐브맵**에서 이미지를 고르면(또는 **큐브맵 이미지 불러오기…**) 그 이미지를 6면 큐브맵으로 바꿔 `samplerCube`로 읽습니다. 하늘 · 반사 · 환경광에 씁니다. 이미지 비율로 배치를 알아봅니다.",
+      },
+      {
+        table: {
+          head: ["비율", "배치"],
+          rows: [
+            ["4:3", "가로 십자: 가운데 줄 -X · +Z · +X · -Z, 위 +Y, 아래 -Y"],
+            ["3:4", "세로 십자: 가운데 줄 -X · +Z · +X, 위 +Y, 그 아래 -Y · -Z(-Z는 180° 돌려 놓인 것)"],
+            ["6:1 · 1:6", "띠: +X · -X · +Y · -Y · +Z · -Z 차례"],
+            ["2:1", "360° 파노라마(등장방형): 가운데가 -Z(앞), 위가 +Y"],
+          ],
+        },
+      },
+      {
+        list: [
+          "각 면은 OpenGL · Shadertoy 큐브맵의 면 방향 그대로입니다. 밉맵이 있어 `textureLod(iChannel0, 방향, 단계)`로 흐린 반사를 만들 수 있습니다.",
+          "코드에서 `iChannelN`을 선언하지 않으면 연결한 종류에 맞춰 `samplerCube`(큐브맵) 또는 `sampler2D`로 자동 선언합니다(Shadertoy 코드를 그대로 붙여 넣어도 됩니다). 직접 선언할 때는 `uniform samplerCube iChannel0;`처럼 큐브맵 채널은 samplerCube로 쓰세요 — sampler2D로 선언하면 검게 읽힙니다.",
+          "큐브맵은 이미지 자원이라 프로젝트 저장 · 프로젝트 파일 · HTML로 내보내기에 함께 담깁니다. `iChannelResolution`은 한 면의 크기입니다.",
+        ],
+      },
+      {
+        code: `uniform samplerCube iChannel0;   // 큐브맵 연결(선언하지 않아도 됩니다)
+vec3 sky(vec3 rd)               { return texture(iChannel0, rd).rgb; }
+vec3 blurry(vec3 rd, float r)   { return textureLod(iChannel0, rd, r * 8.0).rgb; }   // 거친 반사`,
+        title: "큐브맵 읽기",
         insert: "cursor",
       },
       { heading: "마이크 · 오디오 · 웹캠 · 영상" },

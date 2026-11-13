@@ -89,7 +89,18 @@ const SHADERTOY = [
 // 코드가 이 이름을 직접 정의했는가: #define, 또는 타입 바로 뒤에 온 이름(전역·지역 변수, 함수 매개변수, uniform).
 const definesName = (code, name) =>
   new RegExp(`#\\s*define\\s+${name}\\b`).test(code) ||
-  new RegExp(`\\b(?:float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?)\\s+${name}\\b`).test(code);
+  new RegExp(`\\b(?:float|int|uint|bool|[biu]?vec[234]|mat[234](?:x[234])?|[iu]?sampler\\w+)\\s+${name}\\b`).test(code);
+// 채널: Shadertoy처럼 iChannelN · iChannelResolution을 선언하지 않고 쓰면 선언을 넣는다. iChannelN의 타입은 그 채널에
+// 연결된 것(types[N]: 큐브맵이면 samplerCube, 아니면 sampler2D — PassManager.channelTypes).
+const channelLines = (code, known, types = []) => {
+  const lines = [];
+  const missing = name =>
+    new RegExp(`\\b${name}\\b`).test(code) && !uniformType(known, name) && !definesName(known, name);
+  for (let i = 0; i < 4; i++)
+    if (missing(`iChannel${i}`)) lines.push(`uniform ${types[i] || "sampler2D"} iChannel${i};`);
+  if (missing("iChannelResolution")) lines.push("uniform vec3 iChannelResolution[4];");
+  return lines;
+};
 // 넣을 줄: FIELD Uniform 선언(없을 때만)과 #define.
 const shadertoyLines = code => {
   const lines = [];
@@ -151,12 +162,8 @@ const APP_UNIFORMS = [
   ["uDate", "vec4"],
   ["uFrameRate", "float"],
   ["uChannelTime", "float", "[4]"],
-  ["iChannel0", "sampler2D"],
-  ["iChannel1", "sampler2D"],
-  ["iChannel2", "sampler2D"],
-  ["iChannel3", "sampler2D"],
-  ["iChannelResolution", "vec3", "[4]"],
 ];
+// (iChannel0~3 · iChannelResolution은 패스 · Common 어디서 쓰든 channelLines가 연결된 타입으로 넣는다.)
 const commonUniforms = (commonCode, known, project = []) => {
   const used = name =>
     new RegExp(`\\b${name}\\b`).test(commonCode) && !uniformType(known, name) && !definesName(known, name);
@@ -183,7 +190,8 @@ const commonBlock = (common, resume) => ["#line 1 " + COMMON_SOURCE, ...common.s
 // Common에서도 uTime · 파라미터 · iChannel을 쓸 수 있다(위 "Common이 Uniform을 쓸 수 있게").
 // 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 줄을 넣었을 때만.
 // options.uniforms: projectUniforms()의 결과 — Common이 쓰는데 이 패스 · Common에 선언이 없는 Uniform을 넣을 때 쓴다.
-const prepareFragment = (source, declarations = [], { common = "", uniforms = [] } = {}) => {
+// options.channels: 이 패스의 채널 sampler 타입 4개 — 선언하지 않은 iChannelN을 그 타입으로 넣는다(기본 sampler2D).
+const prepareFragment = (source, declarations = [], { common = "", uniforms = [], channels = [] } = {}) => {
   if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
   if (typeof common !== "string") throw new TypeError("Common 코드는 문자열이어야 합니다.");
   const source0 = source; // 끌어올릴 원문(아래에서 source는 그 자리를 지운 사본이 된다)
@@ -191,7 +199,9 @@ const prepareFragment = (source, declarations = [], { common = "", uniforms = []
     hasCommon = !!common.trim(),
     commonCode = hasCommon ? blankComments(common) : "";
   // Shadertoy 이름은 Common에서 쓰거나 정의해도 알아본다.
-  declarations = [...declarations, ...shadertoyLines(hasCommon ? commonCode + "\n" + code : code)];
+  const everything = hasCommon ? commonCode + "\n" + code : code;
+  declarations = [...declarations, ...shadertoyLines(everything)];
+  declarations = [...declarations, ...channelLines(everything, `${everything}\n${declarations.join("\n")}`, channels)];
   // Common이 있을 때만: 끌어올릴 패스 Uniform(Common이 이미 선언한 이름뿐이면 지우기만) · Common이 쓰는 앱 Uniform 선언
   let hoisted = [],
     removed = [];

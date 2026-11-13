@@ -205,4 +205,14 @@ test("Common의 Uniform: uDate · uFrameRate · uChannelTime도 앱 Uniform으�
   const out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(f()); }",[],{common:"float f() { return uDate.w + uFrameRate + uChannelTime[0]; }"}).source;
   for(const d of["uniform vec4 uDate;","uniform float uFrameRate;","uniform float uChannelTime[4];"])assert(out.includes(d)&&out.indexOf(d)<out.indexOf("float f()"),d);
 });
+test("채널: 선언하지 않은 iChannelN · iChannelResolution을 연결된 타입으로 넣는다(Shadertoy처럼)",()=>{
+  const user="void mainImage(out vec4 c, in vec2 p) { c = texture(iChannel0, p / iChannelResolution[0].xy) + texture(iChannel2, vec3(1.0, 0.0, 0.0)); }";
+  const out=prepareFragment(user,[],{channels:["sampler2D","sampler2D","sampler2D","samplerCube"].map((t,i)=>i===2?"samplerCube":t)}).source;
+  for(const d of["uniform sampler2D iChannel0;","uniform samplerCube iChannel2;","uniform vec3 iChannelResolution[4];"])assert(out.includes("\n"+d+"\n"),d+"\n"+out);
+  assert(!out.includes("iChannel1;")&&!out.includes("iChannel3;"),"쓰지 않는 채널은 넣지 않는다");
+  assert(prepareFragment(user).source.includes("uniform sampler2D iChannel2;"),"타입을 모르면 sampler2D");
+  const own=prepareFragment("uniform samplerCube iChannel0;\nvec4 f(sampler2D iChannel1) { return texture(iChannel1, vec2(0.0)); }\nvoid mainImage(out vec4 c, in vec2 p) { c = texture(iChannel0, vec3(1.0)); }").source;
+  assert.equal(own.split("iChannel0;").length,2,"직접 선언한 채널은 그대로");
+  assert(!own.includes("uniform sampler2D iChannel1;"),"매개변수 이름으로 쓴 iChannel1도 건드리지 않는다");
+});
 console.log(`GLSL prepare: ${passed} passed`);
