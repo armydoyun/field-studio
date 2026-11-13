@@ -11,6 +11,14 @@
 // 그 전에 중지를 누르면 시작된 뒤 MIN_RECORD_MS만큼 담고 멈춘다(빈 파일이 되지 않게).
 // 첫 렌더 프레임이 오기 전에 누른 중지는 담을 것이 없으므로 파일 없이 바로 취소한다.
 // 녹화 크기는 캔버스의 실제 렌더 해상도(렌더링 › 해상도 배율·최대 픽셀 수)를 따른다.
+// 소리가 있을 때: 오디오 코덱까지 적은 형식을 먼저 고른다.
+const AUDIO_MIME_TYPES = [
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+  "video/mp4;codecs=avc1,mp4a.40.2",
+  "video/mp4",
+];
 const MIME_TYPES = [
   "video/webm;codecs=vp9",
   "video/webm;codecs=vp8",
@@ -22,8 +30,10 @@ const KEEPALIVE_MS = 250, // 이만큼 새로 그리지 않으면 마지막 화�
   MIN_RECORD_MS = 300, // 준비 중에 중지를 눌렀을 때, 시작된 뒤 최소한 이만큼은 담는다
   BITRATE = 16_000_000; // 16 Mbps: 셰이더의 세밀한 무늬·그라디언트가 뭉개지지 않을 정도
 
-const pickMimeType = (Recorder = globalThis.MediaRecorder) =>
-  MIME_TYPES.find(type => typeof Recorder?.isTypeSupported === "function" && Recorder.isTypeSupported(type)) || "";
+const pickMimeType = (Recorder = globalThis.MediaRecorder, audio = false) =>
+  (audio ? AUDIO_MIME_TYPES : MIME_TYPES).find(
+    type => typeof Recorder?.isTypeSupported === "function" && Recorder.isTypeSupported(type)
+  ) || "";
 
 const supported = (canvas, Recorder = globalThis.MediaRecorder) =>
   typeof Recorder === "function" && typeof canvas?.captureStream === "function";
@@ -44,12 +54,14 @@ const fileName = (mimeType, date = new Date()) => {
 };
 
 // source: { canvas, onFrame(listener) → 해제 함수, redraw() } — renderer.js의 공개 API
+// audioTracks(): 녹화에 함께 담을 소리 트랙(renderer.mediaAudioTracks — 켜진 오디오 파일 · 마이크). 녹화를 시작할 때 한 번 읽는다.
 // onChange({ recording, ready, elapsed }) · onSave(blob, name) · onError(message)
 //   ready=false: 첫 렌더 프레임이나 인코더를 기다리는 중(경과 시간 0)
 const create = ({
   canvas,
   onFrame = () => () => {},
   redraw = () => {},
+  audioTracks = () => [],
   onChange = () => {},
   onSave,
   onError = () => {},
@@ -128,9 +140,16 @@ const create = ({
     };
     const begin = () => {
       try {
-        const mimeType = pickMimeType(Recorder);
         stream = mirror.captureStream(0); // 첫 실제 화면과 그 크기가 준비된 뒤에 만든다.
-        recorder = new Recorder(stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: BITRATE });
+        // 소리: 켜진 오디오가 있으면 그 트랙을 복제해 담는다(녹화를 멈출 때 원본은 그대로 둔다).
+        const sound = (audioTracks() || []).map(item => item.clone());
+        for (const item of sound) stream.addTrack(item);
+        const mimeType = pickMimeType(Recorder, sound.length > 0);
+        recorder = new Recorder(stream, {
+          ...(mimeType ? { mimeType } : {}),
+          videoBitsPerSecond: BITRATE,
+          ...(sound.length ? { audioBitsPerSecond: 192_000 } : {}),
+        });
         pending = false;
         track = stream.getVideoTracks?.()[0];
         const active = recorder;

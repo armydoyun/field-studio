@@ -1745,6 +1745,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     startMedia: (kind, file) => media.start(kind, file),
     // 보관한 파일(오디오 · 영상 파일 종류마다 마지막 하나)로 다시 켜기
     startSavedMedia: kind => media.startSaved(kind),
+    // 녹화에 넣을 소리(켜진 오디오 파일 · 마이크를 섞은 트랙). 없으면 []
+    mediaAudioTracks: () => media.audioTracks(),
     stopMedia: kind => media.stop(kind),
     mediaState: kind => media.state(kind),
     validatePassConfiguration,

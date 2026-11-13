@@ -77,6 +77,7 @@ const create = (gl, { onChange = () => {} } = {}) => {
   };
   const sources = new Map(); // 종류 → {state, name, error, element, stream, analyser, url, texture, width, height, …}
   let audioContext = null,
+    recordDestination = null, // 녹화용 소리 출구(MediaStreamAudioDestination): 켜진 오디오가 모두 여기로도 간다
     disposed = false;
   const notify = () => {
     try {
@@ -146,6 +147,7 @@ const create = (gl, { onChange = () => {} } = {}) => {
       if (entry.stopped) return;
       entry.node = ctx.createMediaStreamSource(entry.stream);
       entry.node.connect(analyser);
+      if (recordDestination) analyser.connect(recordDestination);
     } else {
       const element = new Audio();
       entry.element = element;
@@ -155,6 +157,7 @@ const create = (gl, { onChange = () => {} } = {}) => {
       entry.node = ctx.createMediaElementSource(element);
       entry.node.connect(analyser);
       analyser.connect(ctx.destination);
+      if (recordDestination) analyser.connect(recordDestination);
       await element.play();
     }
   };
@@ -289,6 +292,17 @@ const create = (gl, { onChange = () => {} } = {}) => {
       ? { texture: entry.texture, width: entry.width, height: entry.height }
       : { texture: null, width: 0, height: 0 };
   };
+  // 녹화(recorder.js)에 넣을 소리: 켜진 오디오(오디오 파일 · 마이크)가 하나라도 있으면 그 소리를 섞은 트랙 하나.
+  // 처음 부를 때 출구를 만들고 지금 켜진 오디오를 잇는다(나중에 켜는 오디오는 startAudio가 잇는다). 없으면 [].
+  const audioTracks = () => {
+    const live = [...sources.values()].filter(entry => entry.analyser && entry.state === "on");
+    if (!live.length || !audioContext) return [];
+    if (!recordDestination) {
+      recordDestination = audioContext.createMediaStreamDestination();
+      for (const entry of live) entry.analyser.connect(recordDestination);
+    }
+    return recordDestination.stream.getAudioTracks();
+  };
   // uChannelTime: 재생 위치(초). 파일은 그 파일의 재생 위치, 마이크 · 웹캠은 켠 뒤 지난 시간, 꺼져 있으면 0.
   const time = kind => {
     const entry = sources.get(kind);
@@ -332,7 +346,20 @@ const create = (gl, { onChange = () => {} } = {}) => {
     audioContext?.close?.().catch(() => {});
     audioContext = null;
   };
-  return { start, startSaved, stop, retain, update, binding, state, time, restore, dispose, loaded: () => loaded };
+  return {
+    start,
+    startSaved,
+    stop,
+    retain,
+    update,
+    binding,
+    state,
+    time,
+    audioTracks,
+    restore,
+    dispose,
+    loaded: () => loaded,
+  };
 };
 
 export { create, audioRows, fileProblem, KINDS, LABELS, AUDIO_WIDTH, AUDIO_HEIGHT };
