@@ -42,6 +42,7 @@ js/
   # 렌더링 (GPU 자원 소유)
   renderer.js         # WebGL 리소스 · 애니메이션 루프 · 입력 · 컨텍스트 복구
   pass-manager.js     # 버퍼 패스의 프로그램 · 출력 Texture · FBO
+  glsl-prepare.js     # 컴파일 직전 GLSL 다듬기 — #version · precision 생략 시 자동 추가 · mainImage 진입점 · #line으로 오류 줄 유지
   texture-input.js    # 로컬 이미지 Texture (본문은 IndexedDB)
   keyboard-input.js   # 키보드 입력 텍스처(쉐이더토이 호환 256×3) — 키를 넘길지는 input.js가 정함
   gpu-diagnostics.js  # GL 오류 격리 · Uniform 리플렉션 · GPU 타이머

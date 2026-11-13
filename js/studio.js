@@ -1625,8 +1625,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     check();
     const code = (await file.text()).replace(/^\uFEFF/, "");
     check();
-    if (code.length > 262144 || !code.startsWith("#version 300 es"))
-      throw new Error("262144자 이하의 GLSL ES 3.00 소스가 필요합니다.");
+    if (code.length > 262144 || !code.trim()) throw new Error("262144자 이하의 GLSL 소스가 필요합니다.");
     $("studioCode").value = code;
     editor.update();
     rememberEditor();

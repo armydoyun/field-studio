@@ -5,6 +5,7 @@ import * as TextureInput from "./texture-input.js";
 import * as Diagnostics from "./gpu-diagnostics.js";
 import * as Keyboard from "./keyboard-input.js";
 import * as Ramp from "./ramp.js";
+import * as Prepare from "./glsl-prepare.js";
 
 // 사용자 Uniform 타입 표. n: 성분 수, kind: f(float) i(int) u(uint) b(bool) m(행렬, column-major), fn: 배열 업로드 함수.
 // 새 타입은 이 표에 추가하면 검증·GLSL 자동 선언·업로드·UI가 함께 따라간다.
@@ -350,10 +351,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (target.wheel != null) gl.uniform1f(target.wheel, wheel);
     uploadCustomUniforms(target);
   };
+  // 컴파일할 소스: 등록한 Uniform 중 코드에 없는 선언을 넣고, 짧은 머리말 · 가짜 진입점(mainImage)을 붙인다(glsl-prepare.js).
   const buildFragment = source => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
     const declarations = [],
-      code = source.replace(/\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\r\n]*/g, s => s.replace(/[^\r\n]/g, " "));
+      code = Prepare.blankComments(source);
     const uniforms = [...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+([^;{}]+);/g)];
     for (const [name, item] of userUniforms) {
       const match = uniforms.find(m => m[2].split(",").some(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name));
@@ -363,23 +365,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           throw new Error(`${name}: GLSL 선언(${match[1]})과 등록 타입(${item.type})이 다릅니다.`);
       } else declarations.push(`uniform ${item.type} ${name};`);
     }
-    if (!declarations.length) return { source };
-    const marker = /\bprecision\s+(?:lowp|mediump|highp)\s+float\s*;/.exec(code);
-    if (!source.startsWith("#version 300 es") || !marker)
-      throw new Error("사용자 Uniform을 추가하려면 GLSL ES 3.00과 float precision 선언이 필요합니다.");
-    const end = marker.index + marker[0].length,
-      tail = source.slice(end),
-      extra = /^[^\r\n]*\S/.test(tail.split(/\r?\n/)[0]) ? "\n" : "";
-    return {
-      source: source.slice(0, end) + "\n" + declarations.join("\n") + extra + tail,
-      injected: {
-        after: source.slice(0, end).split("\n").length,
-        count: declarations.length + extra.length,
-        generated: declarations.length,
-      },
-    };
+    return Prepare.prepareFragment(source, declarations);
   };
-  // 삽입 위치와 진단 보정은 같은 결과를 사용한다. 한 줄 GLSL도 원본 줄을 보존한다.
   const compileFragment = source => {
     const compiled = buildFragment(source);
     try {

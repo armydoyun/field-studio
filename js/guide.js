@@ -95,7 +95,7 @@ void main() {
     summary: "GLSL ES 3.00 구조 · 실행 · 오류 읽기",
     blocks: [
       {
-        p: "모든 패스는 `#version 300 es`로 시작하는 프래그먼트 셰이더입니다. 화면의 각 픽셀마다 `main()`이 실행되고 `out vec4`에 색을 씁니다.",
+        p: "모든 패스는 GLSL ES 3.00(`#version 300 es`) 프래그먼트 셰이더입니다. 화면의 각 픽셀마다 `main()`이 실행되고 `out vec4`에 색을 씁니다. 머리말은 생략할 수 있습니다(아래 **짧게 쓰기**).",
       },
       {
         code: `#version 300 es
@@ -111,6 +111,28 @@ void main() {
 }`,
         title: "가장 작은 셰이더",
         insert: "replace",
+      },
+      { heading: "짧게 쓰기 · mainImage" },
+      {
+        p: "`#version 300 es`와 `precision highp float;`은 생략해도 됩니다. 없으면 실행할 때 자동으로 붙이고, 오류 줄 번호는 편집기 줄 그대로 나옵니다. `main()` 대신 Shadertoy처럼 `mainImage(out vec4 fragColor, in vec2 fragCoord)`만 써도 됩니다. 실행할 때 `main()`이 이 함수를 불러 그 색을 출력하고, `fragCoord`는 `gl_FragCoord.xy`(픽셀 중심 좌표)입니다.",
+      },
+      {
+        code: `uniform vec2 uResolution;
+uniform float uTime;
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / uResolution;
+    fragColor = vec4(0.5 + 0.5 * cos(uTime + uv.xyx + vec3(0, 2, 4)), 1.0);
+}`,
+        title: "머리말 없이 mainImage로",
+        insert: "replace",
+      },
+      {
+        list: [
+          "Uniform은 직접 선언합니다. Shadertoy의 `iTime` · `iResolution`은 이 앱에서 `uTime` · `uResolution`(vec2)입니다.",
+          "`main()`이 있으면 그쪽이 진입점이고 `mainImage`는 보통 함수입니다. 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
+          "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말과 `main()`을 직접 넣어야 합니다.",
+        ],
       },
       {
         list: [
