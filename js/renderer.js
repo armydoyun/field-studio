@@ -1453,6 +1453,49 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       return imageChanged || result.changed;
     });
   };
+  // HTML 내보내기(html-export.js)용: 지금 적용된 그대로의 장면. 소스는 컴파일 직전 모양(머리말 · Shadertoy 이름 ·
+  // Common · 파라미터 선언 · mainImage 진입점까지 붙은 것)이라 재생기는 그대로 컴파일만 한다.
+  // 파라미터는 지금 값(벡터는 올릴 배열, 램프는 구운 256×1 자료와 텍스처 유닛)으로 담는다.
+  const exportScene = () => {
+    if (disposed || lost || !program)
+      throw new Error("내보낼 장면이 없습니다(셰이더가 적용되지 않았거나 컨텍스트를 잃음).");
+    const fragments = passManager.getFragments();
+    let rampUnit = RAMP_FIRST_UNIT;
+    const uniforms = [...userUniforms].map(([name, item]) => {
+      const spec = UNIFORM_TYPES[item.type];
+      if (spec.kind === "t")
+        return {
+          name,
+          ramp: {
+            unit: rampUnit++,
+            gradient: !!item.options.gradient,
+            nearest: item.options.gradient === "step",
+            data: Array.from(item.data),
+          },
+        };
+      const values = spec.n === 1 ? [spec.kind === "b" ? (item.value ? 1 : 0) : item.value] : Array.from(item.data);
+      return { name, kind: spec.kind, fn: spec.fn || null, values };
+    });
+    return {
+      vertex: vertexSource,
+      image: { source: buildFragment(fragmentSource).source, channels: passManager.getImageChannels() },
+      passes: passManager.getPasses().map(({ name, format, scale, size, outputs, filter, wrap, mipmap, channels }) => ({
+        name,
+        source: buildFragment(fragments.get(name)).source,
+        format,
+        scale,
+        size: size || null,
+        outputs,
+        filter,
+        wrap,
+        mipmap,
+        channels,
+      })),
+      uniforms,
+      resolutionScale,
+      timeScale,
+    };
+  };
   // 적용한 구성의 채널이 더는 읽지 않는 미디어(마이크 · 카메라 · 파일)는 끈다.
   const retainMedia = () => media.retain(passManager.mediaKinds());
   const validatePassConfiguration = (passes, imageChannels = {}) =>
@@ -1615,6 +1658,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     redraw,
     validateFragment,
     getCommon: () => commonSource,
+    exportScene,
     // 미디어 입력: startMedia(종류, 파일?) → Promise<boolean> · 상태는 mediaState(종류)
     startMedia: (kind, file) => media.start(kind, file),
     stopMedia: kind => media.stop(kind),

@@ -769,6 +769,8 @@ void main(){
     for (const key of Object.keys(imageChannels)) if (imageChannels[key].texture === id) delete imageChannels[key];
   };
   const getImageChannels = () => JSON.parse(JSON.stringify(imageChannels));
+  // 지금 실행 중인 패스의 소스(이름 → GLSL). HTML 내보내기가 적용된 그대로를 담는다.
+  const getFragments = () => new Map(passes.map(p => [p.name, p.fragment]));
   const getPreview = () => preview;
   // 밉맵 체인은 기본 레벨의 약 1/3을 추가로 사용한다.
   const getMemoryBytes = () =>
@@ -845,6 +847,7 @@ void main(){
     resetTargets,
     getPasses,
     getImageChannels,
+    getFragments,
     // 지금 실행 중인 구성에 키보드 입력을 읽는 채널이 있는지(input.js가 키를 셰이더에 넘길지 정한다)
     usesKeyboard: () =>
       [imageChannels, ...passes.map(pass => pass.channels)].some(channels =>

@@ -19,6 +19,7 @@ import * as PreviewDOM from "./preview-dom.js";
 import * as Scope from "./glsl-scope.js";
 import * as Prepare from "./glsl-prepare.js";
 import * as Media from "./media-input.js";
+import * as HtmlExport from "./html-export.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -1548,6 +1549,38 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     download("shader-studio-pack.json", pack.text, "application/json", PACK_LIMIT);
     setStatus(`Pack 내보냄 · 코드·파라미터·설정·이미지 ${pack.images}개 포함`);
   };
+  // 작품 하나를 재생 전용 HTML 한 파일로(html-export.js). 지금 적용된 그대로를 담는다: 고치고 실행하지 않은 코드가 있으면
+  // 먼저 실행하고, 컴파일 오류가 있으면 내보내지 않는다. 연결된 이미지는 파일 안에 data URL로 넣는다.
+  const buildPlayerHTML = async () => {
+    rememberEditor();
+    if ((dirty || compileFailed) && !apply()) throw new Error("컴파일 오류를 고친 뒤 HTML로 내보내세요.");
+    const scene = renderer.exportScene(),
+      assets = renderer.getTextures(),
+      textures = {};
+    const ids = new Set(
+      [scene.image.channels, ...scene.passes.map(pass => pass.channels)]
+        .flatMap(channels => Object.values(channels))
+        .map(ref => ref.texture)
+        .filter(Boolean)
+    );
+    for (const id of ids) {
+      const file = renderer.getTextureFile(id),
+        meta = assets.find(asset => asset.id === id);
+      if (file && meta) textures[id] = { url: await Pack.readData(file), sampling: meta.sampling };
+    }
+    const title = projects?.current()?.name || "FIELD Shader",
+      data = HtmlExport.buildPlayerData(scene, textures);
+    return { html: HtmlExport.buildPlayerHTML(data, title), title, data };
+  };
+  const exportHTML = async () => {
+    const { html, title, data } = await buildPlayerHTML();
+    if (disposed) return;
+    download(`${title.replace(/[\\/:*?"<>|]+/g, "_").trim() || "field-shader"}.html`, html, "text/html;charset=utf-8");
+    const images = Object.keys(data.textures).length;
+    setStatus(
+      `HTML 내보냄 · 버퍼 ${data.passes.length}개${images ? ` · 이미지 ${images}개` : ""} · 더블클릭해 브라우저에서 재생${data.media.length ? " · 미디어 입력은 빠짐" : ""}`
+    );
+  };
   let loadSerial = 0;
   const beginLoad = (full = false) => {
     const serial = ++loadSerial,
@@ -2007,6 +2040,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   });
   on($("studioExportPack"), "click", event => runFile(event.currentTarget, "Pack 준비 중…", exportPack));
+  on($("studioExportHTML"), "click", event => runFile(event.currentTarget, "HTML 준비 중…", exportHTML));
   on($("studioImportPack"), "click", () => $("studioPackFile").click());
   on($("studioPackFile"), "change", async event => {
     const file = event.target.files?.[0];
@@ -2336,6 +2370,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press(".frag 파일 열기", "studioOpenGLSL"),
     press("다른 이름으로 프로젝트 저장", "studioProjectSaveAs", "Ctrl+Shift+S"),
     press("프로젝트 파일 내보내기 (코드·파라미터·이미지)", "studioExportPack"),
+    press("HTML로 내보내기 (재생 전용 한 파일)", "studioExportHTML"),
     press("프로젝트 파일 열기", "studioImportPack"),
     press("이미지 파일 불러오기", "studioTextureAdd"),
     press("새 프로젝트 (기본 장면)", "studioReset"),
@@ -2372,6 +2407,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     getProject: () => copy(project),
     exportPack,
     importPack,
+    // 재생 전용 HTML: {html, title, data}(내려받지 않는다 — 테스트 · 확장용) · exportHTML()은 내려받는다
+    buildPlayerHTML,
+    exportHTML,
     // 브라우저 프로젝트 보관함: save(asNew) · list() · open(id) · rename(id) · remove(id) · current()
     projects: {
       save: asNew => projects.save(asNew),

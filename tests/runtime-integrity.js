@@ -26,5 +26,7 @@ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert(html.includes('<script type="module" src="./js/main.js"></script>'),'ESM HTML entry missing');
 assert(!html.includes('loader.js'),'Legacy loader reference');
 const ids=new Set([...html.matchAll(/\bid\s*=\s*"([^"]+)"/g)].map(x=>x[1]));
-for(const name of names){const source=fs.readFileSync(path.join(jsdir,name+'.js'),'utf8');for(const m of source.matchAll(/\$\("([A-Za-z][\w-]*)"\)|document\.getElementById\("([A-Za-z][\w-]*)"\)/g)) assert(ids.has(m[1]||m[2]),`#${m[1]||m[2]} absent in ${name}`);}
+// html-export.js의 재생기는 앱이 아니라 내보낸 HTML에서 돈다: 그 파일이 만드는 요소(field · note)는 index.html에 없다.
+const OWN_DOCUMENT={'html-export':new Set(['field','note'])};
+for(const name of names){const source=fs.readFileSync(path.join(jsdir,name+'.js'),'utf8');for(const m of source.matchAll(/\$\("([A-Za-z][\w-]*)"\)|document\.getElementById\("([A-Za-z][\w-]*)"\)/g)) assert(ids.has(m[1]||m[2])||OWN_DOCUMENT[name]?.has(m[1]||m[2]),`#${m[1]||m[2]} absent in ${name}`);}
 console.log(`PASS ${files.length} runtime files SHA-256, ${names.size} ES Modules, import cycle, ${ids.size} DOM IDs`);
