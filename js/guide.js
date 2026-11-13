@@ -403,9 +403,20 @@ fragColor = max(newColor, history * 0.97);   // 잔상 누적`,
         p: "버퍼 설정의 **출력 수**를 2 이상으로 하면 한 번의 실행으로 여러 출력에 씁니다. 위치·속도처럼 묶인 데이터를 저장할 때 유용합니다.",
       },
       {
+        code: `void mainImage(out vec4 outColor, out vec4 outData, in vec2 fragCoord) {
+    outColor = vec4(1.0);                 // 출력 0
+    outData = vec4(fragCoord, 0.0, 1.0);  // 출력 1
+}`,
+        title: "mainImage로 쓰기 (출력 수 = 2)",
+        insert: "replace",
+      },
+      {
+        p: "`mainImage`의 `out vec4` 매개변수 순서가 출력 번호(0, 1, …)입니다. `main()`으로 쓸 때는 출력마다 `layout(location = N)`을 붙여 선언합니다.",
+      },
+      {
         code: `layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outData;`,
-        title: "출력 선언 (출력 수 = 2)",
+        title: "main()으로 쓸 때의 출력 선언",
         insert: "cursor",
       },
       {

@@ -71,4 +71,18 @@ test("주석이 맨 위에 있어도 #version을 알아본다",()=>{
   const user="// 설명\n#version 300 es\nprecision highp float;\nout vec4 o;\nvoid main(){ o = vec4(1.0); }";
   assert.equal(prepareFragment(user).source,user);
 });
+test("여러 출력(MRT): out vec4 매개변수 순서대로 layout(location = N) 출력을 만들어 연결한다",()=>{
+  const out=prepareFragment("void mainImage(out vec4 color, out vec4 data, in vec2 fragCoord) { color = vec4(1.0); data = vec4(fragCoord, 0.0, 1.0); }").source;
+  assert(/layout\(location = 0\) out vec4 field_FragColor0_; layout\(location = 1\) out vec4 field_FragColor1_; void main\(\) \{ vec4 color0 = vec4\(0\.0, 0\.0, 0\.0, 1\.0\), color1 = vec4\(0\.0, 0\.0, 0\.0, 1\.0\); mainImage\(color0, color1, gl_FragCoord\.xy\); field_FragColor0_ = color0; field_FragColor1_ = color1; \}/.test(out),out);
+  assert(!/out vec4 field_FragColor_;/.test(out),"출력 하나짜리 선언은 만들지 않는다");
+});
+test("여러 출력을 이미 같은 수만큼 선언했으면 location 순서대로 그 변수에 쓴다",()=>{
+  const out=prepareFragment("layout(location = 1) out vec4 second;\nlayout(location = 0) out vec4 first;\nvoid mainImage(out vec4 a, out vec4 b, in vec2 p) { a = vec4(1.0); b = vec4(0.5); }").source;
+  assert(!out.includes("field_FragColor"),"새 출력을 만들지 않는다");
+  assert(/first = color0; second = color1;/.test(out),out);
+});
+test("출력이 하나면 예전과 같다(전역 out이 layout으로 선언돼 있어도 그 변수에 쓴다)",()=>{
+  const out=prepareFragment("layout(location = 0) out vec4 result;\nvoid mainImage(out highp vec4 c, in vec2 p) { c = vec4(1.0); }").source;
+  assert(/mainImage\(color, gl_FragCoord\.xy\); result = color; \}/.test(out),out);
+});
 console.log(`GLSL prepare: ${passed} passed`);
