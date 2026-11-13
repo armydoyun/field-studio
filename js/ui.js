@@ -8,6 +8,7 @@ import * as Presets from "./presets.js";
 import * as Links from "./links.js";
 import * as Timeline from "./timeline.js";
 import * as LinkSheet from "./link-sheet.js";
+import * as Store from "./storage.js";
 const mount = (renderer, input, settings) => {
   const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
@@ -1560,10 +1561,16 @@ const mount = (renderer, input, settings) => {
       : presets.length >= Presets.MAX_PRESETS
         ? `프리셋은 최대 ${Presets.MAX_PRESETS}개입니다`
         : "지금 파라미터 값 전체를 이름 붙여 저장";
+    // 파라미터가 없으면 프리셋 막대를 통째로 숨기고, 프리셋이 없으면 '프리셋 · 지금 값 저장' 한 줄로 줄인다(전환 시간은 고를 칩이 있을 때만).
+    const bar = $("presetBar");
+    if (bar) {
+      bar.hidden = !users.length && !presets.length;
+      bar.classList?.toggle("is-empty", !presets.length);
+    }
     if (!presets.length) {
       const empty = element("span");
       empty.className = "preset-empty";
-      empty.textContent = "저장한 프리셋이 없습니다. 값을 맞춘 뒤 저장하세요.";
+      empty.textContent = "저장한 프리셋이 없습니다";
       list.append(empty);
       return;
     }
@@ -1595,11 +1602,11 @@ const mount = (renderer, input, settings) => {
       names = presets.map(item => item.name);
     let n = presets.length + 1;
     while (names.includes(`프리셋 ${n}`)) n++;
-    const name = await askName("프리셋 저장", `프리셋 ${n}`, names);
-    if (!name) return;
+    // 이름을 묻지 않고 바로 저장한다(한 번에 끝). 이름은 칩을 두 번 누르거나 ⋯에서 바꾼다.
+    const name = `프리셋 ${n}`;
     attempt(() => {
-      settings.setPresets([...settings.getPresets(), Presets.capture(name, renderer.getUserUniforms())]);
-      presetNotice(`'${name}' 저장 · 파라미터 ${renderer.getUserUniforms().length}개`);
+      settings.setPresets([...presets, Presets.capture(name, renderer.getUserUniforms())]);
+      presetNotice(`'${name}' 저장 · 이름은 칩을 두 번 눌러 바꿉니다`, presets);
     });
   });
   listen($("presetUndo"), "click", () => {
@@ -1648,7 +1655,13 @@ const mount = (renderer, input, settings) => {
     liveLinks.get(name).push(update);
     if (!liveFrame) liveFrame = requestAnimationFrame(liveStep);
   };
-  const openTimeline = name => timeline.open(name);
+  const openTimeline = (name, options) => timeline.open(name, options);
+  // 편집기를 열고 입력 채널 줄(iChannel0–3)을 펼친다 — 소리 연결에 오디오가 없을 때의 바로가기
+  const openInputs = () => {
+    window.shaderStudio?.open?.();
+    if ($("studioInputsToggle")?.getAttribute("aria-expanded") !== "true") $("studioInputsToggle")?.click();
+    $("studioInputs")?.querySelector("button")?.focus();
+  };
   // ---- 키프레임 정밀 입력: 키프레임 연결 줄의 내비게이터(◀ ◆ ▶ · 재생 위치) · 자동 키 ----
   // 키프레임 연결 줄에서 값을 바꾸면 재생선 위치에 키를 찍는다(그 시간에 키가 있으면 값만 바꾼다).
   // 끄는 동안은 렌더러에만 적용하고, 놓거나(change · pointerup · keyup) 잠시 멈추면 저장한다 — 끌기가 끊기지 않게.
@@ -1808,6 +1821,7 @@ const mount = (renderer, input, settings) => {
       save: next => saveLink(item.name, next),
       preview: next => previewLink(item.name, next),
       openTimeline,
+      openInputs,
     });
     watchLink(item.name, view.update);
     return view.node;
@@ -2140,6 +2154,8 @@ const mount = (renderer, input, settings) => {
           const channels = item.type === "vec4" ? "RGBA" : "RGB";
           // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
           const hdr = item.options.hdr;
+          // 0~1 숫자 줄은 HEX와 같은 말이라 HDR(1을 넘는 값)일 때만 보인다
+          wrap.classList.toggle("is-hdr", !!hdr);
           let alpha = null,
             alphaNumber = null,
             intensity = null,
@@ -2549,6 +2565,9 @@ const mount = (renderer, input, settings) => {
     // 방향 패드는 문서에 붙은 뒤에야 테마 색을 읽을 수 있으므로 한 번 더 그린다.
     for (const draw of directionRedraws) draw();
     const count = shown;
+    // 고를 파라미터가 없으면 검색 칸은 쓸모가 없다(검색 중이면 지울 수 있게 남긴다)
+    const searchWrap = $("uniformSearch")?.closest?.(".uniform-search-wrap");
+    if (searchWrap) searchWrap.hidden = !items.length && !search;
     $("uniformResults").textContent = search
       ? `${items.length}개 중 ${count}개 표시`
       : hidden.size
@@ -2561,7 +2580,25 @@ const mount = (renderer, input, settings) => {
         ? "검색 결과가 없습니다. 이름이나 타입을 확인하세요."
         : hidden.size
           ? "모든 파라미터가 조건(@if)으로 숨겨져 있습니다."
-          : "아직 파라미터가 없습니다. 위에서 추가하거나 갤러리 예제로 시작하세요.";
+          : "아직 파라미터가 없습니다.";
+      // 빈 상태에서 할 수 있는 일을 바로 누르게 한다: 예제로 시작 · 직접 추가
+      if (!search && !hidden.size) {
+        const actions = element("div"),
+          gallery = element("button"),
+          add = element("button");
+        actions.className = "uniform-empty-actions";
+        gallery.type = add.type = "button";
+        gallery.className = "primary";
+        gallery.textContent = "예제 갤러리 열기";
+        gallery.addEventListener("click", () => $("galleryToggle").click());
+        add.textContent = "파라미터 추가";
+        add.addEventListener("click", () => {
+          $("uniformEditor").open = true;
+          $("uniformEditor").scrollIntoView?.({ block: "nearest" });
+        });
+        actions.append(gallery, add);
+        hint.append(actions);
+      }
       userList.append(hint);
     }
   };
@@ -2766,6 +2803,7 @@ const mount = (renderer, input, settings) => {
         const value = Number(button.dataset.fpsPreset);
         renderer.setFpsLimit(value);
         $("fpsLimit").value = String(value);
+        fpsCustom = false;
         syncFpsPresets(value);
       })
     );
@@ -2831,7 +2869,8 @@ const mount = (renderer, input, settings) => {
   );
   const stage = $("stage"),
     tabScroll = new Map();
-  let activeTab = "render";
+  // 처음 여는 탭은 파라미터: 작품을 만지는 사람이 가장 자주 쓰는 곳(렌더링 · 성능 · 작업공간은 가끔 여는 설정).
+  let activeTab = "uniforms";
   const setActiveTab = tab => {
     const scroll = $("panel").querySelector(".panel-scroll");
     tabScroll.set(activeTab, scroll.scrollTop);
@@ -2933,13 +2972,32 @@ const mount = (renderer, input, settings) => {
     renderer.stepFrame();
     requestAnimationFrame(() => requestAnimationFrame(updateStats));
   };
+  // 프레임 제한: 빠른 선택(Auto · 30 · 60 · 120)이 기본, 그 밖의 값은 '직접'을 눌러 입력한다.
+  // 목록에 없는 값이면 '직접'이 눌린 채 입력 칸이 보인다.
+  let fpsCustom = false;
   const syncFpsPresets = fps => {
+    let matched = false;
     for (const button of document.querySelectorAll("[data-fps-preset]")) {
-      const active = Number(button.dataset.fpsPreset) === fps;
+      const active = !fpsCustom && Number(button.dataset.fpsPreset) === fps;
+      matched ||= Number(button.dataset.fpsPreset) === fps;
       button.classList.toggle("is-selected", active);
       button.setAttribute("aria-pressed", String(active));
     }
+    const custom = fpsCustom || !matched,
+      toggle = document.querySelector("[data-fps-custom]"),
+      field = $("fpsLimit")?.closest?.(".fps-control");
+    toggle?.classList.toggle("is-selected", custom);
+    toggle?.setAttribute("aria-pressed", String(custom));
+    if (field) field.hidden = !custom;
   };
+  const fpsCustomButton = document.querySelector("[data-fps-custom]");
+  if (fpsCustomButton)
+    listen(fpsCustomButton, "click", () => {
+      fpsCustom = true;
+      syncFpsPresets(renderer.getStats().fpsLimit);
+      $("fpsLimit").focus();
+      $("fpsLimit").select?.();
+    });
   const toggleFullscreen = async () => {
     try {
       const doc = $("screen").ownerDocument || document,
@@ -3036,6 +3094,8 @@ const mount = (renderer, input, settings) => {
     recorder.stop();
     $("captureToggle").focus();
   });
+  // 도구 막대의 카메라 = 한 번에 스크린샷(PNG). 고해상도 · 영상 · 녹화는 옆의 ▾ 메뉴.
+  if ($("quickShot")) listen($("quickShot"), "click", () => $("screenshotButton").click());
   listen($("screenshotButton"), "click", async () => {
     const button = $("screenshotButton");
     button.disabled = true;
@@ -3080,6 +3140,33 @@ const mount = (renderer, input, settings) => {
       document.dispatchEvent(new Event("shader-preview-changed"));
     })
   );
+  // 미리보기 통계: 평소에는 FPS 한 칸만(작품을 덜 가리게), 누르면 해상도 · 시간 · 프레임 · GPU까지 펼친다. 고른 상태는 기억한다.
+  {
+    const STATS_KEY = "field.hud.stats.v1",
+      stats = $("stats");
+    const setStatsOpen = open => {
+      stats.dataset.expanded = String(open);
+      stats.setAttribute("aria-expanded", String(open));
+      stats.title = open ? "누르면 FPS만 보기" : "누르면 해상도 · 시간 · 프레임 · GPU까지 보기";
+    };
+    if (stats?.setAttribute) {
+      stats.setAttribute("role", "button");
+      stats.tabIndex = 0;
+      stats.setAttribute("aria-label", "미리보기 통계 펼치기/접기");
+      setStatsOpen(Store.read(STATS_KEY) === "1");
+      const flip = () => {
+        const open = stats.dataset.expanded !== "true";
+        setStatsOpen(open);
+        Store.write(STATS_KEY, open ? "1" : "0");
+      };
+      listen(stats, "click", flip);
+      listen(stats, "keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        flip();
+      });
+    }
+  }
   listen($("screen"), "pointerdown", () => stage.classList.add("has-interacted"));
   listen($("screen"), "wheel", () => stage.classList.add("has-interacted"));
   const syncFullscreen = () => {
@@ -3213,6 +3300,7 @@ const mount = (renderer, input, settings) => {
     $("stats").title =
       `${s.fps.toFixed(1)} FPS · ${s.width}×${s.height} · Frame ${s.frame} · GPU ${gpuText} · CPU ${(s.cpuMs ?? 0).toFixed(2)}ms`;
     $("viewportMode").textContent = s.previewPass ? `BUFFER ${s.previewPass}` : "IMAGE";
+    if ($("viewportInfo")?.dataset) $("viewportInfo").dataset.mode = s.previewPass ? "buffer" : "image";
     const previewName = s.previewPass ? `Buffer ${s.previewPass}` : "Image";
     $("studioPreviewTarget").textContent = previewName;
     $("studioPreviewTarget").setAttribute("aria-label", `미리보기: ${previewName}`);

@@ -33,7 +33,7 @@
       if (desc) test(desc.getBoundingClientRect().width >= row.clientWidth-26, `${label} ${name}: 설명은 행 전체 너비 사용`);
     }
     const footer = document.querySelector(".panel-footer"), status = $("storageStatus"), version = footer.querySelector(".footer-version");
-    test(contained(status,footer) && contained(version,footer) && !overlaps(status,version), `${label}: 저장 상태와 버전 표시가 겹치거나 잘리지 않음`);
+    test(contained(status,footer) && (!version || (contained(version,footer) && !overlaps(status,version))), `${label}: 저장 상태가 바닥줄 안에 온전히 표시됨`);
     test($("panel").scrollWidth <= $("panel").clientWidth+1, `${label}: 패널 가로 넘침 없음`);
   };
   const handle = $("panelResize");

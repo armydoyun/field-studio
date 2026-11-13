@@ -84,6 +84,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     start = button("timeline-start glyph-icon icon-reset", "처음으로", "", "재생 위치를 0초로"),
     timeField = element("input", "timeline-time"),
     snapSelect = element("select", "timeline-snap"),
+    speedSelect = element("select", "timeline-speed"),
     zoomOut = button("timeline-zoom", "축소", "−"),
     zoomIn = button("timeline-zoom", "확대", "+"),
     fit = button("timeline-fit", "모든 키가 보이게 맞춤", "맞춤"),
@@ -106,6 +107,14 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     snapSelect.append(option);
   }
   snapSelect.value = snapChoice;
+  // 재생 속도: 타임라인을 재생 조작의 한 곳으로 모은다(설정 패널 렌더링 탭의 배속 버튼과 같은 값 · 같은 저장).
+  for (const value of ["0.25", "0.5", "1", "2"]) {
+    const option = element("option", "", `${value}×`);
+    option.value = value;
+    speedSelect.append(option);
+  }
+  speedSelect.setAttribute("aria-label", "재생 속도");
+  speedSelect.title = "재생 속도(uTime이 흐르는 빠르기) · 설정 패널 렌더링 탭과 같은 값";
   snapSelect.setAttribute("aria-label", "스냅");
   snapSelect.title = "키를 끌거나 방향키로 옮길 때 맞출 간격 · 재생선 · 다른 키에도 붙는다(Alt를 누르고 끌면 끔)";
   addSelect.setAttribute("aria-label", "키프레임 레인 추가");
@@ -148,8 +157,8 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     keyDelete
   );
   bar.append(
-    group(play, start, labelled("", timeField, "초")),
-    group(labelled("스냅", snapSelect), zoomOut, zoomIn, fit, addSelect),
+    group(play, start, labelled("", timeField, "초"), speedSelect),
+    group(labelled("스냅", snapSelect), zoomOut, zoomIn, fit),
     inspector,
     close
   );
@@ -430,7 +439,9 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     lanes.clear();
     track.replaceChildren();
     const rulerRow = element("div", "timeline-ruler-row"),
-      corner = element("div", "timeline-corner", list.length ? `레인 ${list.length}` : "");
+      corner = element("div", "timeline-corner");
+    // 레인 추가는 레인 이름 칸 맨 위(눈금자 왼쪽)에 둔다: 레인이 생기는 자리 바로 위라 찾기 쉽고, 위 막대 폭을 아낀다.
+    corner.append(addSelect);
     rulerRow.append(corner, renderRuler());
     track.append(rulerRow);
     if (!list.length)
@@ -438,7 +449,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         element(
           "p",
           "timeline-empty",
-          "키프레임 연결이 없습니다. '+ 파라미터'로 레인을 만들거나, 파라미터 줄의 연결 버튼(⛓)에서 '키프레임'을 고르세요."
+          "키프레임 연결이 없습니다. 왼쪽 위 '+ 파라미터'로 레인을 만들거나, 파라미터 줄의 연결 버튼(⛓)에서 '키프레임'을 고르세요."
         )
       );
     for (const link of list) track.append(renderLane(link, items.get(link.name)));
@@ -815,6 +826,13 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     snapChoice = snapSelect.value;
     remember();
   });
+  // 배속은 설정 패널의 배속 버튼을 눌러 바꾼다: 저장 · 표시 · 되돌리기가 한 길로 간다(없으면 렌더러에 직접).
+  on(speedSelect, "change", () => {
+    const value = speedSelect.value,
+      preset = document.querySelector(`[data-time-scale="${value}"]`);
+    if (preset) preset.click();
+    else attempt(() => renderer.setTimeScale?.(Number(value)));
+  });
   on(addSelect, "change", () => {
     const item = users().find(u => u.name === addSelect.value);
     addSelect.value = "";
@@ -880,6 +898,15 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     // 재생 중에는 자릿수 고정(소수 둘째)으로 글자 폭이 흔들리지 않게, 멈췄을 때는 정확한 값
     if (document.activeElement !== timeField)
       timeField.value = renderer.getStats().running ? t.toFixed(2) : String(round(t, 3));
+    const scale = String(renderer.getStats().timeScale ?? 1);
+    if (document.activeElement !== speedSelect && speedSelect.value !== scale) {
+      if (![...speedSelect.options].some(option => option.value === scale)) {
+        const option = element("option", "", `${scale}×`);
+        option.value = scale;
+        speedSelect.append(option);
+      }
+      speedSelect.value = scale;
+    }
     const playing = studio()?.getPlaybackState?.() ?? renderer.getStats().running;
     play.classList.toggle("icon-play", !playing);
     play.classList.toggle("icon-pause", !!playing);
@@ -908,15 +935,16 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     }
     window.dispatchEvent?.(new Event("resize")); // 미리보기 캔버스 크기를 다시 맞춘다
   };
-  // name이 있으면 그 레인의 첫 키를 고른다
-  const open = name => {
+  // name이 있으면 그 레인의 첫 키를 고른다. focus: false면 초점은 부른 쪽(연결 시트)에 그대로 둔다.
+  const open = (name, { focus = true } = {}) => {
     setOpen(true);
     const link = name && linkOf(name);
     if (link?.keys?.length) {
       selected = [{ name, t: link.keys[0][0] }];
       render();
+      lanes.get(name)?.area?.closest?.(".timeline-lane")?.scrollIntoView?.({ block: "nearest" });
     }
-    body.focus({ preventScroll: true });
+    if (focus) body.focus({ preventScroll: true });
   };
   const bindToggle = node => {
     if (!node?.addEventListener) return;

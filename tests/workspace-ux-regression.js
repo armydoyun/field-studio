@@ -5,7 +5,7 @@ const classes=()=>{const set=new Set();return {add(...names){names.forEach(x=>se
 async function test(name,fn,compact=false,initialStorage={}){const f=fixture(false,compact,initialStorage);let ui;try{
  const N=f.canvas.constructor,n=id=>f.document.getElementById(id),scroll=new N();
  N.prototype.setAttribute=function(k,v){(this.attrs??={})[k]=String(v);};N.prototype.removeAttribute=function(k){delete this.attrs?.[k];};
- const tabs=['render','uniforms','input'].map(tab=>Object.assign(new N(),{dataset:{tab}})),views=tabs.map(t=>Object.assign(n('view-'+t.dataset.tab),{dataset:{panel:t.dataset.tab},hidden:t.dataset.tab!=='render'}));
+ const tabs=['uniforms','render','input'].map(tab=>Object.assign(new N(),{dataset:{tab}})),views=tabs.map(t=>Object.assign(n('view-'+t.dataset.tab),{dataset:{panel:t.dataset.tab},hidden:t.dataset.tab!=='uniforms'}));
  N.prototype.querySelector=function(s){if(s==='option[data-custom]')return this.children.find(x=>x.dataset.custom)||null;if(s==='.panel-scroll')return scroll;if(s==='summary')return this.summary??=new N();if(s.startsWith('[data-tab='))return tabs.find(t=>s.includes(t.dataset.tab));return null;};N.prototype.querySelectorAll=()=>[];
  f.document.querySelectorAll=s=>s==='#panelTabs [data-tab]'?tabs:s==='.panel-view'?views:[];
  f.document.body.classList=classes();n('stage').classList=classes();n('studioDock').hidden=true;
