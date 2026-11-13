@@ -241,6 +241,21 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       found = wordAround(src, pos);
     if (!found) return false;
     const at = definitionOf(src, found.word, found.start);
+    // 이 탭에 없으면 Common 탭에서 찾는다: 함수 · 전역 변수 · 구조체 · #define이면 options.openShared(줄, 열)로 그 탭의 그 자리로.
+    const common = at < 0 ? language.shared?.() : null;
+    if (common && options.openShared) {
+      const where =
+        common.functions.find(f => f.name === found.word)?.offset ??
+        common.structs.get(found.word)?.offset ??
+        common.defines.find(d => d.name === found.word)?.offset ??
+        common.variables.find(v => v.name === found.word)?.offset;
+      if (where !== undefined) {
+        const before = common.src.slice(0, where),
+          line = before.split("\n").length;
+        options.openShared(line, where - before.lastIndexOf("\n"));
+        return true;
+      }
+    }
     if (at < 0) {
       notify(
         options.lookup?.(found.word)
@@ -330,11 +345,68 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     notify(`${word} → ${next} · ${before.length}곳을 바꿨습니다 · Ctrl+Z로 되돌리기`);
     return true;
   };
+  // Common의 전역 이름은 어느 탭에서 바꾸든 Common과 모든 패스를 함께 바꾼다(studio의 renameShared · Undo 한 번).
+  // 패스 탭: 이 탭에 선언이 없고 Common에 있는 이름 · Common 탭: 전역 함수 · 변수 · 구조체 · #define 이름 — Uniform은 renameUniform.
+  const renameAcross = async (view, word, macro) => {
+    const src = docText(view.state);
+    const next = await askNewName(
+      `'${word}' 이름 바꾸기 · Common ${macro ? "#define" : "전역 이름"}`,
+      `Common의 '${word}'와, 모든 패스에서 그것을 쓰는 곳을 함께 바꿉니다(그 패스 안에서 같은 이름을 따로 선언한 곳은 그대로). Undo 한 번으로 되돌립니다.`,
+      word
+    );
+    if (next === null || next === undefined || badName(next, word)) return true;
+    if (docText(view.state) !== src) {
+      notify("확인하는 동안 코드가 바뀌어 이름 바꾸기를 취소했습니다");
+      return true;
+    }
+    if (options.lookup?.(next) || Object.hasOwn(BUILTIN_VARS, next) || appUniforms.has(next)) {
+      notify(`'${next}'은(는) GLSL 내장 이름이나 앱 Uniform 이름이라 쓸 수 없습니다`);
+      return true;
+    }
+    const result = await options.renameShared({ from: word, to: next, macro });
+    if (result && !result.refused)
+      notify(
+        `${word} → ${next} · Common ${result.common}곳${result.passes ? ` · 패스 ${result.passes}개` : ""} · Ctrl+Z로 되돌리기`
+      );
+    return true;
+  };
   const renameSymbol = async view => {
     const src = docText(view.state),
       head = view.state.selection.main.head,
       macros = symbolsOf(src).defines.map(d => d.name),
       plan = Scope.planRename(src, head, null, { macros });
+    const common = typeof options.renameShared === "function" ? language.shared?.() : null;
+    // 패스 탭에서 Common의 이름(이 탭에는 선언이 없다)
+    if (common && !plan.ok && plan.reason === "undeclared") {
+      const word = plan.word;
+      if (common.defines.some(d => d.name === word)) return renameAcross(view, word, true);
+      const variable = common.variables.find(v => v.name === word);
+      if (variable?.uniform && typeof options.renameUniform === "function" && !appUniforms.has(word)) {
+        const next = await askNewName(
+          `'${word}' 이름 바꾸기 · Common의 Uniform`,
+          "Common의 선언과 모든 패스에서 쓰는 곳, 파라미터 값까지 함께 바꿉니다.",
+          word
+        );
+        if (next === null || next === undefined || badName(next, word) || docText(view.state) !== src) return true;
+        const result = await options.renameUniform({
+          from: word,
+          to: next,
+          spots: Scope.externalSpots(src, word) || [],
+          head,
+        });
+        if (result && !result.refused) notify(`${word} → ${next} · 패스 ${result.passes}개 · Ctrl+Z로 되돌리기`);
+        return true;
+      }
+      if (variable || common.functions.some(f => f.name === word) || common.structs.has(word))
+        return renameAcross(view, word, false);
+    }
+    // Common 탭에서 전역 이름 · #define
+    if (options.isSharedTab?.() && typeof options.renameShared === "function") {
+      if (!plan.ok && plan.reason === "macro") return renameAcross(view, plan.word, true);
+      const symbol = plan.ok ? plan.symbol : null;
+      if (symbol && symbol.scope === 0 && !symbol.uniform && ["function", "var", "struct"].includes(symbol.kind))
+        return renameAcross(view, symbol.name, false);
+    }
     if (!plan.ok) {
       const word = plan.word;
       if (plan.reason === "macro")

@@ -434,6 +434,23 @@ const planGlobal = (src, name, next) => {
   return decl ? planRename(src, decl.at, next) : null;
 };
 
+// Common 탭의 전역 이름(함수 · 변수 · Uniform · 구조체)을 바꾸는 계획: Common 안의 선언과 그것을 가리키는 곳.
+const planShared = (src, name, next) => {
+  const info = analyze(src),
+    decl = info.decls.find(d => d.scope === 0 && d.name === name && d.kind !== "field");
+  return decl ? planRename(src, decl.at, next) : null;
+};
+// 이 소스 안의 어떤 선언도 가리키지 않는 이름(name) 참조 — 다른 곳(Common)에 정의된 것을 쓰는 곳. 괄호 짝이 안 맞으면 null.
+const externalSpots = (src, name) => {
+  const info = analyze(src);
+  if (!info.balanced) return null;
+  return info.refs.filter(r => !r.member && r.name === name && !resolve(info, name, r.at, r.scope)).map(r => r.at);
+};
+// 이 소스가 전역에서 name을 정의하는가(전역 선언 또는 #define) — 이름이 겹치는지 볼 때.
+const definesGlobal = (src, name) =>
+  analyze(src).decls.some(d => d.scope === 0 && d.name === name && d.kind !== "field") ||
+  new RegExp(`^[ \\t]*#\\s*define\\s+${name}\\b`, "m").test(cleanCode(src, true));
+
 // 계획대로 바꾼 소스.
 const applyRename = (src, spots, from, to) => {
   let out = src;
@@ -458,6 +475,9 @@ export {
   symbolAt,
   planRename,
   planGlobal,
+  planShared,
+  externalSpots,
+  definesGlobal,
   applyRename,
   macroSpots,
   lineOf,

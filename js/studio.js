@@ -159,7 +159,16 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       userUniforms: () => renderer.getUserUniforms().map(item => ({ name: item.name, type: item.type })),
       onScrub: scrubApply,
       renameUniform: request => renameUniform(request),
+      renameShared: request => renameShared(request),
+      isSharedTab: () => selected === COMMON,
       notify: text => setStatus(text, "is-dirty"),
+      // 다른 탭의 편집기가 Common의 이름을 알도록(자동 완성 · 설명 · 정의로 이동). Common 탭 자신에게는 넘기지 않는다.
+      shared: () => (selected !== COMMON && hasCommon() ? project.common : ""),
+      openShared: (line, column) => {
+        select(COMMON);
+        editor.goToLine(line, column);
+        setStatus(`Common 탭 ${line}번째 줄의 정의로 이동했습니다`);
+      },
     }
   );
   for (const type of ["beforeinput", "select", "click", "keyup", "scroll"]) on($("studioCode"), type, captureCursor);
@@ -1274,11 +1283,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     // (파라미터 패널·어노테이션으로 등록한 값은 코드 편집 기록과 따로 바뀐다).
     checkpoint.users = users;
     let passes = 0;
+    // Common이 선언한 Uniform은 패스가 선언 없이 쓴다(glsl-prepare가 Common 앞으로 모은다): 그런 패스는 쓰는 곳만 바꾼다.
+    const commonUniform = hasCommon() && !!Scope.planGlobal(project.common, from, to)?.symbol?.uniform;
     const renameIn = source => {
       const plan = Scope.planGlobal(source, from, to);
-      if (!plan?.ok || !plan.symbol.uniform) return source;
+      const spots =
+        plan?.ok && plan.symbol.uniform ? plan.spots : commonUniform ? Scope.externalSpots(source, from) : null;
+      if (!spots?.length) return source;
       passes++;
-      return Scope.applyRename(source, plan.spots, from, to);
+      return Scope.applyRename(source, spots, from, to);
     };
     const current = Scope.applyRename(code, spots, from, to);
     if (selected === "Image") project.image = current;
@@ -1295,6 +1308,49 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!applied && same(before, project)) return null;
     recordEdit(false, true);
     return { passes, parameter: registered && applied };
+  };
+  // Common 탭의 전역 이름(함수 · 변수 · 구조체 · #define) 바꾸기: Common의 선언과 쓰는 곳, 그리고 모든 패스에서 그 이름을
+  // Common 것으로 쓰는 곳(그 패스 안의 선언을 가리키지 않는 곳)을 함께 바꾼다. Undo 한 번. 어느 탭의 F2에서든 부른다.
+  // macro: #define 이름이면 true(범위가 없어 같은 단어를 모두 — 그 이름을 스스로 #define한 패스는 빼고).
+  const renameShared = ({ from, to, macro = false }) => {
+    if (disposed || !hasCommon()) return null;
+    rememberEditor();
+    const before = copy(project),
+      head = $("studioCode").selectionStart,
+      tabs = tabNames();
+    const clash = tabs.find(name => Scope.definesGlobal(sourceOf(project, name), to));
+    if (clash) {
+      setStatus(`${tabLabel(clash)}에 이미 '${to}'이(가) 있어 이름을 바꾸지 않았습니다`, "is-error");
+      return { refused: true };
+    }
+    const commonSpots = macro
+      ? Scope.macroSpots(project.common, from)
+      : Scope.planShared(project.common, from, to)?.spots;
+    if (!commonSpots?.length) return null;
+    let passes = 0,
+      skipped = [],
+      current = [];
+    for (const name of tabs) {
+      const src = sourceOf(project, name);
+      let spots;
+      if (name === COMMON) spots = commonSpots;
+      else if (macro) spots = Scope.definesGlobal(src, from) ? [] : Scope.macroSpots(src, from);
+      else spots = Scope.definesGlobal(src, from) ? [] : Scope.externalSpots(src, from);
+      if (spots === null) skipped.push(name); // 괄호 짝이 안 맞아(작성 중) 범위를 알 수 없음
+      if (!spots?.length) continue;
+      if (name === selected) current = spots;
+      if (name !== COMMON) passes++;
+      setSourceOf(project, name, Scope.applyRename(src, spots, from, to));
+    }
+    const shift = current.filter(at => at < head).length * (to.length - from.length);
+    renderEditor();
+    $("studioCode").setSelectionRange(head + shift, head + shift);
+    apply();
+    if (same(before, project)) return null;
+    recordEdit(false, true);
+    if (skipped.length)
+      setStatus(`${skipped.map(tabLabel).join(", ")}은(는) 괄호 짝이 맞지 않아 바꾸지 않았습니다`, "is-error");
+    return { passes, common: commonSpots.length, skipped: skipped.length };
   };
   // 지금 작업을 다른 작업(예제·새 프로젝트·파일·보관함 항목)으로 바꾸기 전에 묻는다.
   //   지킬 것: 보관함과 다른 작업(저장한 뒤 바뀐 프로젝트, 시작한 뒤 바뀐 이름 없는 작업) · 실행하지 않은 코드
@@ -1630,8 +1686,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
     if (state) renderer.validatePortable(Pack.withoutTextures(next), state.user);
     else {
-      renderer.validateFragment(next.image, next.common ?? "");
-      for (const pass of next.passes) renderer.validateFragment(pass.fragment, next.common ?? "");
+      renderer.validateFragment(next.image, next);
+      for (const pass of next.passes) renderer.validateFragment(pass.fragment, next);
     }
     if (!(await confirmReplace())) return false;
     check();

@@ -36,10 +36,9 @@ const TOPICS = [
 precision highp float;
 uniform vec2 uResolution;   // 화면 픽셀 크기
 uniform float uTime;        // 재생 시간(초)
-out vec4 fragColor;
 
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;        // 0~1 화면 좌표
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {   // 픽셀마다 실행된다
+    vec2 uv = fragCoord / uResolution;              // 0~1 화면 좌표
     vec3 col = vec3(uv, 0.5 + 0.5 * sin(uTime));    // x → 빨강, y → 초록, 시간 → 파랑
     fragColor = vec4(col, 1.0);
 }`,
@@ -79,7 +78,7 @@ void main() {
               "FPS · 렌더 해상도 · 시간(uTime, 배속) · 프레임 수 · GPU 시간(지원 시). 미리보기를 분리 창으로 옮기면 HUD도 그 창에 보이고, 분리 창에서도 G로 숨깁니다. G는 위쪽 도구 막대까지 모든 HUD를 숨겨 셰이더만 남기고, 다시 G나 Esc로 되돌립니다",
             ],
             ["설정 패널(기본 왼쪽)", "렌더링 품질 · 파라미터 · 성능/디버그 · 작업공간 탭"],
-            ["편집기", "패스 탭(Image/Buffer) · 입력 채널 · GLSL 코드 · 오류 표시"],
+            ["편집기", "패스 탭(Image · Common · Buffer) · 입력 채널 · GLSL 코드 · 오류 표시"],
           ],
         },
       },
@@ -132,11 +131,11 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
       },
       {
         list: [
-          "Uniform은 직접 선언합니다. 이 앱의 이름은 `uTime` · `uResolution`(vec2) · `uMouse` · `uFrame` · `uDeltaTime`입니다.",
+          "앱 이름의 Uniform은 직접 선언합니다: `uTime` · `uResolution`(vec2) · `uMouse` · `uFrame` · `uDeltaTime`(**내장 Uniform** 참고). 자동 완성으로 고르면 선언 줄도 함께 들어갑니다.",
           "Shadertoy 이름 `iTime` · `iTimeDelta` · `iFrame` · `iResolution`(vec3) · `iMouse`는 선언 없이 그대로 써도 됩니다. 실행할 때 앱이 위 Uniform에 연결합니다(필요하면 그 Uniform 선언도 넣습니다). 그래서 Shadertoy 코드를 붙여 넣으면 대부분 바로 돌아갑니다.",
           "`iMouse`는 `uMouse`(vec4)와 같은 값입니다. Shadertoy와 달리 xy는 누르지 않아도 포인터를 따라가고, 포인터가 뷰포트 밖이면 -1입니다. `iDate` · `iFrameRate` · `iChannelTime`은 아직 없습니다.",
           "`mainImage`를 쓰면서 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
-          "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말과 `main()`을 직접 넣어야 합니다.",
+          "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말 · `main()` · Common을 직접 넣고 Shadertoy 이름은 앱 이름으로 바꿔야 합니다. 작품을 그대로 보여 주려면 **HTML로 내보내기**(프로젝트 메뉴)를 쓰세요.",
         ],
       },
       {
@@ -154,7 +153,7 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
           rows: [
             [
               "맨 위 줄",
-              "패스 탭과 **+**(버퍼 추가) · 되돌리기/다시 실행 · **자동** · **실행** · 재생/정지 · 시간 초기화 · 집중 모드 · 닫기",
+              "패스 탭과 **+**(버퍼 추가) · **+ Common**(공용 코드 탭, 없을 때만) · 되돌리기/다시 실행 · **자동** · **실행** · 재생/정지 · 시간 초기화 · 집중 모드 · 닫기",
             ],
             [
               "입력 줄",
@@ -162,7 +161,7 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
             ],
             [
               "버퍼 설정",
-              "Buffer 탭을 고르면 나타나는 한 줄 요약. 누르면 형식·크기·출력 수·필터·가장자리·밉맵과 순서·복제·삭제가 펼쳐집니다.",
+              "Buffer 탭을 고르면 나타나는 한 줄 요약. 누르면 형식·크기·출력 수·필터·가장자리·밉맵과 순서·복제·삭제가 펼쳐집니다. Common 탭에서는 삭제만 있습니다.",
             ],
             [
               "코드 머리줄",
@@ -180,7 +179,7 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
           "오른쪽(좁으면 아래) 설명 칸에 시그니처와 설명이 나옵니다. 아이콘: `x` 변수 · `ƒ` 함수 · `u` Uniform · `T` 타입 · `k` 키워드 · `{}` 템플릿 · `+` 코드 조각 모음.",
           "`uv.` · `col.`처럼 **점을 찍으면** 그 변수 타입에 맞는 성분(`x y xy rgb …`)이나 구조체 필드를 제안합니다.",
           "**템플릿**: `for` · `if` · `ifelse` · `func` · `main` · `struct` · `uniform-range` · `uniform-color` · `uv-center` · `frag` … 넣은 뒤 `Tab`으로 다음 자리로 이동하고, `Esc`로 끝냅니다.",
-          "`uTime`·`uMouse`·`iChannel0`처럼 **선언하지 않은 앱 Uniform**을 고르면 선언 줄을 맨 위에 함께 넣습니다.",
+          "`uTime`·`uMouse`·`iChannel0`처럼 **선언하지 않은 앱 Uniform**을 고르면 선언 줄을 맨 위에 함께 넣습니다. `iTime`·`iResolution` 같은 Shadertoy 이름은 선언 없이 쓰는 이름이라 이름만 넣습니다.",
           "`fbm3`·`sdHexagon`처럼 **코드 조각 모음의 함수 이름**(`+` 아이콘)을 고르면 함수 정의(필요한 보조 함수 포함)가 위쪽에 자동으로 추가됩니다. `Ctrl+Z` 한 번이면 정의만 되돌아갑니다.",
           "새 변수 이름을 짓는 자리(`float ` 다음 등)에서는 목록이 저절로 뜨지 않습니다.",
         ],
@@ -197,8 +196,8 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
           "**찾기 · 바꾸기** — `Ctrl+F`는 찾기만, `Ctrl+H`는 찾아 바꾸기(바꿀 내용 줄이 함께 열림)입니다. 창 안에서도 두 키로 오가고, 찾기 칸 왼쪽 `›` 버튼으로 바꾸기 줄을 여닫습니다. 찾기 칸에서 `Enter`/`Shift+Enter`로 다음·이전 일치로 가고, 바꾸기 줄이 열려 있으면 `Tab`으로 바로 바꿀 내용 칸으로 갑니다. 대소문자(`Alt+C`)·단어 단위(`Alt+W`)·정규식(`Alt+R`)을 켤 수 있고, 정규식으로 바꿀 때 `$1`·`$&`를 씁니다.",
           "**오류** — 컴파일 오류가 난 줄에 표시가 붙고 줄 끝에 이유가 나옵니다. `F8`·`Shift+F8`로 오류 사이를 오가고, `Ctrl+Shift+M`으로 목록을 엽니다.",
           "**주석** — `Ctrl+/` 줄 주석, `Shift+Alt+A` 블록 주석(`/* */`).",
-          "**정의로 이동** — `F12` 또는 `Ctrl+클릭`. **이름 바꾸기** — `F2`. VS Code처럼 커서 아래 이름이 가리키는 그 변수·함수만 바꿉니다(다른 함수의 같은 이름, 안쪽 블록에서 가린 이름은 그대로). Uniform은 다른 패스의 같은 Uniform과 파라미터 값까지 함께 바꾸고, 새 이름이 겹치면 무엇이 바뀌는지 보여 주고 다시 묻습니다. 구조체 필드도 그 구조체의 필드만 바꿉니다(`.` 앞 식의 타입을 따라가므로 다른 구조체의 같은 이름 필드·벡터 성분 `.xyz`는 그대로). 내장 이름은 바꾸지 않고, `#define` 매크로는 이 패스의 같은 이름을 모두 바꿉니다.",
-          "**명령 팔레트** — VS Code와 같습니다. `Ctrl+Shift+P`(또는 `F1`, ⋯ 메뉴)는 `>` 명령, `Ctrl+P`는 패스(Image · Buffer)로 이동, `Ctrl+Shift+O`는 `@` 함수·Uniform, `Ctrl+G`는 `:` 줄 번호. 입력 칸에서 접두어를 바꿔 다른 목록으로 넘어갈 수 있습니다.",
+          "**정의로 이동** — `F12` 또는 `Ctrl+클릭`. **이름 바꾸기** — `F2`. VS Code처럼 커서 아래 이름이 가리키는 그 변수·함수만 바꿉니다(다른 함수의 같은 이름, 안쪽 블록에서 가린 이름은 그대로). Uniform은 다른 패스의 같은 Uniform과 파라미터 값까지 함께 바꾸고, **Common의 이름**(함수 · 변수 · 구조체 · `#define` · Uniform)은 어느 탭에서 바꾸든 Common과 모든 패스의 쓰는 곳을 함께 바꿉니다(그 패스 안에서 따로 선언한 같은 이름은 그대로, Undo 한 번). 또 새 이름이 겹치면 무엇이 바뀌는지 보여 주고 다시 묻습니다. 구조체 필드도 그 구조체의 필드만 바꿉니다(`.` 앞 식의 타입을 따라가므로 다른 구조체의 같은 이름 필드·벡터 성분 `.xyz`는 그대로). 내장 이름은 바꾸지 않고, `#define` 매크로는 이 패스의 같은 이름을 모두 바꿉니다.",
+          "**명령 팔레트** — VS Code와 같습니다. `Ctrl+Shift+P`(또는 `F1`, ⋯ 메뉴)는 `>` 명령, `Ctrl+P`는 패스(Image · Common · Buffer)로 이동, `Ctrl+Shift+O`는 `@` 함수·Uniform, `Ctrl+G`는 `:` 줄 번호. 입력 칸에서 접두어를 바꿔 다른 목록으로 넘어갈 수 있습니다.",
           "**숫자 조절** — 숫자 위에 커서를 두고 `Ctrl+↑`/`Ctrl+↓`로 마지막 자릿수 단위만큼 올리고 내립니다(`Shift`를 함께 누르면 10배). `0.25`는 0.01씩, `3.`은 1씩 바뀝니다.",
           "**끌어서 조절** — `Alt`를 누른 채 숫자를 좌우로 끌면 값이 바뀌며 화면이 바로 따라옵니다. 한 번 끈 것은 `Ctrl+Z` 한 번으로 되돌아갑니다.",
         ],
@@ -225,7 +224,7 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
     summary: "렌더러가 자동으로 넣어주는 값",
     blocks: [
       {
-        p: "아래 이름을 GLSL에 선언하기만 하면 렌더러가 매 프레임 값을 넣습니다. 별도 등록이 필요 없습니다. 허용 타입이 아니면 값 전달을 건너뛰고 상태줄에 알려줍니다.",
+        p: "아래 이름을 GLSL에 선언하기만 하면 렌더러가 매 프레임 값을 넣습니다. 별도 등록이 필요 없습니다. 허용 타입이 아니면 값 전달을 건너뛰고 상태줄에 알려줍니다. Shadertoy 이름(`iTime` 등)은 선언 없이 씁니다(아래).",
       },
       {
         table: {
@@ -244,11 +243,30 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
               "float",
               "뷰포트에서 굴린 휠의 누적 칸 수(위로 +1). 시간 초기화 시 0. 선언하면 휠이 페이지 대신 셰이더로 갑니다",
             ],
-            ["iChannel0~3", "sampler2D", "편집기에서 연결한 이미지·버퍼"],
-            ["iChannelResolution[4]", "vec3", "각 채널 입력의 크기"],
+            [
+              "iChannel0~3",
+              "sampler2D",
+              "편집기에서 연결한 버퍼 · 이미지 · 키보드 · 미디어(마이크 · 오디오 · 웹캠 · 영상)",
+            ],
+            ["iChannelResolution[4]", "vec3", "각 채널 입력의 크기(연결이 없거나 꺼진 미디어는 0)"],
           ],
         },
       },
+      {
+        p: "**Shadertoy 이름** — 아래 이름은 선언하지 않고 쓰면 실행할 때 앱이 위 Uniform에 연결합니다(코드에서 같은 이름을 직접 선언하거나 `#define`했으면 건드리지 않습니다).",
+      },
+      {
+        table: {
+          head: ["Shadertoy 이름", "타입", "연결되는 값"],
+          rows: [
+            ["iTime / iTimeDelta", "float", "uTime / uDeltaTime"],
+            ["iFrame", "int", "uFrame"],
+            ["iResolution", "vec3", "(uResolution.xy, 1.0)"],
+            ["iMouse", "vec4", "uMouse — xy는 누르지 않아도 포인터를 따라가고 뷰포트 밖이면 -1(Shadertoy와 다름)"],
+          ],
+        },
+      },
+      { note: "`iDate` · `iFrameRate` · `iChannelTime` · `iSampleRate`는 아직 없습니다." },
       {
         code: `uniform vec4 uMouse;
 // ...
@@ -376,12 +394,27 @@ fragColor = max(newColor, history * 0.97);   // 잔상 누적`,
         insert: "cursor",
       },
       {
-        p: "**Common** — 패스 탭 옆의 **+ Common**을 누르면 모든 패스(Image · Buffer)가 같이 쓰는 공용 코드 탭이 생깁니다. 여기에 쓴 함수 · 상수 · `#define` · 구조체는 실행할 때 각 패스의 머리말(`#version` · precision · Uniform 선언) 바로 뒤에 붙으므로, 해시 · 노이즈 같은 함수를 패스마다 복사하지 않아도 됩니다. `mainImage`는 각 패스에 둡니다.",
+        p: "**Common** — 패스 탭 옆의 **+ Common**을 누르면 모든 패스(Image · Buffer)가 같이 쓰는 공용 코드 탭이 생깁니다. 여기에 쓴 함수 · 상수 · `#define` · 구조체는 실행할 때 각 패스의 머리말 바로 뒤, 패스 코드보다 앞에 붙으므로, 해시 · 노이즈 같은 함수를 패스마다 복사하지 않아도 됩니다. `mainImage`는 각 패스에 둡니다.",
+      },
+      {
+        code: `// Common — uTime · uResolution · iChannel0 · iTime 같은 이름을 그대로 쓴다
+uniform float uSpeed;   // 파라미터는 Common이나 어느 한 패스에 선언 · @range 0 4 @default 1
+float wave(vec2 p) { return sin(p.x * 10.0 + uTime * uSpeed); }
+vec4 history(vec2 fragCoord) { return texture(iChannel0, fragCoord / uResolution); }
+
+// Buffer A · Image — 여느 함수처럼 부른다
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    fragColor = vec4(vec3(0.5 + 0.5 * wave(fragCoord / uResolution.y)), 1.0);
+}`,
+        title: "Common의 함수를 패스에서 쓰기",
       },
       {
         list: [
+          "Common에서 앱 Uniform(`uTime` · `uResolution` · `uMouse` · `uFrame` · `uDeltaTime` · `uWheel` · `iChannel0~3` · `iChannelResolution`)과 Shadertoy 이름(`iTime` …)을 선언 없이 그대로 씁니다. 패스가 선언하지 않았으면 실행할 때 그 패스에 선언을 넣고, 패스가 선언했으면 그 선언(타입)을 씁니다.",
+          "패스가 선언한 Uniform(파라미터 포함)도 Common에서 쓸 수 있습니다. 실행할 때 패스의 `uniform` 선언을 Common 앞으로 옮기고(편집기 코드는 그대로, 오류 줄 번호도 원래 줄), Common이 쓰는데 선언하지 않은 패스에는 **다른 패스의 선언**을 넣습니다. 그래서 파라미터는 Common이나 **어느 한 패스**에 한 번만 선언하면 됩니다(어노테이션은 선언한 곳에서 읽습니다).",
+          "`iChannelN`은 패스마다 그 패스에 연결된 입력을 읽습니다. Common의 함수가 `iChannel1`을 읽으면, 그 함수를 부르는 패스마다 iChannel1에 같은 종류(예: 키보드)를 연결하세요. 예제 갤러리의 **Keyboard Control**이 이렇게 씁니다.",
+          "Image · Buffer 탭의 자동 완성 · 마우스 설명 · 시그니처 도움말이 Common의 함수 · 상수 · 구조체 · `#define`도 압니다. `F12`(또는 `Ctrl+클릭`)로 Common에 있는 정의로 바로 갑니다.",
           "Common만 고쳐도 모든 패스가 다시 컴파일됩니다. Common에서 난 오류는 **Common** 탭의 그 줄로 표시됩니다(어느 패스를 컴파일하다 났는지도 함께 적습니다).",
-          "Common에는 입력 채널이 없습니다. 채널 연결 · `iChannel` 선언은 그것을 읽는 각 패스에 둡니다.",
           "Common 탭을 고른 뒤 설정 줄의 **삭제**로 지울 수 있습니다(Undo로 복원). `Common`은 Buffer 이름으로 쓸 수 없습니다.",
         ],
       },
@@ -606,7 +639,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           ["되돌리기 / 다시 실행", "Ctrl+Z / Ctrl+Y · Ctrl+Shift+Z"],
           ["자동 완성", "Ctrl+Space / Ctrl+I"],
           ["명령 팔레트", "Ctrl+Shift+P / F1"],
-          ["패스(Image · Buffer)로 이동", "Ctrl+P"],
+          ["패스(Image · Common · Buffer)로 이동", "Ctrl+P"],
           ["함수·Uniform으로 이동", "Ctrl+Shift+O"],
           ["줄 번호로 이동", "Ctrl+G"],
           ["찾기만 / 찾아 바꾸기", "Ctrl+F / Ctrl+H"],
@@ -662,7 +695,10 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
               "지금 적용된 작품을 HTML 한 파일로 — 서버·인터넷 없이 더블클릭해 전체 화면으로 재생(더블클릭 · F: 전체 화면). 코드·버퍼·Common·파라미터 값·이미지 포함, 마우스·휠·키보드 동작. 편집은 안 되고 미디어 입력(마이크·카메라·파일)은 빠집니다",
             ],
             ["코드만 내보내기 (고급)", "코드와 버퍼 연결 구성만(이미지·파라미터 제외)"],
-            [".frag 파일로 저장", "현재 패스의 코드만 .frag 파일로 (편집기 ⋯ 메뉴)"],
+            [
+              ".frag 파일로 저장",
+              "현재 탭의 코드만 쓴 그대로 .frag 파일로(Common 탭은 Common.glsl) — 편집기 ⋯ 메뉴. Common · 자동 머리말은 들어가지 않습니다",
+            ],
             ["스크린샷", "툴바의 캡처(카메라) › 스크린샷 저장 → 현재 화면 PNG"],
             [
               "고해상도 스크린샷",
@@ -736,7 +772,7 @@ const TOUR = [
   {
     target: "#studioPassTabs",
     title: "패스 탭",
-    text: "Image(화면)와 Buffer 패스를 오갑니다. 옆의 +로 오프스크린 패스를 추가해 여러 단계를 연결할 수 있어요.",
+    text: "Image(화면) · Common(공용 코드) · Buffer 패스를 오갑니다. 옆의 +로 오프스크린 패스를 추가해 여러 단계를 연결하고, + Common으로 모든 패스가 같이 쓰는 함수를 한 곳에 둘 수 있어요.",
     prepare: "open-editor",
   },
   {

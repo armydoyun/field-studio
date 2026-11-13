@@ -74,6 +74,7 @@ js/
   ramp.js             # @gradient·@curve 램프 굽기(256×1 텍스처 자료, 순수 함수)
   input.js            # 뷰포트 포인터·키 입력 → 키보드 채널 전달
   stage-menu.js       # 뷰포트 툴바 드롭다운(캡처 ▾ · ⋯ 더보기)
+  html-export.js      # HTML로 내보내기: 작품 하나를 재생 전용 HTML 한 파일로(재생기 · 컴파일 직전 GLSL · 이미지 포함)
   recorder.js         # 뷰포트 녹화(MediaRecorder → WebM/MP4 내려받기) — 실시간
   video-render.js     # 영상 렌더링(오프라인) — 프레임마다 정한 시간으로 그려 WebCodecs → WebM 먹서 / PNG ZIP (순수 함수 + 실행기)
   video-dialog.js     # 영상 렌더링 대화상자(캡처 › 영상 렌더링…): 설정 · 진행률 · 취소

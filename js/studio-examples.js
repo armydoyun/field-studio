@@ -26,7 +26,9 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 }`;
 // Common 탭의 시작 코드: 모든 패스(Image · Buffer) 앞에 붙는다. 함수 · 상수 · 구조체를 두는 곳이다.
 const common = `// Common: 여기에 쓴 함수 · 상수 · #define은 모든 패스(Image · Buffer)에서 쓸 수 있습니다.
-// 패스의 #version · precision · Uniform 선언 다음, 패스 코드 바로 앞에 붙습니다(mainImage는 각 패스에 둡니다).
+// 패스의 머리말(#version · precision) 다음, 패스 코드보다 앞에 붙습니다(mainImage는 각 패스에 둡니다).
+// uTime · uResolution · iChannel0 · iTime 같은 앱 Uniform은 선언 없이, 파라미터는 여기나 어느 한 패스에 선언해 씁니다.
+// 여기 이름을 F2로 바꾸면 모든 패스의 쓰는 곳도 함께 바뀝니다.
 #define PI 3.14159265
 
 // 0~1 정수 해시(칸 번호가 커져도 무늬가 무너지지 않는다)

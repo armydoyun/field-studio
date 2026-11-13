@@ -1181,7 +1181,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "찾아 바꾸기", key: "Ctrl+H", run: () => showFind(true) },
     { label: "줄 번호로 이동", key: "Ctrl+G", run: () => openPalette(":") },
     { label: "함수·변수로 이동", key: "Ctrl+Shift+O", run: () => openPalette("@") },
-    { label: "패스로 이동 (Image · Buffer)", key: "Ctrl+P", run: () => openPalette("") },
+    { label: "패스로 이동 (Image · Common · Buffer)", key: "Ctrl+P", run: () => openPalette("") },
     { label: "자동 완성 열기", key: "Ctrl+Space · Ctrl+I", run: () => CM.startCompletion(view) },
     { label: "줄 주석 전환", key: "Ctrl+/", run: () => CM.toggleComment(view) },
     { label: "블록 주석 전환 (/* */)", key: "Shift+Alt+A", run: () => blockComment(view) },

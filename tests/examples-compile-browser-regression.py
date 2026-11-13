@@ -71,7 +71,7 @@ with sync_playwright() as p:
     failures=compile_all(sources)
     check(not failures,f'all {len(sources)} gallery shaders compile: {failures}')
     # 여러 패스가 같이 쓰는 함수는 Common에 한 번만: 패스에 다시 정의하지 않는다(복사본이 어긋나지 않게)
-    shared={'fluid':['at','jet'],'explorer':['world','worldNormal','pick']}
+    shared={'fluid':['at','jet'],'explorer':['world','worldNormal','pick'],'keyboard':['keyDown']}
     for id,names in shared.items():
         proj=projects[cards.index(id)]
         copies=[f'{id}/{pass_name}:{fn}' for pass_name,src in [('Image',proj['image'])]+[(x['name'],x['fragment']) for x in proj['passes']]
