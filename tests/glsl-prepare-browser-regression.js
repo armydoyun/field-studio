@@ -42,7 +42,16 @@
     test(!studio.setProject(project("// 설명\nvoid mainImage(out vec4 c) {\n    c = vec4(1.0);\n}")), "모양이 틀린 mainImage는 적용되지 않음");
     test(diagnostics().some(text => /Line 2 · .*mainImage/.test(text)), `진입점 오류는 mainImage 정의 줄(2): ${diagnostics()}`);
 
-    // 6) #version이 있는 예전 코드는 그대로 동작한다
+    // 6) 여러 출력(MRT): out vec4 매개변수 순서대로 출력 0 · 1
+    const mrt = project("void mainImage(out vec4 color, out vec4 data, in vec2 fragCoord) {\n    color = vec4(1.0, 0.0, 0.0, 1.0);\n    data = vec4(0.0, 0.25, fragCoord);\n}");
+    mrt.passes[0].outputs = 2;
+    test(studio.setProject(mrt), "출력 2개 mainImage");
+    await frames(3);
+    const out0 = Array.from(r.readPassPixel("A", 0, 0, 0)), out1 = Array.from(r.readPassPixel("A", 0, 0, 1));
+    test(out0[0] === 1 && out0[1] === 0, `출력 0 = 첫 매개변수: ${out0}`);
+    test(out1[1] === 0.25 && out1[2] === 0.5 && out1[3] === 0.5, `출력 1 = 둘째 매개변수(fragCoord 포함): ${out1}`);
+
+    // 7) #version이 있는 예전 코드는 그대로 동작한다
     test(studio.setProject(project("#version 300 es\nprecision highp float;\nout vec4 o;\nvoid main() { o = vec4(0.0, 1.0, 0.0, 1.0); }")), "#version이 있는 코드");
     await frames(3);
     test(pixel()[1] === 1, "예전 형식 그대로 동작");

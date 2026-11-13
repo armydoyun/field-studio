@@ -457,12 +457,11 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 const mrtSource = `#version 300 es
 precision highp float;
 // Buffer A · Out = 2 (MRT). 한 번의 실행으로 두 출력에 서로 다른 데이터를 쓴다.
+// mainImage의 out vec4 매개변수 순서가 출력 번호다: outColor = 출력 0(보이는 색), outField = 출력 1(거리장, 채널 선택에서 A[1]).
 uniform vec2 uResolution;
 uniform float uTime;
-layout(location = 0) out vec4 outColor;  // 출력 0: 보이는 색
-layout(location = 1) out vec4 outField;  // 출력 1: 거리장 데이터(채널 선택에서 A[1])
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+void mainImage(out vec4 outColor, out vec4 outField, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     float d = 1e3;
     for (int i = 0; i < 5; i++) {
         float t = uTime * 0.6 + float(i) * 1.26;

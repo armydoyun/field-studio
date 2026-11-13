@@ -2,6 +2,7 @@
 (async () => {
     const assert = (ok, name) => { if(!ok) throw new Error(`FAIL: ${name}`); console.log(`PASS: ${name}`); };
     const Shader = (await import(new URL("js/shader.js", document.baseURI).href)).default;   // AMD require.async → 표준 ES Module import
+    const Prepare = await import(new URL("js/glsl-prepare.js", document.baseURI).href);
     const source = Shader.fragment;
     assert(source.includes("uTime") && !source.includes("SDFResult"),"범용 Shader Art 시작 템플릿");
     assert(source.startsWith("#version 300 es"), "GLSL 버전");
@@ -10,7 +11,8 @@
     const gl = document.getElementById("screen").getContext("webgl2");
     const shader = gl.createShader(gl.FRAGMENT_SHADER);
     try {
-        gl.shaderSource(shader, source); gl.compileShader(shader);
+        // 앱처럼 컴파일 직전에 다듬는다(시작 장면은 mainImage로 쓰고 main()은 앱이 붙인다).
+        gl.shaderSource(shader, Prepare.prepareFragment(source).source); gl.compileShader(shader);
         assert(gl.getShaderParameter(shader, gl.COMPILE_STATUS), gl.getShaderInfoLog(shader) || "Fragment Shader 컴파일");
     } finally { gl.deleteShader(shader); }
     const r = window.shaderPlayground;
