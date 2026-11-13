@@ -1460,7 +1460,11 @@ const mount = ({ studio, gallery }) => {
     search.value = "";
     renderNav();
     show(id);
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) {
+      dialog.showModal();
+      // 닫힌 채로 주제를 고르면 스크롤할 수 없으므로, 연 다음에 고른 주제 탭을 보이는 자리로 옮긴다(좁은 화면의 가로 탭 줄).
+      nav.querySelector("button.is-active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }
     if (!touchOnly) setTimeout(() => search.focus(), 0);
   };
   listen(search, "input", renderNav);
