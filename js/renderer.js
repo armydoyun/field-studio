@@ -1060,6 +1060,19 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stepDelta = seconds;
     return redraw();
   };
+  // 재생 위치(uTime)를 seconds로 옮긴다(타임라인 · 키프레임 편집). 프레임 수 · 버퍼는 그대로 이어 간다.
+  // 일시정지 중이면 그 시간으로 한 장 다시 그린다. 연결의 부드럽게 따라가기는 새 위치에서 다시 시작한다.
+  const setTime = seconds => {
+    if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
+    if (offline) throw new Error("영상 렌더링 중에는 재생 위치를 옮길 수 없습니다.");
+    if (!Number.isFinite(seconds) || seconds < 0 || seconds > 1e6)
+      throw new RangeError("재생 위치는 0초 이상 1000000초 이하여야 합니다.");
+    time = seconds;
+    lastTime = null; // 다음 프레임이 멈춰 있던 시간만큼 건너뛰지 않게
+    linkValues.clear();
+    if (!running) redraw();
+    return time;
+  };
   const setTimeScale = value => {
     if (!Number.isFinite(value) || value < 0.05 || value > 8)
       throw new RangeError("재생 배속은 0.05부터 8 사이여야 합니다.");
@@ -1834,6 +1847,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stop,
     resetSimulation,
     stepFrame,
+    setTime,
     setTimeScale,
     beginOffline,
     renderOfflineFrame,

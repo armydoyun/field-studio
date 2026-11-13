@@ -6,6 +6,7 @@ import * as VideoDialog from "./video-dialog.js";
 import * as PreviewDOM from "./preview-dom.js";
 import * as Presets from "./presets.js";
 import * as Links from "./links.js";
+import * as Timeline from "./timeline.js";
 const mount = (renderer, input, settings) => {
   const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
@@ -3079,9 +3080,11 @@ const mount = (renderer, input, settings) => {
   renderUniforms();
   updateStats();
   const timer = setInterval(updateStats, 500);
+  const timeline = Timeline.mount({ renderer, settings, root: $("timeline") });
   return {
     dispose: () => {
       clearInterval(timer);
+      timeline.dispose();
       recorder.dispose(); // 창을 닫는 중에는 녹화 파일을 내려받지 않고 버린다.
       controller.abort();
     },

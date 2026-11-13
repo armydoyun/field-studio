@@ -140,6 +140,39 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .seed-uniform.glyph-icon::before,.play-uniform.glyph-icon::before { flex-basis:14px;width:14px;height:14px; }
 .seed-uniform:hover,.play-uniform:hover { color:var(--text); }
 .play-uniform[aria-pressed="true"] { color:var(--accent-strong); }
+/* 키프레임 타임라인(timeline.js): 눈금 · 레인(이름 | 곡선 + 키 점) · 재생선 */
+.timeline { margin:0 0 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel); }
+.timeline-summary { display:flex;align-items:center;gap:8px;min-height:32px;padding:4px 8px;cursor:pointer;font-size:12px; }
+.timeline-title { font-weight:600; }
+.timeline-count:not(:empty) { padding:0 6px;border-radius:999px;background:var(--surface);color:var(--muted);font:10px/1.6 var(--mono); }
+.timeline-clock { margin-left:auto;color:var(--muted);font:11px var(--mono); }
+.timeline-tools { display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:0 8px 6px;font-size:11px;color:var(--muted); }
+.timeline-length-field { display:inline-flex;align-items:center;gap:4px;margin:0;white-space:nowrap; }
+.timeline-tools .timeline-length { flex:0 0 56px;width:56px;min-height:26px;padding:2px 6px;font:11px var(--mono); }
+.timeline-tools .timeline-add { flex:1 1 120px;width:auto; }
+.timeline-add { min-height:26px;max-width:100%;font-size:11px; }
+.timeline-body { padding:0 8px; }
+.timeline-track { position:relative;display:grid;gap:4px;--lane-head:72px; }
+.timeline-ruler { position:relative;height:22px;margin-left:var(--lane-head);border-bottom:1px solid var(--line-strong);cursor:ew-resize;touch-action:none; }
+.timeline-ruler:focus-visible { outline:2px solid var(--accent);outline-offset:1px; }
+.timeline-tick { position:absolute;bottom:0;transform:translateX(-50%);padding-bottom:3px;color:var(--faint);font:9px/1 var(--mono);pointer-events:none; }
+.timeline-tick::after { content:"";position:absolute;left:50%;bottom:-1px;width:1px;height:4px;background:var(--line-strong); }
+.timeline-lane { display:grid;grid-template-columns:var(--lane-head) minmax(0,1fr);align-items:stretch;min-height:44px; }
+.timeline-lane-head { display:flex;align-items:center;gap:2px;min-width:0;padding-right:4px; }
+.timeline-lane-name { flex:1;min-width:0;overflow:hidden;font:600 10px/1.4 var(--mono);text-overflow:ellipsis;white-space:nowrap; }
+.timeline-lane-remove { flex:0 0 20px;width:20px;min-height:20px;height:20px;padding:0;border-color:transparent;background:transparent;color:var(--faint); }
+.timeline-lane-remove.glyph-icon::before { flex-basis:10px;width:10px;height:10px; }
+.timeline-area { position:relative;min-height:44px;border:1px solid var(--line);border-radius:4px;background:var(--surface);touch-action:none; }
+.timeline-plot { position:absolute;inset:7px 0; }
+.timeline-curve { position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none; }
+.timeline-curve path { fill:none;stroke:var(--accent-strong);stroke-width:1.5; }
+.timeline-key { position:absolute;width:12px;min-height:12px;height:12px;margin:-6px 0 0 -6px;padding:0;border:2px solid var(--accent-strong);border-radius:50%;background:var(--surface);cursor:grab;touch-action:none; }
+.timeline-key:focus-visible,.timeline-key:hover { background:var(--accent-strong); }
+.timeline-loop { position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--line-strong);pointer-events:none; }
+.timeline-overlay { position:absolute;top:0;bottom:0;left:var(--lane-head);right:0;pointer-events:none; }
+.timeline-playhead { position:absolute;top:0;bottom:0;width:0;border-left:1.5px solid var(--danger, #e5484d); }
+.timeline-empty { margin:4px 0 2px var(--lane-head); }
+.timeline-help { margin:6px 8px 8px; }
 /* 배열 파라미터: 원소마다 [번호 | 위젯] 한 칸 */
 .uniform-array { display:grid;gap:6px;min-width:0; }
 .uniform-array-item { display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:4px 8px;min-width:0; }

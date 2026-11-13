@@ -106,6 +106,7 @@
                             <div id="presetList" class="preset-list" role="list"></div>
                             <p id="presetNotice" class="help preset-notice" role="status"><span id="presetNoticeText"></span><button id="presetUndo" type="button" hidden>되돌리기</button></p>
                         </div>
+                        <details id="timeline" class="timeline"><summary class="timeline-summary"><span class="timeline-title">타임라인</span><span class="timeline-count"></span><span class="timeline-clock" aria-live="off"></span></summary><div class="timeline-tools"><label class="timeline-length-field" title="타임라인에 보이는 길이">길이 <input class="timeline-length" type="number" min="1" max="3600" step="1" value="10"> 초</label><select class="timeline-add" aria-label="키프레임 레인 추가"></select></div><div class="timeline-body"></div><p class="help timeline-help">눈금을 누르거나 끌면 재생 위치가 옮겨집니다. 키 점은 끌어서 시간 · 값을 바꾸고(0.05초 단위, Alt는 자유롭게), 빈 곳을 더블클릭하면 키를 더하고, 점을 더블클릭하면 지웁니다. 방향키 · Delete · Enter(그 시간으로)도 됩니다.</p></details>
                         <p id="uniformResults" class="help" role="status"></p>
                         <div id="uniformList" class="uniform-list"></div>
                         <p class="help uniform-footnote">선언은 자동 생성됩니다. 실제 화면에 반영하려면 GLSL에서 해당 변수를 참조해야 합니다.</p>
