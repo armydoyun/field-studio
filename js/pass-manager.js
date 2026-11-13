@@ -12,6 +12,10 @@ const BUILTINS = {
   frame: ["uFrame", ["int", "float", "uint"]],
   mouse: ["uMouse", ["vec2", "vec4"]],
   wheel: ["uWheel", ["float"]],
+  date: ["uDate", ["vec4"]],
+  frameRate: ["uFrameRate", ["float"]],
+  // Shadertoy의 iMouse 그대로(xy는 누르고 있을 때만 바뀌고 놓으면 마지막 위치). uMouse와 따로 둔다.
+  shadertoyMouse: ["iMouse", ["vec4"]],
 };
 // 출력 형식별 GPU 저장 방식. float 계열은 EXT_color_buffer_float가 있어야 FBO로 렌더링할 수 있다.
 const FORMATS = {
@@ -44,12 +48,20 @@ const makeLocations = (gl, program) => {
   }
   result.channels = [0, 1, 2, 3].map(i => gl.getUniformLocation(program, `iChannel${i}`));
   result.channelResolution = [0, 1, 2, 3].map(i => gl.getUniformLocation(program, `iChannelResolution[${i}]`));
+  // uChannelTime[4]: 채널마다 재생 시간(미디어는 그 미디어의 재생 위치, 나머지는 uTime)
+  result.channelTime = gl.getUniformLocation(program, "uChannelTime");
   return result;
 };
 // keyboard(선택): keyboard-input.js의 create(gl) 결과. 채널 {keyboard:true}가 이 텍스처를 읽는다.
 // media(선택): media-input.js의 create(gl) 결과. 채널 {media:"mic"|"audio"|"webcam"|"video"}가 그 텍스처를 읽는다.
 const MEDIA_KINDS = ["mic", "audio", "webcam", "video"];
-const createPassManager = (gl, createProgram, textureStore, keyboard = null, media = null) => {
+// 채널 연결에 맞는 sampler 타입(0~3). 큐브맵은 samplerCube, 나머지는 sampler2D.
+// 코드가 iChannelN을 선언하지 않고 쓰면 이 타입으로 선언을 넣는다(glsl-prepare.js, Shadertoy처럼).
+const channelTypes = channels => [0, 1, 2, 3].map(i => (channels?.[i]?.cubemap ? "samplerCube" : "sampler2D"));
+const usesImage = (ref, id) => ref?.texture === id || ref?.cubemap === id;
+const sameTypes = (a, b) => channelTypes(a).join() === channelTypes(b).join();
+// clock(선택): 지금 uTime(초). uChannelTime에서 미디어가 아닌 채널의 시간이다.
+const createPassManager = (gl, createProgram, textureStore, keyboard = null, media = null, clock = () => 0) => {
   let passes = [],
     imageChannels = {},
     preview = null,
@@ -131,6 +143,13 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
       if (ref.keyboard === true && Object.keys(ref).length === 1) {
         if (!keyboard) throw new Error("키보드 입력을 쓸 수 없는 렌더러입니다.");
         result[key] = { keyboard: true };
+        continue;
+      }
+      // 큐브맵: 이미지 한 장(십자 · 띠 · 2:1 파노라마)을 6면으로 바꿔 samplerCube로 읽는다(texture-input.js · cubemap.js).
+      if (typeof ref.cubemap === "string" && Object.keys(ref).length === 1) {
+        const problem = textureStore.cubeProblem?.(ref.cubemap) ?? "큐브맵을 쓸 수 없는 렌더러입니다.";
+        if (problem) throw new Error(`채널 ${key}: ${problem}`);
+        result[key] = { cubemap: ref.cubemap };
         continue;
       }
       // 미디어는 켜져 있지 않아도 연결할 수 있다(그동안은 빈 텍스처를 읽는다).
@@ -221,10 +240,11 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
     validateDefinition(specs, image);
     return true;
   };
-  const compilePass = (source, name) => {
+  // channels: 이 패스의 채널 연결(선언하지 않은 iChannelN의 타입을 정한다)
+  const compilePass = (source, name, channels = {}) => {
     let program;
     try {
-      program = createProgram(source);
+      program = createProgram(source, { channels: channelTypes(channels) });
       return { program, locations: makeLocations(gl, program) };
     } catch (error) {
       if (program) gl.deleteProgram(program);
@@ -239,7 +259,7 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
       for (const s of normalized) {
         next.push({
           ...s,
-          ...compilePass(s.fragment, s.name),
+          ...compilePass(s.fragment, s.name, s.channels),
           textures: [],
           attachments: [],
           fbos: [],
@@ -263,7 +283,7 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
   const refreshPrograms = () => {
     const next = [];
     try {
-      for (const pass of passes) next.push({ pass, ...compilePass(pass.fragment, pass.name) });
+      for (const pass of passes) next.push({ pass, ...compilePass(pass.fragment, pass.name, pass.channels) });
     } catch (error) {
       next.forEach(item => gl.deleteProgram(item.program));
       throw error;
@@ -292,7 +312,9 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
       for (let i = 0; i < passes.length; i++) {
         const pass = passes[i],
           spec = normalized[i];
-        if (pass.fragment !== spec.fragment) next.push({ pass, ...compilePass(spec.fragment, spec.name) });
+        // 소스가 바뀌었거나, 채널이 2D ↔ 큐브맵으로 바뀌면(자동 선언하는 sampler 타입이 달라진다) 다시 만든다.
+        if (pass.fragment !== spec.fragment || !sameTypes(pass.channels, spec.channels))
+          next.push({ pass, ...compilePass(spec.fragment, spec.name, spec.channels) });
         if (JSON.stringify(pass.channels) !== JSON.stringify(spec.channels)) changed = true;
       }
     } catch (error) {
@@ -320,7 +342,7 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
     const pass = passes.find(p => p.name === name);
     if (!pass) throw new Error(`존재하지 않는 Buffer: ${name}`);
     if (typeof source !== "string" || !source.trim()) throw new Error("GLSL Fragment 소스가 필요합니다.");
-    const { program, locations } = compilePass(source, name);
+    const { program, locations } = compilePass(source, name, pass.channels);
     const previous = pass.program;
     pass.program = program;
     pass.locations = locations;
@@ -331,8 +353,15 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
   const setPassChannels = (name, channels) => {
     const index = passes.findIndex(p => p.name === name);
     if (index < 0) throw new Error(`존재하지 않는 Buffer: ${name}`);
-    const order = passOrder();
-    passes[index].channels = validateChannels(channels, name, order, false, outputsOfLive);
+    const order = passOrder(),
+      next = validateChannels(channels, name, order, false, outputsOfLive),
+      pass = passes[index];
+    if (!sameTypes(pass.channels, next)) {
+      const { program, locations } = compilePass(pass.fragment, name, next);
+      gl.deleteProgram(pass.program);
+      Object.assign(pass, { program, locations });
+    }
+    pass.channels = next;
   };
   // 기본값과 같은 선택 항목은 생략해 기존 프로젝트 JSON과 동일한 모양을 유지한다.
   const getSpecs = () =>
@@ -493,6 +522,7 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
     for (let i = 0; i < 4; i++) {
       gl.activeTexture(units[i]);
       gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
     }
     gl.activeTexture(gl.TEXTURE0);
   };
@@ -501,9 +531,13 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
       const ref = channels[i];
       gl.activeTexture(units[i]);
       let texture = null,
+        cube = null,
         width = 0,
         height = 0;
-      if (ref?.keyboard) {
+      if (ref?.cubemap) {
+        const made = textureStore.cube(ref.cubemap);
+        if (made) [cube, width, height] = [made.tex, made.size, made.size];
+      } else if (ref?.keyboard) {
         texture = keyboard.texture();
         width = keyboard.width;
         height = keyboard.height;
@@ -532,10 +566,16 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
         height = pass.height;
       }
       gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
       if (locations.channels[i] !== null) gl.uniform1i(locations.channels[i], i);
       if (locations.channelResolution[i] !== null)
         gl.uniform3f(locations.channelResolution[i], width, height, width ? 1 : 0);
     }
+    if (locations.channelTime != null)
+      gl.uniform1fv(
+        locations.channelTime,
+        [0, 1, 2, 3].map(i => (channels[i]?.media ? media.time(channels[i].media) : clock()))
+      );
     gl.activeTexture(gl.TEXTURE0);
   }; // timer(선택): GPU 시간 측정기. 패스 이름으로 begin/end하며 예외 시에도 Query를 닫는다.
   const drawPasses = (width, height, uploadGlobals, timer = null) => {
@@ -765,8 +805,8 @@ void main(){
     }));
   const detachTexture = id => {
     for (const pass of passes)
-      for (const key of Object.keys(pass.channels)) if (pass.channels[key].texture === id) delete pass.channels[key];
-    for (const key of Object.keys(imageChannels)) if (imageChannels[key].texture === id) delete imageChannels[key];
+      for (const key of Object.keys(pass.channels)) if (usesImage(pass.channels[key], id)) delete pass.channels[key];
+    for (const key of Object.keys(imageChannels)) if (usesImage(imageChannels[key], id)) delete imageChannels[key];
   };
   const getImageChannels = () => JSON.parse(JSON.stringify(imageChannels));
   // 지금 실행 중인 패스의 소스(이름 → GLSL). HTML 내보내기가 적용된 그대로를 담는다.
@@ -805,7 +845,7 @@ void main(){
   const restore = () => {
     const compiled = [];
     try {
-      for (const p of passes) compiled.push({ p, ...compilePass(p.fragment, p.name) });
+      for (const p of passes) compiled.push({ p, ...compilePass(p.fragment, p.name, p.channels) });
     } catch (error) {
       for (const c of compiled) gl.deleteProgram(c.program);
       throw error;
@@ -873,4 +913,4 @@ void main(){
     dispose,
   };
 };
-export { createPassManager, makeLocations };
+export { channelTypes, createPassManager, makeLocations };

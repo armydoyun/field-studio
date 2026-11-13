@@ -119,7 +119,7 @@ const withTimeout = (promise, ms, label) => {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 };
 
-const MEDIA_BROWSER_TESTS = new Set(["toolbar-browser-regression.js", "video-render-browser-regression.js"]);
+const MEDIA_BROWSER_TESTS = new Set(["toolbar-browser-regression.js", "video-render-browser-regression.js", "recorder-audio-browser-regression.js", "video-render-media-browser-regression.js"]);
 const runBrowser = async () => {
   let chromium;
   try { ({chromium} = await import("playwright")); }

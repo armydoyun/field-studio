@@ -44,6 +44,14 @@ const create = ctx => {
     ["uFrame", "int", "누적 프레임 수. 시간 초기화·구조 변경 시 0"],
     ["uMouse", "vec4", "포인터 픽셀 좌표(밖이면 -1) · zw = 클릭 위치, z > 0 누르는 중, w > 0 누른 첫 프레임"],
     ["uWheel", "float", "뷰포트에서 굴린 마우스 휠 누적 칸 수(위로 +1). 시간 초기화 시 0"],
+    ["uDate", "vec4", "벽시계: (연, 월 0~11, 일, 자정부터 지난 초). 영상 렌더링 중에는 시작 시각 + 렌더 시간"],
+    ["uFrameRate", "float", "실제 초당 프레임 수(배속과 무관). 영상 렌더링 중에는 영상의 프레임 수"],
+    [
+      "uChannelTime",
+      "float",
+      "채널마다 재생 시간(배열 4개): 미디어는 재생 위치, 나머지는 uTime",
+      "uniform float uChannelTime[4];",
+    ],
     ...[0, 1, 2, 3].map(i => [
       `iChannel${i}`,
       "sampler2D",
@@ -57,7 +65,15 @@ const create = ctx => {
     ["iTimeDelta", "float", "Shadertoy 이름 — uDeltaTime(프레임 간격, 초)과 같음 · 선언 없이 씁니다"],
     ["iFrame", "int", "Shadertoy 이름 — uFrame(누적 프레임 수)과 같음 · 선언 없이 씁니다"],
     ["iResolution", "vec3", "Shadertoy 이름 — (uResolution.xy, 1.0) · 선언 없이 씁니다"],
-    ["iMouse", "vec4", "Shadertoy 이름 — uMouse(vec4)와 같음 · 선언 없이 씁니다"],
+    [
+      "iMouse",
+      "vec4",
+      "Shadertoy와 같은 마우스: xy = 누르고 있는 동안의 위치(놓으면 마지막 위치) · zw = 클릭 위치(z > 0 누르는 중, w > 0 누른 첫 프레임) · 선언 없이 씁니다",
+    ],
+    ["iDate", "vec4", "Shadertoy 이름 — uDate(연, 월 0~11, 일, 자정부터 지난 초)와 같음 · 선언 없이 씁니다"],
+    ["iFrameRate", "float", "Shadertoy 이름 — uFrameRate(초당 프레임 수)와 같음 · 선언 없이 씁니다"],
+    ["iChannelTime", "float", "Shadertoy 이름 — uChannelTime[4](채널마다 재생 시간)과 같음 · 선언 없이 씁니다"],
+    ["iSampleRate", "float", "Shadertoy 이름 — 사운드 샘플레이트 44100.0 · 선언 없이 씁니다"],
   ];
   const BUILTIN_VARS = { gl_FragCoord: "vec4", gl_FrontFacing: "bool", gl_PointCoord: "vec2", gl_FragDepth: "float" };
   const isIdent = text => /^[A-Za-z_]\w*$/.test(text);

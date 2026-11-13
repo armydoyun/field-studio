@@ -10,7 +10,7 @@ const TYPES = ["image/png", "image/jpeg", "image/webp"];
 const textureIds = project => {
   const ids = new Set();
   for (const channels of Model.channelGroups(project))
-    for (const ref of Object.values(channels)) if (ref.texture) ids.add(ref.texture);
+    for (const ref of Object.values(channels)) if (Model.imageOf(ref)) ids.add(Model.imageOf(ref));
   return [...ids];
 };
 
@@ -91,14 +91,17 @@ const checkReferences = (project, ids) => {
 const withoutTextures = project => {
   const trial = Model.copy(project);
   for (const channels of Model.channelGroups(trial))
-    for (const key of Object.keys(channels)) if (channels[key].texture) delete channels[key];
+    for (const key of Object.keys(channels)) if (Model.imageOf(channels[key])) delete channels[key];
   return trial;
 };
 
 // Pack의 이미지 ID를 새로 등록한 ID로 바꾼다(제자리 수정).
 const remapTextures = (project, map) => {
   for (const channels of Model.channelGroups(project))
-    for (const ref of Object.values(channels)) if (ref.texture) ref.texture = map.get(ref.texture);
+    for (const ref of Object.values(channels)) {
+      if (ref.texture) ref.texture = map.get(ref.texture);
+      if (ref.cubemap) ref.cubemap = map.get(ref.cubemap);
+    }
   return project;
 };
 

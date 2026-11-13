@@ -5,7 +5,9 @@
 // 코드가 읽는 채널은 진하게, 읽지 않는 채널은 흐리게 두고, "읽는데 비어 있음 / 연결했는데 안 읽음"은 경고 점으로 알린다.
 // 연결 규칙(current는 앞선 패스만)은 project-model.js가 정하고, 바뀐 연결을 적용하는 일은 studio.js가 한다.
 
-// 값 형식(이전 select와 같음): "" 연결 없음 · "tex:<id>" 이미지 · "keyboard" 키보드 · "media:<종류>" 미디어
+import * as Cubemap from "./cubemap.js";
+
+// 값 형식(이전 select와 같음): "" 연결 없음 · "tex:<id>" 이미지 · "cube:<id>" 큐브맵 · "keyboard" 키보드 · "media:<종류>" 미디어
 // · "<버퍼>:<current|previous>[:<출력>]"
 const valueOf = ref =>
   !ref
@@ -14,13 +16,16 @@ const valueOf = ref =>
       ? "keyboard"
       : ref.media
         ? `media:${ref.media}`
-        : ref.texture
-          ? `tex:${ref.texture}`
-          : `${ref.buffer}:${ref.frame}${ref.attachment ? `:${ref.attachment}` : ""}`;
+        : ref.cubemap
+          ? `cube:${ref.cubemap}`
+          : ref.texture
+            ? `tex:${ref.texture}`
+            : `${ref.buffer}:${ref.frame}${ref.attachment ? `:${ref.attachment}` : ""}`;
 const refOf = value => {
   if (!value) return null;
   if (value === "keyboard") return { keyboard: true };
   if (value.startsWith("media:")) return { media: value.slice(6) };
+  if (value.startsWith("cube:")) return { cubemap: value.slice(5) };
   if (value.startsWith("tex:")) return { texture: value.slice(4) };
   const [buffer, frame, att] = value.split(":");
   return att ? { buffer, frame, attachment: Number(att) } : { buffer, frame };
@@ -85,6 +90,10 @@ const create = ({
         state: media.state,
       };
     }
+    if (ref.cubemap) {
+      const asset = state.assets.find(item => item.id === ref.cubemap);
+      return { badge: "CUBE", tag: asset?.name || "없는 이미지", kind: asset ? "cube" : "missing" };
+    }
     if (ref.texture) {
       const asset = state.assets.find(item => item.id === ref.texture);
       return { badge: "", tag: asset?.name || "없는 이미지", kind: asset ? "image" : "missing" };
@@ -138,14 +147,15 @@ const create = ({
   };
   const choose = value => {
     const i = openIndex;
-    if (value === "load") {
+    if (value === "load" || value === "loadcube") {
       close({ refocus: true });
-      onLoadImage(i);
+      onLoadImage(i, value === "loadcube");
       return;
     }
     if (value.startsWith("media:")) {
       close({ refocus: true });
-      onMedia(i, value.slice(6));
+      const [kind, saved] = value.slice(6).split(":");
+      onMedia(i, kind, saved === "saved");
       return;
     }
     onChange(i, refOf(value));
@@ -256,6 +266,17 @@ const create = ({
       })
     );
     images.push(button("load", "이미지 불러오기…", { className: "channel-load glyph-icon icon-plus" }));
+    // 큐브맵: 같은 이미지를 6면 큐브맵(samplerCube)으로. 비율이 맞지 않는 이미지는 이유와 함께 비활성.
+    const cubes = state.assets.map(asset => {
+      const layout = Cubemap.layoutOf(asset.width, asset.height);
+      return button(`cube:${asset.id}`, asset.name, {
+        disabled: !layout.kind,
+        reason: layout.kind ? "" : "비율이 맞지 않음",
+        pressed: current === `cube:${asset.id}`,
+        className: "channel-cube",
+      });
+    });
+    cubes.push(button("loadcube", "큐브맵 이미지 불러오기…", { className: "channel-load glyph-icon icon-plus" }));
     // 입력: 키보드(쉐이더토이 호환 256×3 텍스처). 뷰포트를 클릭하면 키가 셰이더로 간다.
     const inputs = [button("keyboard", "키보드", { pressed: current === "keyboard", className: "channel-keyboard" })];
     // 미디어: 고르면 켜고(권한 · 파일 고르기) 연결한다. 연결돼 있지만 꺼져 있으면 다시 골라 켠다.
@@ -276,6 +297,14 @@ const create = ({
           className: `channel-media channel-${kind}`,
         })
       );
+      // 보관한 파일(오디오 · 영상 파일)이 있고 꺼져 있으면: 파일을 고르지 않고 다시 켜기
+      if (media.savedName && media.state !== "on")
+        inputs.push(
+          button(`media:${kind}:saved`, `▶ ${media.savedName}`, {
+            reason: `보관한 ${kind === "audio" ? "오디오" : "영상"} 파일로 켜기`,
+            className: `channel-media channel-${kind}-saved`,
+          })
+        );
     }
     const clear = button("", "연결 해제", { disabled: !ref, className: "channel-clear" });
     const sections = [
@@ -289,6 +318,7 @@ const create = ({
           : ""
       ),
       group("이미지", images),
+      group("큐브맵", cubes, "samplerCube로 읽기 · 4:3 · 3:4 십자, 6:1 · 1:6 띠, 2:1 파노라마"),
       group(
         "입력",
         inputs,

@@ -60,6 +60,10 @@ const player = data => {
       frame: at("uFrame"),
       mouse: at("uMouse"),
       wheel: at("uWheel"),
+      date: at("uDate"),
+      frameRate: at("uFrameRate"),
+      shadertoyMouse: at("iMouse"),
+      channelTime: at("uChannelTime"),
       samplers: [0, 1, 2, 3].map(i => at(`iChannel${i}`)),
       samplerSizes: [0, 1, 2, 3].map(i => at(`iChannelResolution[${i}]`)),
       custom: data.uniforms.map(item => at(item.name)),
@@ -106,6 +110,26 @@ const player = data => {
       sampler(item.sampling.filter, item.sampling.wrapS, item.sampling.wrapT);
       images.set(id, { texture, width: bitmap.width, height: bitmap.height });
       bitmap.close();
+    })
+  );
+  // 큐브맵: 앱이 만든 6면(+X -X +Y -Y +Z -Z)을 그대로 올리고 밉맵을 만든다.
+  const cubes = new Map(); // id → {texture, size}
+  const loadCubes = Promise.all(
+    Object.entries(data.cubemaps || {}).map(async ([id, faces]) => {
+      const bitmaps = await Promise.all(faces.map(async url => createImageBitmap(await (await fetch(url)).blob())));
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+      bitmaps.forEach((bitmap, i) => {
+        gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+        bitmap.close();
+      });
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+      cubes.set(id, { texture, size: bitmaps[0].width });
     })
   );
   const ramps = data.uniforms.map(item => {
@@ -196,7 +220,8 @@ const player = data => {
 
   // ---- 입력: 마우스 · 휠 · 키보드(renderer.js와 같은 값) ----
   const mouse = [-1, -1],
-    click = [0, 0];
+    click = [0, 0],
+    drag = [0, 0]; // iMouse의 xy: 누르고 있는 동안의 위치(Shadertoy와 같음)
   let mouseDown = false,
     clickPending = false,
     wheel = 0;
@@ -204,12 +229,14 @@ const player = data => {
     const rect = canvas.getBoundingClientRect();
     mouse[0] = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     mouse[1] = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
+    if (mouseDown) [drag[0], drag[1]] = mouse;
   };
   canvas.addEventListener("pointermove", pointer);
   canvas.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
     canvas.setPointerCapture?.(event.pointerId);
     pointer(event);
+    [drag[0], drag[1]] = mouse;
     click[0] = mouse[0];
     click[1] = mouse[1];
     mouseDown = clickPending = true;
@@ -247,7 +274,8 @@ const player = data => {
   });
 
   // ---- 그리기 ----
-  let time = 0,
+  let frameRate = 60,
+    time = 0,
     delta = 0,
     frame = 0,
     last = null;
@@ -271,6 +299,24 @@ const player = data => {
       } else if (types.get("uMouse") === "vec2") gl.uniform2f(target.mouse, x, y);
     }
     if (target.wheel && types.get("uWheel") === "float") gl.uniform1f(target.wheel, wheel);
+    if (target.date && types.get("uDate") === "vec4") {
+      const now = new Date(),
+        midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      gl.uniform4f(target.date, now.getFullYear(), now.getMonth(), now.getDate(), (now.getTime() - midnight) / 1000);
+    }
+    if (target.frameRate && types.get("uFrameRate") === "float") gl.uniform1f(target.frameRate, frameRate);
+    if (target.shadertoyMouse && types.get("iMouse") === "vec4") {
+      const cx = click[0] * width,
+        cy = click[1] * height;
+      gl.uniform4f(
+        target.shadertoyMouse,
+        drag[0] * width,
+        drag[1] * height,
+        mouseDown ? cx : -cx,
+        clickPending ? cy : -cy
+      );
+    }
+    if (target.channelTime) gl.uniform1fv(target.channelTime, [time, time, time, time]); // 미디어는 담지 않는다
     data.uniforms.forEach((item, i) => {
       const location = target.custom[i];
       if (location === null) return;
@@ -291,9 +337,16 @@ const player = data => {
     for (let i = 0; i < 4; i++) {
       const ref = target.channels?.[i];
       let texture = null,
+        cube = null,
         width = 0,
         height = 0;
-      if (ref?.keyboard) [texture, width, height] = [keyboard, 256, 3];
+      if (ref?.cubemap && cubes.has(ref.cubemap))
+        [cube, width, height] = [
+          cubes.get(ref.cubemap).texture,
+          cubes.get(ref.cubemap).size,
+          cubes.get(ref.cubemap).size,
+        ];
+      else if (ref?.keyboard) [texture, width, height] = [keyboard, 256, 3];
       else if (ref?.texture && images.has(ref.texture)) ({ texture, width, height } = images.get(ref.texture));
       else if (ref?.buffer) {
         const pass = passes.find(p => p.name === ref.buffer),
@@ -304,6 +357,7 @@ const player = data => {
       }
       gl.activeTexture(gl.TEXTURE0 + i);
       gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
       if (target.samplers[i] !== null) gl.uniform1i(target.samplers[i], i);
       if (target.samplerSizes[i] !== null) gl.uniform3f(target.samplerSizes[i], width, height, width ? 1 : 0);
     }
@@ -313,6 +367,7 @@ const player = data => {
     for (let i = 0; i < 4; i++) {
       gl.activeTexture(gl.TEXTURE0 + i);
       gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
     }
     gl.activeTexture(gl.TEXTURE0);
   };
@@ -324,6 +379,7 @@ const player = data => {
     last = now;
     delta = elapsed * data.timeScale;
     time += delta;
+    if (elapsed > 0) frameRate = frameRate * 0.9 + (1 / elapsed) * 0.1;
     const dpr = Math.min(devicePixelRatio || 1, 2) * data.resolutionScale,
       width = Math.max(1, Math.round(canvas.clientWidth * dpr)),
       height = Math.max(1, Math.round(canvas.clientHeight * dpr));
@@ -380,20 +436,21 @@ const player = data => {
     },
     ready: null,
   };
-  window.fieldPlayer.ready = loadImages.then(
+  window.fieldPlayer.ready = Promise.all([loadImages, loadCubes]).then(
     () => requestAnimationFrame(draw),
     error => fail(`이미지를 읽지 못했습니다: ${error.message}`)
   );
 };
 
-// renderer.exportScene()과 이미지(id → {url: data URL, sampling})로 재생기 자료를 만든다.
-const buildPlayerData = (scene, textures) => {
+// renderer.exportScene()과 이미지(id → {url: data URL, sampling}) · 큐브맵(id → 6면 PNG data URL)으로 재생기 자료를 만든다.
+const buildPlayerData = (scene, textures, cubemaps = {}) => {
   const refs = [scene.image.channels, ...scene.passes.map(pass => pass.channels)].flatMap(channels =>
     Object.values(channels || {})
   );
   return {
     ...scene,
     textures,
+    cubemaps,
     keyboard: refs.some(ref => ref?.keyboard),
     media: [...new Set(refs.map(ref => ref?.media).filter(Boolean))],
   };

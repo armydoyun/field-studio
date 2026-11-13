@@ -132,8 +132,8 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
       {
         list: [
           "앱 이름의 Uniform은 직접 선언합니다: `uTime` · `uResolution`(vec2) · `uMouse` · `uFrame` · `uDeltaTime`(**내장 Uniform** 참고). 자동 완성으로 고르면 선언 줄도 함께 들어갑니다.",
-          "Shadertoy 이름 `iTime` · `iTimeDelta` · `iFrame` · `iResolution`(vec3) · `iMouse`는 선언 없이 그대로 써도 됩니다. 실행할 때 앱이 위 Uniform에 연결합니다(필요하면 그 Uniform 선언도 넣습니다). 그래서 Shadertoy 코드를 붙여 넣으면 대부분 바로 돌아갑니다.",
-          "`iMouse`는 `uMouse`(vec4)와 같은 값입니다. Shadertoy와 달리 xy는 누르지 않아도 포인터를 따라가고, 포인터가 뷰포트 밖이면 -1입니다. `iDate` · `iFrameRate` · `iChannelTime`은 아직 없습니다.",
+          "Shadertoy 이름(`iTime` · `iTimeDelta` · `iFrame` · `iResolution` · `iMouse` · `iDate` · `iFrameRate` · `iChannelTime` · `iSampleRate`)은 선언 없이 그대로 써도 됩니다. 실행할 때 앱이 값을 넣습니다(**내장 Uniform** 표). 그래서 Shadertoy 코드를 붙여 넣으면 대부분 바로 돌아갑니다.",
+          "`iMouse`는 Shadertoy와 똑같이 누르고 있는 동안만 xy가 바뀝니다. 누르지 않아도 포인터를 따라가는 값은 `uMouse`입니다.",
           "`mainImage`를 쓰면서 출력 변수(`out vec4 …;`)를 직접 선언했으면 그 변수로 출력합니다.",
           "`.frag`로 저장한 파일은 쓴 그대로라, 다른 프로그램에서 쓰려면 머리말 · `main()` · Common을 직접 넣고 Shadertoy 이름은 앱 이름으로 바꿔야 합니다. 작품을 그대로 보여 주려면 **HTML로 내보내기**(프로젝트 메뉴)를 쓰세요.",
         ],
@@ -243,10 +243,13 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
               "float",
               "뷰포트에서 굴린 휠의 누적 칸 수(위로 +1). 시간 초기화 시 0. 선언하면 휠이 페이지 대신 셰이더로 갑니다",
             ],
+            ["uDate", "vec4", "벽시계 (연, 월 0~11, 일, 자정부터 지난 초). 영상 렌더링 중에는 시작 시각 + 렌더 시간"],
+            ["uFrameRate", "float", "실제 초당 프레임 수(배속과 무관). 영상 렌더링 중에는 영상의 프레임 수"],
+            ["uChannelTime[4]", "float", "채널마다 재생 시간: 미디어(오디오 · 영상 파일)는 재생 위치, 나머지는 uTime"],
             [
               "iChannel0~3",
-              "sampler2D",
-              "편집기에서 연결한 버퍼 · 이미지 · 키보드 · 미디어(마이크 · 오디오 · 웹캠 · 영상)",
+              "sampler2D · samplerCube",
+              "편집기에서 연결한 버퍼 · 이미지 · 큐브맵 · 키보드 · 미디어. 선언하지 않고 쓰면 연결된 종류(큐브맵은 samplerCube)로 자동 선언",
             ],
             ["iChannelResolution[4]", "vec3", "각 채널 입력의 크기(연결이 없거나 꺼진 미디어는 0)"],
           ],
@@ -262,11 +265,17 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
             ["iTime / iTimeDelta", "float", "uTime / uDeltaTime"],
             ["iFrame", "int", "uFrame"],
             ["iResolution", "vec3", "(uResolution.xy, 1.0)"],
-            ["iMouse", "vec4", "uMouse — xy는 누르지 않아도 포인터를 따라가고 뷰포트 밖이면 -1(Shadertoy와 다름)"],
+            ["iDate / iFrameRate", "vec4 / float", "uDate / uFrameRate"],
+            ["iChannelTime[4]", "float", "uChannelTime"],
+            ["iSampleRate", "float", "44100.0"],
+            [
+              "iMouse",
+              "vec4",
+              "Shadertoy와 똑같다: xy = 누르고 있는 동안의 위치(놓으면 마지막 위치, 처음에는 0) · zw = 클릭 위치(z > 0 누르는 중, w > 0 누른 첫 프레임). 누르지 않아도 포인터를 따라가는 값이 필요하면 uMouse를 쓰세요",
+            ],
           ],
         },
       },
-      { note: "`iDate` · `iFrameRate` · `iChannelTime` · `iSampleRate`는 아직 없습니다." },
       {
         code: `uniform vec4 uMouse;
 // ...
@@ -479,8 +488,8 @@ layout(location = 1) out vec4 outData;`,
   },
   {
     id: "inputs",
-    title: "이미지 · 키보드 · 미디어 입력",
-    summary: "이미지 · 키보드 · 마이크 · 오디오 · 웹캠 · 영상을 채널에 연결",
+    title: "이미지 · 큐브맵 · 키보드 · 미디어 입력",
+    summary: "이미지 · 큐브맵 · 키보드 · 마이크 · 오디오 · 웹캠 · 영상을 채널에 연결",
     blocks: [
       { heading: "이미지" },
       {
@@ -528,6 +537,35 @@ bool keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x > 0.5; }
         title: "키 읽기",
         insert: "cursor",
       },
+      { heading: "큐브맵" },
+      {
+        p: "채널 칩의 **큐브맵**에서 이미지를 고르면(또는 **큐브맵 이미지 불러오기…**) 그 이미지를 6면 큐브맵으로 바꿔 `samplerCube`로 읽습니다. 하늘 · 반사 · 환경광에 씁니다. 이미지 비율로 배치를 알아봅니다.",
+      },
+      {
+        table: {
+          head: ["비율", "배치"],
+          rows: [
+            ["4:3", "가로 십자: 가운데 줄 -X · +Z · +X · -Z, 위 +Y, 아래 -Y"],
+            ["3:4", "세로 십자: 가운데 줄 -X · +Z · +X, 위 +Y, 그 아래 -Y · -Z(-Z는 180° 돌려 놓인 것)"],
+            ["6:1 · 1:6", "띠: +X · -X · +Y · -Y · +Z · -Z 차례"],
+            ["2:1", "360° 파노라마(등장방형): 가운데가 -Z(앞), 위가 +Y"],
+          ],
+        },
+      },
+      {
+        list: [
+          "각 면은 OpenGL · Shadertoy 큐브맵의 면 방향 그대로입니다. 밉맵이 있어 `textureLod(iChannel0, 방향, 단계)`로 흐린 반사를 만들 수 있습니다.",
+          "코드에서 `iChannelN`을 선언하지 않으면 연결한 종류에 맞춰 `samplerCube`(큐브맵) 또는 `sampler2D`로 자동 선언합니다(Shadertoy 코드를 그대로 붙여 넣어도 됩니다). 직접 선언할 때는 `uniform samplerCube iChannel0;`처럼 큐브맵 채널은 samplerCube로 쓰세요 — sampler2D로 선언하면 검게 읽힙니다.",
+          "큐브맵은 이미지 자원이라 프로젝트 저장 · 프로젝트 파일 · HTML로 내보내기에 함께 담깁니다. `iChannelResolution`은 한 면의 크기입니다.",
+        ],
+      },
+      {
+        code: `uniform samplerCube iChannel0;   // 큐브맵 연결(선언하지 않아도 됩니다)
+vec3 sky(vec3 rd)               { return texture(iChannel0, rd).rgb; }
+vec3 blurry(vec3 rd, float r)   { return textureLod(iChannel0, rd, r * 8.0).rgb; }   // 거친 반사`,
+        title: "큐브맵 읽기",
+        insert: "cursor",
+      },
       { heading: "마이크 · 오디오 · 웹캠 · 영상" },
       {
         p: "채널 칩의 **입력**에서 **마이크** · **웹캠**을 고르면 권한을 묻고 켭니다. **오디오 파일…** · **영상 파일…**은 파일을 고르면 그 채널에 연결하고 재생합니다(반복 재생, 오디오는 소리도 납니다).",
@@ -552,9 +590,9 @@ bool keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x > 0.5; }
       {
         list: [
           "켜지 않은 채널은 검정 · `iChannelResolution` = 0으로 읽힙니다. 칩에 **꺼짐**이 보이면 칩을 눌러 같은 입력을 다시 고르세요.",
-          "마이크 · 카메라 권한과 고른 파일은 **저장되지 않습니다**. 프로젝트에는 연결만 남으므로, 다시 열면 다시 켜거나 파일을 다시 고릅니다.",
+          "고른 오디오 · 영상 파일은 종류마다 마지막 하나를 이 브라우저에 보관합니다. 다시 열면 칩이 **꺼짐**이고, 채널 고르기의 **▶ 파일 이름**으로 파일을 다시 고르지 않고 켭니다(소리가 갑자기 나지 않게 저절로 켜지는 않습니다). 마이크 · 카메라는 권한 때문에 다시 골라 켭니다. 프로젝트 파일 · HTML에는 미디어 파일이 담기지 않습니다.",
           "어떤 채널도 읽지 않게 되면(연결 해제 · 프로젝트 바꾸기) 마이크 · 카메라를 바로 끕니다.",
-          "마이크 · 카메라는 `http://localhost`나 `https`, 또는 파일로 연 배포본에서 쓸 수 있습니다. 영상 렌더링(오프라인)에서는 렌더링하는 순간의 화면 · 소리가 들어갑니다.",
+          "마이크 · 카메라는 `http://localhost`나 `https`, 또는 파일로 연 배포본에서 쓸 수 있습니다. 실시간 **녹화**에는 켜진 오디오(오디오 파일 · 마이크) 소리가 함께 담깁니다.",
         ],
       },
       {
@@ -721,6 +759,8 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           "프레임 i의 `uTime` = 시작 시간 + i ÷ FPS, `uDeltaTime` = 1 ÷ FPS, `uFrame` = 시작 시간 × FPS + i. 재생 배속과 상관없고, 렌더링하는 동안 마우스·휠·키 값은 그대로 고정됩니다.",
           "버퍼 패스(피드백 시뮬레이션)가 있으면 0초부터 시작 시간까지를 먼저 계산한 뒤 저장을 시작합니다. 이 계산은 따로 하므로 화면의 시뮬레이션은 렌더링 전 상태 그대로 이어집니다.",
           "MP4·WebM은 브라우저의 WebCodecs 인코더를 씁니다(Chrome·Edge·최신 Firefox·Safari). **MP4(H.264)** 는 대부분의 플레이어·편집 프로그램·SNS에서 바로 열립니다. 고를 수 없는 형식은 '지원 안 됨'으로 표시되고, 그때는 **PNG 연속 이미지**를 고르세요(ZIP 안의 README에 ffmpeg 명령이 있습니다). PNG ZIP은 크기·장 수 제한이 없습니다(4GB가 넘으면 ZIP64).",
+          "**미디어 입력** — 오디오 · 영상 파일 채널은 렌더 시간에 정확히 맞춥니다: 파일 위치 = `uTime` ÷ 파일 길이의 나머지(0초 = 파일 처음, 끝나면 처음부터). 소리 분석(512×2)은 그 시각의 파일 샘플에서 실시간과 같은 방식으로 계산하고, 영상은 그 시각으로 탐색합니다. `iChannelTime`도 그 위치입니다. 마이크 · 웹캠은 실시간 입력이라 렌더링하는 순간의 값이 들어갑니다.",
+          "**소리** — 오디오 파일 채널이 켜져 있으면 그 소리(렌더 구간에 맞춘 것)가 MP4 · WebM에 Opus로 담기고, PNG ZIP에는 `audio.wav`로 들어갑니다(완료 메시지에 '소리 포함'). 실시간 **녹화**에는 켜진 오디오 파일 · 마이크 소리가 담깁니다.",
           "렌더링 중에는 진행률과 남은 시간이 보이고, **Esc** 또는 **렌더링 취소**로 멈춥니다(파일은 만들지 않음).",
           "**무거운 셰이더** — 큰 크기로 한 번에 그리면 GPU가 몇 초씩 붙잡혀 브라우저가 WebGL을 초기화합니다(컨텍스트 손실). 그래서 영상 렌더링은 프레임을 **타일로 나눠** 그리고 타일마다 GPU가 끝나기를 기다립니다. 타일 크기는 잰 시간으로 자동으로 정해서, 가벼운 셰이더는 한 장으로 그대로 빠르게 그립니다(진행 표시에 타일 수가 나옵니다). 그래도 컨텍스트를 잃으면 렌더링을 멈추고 안내하며, 앱은 스스로 복구합니다. 그때는 크기를 줄여 다시 시도하세요.",
         ],

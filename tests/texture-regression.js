@@ -15,11 +15,11 @@ const gl={}; let seq=0,active=0,program=null;const bindings=new Map(),draws=[],s
 for(const key of ["MAX_TEXTURE_SIZE","TEXTURE_BINDING_2D","TEXTURE_2D","TEXTURE0","TEXTURE1","TEXTURE2","TEXTURE3","RGBA","UNSIGNED_BYTE","TEXTURE_MIN_FILTER","TEXTURE_MAG_FILTER","TEXTURE_WRAP_S","TEXTURE_WRAP_T","LINEAR","CLAMP_TO_EDGE","FRAMEBUFFER","COLOR_ATTACHMENT0","RGBA8","COLOR_BUFFER_BIT","FRAMEBUFFER_COMPLETE","TRIANGLES"])gl[key]=key;
 gl.NO_ERROR=0;gl.getError=()=>0;gl.getParameter=key=>key===gl.MAX_TEXTURE_SIZE?4096:bindings.get(active)||null;
 gl.createTexture=()=>({id:++seq});gl.deleteTexture=()=>{};
-gl.bindTexture=(_,tex)=>bindings.set(active,tex);gl.activeTexture=unit=>active=[gl.TEXTURE0,gl.TEXTURE1,gl.TEXTURE2,gl.TEXTURE3].indexOf(unit);
+gl.bindTexture=(target,tex)=>{if(target===gl.TEXTURE_2D)bindings.set(active,tex);};gl.activeTexture=unit=>active=[gl.TEXTURE0,gl.TEXTURE1,gl.TEXTURE2,gl.TEXTURE3].indexOf(unit);
 gl.texImage2D=()=>{};gl.texParameteri=()=>{};
 gl.createFramebuffer=()=>({id:++seq});gl.deleteFramebuffer=()=>{};gl.deleteProgram=()=>{};gl.bindFramebuffer=()=>{};gl.framebufferTexture2D=()=>{};
 gl.checkFramebufferStatus=()=>gl.FRAMEBUFFER_COMPLETE;gl.viewport=()=>{};gl.clearColor=()=>{};gl.clear=()=>{};
-gl.getUniformLocation=(_,key)=>key;gl.useProgram=p=>program=p;gl.uniform1i=()=>{};gl.uniform3f=(name,x,y,z)=>sizes.push([name,x,y,z]);
+gl.getUniformLocation=(_,key)=>key;gl.useProgram=p=>program=p;gl.uniform1i=()=>{};gl.uniform3f=(name,x,y,z)=>sizes.push([name,x,y,z]);gl.uniform1fv=()=>{};
 gl.drawArrays=()=>draws.push({program,texture:bindings.get(0)});
 (async()=>{
   const textures=load("texture-input").createTextureInput(gl);

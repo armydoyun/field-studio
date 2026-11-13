@@ -39,7 +39,7 @@ function mockGL(){
     bindTexture:()=>{},activeTexture:()=>{},texImage2D:()=>{},texParameteri:()=>{},
     framebufferTexture2D:()=>{},checkFramebufferStatus:()=>failFBO?0:gl.FRAMEBUFFER_COMPLETE,
     viewport:()=>{},clearColor:()=>{},clear:()=>{},
-    uniform1i:()=>{},uniform1f:()=>{},uniform2f:()=>{},uniform3f:()=>{},
+    uniform1i:()=>{},uniform1f:()=>{},uniform2f:()=>{},uniform3f:()=>{},uniform4f:()=>{},uniform1fv:()=>{},
     uniform2fv:()=>{},uniform3fv:()=>{},uniform4fv:()=>{},
     drawArrays:()=>{if(failDraw)throw new Error("mock draw failure");},
     readPixels:(x,y,w,h,format,type,out)=>out.fill(type===gl.FLOAT?.5:255),getError:()=>gl.NO_ERROR,

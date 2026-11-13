@@ -45,6 +45,9 @@ const DEFAULT_BUILTIN_TYPES = Object.freeze({
   frame: "int",
   mouse: "vec2",
   wheel: "float",
+  date: "vec4",
+  frameRate: "float",
+  shadertoyMouse: "vec4",
 });
 
 const createRenderer = (canvas, sources, onStatus = () => {}) => {
@@ -99,11 +102,20 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 마우스는 0~1 상대 좌표로 보관하고 Uniform 전송 시 버퍼 픽셀 좌표로 환산한다.
   // uMouse를 vec4로 선언하면 zw에 클릭 위치를 전달한다: z>0 버튼 누름 중, w>0 누른 직후 첫 프레임.
   const mouse = [-1, -1],
-    click = [0, 0];
+    click = [0, 0],
+    drag = [0, 0]; // Shadertoy iMouse의 xy: 누르고 있는 동안의 위치(놓으면 마지막 위치를 유지, 처음에는 0)
   let mouseDown = false,
     clickPending = false;
   // uWheel: 뷰포트에서 굴린 휠의 누적 칸 수(위로 굴리면 +1). 시간 초기화 때 0으로 돌아간다.
   let wheel = 0;
+  // uFrameRate: 실제 초당 프레임 수(배속과 무관, 부드럽게). uDate는 벽시계 — 영상 렌더링 중에는 시작 시각 + 렌더 시간.
+  let frameRate = 60,
+    dateOrigin = null;
+  const dateValue = () => {
+    const now = new Date(dateOrigin === null ? Date.now() : dateOrigin + time * 1000);
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return [now.getFullYear(), now.getMonth(), now.getDate(), (now.getTime() - midnight) / 1000];
+  };
   // 성능 지표: cpuMs는 프레임당 GL 명령 제출 시간(JS), frameMs는 rAF 간격, GPU 시간은 gpuTimer가 측정한다.
   const clock =
     typeof performance === "object" && typeof performance.now === "function"
@@ -161,10 +173,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 앱 내부 셰이더(버퍼 미리보기)는 { internal: true }로 컴파일한다 — 사용자의 Common을 붙이지 않는다.
   const passManager = PassManager.createPassManager(
     gl,
-    (source, { internal = false } = {}) => compileFragment(source, internal ? NO_SHARED : shared),
+    (source, { internal = false, channels } = {}) => compileFragment(source, internal ? NO_SHARED : shared, channels),
     textureInput,
     keyboard,
-    media
+    media,
+    () => time
   );
   // 다음 프레임 예약을 취소한다. lastTime을 지워 재시작 첫 delta를 0으로 만든다.
   const cancelFrame = () => {
@@ -359,6 +372,19 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       } else gl.uniform2f(target.mouse, x, y);
     }
     if (target.wheel != null) gl.uniform1f(target.wheel, wheel);
+    if (target.date != null) gl.uniform4fv(target.date, dateValue());
+    if (target.frameRate != null) gl.uniform1f(target.frameRate, frameRate);
+    if (target.shadertoyMouse != null) {
+      const cx = click[0] * width,
+        cy = click[1] * height;
+      gl.uniform4f(
+        target.shadertoyMouse,
+        drag[0] * width,
+        drag[1] * height,
+        mouseDown ? cx : -cx,
+        clickPending ? cy : -cy
+      );
+    }
     uploadCustomUniforms(target);
   };
   // 컴파일할 소스: 등록한 Uniform 중 코드에 없는 선언을 넣고, 짧은 머리말 · 가짜 진입점(mainImage)을 붙인다(glsl-prepare.js).
@@ -367,6 +393,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // Common이 한 패스에만 선언된 Uniform(파라미터 등)을 쓰면 다른 패스에도 그 선언을 넣는 데 쓴다. 둘 중 하나라도 바뀌면
   // 모든 프로그램을 다시 만든다(withCommon).
   const NO_SHARED = Object.freeze({ common: "", uniforms: [] });
+  // Image 패스의 채널 sampler 타입(지금 적용된 것). Image 채널이 2D ↔ 큐브맵으로 바뀌면 Image를 다시 만든다.
+  const SAMPLER_2D = PassManager.channelTypes({});
+  let imageTypes = SAMPLER_2D;
+  const typesOf = channels => PassManager.channelTypes(channels);
   let shared = NO_SHARED;
   const sharedOf = scene => {
     const common = typeof scene?.common === "string" ? scene.common : "";
@@ -378,7 +408,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     };
   };
   const sameShared = (a, b) => a.common === b.common && JSON.stringify(a.uniforms) === JSON.stringify(b.uniforms);
-  const buildFragment = (source, context = shared) => {
+  // channels: 이 패스의 채널 sampler 타입 4개(PassManager.channelTypes) — 선언하지 않은 iChannelN을 그 타입으로 넣는다.
+  const buildFragment = (source, context = shared, channels = SAMPLER_2D) => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
     const declarations = [],
       code = Prepare.blankComments(context.common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
@@ -391,10 +422,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           throw new Error(`${name}: GLSL 선언(${match[1]})과 등록 타입(${item.type})이 다릅니다.`);
       } else declarations.push(`uniform ${item.type} ${name};`);
     }
-    return Prepare.prepareFragment(source, declarations, { common: context.common, uniforms: context.uniforms });
+    return Prepare.prepareFragment(source, declarations, {
+      common: context.common,
+      uniforms: context.uniforms,
+      channels,
+    });
   };
-  const compileFragment = (source, context = shared) => {
-    const compiled = buildFragment(source, context);
+  const compileFragment = (source, context = shared, channels = SAMPLER_2D) => {
+    const compiled = buildFragment(source, context, channels);
     try {
       return createProgram(compiled.source);
     } catch (error) {
@@ -424,6 +459,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     stepDelta = 0;
     lastTime = now;
     time += delta;
+    if (elapsed > 0) frameRate = frameRate * 0.9 + (1 / elapsed) * 0.1;
     const cpuStart = clock();
     try {
       if (passManager.ensureTargets(gl.drawingBufferWidth, gl.drawingBufferHeight)) frameCount = 0;
@@ -514,12 +550,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (offline) return;
     if (running && !lost && !disposed && !document.hidden && program && !frame) frame = requestAnimationFrame(render);
   };
-  const replacePrograms = (source, updatePasses = () => {}) => {
+  const replacePrograms = (source, updatePasses = () => {}, types = imageTypes) => {
     if (disposed) throw new Error("이미 폐기된 Renderer입니다.");
     assertOnline();
     if (lost) throw new Error("WebGL 컨텍스트 복구 대기 중입니다.");
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
-    const next = compileFragment(source);
+    const next = compileFragment(source, shared, types);
     let nextUniforms;
     try {
       nextUniforms = PassManager.makeLocations(gl, next);
@@ -544,6 +580,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     program = next;
     uniforms = nextUniforms;
     fragmentSource = source;
+    imageTypes = types;
     if (previous) gl.deleteProgram(previous);
     pruneRamps();
     // 셰이더가 바뀌면 누적 프레임을 리셋한다. 시간(time)은 이어서 진행한다.
@@ -569,9 +606,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (message) onStatus(message);
   };
   // scene: 검사할 때 쓸 장면(Common · 다른 패스의 Uniform 선언을 그 장면에서 읽는다). 객체가 아니면 지금 적용된 것.
-  const validateFragment = (source, scene) => {
+  // channels: 이 소스를 쓰는 패스의 채널 연결(선언하지 않은 iChannelN의 타입).
+  const validateFragment = (source, scene, channels = {}) => {
     if (disposed || lost) throw new Error("셰이더를 검사할 수 없는 상태입니다.");
-    const candidate = compileFragment(source, scene && typeof scene === "object" ? sharedOf(scene) : shared);
+    const candidate = compileFragment(
+      source,
+      scene && typeof scene === "object" ? sharedOf(scene) : shared,
+      typesOf(channels)
+    );
     gl.deleteProgram(candidate);
     return true;
   };
@@ -682,8 +724,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       height,
       resume,
       tilePixels: Math.max(0, Math.floor(tilePixels) || 0),
-      saved: { time, frameCount, lastDelta },
+      saved: { time, frameCount, lastDelta, frameRate },
     };
+    dateOrigin = Date.now(); // uDate: 렌더링을 시작한 시각 + 렌더 시간
     tileCost.clear();
     tileStats = { tiles: 0, frames: 0 };
     resize();
@@ -703,6 +746,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     time = at;
     lastDelta = delta;
     frameCount = index;
+    if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
     keyboard.upload();
     media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
@@ -858,6 +902,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     time = at;
     lastDelta = delta;
     frameCount = index;
+    if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
     keyboard.upload();
     media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
@@ -924,6 +969,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!offline && offlineLost) {
       const { saved, resume } = offlineLost;
       offlineLost = null;
+      dateOrigin = null;
+      frameRate = saved.frameRate;
       time = saved.time;
       lastDelta = saved.lastDelta;
       lastTime = null;
@@ -935,6 +982,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     deleteOfflineTarget();
     const { saved, resume } = offline;
     offline = null;
+    dateOrigin = null;
+    frameRate = saved.frameRate;
     time = saved.time;
     lastDelta = saved.lastDelta;
     lastTime = null;
@@ -1022,11 +1071,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (!rect.width || !rect.height) return;
     mouse[0] = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     mouse[1] = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height));
+    if (mouseDown) [drag[0], drag[1]] = mouse;
   };
   const onPointerDown = event => {
     if (offline || event.button !== 0) return;
     onPointerMove(event);
     if (mouse[0] < 0) return;
+    [drag[0], drag[1]] = mouse;
     click[0] = mouse[0];
     click[1] = mouse[1];
     mouseDown = clickPending = true;
@@ -1392,8 +1443,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       swapUsers(next);
       const context = sharedOf(scene);
-      for (const source of [scene.image, ...scene.passes.map(p => p.fragment)]) {
-        const candidate = compileFragment(source, context);
+      for (const [source, channels] of [
+        [scene.image, scene.imageChannels],
+        ...scene.passes.map(p => [p.fragment, p.channels]),
+      ]) {
+        const candidate = compileFragment(source, context, typesOf(channels));
         gl.deleteProgram(candidate);
       }
     } finally {
@@ -1409,7 +1463,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       swapUsers(next);
       shared = sharedOf(scene);
-      replacePrograms(scene.image, () => passManager.setPasses(scene.passes, scene.imageChannels));
+      replacePrograms(
+        scene.image,
+        () => passManager.setPasses(scene.passes, scene.imageChannels),
+        typesOf(scene.imageChannels)
+      );
       frameCount = 0;
       retainMedia();
       return true;
@@ -1424,10 +1482,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const withCommon = (scene, apply) => {
     const context = sharedOf(scene);
     if (sameShared(context, shared)) return apply(false);
-    for (const [name, source] of [["Image", scene.image], ...scene.passes.map(p => [p.name, p.fragment])]) {
+    for (const [name, source, channels] of [
+      ["Image", scene.image, scene.imageChannels],
+      ...scene.passes.map(p => [p.name, p.fragment, p.channels]),
+    ]) {
       let candidate;
       try {
-        candidate = compileFragment(source, context);
+        candidate = compileFragment(source, context, typesOf(channels));
       } catch (error) {
         error.passName ??= name;
         throw error;
@@ -1447,7 +1508,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed || lost) throw new Error("현재 프로젝트를 적용할 수 없습니다.");
     assertOnline();
     return withCommon(scene, commonChanged => {
-      const imageChanged = commonChanged || scene.image !== fragmentSource;
+      const types = typesOf(scene.imageChannels),
+        imageChanged = commonChanged || scene.image !== fragmentSource || types.join() !== imageTypes.join();
       let result;
       const update = () => {
         result = passManager.updatePasses(scene.passes, scene.imageChannels);
@@ -1455,7 +1517,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         if (commonChanged && !result.structural) passManager.refreshPrograms();
       };
       try {
-        if (imageChanged) replacePrograms(scene.image, update);
+        if (imageChanged) replacePrograms(scene.image, update, types);
         else update();
       } catch (error) {
         if (imageChanged) error.passName ??= "Image";
@@ -1492,10 +1554,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     });
     return {
       vertex: vertexSource,
-      image: { source: buildFragment(fragmentSource).source, channels: passManager.getImageChannels() },
+      image: {
+        source: buildFragment(fragmentSource, shared, imageTypes).source,
+        channels: passManager.getImageChannels(),
+      },
       passes: passManager.getPasses().map(({ name, format, scale, size, outputs, filter, wrap, mipmap, channels }) => ({
         name,
-        source: buildFragment(fragments.get(name)).source,
+        source: buildFragment(fragments.get(name), shared, typesOf(channels)).source,
         format,
         scale,
         size: size || null,
@@ -1533,7 +1598,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const setImageChannels = channels => {
     if (disposed || lost) throw new Error("현재 Image 채널을 변경할 수 없습니다.");
-    passManager.setImageChannels(channels);
+    const types = typesOf(channels);
+    if (types.join() !== imageTypes.join())
+      replacePrograms(fragmentSource, () => passManager.setImageChannels(channels), types);
+    else passManager.setImageChannels(channels);
   };
   const setPreviewPass = (name, attachment = 0) => {
     if (disposed || lost) throw new Error("현재 미리보기를 변경할 수 없습니다.");
@@ -1675,6 +1743,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     exportScene,
     // 미디어 입력: startMedia(종류, 파일?) → Promise<boolean> · 상태는 mediaState(종류)
     startMedia: (kind, file) => media.start(kind, file),
+    // 보관한 파일(오디오 · 영상 파일 종류마다 마지막 하나)로 다시 켜기
+    startSavedMedia: kind => media.startSaved(kind),
+    // 녹화에 넣을 소리(켜진 오디오 파일 · 마이크를 섞은 트랙). 없으면 []
+    mediaAudioTracks: () => media.audioTracks(),
+    // 영상 렌더링: 오디오 · 영상 파일을 렌더 시간에 맞춘다(video-render.js가 부른다)
+    prepareOfflineMedia: () => media.prepareOffline(),
+    seekOfflineMedia: time => media.seekOffline(time),
+    endOfflineMedia: () => media.endOffline(),
     stopMedia: kind => media.stop(kind),
     mediaState: kind => media.state(kind),
     validatePassConfiguration,
@@ -1715,6 +1791,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     failedTextures: () => textureInput.failedIds(),
     getTextures,
     getTextureFile: id => textureInput.get(id)?.file || null,
+    // 큐브맵 채널로 쓸 때의 6면 캔버스(+X -X +Y -Y +Z -Z) — HTML 내보내기가 담는다
+    getCubeFaces: id => textureInput.cubeFaces(id),
     setTextureSampling,
     getPasses: passManager.getPasses,
     getPassDefinitions: passManager.getSpecs,

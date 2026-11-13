@@ -550,20 +550,26 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           }
         : ref.media
           ? mediaInfo(ref.media)
-          : ref.texture
+          : ref.cubemap
             ? {
-                source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
-                frame: "이미지",
-                help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
+                source: assets.find(asset => asset.id === ref.cubemap)?.name || "사용할 수 없는 이미지",
+                frame: "큐브맵",
+                help: "samplerCube로 읽습니다: texture(iChannelN, 방향). 4:3 · 3:4 십자, 6:1 · 1:6 띠, 2:1 파노라마 이미지를 6면으로 바꿉니다. 코드에서 선언하지 않으면 samplerCube로 자동 선언됩니다.",
               }
-            : {
-                source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
-                frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
-                help:
-                  ref.frame === "current"
-                    ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
-                    : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
-              };
+            : ref.texture
+              ? {
+                  source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
+                  frame: "이미지",
+                  help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
+                }
+              : {
+                  source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
+                  frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
+                  help:
+                    ref.frame === "current"
+                      ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
+                      : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
+                };
   // 미디어 채널 설명: 켜짐이면 이름(파일 이름) · 크기, 아니면 켜는 방법.
   const mediaInfo = kind => {
     const media = renderer.mediaState(kind),
@@ -579,9 +585,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           ? "켜는 중"
           : media.state === "error"
             ? `오류 · ${media.error}`
-            : kind === "audio" || kind === "video"
-              ? "꺼짐 · 파일은 저장되지 않습니다. 칩을 눌러 파일을 다시 고르세요"
-              : "꺼짐 · 칩을 눌러 다시 고르면 켭니다(권한 필요)";
+            : (kind === "audio" || kind === "video") && media.savedName
+              ? `꺼짐 · 보관한 파일 ${media.savedName} — 칩을 눌러 '▶ ${media.savedName}'으로 다시 켜세요`
+              : kind === "audio" || kind === "video"
+                ? "꺼짐 · 칩을 눌러 파일을 고르세요"
+                : "꺼짐 · 칩을 눌러 다시 고르면 켭니다(권한 필요)";
     return { source: label, frame: status, help: shape };
   };
   // 채널 연결을 바꾸고, 자동이면 바로 적용한다(칩 고르기 · 미디어 켜기가 같이 쓴다).
@@ -603,16 +611,22 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   // 미디어: 연결한 뒤 켠다(마이크 · 카메라는 권한을 묻고, 파일 종류는 먼저 파일을 고른다).
   const MEDIA_ACCEPT = { audio: "audio/*", video: "video/*" };
-  const startMedia = async (i, kind, file) => {
+  const startMedia = async (i, kind, file, useSaved = false) => {
     const label = Media.LABELS[kind];
     setStatus(`${label} 켜는 중…`, "is-dirty");
     try {
-      if (await renderer.startMedia(kind, file)) setStatus(`${label} 켜짐 → ${selected}.iChannel${i}`);
+      const started = useSaved ? await renderer.startSavedMedia(kind) : await renderer.startMedia(kind, file);
+      if (started) setStatus(`${label} 켜짐 → ${selected}.iChannel${i}`);
     } catch (error) {
       setStatus(`${label}: ${error.message}`, "is-error");
     }
   };
-  const onMedia = (i, kind) => {
+  // useSaved: 파일 종류를 보관한 파일로 다시 켠다(파일 고르기 없이)
+  const onMedia = (i, kind, useSaved = false) => {
+    if (useSaved) {
+      setChannel(i, { media: kind });
+      return startMedia(i, kind, null, true);
+    }
     if (!MEDIA_ACCEPT[kind]) {
       setChannel(i, { media: kind });
       return startMedia(i, kind);
@@ -643,7 +657,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     onMedia,
     mediaState: kind => renderer.mediaState(kind),
     onChange: setChannel,
-    onLoadImage: i => pickImage(i),
+    onLoadImage: (i, cube) => pickImage(i, cube),
     onDropImage: (i, file) => runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, i)),
   });
   // 입력 채널 줄은 자주 쓰지 않으므로 기본은 접어 둔다: 패스나 프로젝트가 바뀔 때 그 패스에 연결이 있으면 펴고, 없으면 접는다.
@@ -769,7 +783,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   };
   // 새 이미지는 사용 중인 연결을 덮어쓰지 않고 첫 빈 채널에만 연결한다. target: 채널 선택 목록에서 고른 채널(덮어씀)
-  const connectTexture = (id, target) => {
+  // cube: 이 이미지를 큐브맵 채널로 연결(samplerCube)
+  const connectTexture = (id, target, cube = false) => {
     rememberEditor();
     const channels = activeChannels(),
       slot = target ?? freeChannel(),
@@ -778,12 +793,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       setStatus("빈 입력 채널이 없습니다. 기존 채널을 해제한 뒤 연결하세요.", "is-error");
       return false;
     }
-    channels[slot] = { texture: id };
+    channels[slot] = cube ? { cubemap: id } : { texture: id };
     renderChannels();
     renderGraph();
     schedule();
     if (apply()) {
-      setStatus(`${inputInfo({ texture: id }, renderer.getTextures()).source} → ${selected}.iChannel${slot} 연결됨`);
+      setStatus(
+        `${inputInfo({ texture: id }, renderer.getTextures()).source}${cube ? " (큐브맵)" : ""} → ${selected}.iChannel${slot} 연결됨`
+      );
       return true;
     }
     if (previous) channels[slot] = previous;
@@ -900,9 +917,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         const before = copy(project);
         for (const pass of project.passes)
           for (const key of Object.keys(pass.channels))
-            if (pass.channels[key].texture === asset.id) delete pass.channels[key];
+            if (Model.imageOf(pass.channels[key]) === asset.id) delete pass.channels[key];
         for (const key of Object.keys(project.imageChannels))
-          if (project.imageChannels[key].texture === asset.id) delete project.imageChannels[key];
+          if (Model.imageOf(project.imageChannels[key]) === asset.id) delete project.imageChannels[key];
         if (!apply()) {
           project = before;
           renderEditor();
@@ -1613,19 +1630,20 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const scene = renderer.exportScene(),
       assets = renderer.getTextures(),
       textures = {};
-    const ids = new Set(
-      [scene.image.channels, ...scene.passes.map(pass => pass.channels)]
-        .flatMap(channels => Object.values(channels))
-        .map(ref => ref.texture)
-        .filter(Boolean)
-    );
-    for (const id of ids) {
+    const refs = [scene.image.channels, ...scene.passes.map(pass => pass.channels)].flatMap(channels =>
+        Object.values(channels)
+      ),
+      cubemaps = {};
+    for (const id of new Set(refs.map(ref => ref.texture).filter(Boolean))) {
       const file = renderer.getTextureFile(id),
         meta = assets.find(asset => asset.id === id);
       if (file && meta) textures[id] = { url: await Pack.readData(file), sampling: meta.sampling };
     }
+    // 큐브맵: 앱이 만든 6면을 그대로 PNG로 담는다(재생기가 같은 면으로 큐브맵을 만든다).
+    for (const id of new Set(refs.map(ref => ref.cubemap).filter(Boolean)))
+      cubemaps[id] = renderer.getCubeFaces(id).map(face => face.toDataURL("image/png"));
     const title = projects?.current()?.name || "FIELD Shader",
-      data = HtmlExport.buildPlayerData(scene, textures);
+      data = HtmlExport.buildPlayerData(scene, textures, cubemaps);
     return { html: HtmlExport.buildPlayerHTML(data, title), title, data };
   };
   const exportHTML = async () => {
@@ -1686,8 +1704,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
     if (state) renderer.validatePortable(Pack.withoutTextures(next), state.user);
     else {
-      renderer.validateFragment(next.image, next);
-      for (const pass of next.passes) renderer.validateFragment(pass.fragment, next);
+      renderer.validateFragment(next.image, next, next.imageChannels);
+      for (const pass of next.passes) renderer.validateFragment(pass.fragment, next, pass.channels);
     }
     if (!(await confirmReplace())) return false;
     check();
@@ -1820,7 +1838,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderGraph();
   });
   const savedDraft = Store.readTab(DRAFT_KEY);
-  const loadImage = async (file, slot) => {
+  const loadImage = async (file, slot, cube = false) => {
     const check = beginLoad(),
       result = await renderer.addTexture(file);
     if (disposed) return;
@@ -1831,7 +1849,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       setStatus(`${file.name} 추가됨 · 작업 변경으로 자동 채널 연결을 취소했습니다.`);
       return;
     }
-    const connected = connectTexture(result.id, slot);
+    const connected = connectTexture(result.id, slot, cube);
     renderChannels();
     if (connected && !result.saved) setStatus(`${$("studioMessage").textContent} · 로컬 저장 불가`);
     else if (!result.saved) setStatus(`이미지 추가됨 · 로컬 저장 불가: ${result.error}`);
@@ -1892,19 +1910,21 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   });
   // 이미지 파일 고르기. slot을 주면(채널 선택 목록의 "이미지 불러오기…") 그 채널에, 없으면 첫 빈 채널에 연결한다.
-  let imageSlot;
-  const pickImage = slot => {
+  let imageSlot, imageCube;
+  const pickImage = (slot, cube = false) => {
     imageSlot = slot;
+    imageCube = cube;
     $("studioTextureFile").click();
   };
   on($("studioTextureAdd"), "click", () => pickImage());
   on($("studioTextureFile"), "change", async event => {
     const file = event.target.files?.[0],
-      slot = imageSlot;
-    imageSlot = undefined;
+      slot = imageSlot,
+      cube = imageCube;
+    imageSlot = imageCube = undefined;
     event.target.value = "";
     if (!file) return;
-    await runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, slot));
+    await runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, slot, cube));
   });
   on($("studioCode"), "input", event => {
     rememberEditor();

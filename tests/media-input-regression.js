@@ -39,4 +39,18 @@ test("채널 값: media:<종류> ↔ {media:종류}",()=>{
   }
   assert.deepEqual({...Picker.refOf("keyboard")},{keyboard:true},"키보드는 그대로");
 });
+test("영상 렌더링용 소리 분석: 440Hz는 그 칸만 크고, 무음은 0 · 파형은 128 둘레(AnalyserNode와 같은 배치)",()=>{
+  const rate=44100,tone=Float32Array.from({length:rate},(_,i)=>0.5*Math.sin(2*Math.PI*440*i/rate)),smooth=new Float32Array(512);
+  let out;
+  for(let k=0;k<12;k++)out=Media.analyseAt(tone,20000+k*735,smooth); // 60fps로 12프레임: 시간 평활이 쌓인다
+  const bin=Math.round(440/(rate/1024));
+  assert(out.frequency[bin]>200,`440Hz 칸 ${out.frequency[bin]}`);
+  assert(out.frequency[200]<60,`멀리 떨어진 칸 ${out.frequency[200]}`);
+  assert.equal(out.wave.length,1024);
+  assert(Math.max(...out.wave)>180&&Math.min(...out.wave)<76,"파형은 진폭 0.5만큼 흔들린다");
+  const quiet=Media.analyseAt(new Float32Array(4096),3000,new Float32Array(512));
+  assert(quiet.frequency.every(v=>v===0)&&quiet.wave.every(v=>v===128),"무음");
+  const early=Media.analyseAt(tone,100,new Float32Array(512));
+  assert.equal(early.wave[0],128,"파일 앞(음수 위치)은 무음으로 채운다");
+});
 console.log(`Media input: ${passed} passed`);

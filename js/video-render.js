@@ -136,6 +136,10 @@ const ID = {
   Cluster: 0x1f43b675,
   Timestamp: 0xe7,
   SimpleBlock: 0xa3,
+  CodecPrivate: 0x63a2,
+  Audio: 0xe1,
+  SamplingFrequency: 0xb5,
+  Channels: 0x9f,
 };
 const idBytes = id => {
   const out = [];
@@ -177,8 +181,12 @@ const element = (id, children) => {
 };
 
 // codecId: "V_VP9" · "V_VP8". addChunk({ type: "key"|"delta", timestamp: µs, data: Uint8Array }) · finish() → Blob 조각 배열
+// 소리(선택): setAudio({ codecPrivate: OpusHead, sampleRate, channels }) · addAudioChunk({ timestamp: µs, data }).
+// 소리 블록은 트랙 2로, 끝낼 때 시간에 맞는 클러스터(비디오 키프레임마다 열린 것)에 끼워 넣는다.
 const createWebmMuxer = ({ codecId, width, height, fps }) => {
-  const clusters = [];
+  const clusters = [],
+    audioBlocks = [];
+  let audio = null;
   let current = null,
     lastMs = 0,
     count = 0;
@@ -192,16 +200,24 @@ const createWebmMuxer = ({ codecId, width, height, fps }) => {
       current = { ms, key, blocks: [] };
       clusters.push(current);
     }
-    const rel = ms - current.ms,
-      head = new Uint8Array(4);
-    head[0] = 0x81; // 트랙 번호 1 (가변 길이 정수)
-    head[1] = (rel >> 8) & 0xff;
-    head[2] = rel & 0xff;
-    head[3] = key ? 0x80 : 0;
-    current.blocks.push(element(ID.SimpleBlock, [head, data]));
+    current.blocks.push({ ms, track: 1, key, data });
     lastMs = ms;
     count++;
   };
+  const block = (cluster, { ms, track, key, data }) => {
+    const rel = ms - cluster.ms,
+      head = new Uint8Array(4);
+    head[0] = 0x80 | track; // 트랙 번호(가변 길이 정수)
+    head[1] = (rel >> 8) & 0xff;
+    head[2] = rel & 0xff;
+    head[3] = key ? 0x80 : 0;
+    return element(ID.SimpleBlock, [head, data]);
+  };
+  const setAudio = config => {
+    audio = config;
+  };
+  const addAudioChunk = ({ timestamp, data }) =>
+    audioBlocks.push({ ms: Math.round(timestamp / 1000), track: 2, key: true, data });
   const finish = () => {
     if (!count) throw new Error("인코딩된 프레임이 없습니다.");
     const header = element(ID.EBML, [
@@ -220,6 +236,7 @@ const createWebmMuxer = ({ codecId, width, height, fps }) => {
       element(ID.MuxingApp, [ascii("FIELD Studio")]),
       element(ID.WritingApp, [ascii("FIELD Studio")]),
     ]);
+    const withAudio = audio && audioBlocks.length;
     const tracks = element(ID.Tracks, [
       element(ID.TrackEntry, [
         element(ID.TrackNumber, [uint(1)]),
@@ -230,8 +247,39 @@ const createWebmMuxer = ({ codecId, width, height, fps }) => {
         element(ID.DefaultDuration, [uint(Math.round(1e9 / fps))]),
         element(ID.Video, [element(ID.PixelWidth, [uint(width)]), element(ID.PixelHeight, [uint(height)])]),
       ]),
+      ...(withAudio
+        ? [
+            element(ID.TrackEntry, [
+              element(ID.TrackNumber, [uint(2)]),
+              element(ID.TrackUID, [uint(2)]),
+              element(ID.TrackType, [uint(2)]), // 소리
+              element(ID.FlagLacing, [uint(0)]),
+              element(ID.CodecID, [ascii("A_OPUS")]),
+              element(ID.CodecPrivate, [new Uint8Array(audio.codecPrivate)]),
+              element(ID.Audio, [
+                element(ID.SamplingFrequency, [float64(audio.sampleRate)]),
+                element(ID.Channels, [uint(audio.channels)]),
+              ]),
+            ]),
+          ]
+        : []),
     ]);
-    const clusterParts = clusters.map(c => element(ID.Cluster, [element(ID.Timestamp, [uint(c.ms)]), ...c.blocks]));
+    // 소리 블록을 시간에 맞는 클러스터에 넣는다(그 시각 이전에 열린 마지막 클러스터). 클러스터 안은 시간 순.
+    if (withAudio)
+      for (const item of audioBlocks) {
+        let at = 0;
+        while (at + 1 < clusters.length && clusters[at + 1].ms <= item.ms) at++;
+        clusters[at].blocks.push(item);
+      }
+    const clusterParts = clusters.map(c =>
+      element(ID.Cluster, [
+        element(ID.Timestamp, [uint(c.ms)]),
+        ...c.blocks
+          .map((item, order) => ({ item, order }))
+          .sort((a, b) => a.item.ms - b.item.ms || a.order - b.order)
+          .map(({ item }) => block(c, item)),
+      ])
+    );
     // Cues(탐색 색인)는 클러스터 앞에 둔다. 위치 값을 8바이트 고정 폭으로 써서 Cues 크기가 위치에 따라 바뀌지 않게 한다.
     const keyed = clusters.map((c, i) => ({ c, i })).filter(({ c }) => c.key);
     const cuesFor = positions =>
@@ -257,7 +305,7 @@ const createWebmMuxer = ({ codecId, width, height, fps }) => {
     const segment = element(ID.Segment, [info, tracks, cuesFor(keyed.map(({ i }) => offsets[i])), ...clusterParts]);
     return [...header, ...segment];
   };
-  return { addChunk, finish, frames: () => count };
+  return { addChunk, setAudio, addAudioChunk, finish, frames: () => count };
 };
 
 // ---- MP4(ISO BMFF) 먹서 ----
@@ -281,9 +329,17 @@ const box = (type, children) => {
 const fullBox = (type, version, flags, children) =>
   box(type, [be(1, version), be(1, flags >> 16), be(2, flags), ...children]);
 const MATRIX = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000].map(v => be(4, v));
+// 소리(선택): setAudio({ codecPrivate: OpusHead, sampleRate, channels }) · addAudioChunk({ timestamp, duration: µs, data }).
+// Opus 소리 트랙(트랙 2, 'Opus' 샘플 항목 + dOps)을 더하고, 소리 샘플은 mdat에서 비디오 샘플 뒤에 한 덩어리로 둔다.
 const createMp4Muxer = ({ width, height, fps }) => {
-  const samples = [];
-  let description = null;
+  const samples = [],
+    audioSamples = [];
+  let description = null,
+    audio = null;
+  const setAudio = config => {
+    audio = config;
+  };
+  const addAudioChunk = ({ duration, data }) => audioSamples.push({ duration, data });
   // 트랙 시간 단위: fps로 나누어떨어지는 값(90000이 되면 그것). 프레임 길이(delta)가 정수가 된다.
   const timescale = 90000 % fps === 0 ? 90000 : fps * 1000,
     delta = timescale / fps;
@@ -300,10 +356,19 @@ const createMp4Muxer = ({ width, height, fps }) => {
   const finish = () => {
     if (!samples.length) throw new Error("인코딩된 프레임이 없습니다.");
     if (!description) throw new Error("H.264 설정(avcC)을 받지 못했습니다.");
+    const withAudio = !!(audio && audioSamples.length),
+      rate = audio?.sampleRate || 48000,
+      audioDurations = audioSamples.map(s => Math.round((s.duration * rate) / 1e6)),
+      audioDuration = audioDurations.reduce((sum, d) => sum + d, 0),
+      audioSize = audioSamples.reduce((sum, s) => sum + s.data.byteLength, 0);
     const count = samples.length,
       duration = count * delta,
-      movieDuration = Math.round((duration * 1000) / timescale),
-      dataSize = samples.reduce((sum, s) => sum + s.data.byteLength, 0),
+      movieDuration = Math.max(
+        Math.round((duration * 1000) / timescale),
+        withAudio ? Math.round((audioDuration * 1000) / rate) : 0
+      ),
+      videoSize = samples.reduce((sum, s) => sum + s.data.byteLength, 0),
+      dataSize = videoSize + (withAudio ? audioSize : 0),
       large = dataSize + 16 > 0xffffffff;
     // 디코딩 순서 = 인코더 출력 순서. 디코딩 시간 i·delta, 표시 시간 pts.
     const offsets = samples.map((s, i) => s.pts - i * delta),
@@ -360,7 +425,7 @@ const createMp4Muxer = ({ width, height, fps }) => {
           new Uint8Array(10),
           ...MATRIX,
           new Uint8Array(24),
-          be(4, 2),
+          be(4, withAudio ? 3 : 2), // 다음 트랙 번호
         ]),
         box("trak", [
           fullBox("tkhd", 0, 3, [
@@ -394,13 +459,93 @@ const createMp4Muxer = ({ width, height, fps }) => {
             ]),
           ]),
         ]),
+        ...(withAudio ? [audioTrak(chunkOffset + videoSize)] : []),
       ]);
+    // 소리 트랙: Opus. dOps는 OpusHead(작은 끝 바이트 순서)의 값을 큰 끝 순서로 옮긴 것이다.
+    const audioTrak = offset => {
+      const head = new DataView(new Uint8Array(audio.codecPrivate).buffer),
+        channels = audio.channels,
+        dOps = box("dOps", [
+          be(1, 0),
+          be(1, head.getUint8(9)),
+          be(2, head.getUint16(10, true)),
+          be(4, head.getUint32(12, true)),
+          be(2, head.getInt16(16, true)),
+          be(1, head.getUint8(18)),
+        ]);
+      // 같은 길이가 이어지는 샘플은 한 항목으로(stts)
+      const runs = [];
+      for (const d of audioDurations)
+        if (runs.length && runs[runs.length - 1][1] === d) runs[runs.length - 1][0]++;
+        else runs.push([1, d]);
+      const n = audioSamples.length,
+        seconds = Math.round((audioDuration * 1000) / rate);
+      return box("trak", [
+        fullBox("tkhd", 0, 3, [
+          be(4, 0),
+          be(4, 0),
+          be(4, 2),
+          be(4, 0),
+          be(4, seconds),
+          new Uint8Array(8),
+          be(2, 0),
+          be(2, 1), // alternate group
+          be(2, 0x0100), // 소리 크기 1.0
+          be(2, 0),
+          ...MATRIX,
+          be(4, 0),
+          be(4, 0),
+        ]),
+        box("mdia", [
+          fullBox("mdhd", 0, 0, [be(4, 0), be(4, 0), be(4, rate), be(4, audioDuration), be(2, 0x55c4), be(2, 0)]),
+          fullBox("hdlr", 0, 0, [
+            be(4, 0),
+            fourcc("soun"),
+            new Uint8Array(12),
+            ascii("SoundHandler"),
+            new Uint8Array(1),
+          ]),
+          box("minf", [
+            fullBox("smhd", 0, 0, [be(2, 0), be(2, 0)]),
+            box("dinf", [fullBox("dref", 0, 0, [be(4, 1), fullBox("url ", 0, 1, [])])]),
+            box("stbl", [
+              fullBox("stsd", 0, 0, [
+                be(4, 1),
+                box("Opus", [
+                  new Uint8Array(6),
+                  be(2, 1), // data_reference_index
+                  new Uint8Array(8),
+                  be(2, channels),
+                  be(2, 16),
+                  be(2, 0),
+                  be(2, 0),
+                  be(4, rate * 65536),
+                  dOps,
+                ]),
+              ]),
+              fullBox("stts", 0, 0, [be(4, runs.length), ...runs.flatMap(([k, d]) => [be(4, k), be(4, d)])]),
+              fullBox("stsc", 0, 0, [be(4, 1), be(4, 1), be(4, n), be(4, 1)]),
+              fullBox("stsz", 0, 0, [be(4, 0), be(4, n), ...audioSamples.map(s => be(4, s.data.byteLength))]),
+              large
+                ? fullBox("co64", 0, 0, [be(4, 1), be(8, offset)])
+                : fullBox("stco", 0, 0, [be(4, 1), be(4, offset)]),
+            ]),
+          ]),
+        ]),
+      ]);
+    };
     // moov 크기는 덩어리 위치 값과 상관없다(고정 폭) → 한 번 재고 위치를 넣어 다시 만든다.
     const mdatHeader = large ? [be(4, 1), fourcc("mdat"), be(8, dataSize + 16)] : [be(4, dataSize + 8), fourcc("mdat")];
     const chunkOffset = sizeOf(ftyp) + sizeOf(moov(0)) + sizeOf(mdatHeader);
-    return [...ftyp, ...moov(chunkOffset), ...mdatHeader, ...samples.map(s => s.data)];
+    return [
+      ...ftyp,
+      ...moov(chunkOffset),
+      ...mdatHeader,
+      ...samples.map(s => s.data),
+      ...(withAudio ? audioSamples.map(s => s.data) : []),
+    ];
   };
-  return { addChunk, setDescription, finish, frames: () => samples.length, timescale };
+  return { addChunk, setDescription, setAudio, addAudioChunk, finish, frames: () => samples.length, timescale };
 };
 
 // ---- ZIP(압축 없음) ----
@@ -584,6 +729,102 @@ const yieldTask = () =>
   });
 const abortError = () => Object.assign(new Error("영상 렌더링을 취소했습니다."), { name: "AbortError" });
 
+// ---- 소리 ----
+// 결과 영상의 소리 = 오디오 파일 채널의 파일. 렌더 구간 [시작, 시작 + 길이]에 맞춰(파일 위치 = 시간 % 파일 길이, 반복)
+// OfflineAudioContext로 48kHz로 만든 뒤 Opus로 인코딩한다(WebM · MP4). PNG는 같은 소리를 audio.wav로 담는다.
+const AUDIO_RATE = 48000;
+const renderAudio = async (buffer, s, Context = globalThis.OfflineAudioContext) => {
+  const channels = Math.min(2, buffer.numberOfChannels) || 1,
+    length = Math.max(1, Math.round(s.duration * AUDIO_RATE)),
+    ctx = new Context(channels, length, AUDIO_RATE),
+    source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  source.connect(ctx.destination);
+  source.start(0, ((s.start % buffer.duration) + buffer.duration) % buffer.duration);
+  return ctx.startRendering();
+};
+// OpusHead(RFC 7845): 인코더가 설정(description)을 주지 않을 때 쓴다.
+const opusHead = (channels, rate, preSkip = 312) => {
+  const out = new Uint8Array(19),
+    view = new DataView(out.buffer);
+  out.set(ascii("OpusHead"));
+  out[8] = 1;
+  out[9] = channels;
+  view.setUint16(10, preSkip, true);
+  view.setUint32(12, rate, true);
+  return out;
+};
+const encodeAudio = async (mixed, muxer, { Encoder = globalThis.AudioEncoder, Data = globalThis.AudioData } = {}) => {
+  const channels = mixed.numberOfChannels,
+    config = { codec: "opus", sampleRate: AUDIO_RATE, numberOfChannels: channels, bitrate: 192_000 };
+  if (typeof Encoder !== "function" || typeof Data !== "function") return false;
+  if (!(await Encoder.isConfigSupported(config)).supported) return false;
+  let failure = null,
+    head = null;
+  const encoder = new Encoder({
+    output: (chunk, metadata) => {
+      const description = metadata?.decoderConfig?.description;
+      if (description && !head)
+        head = new Uint8Array(ArrayBuffer.isView(description) ? description.slice().buffer : description.slice(0));
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      muxer.addAudioChunk({ timestamp: chunk.timestamp, duration: chunk.duration, data });
+    },
+    error: error => {
+      failure ??= error;
+    },
+  });
+  try {
+    encoder.configure(config);
+    for (let at = 0; at < mixed.length; at += AUDIO_RATE) {
+      const n = Math.min(AUDIO_RATE, mixed.length - at),
+        planar = new Float32Array(n * channels);
+      for (let c = 0; c < channels; c++) planar.set(mixed.getChannelData(c).subarray(at, at + n), c * n);
+      const data = new Data({
+        format: "f32-planar",
+        sampleRate: AUDIO_RATE,
+        numberOfFrames: n,
+        numberOfChannels: channels,
+        timestamp: Math.round((at * 1e6) / AUDIO_RATE),
+        data: planar,
+      });
+      encoder.encode(data);
+      data.close();
+    }
+    await encoder.flush();
+  } finally {
+    if (encoder.state !== "closed") encoder.close();
+  }
+  if (failure) throw failure;
+  muxer.setAudio({ codecPrivate: head || opusHead(channels, AUDIO_RATE), sampleRate: AUDIO_RATE, channels });
+  return true;
+};
+// 16비트 PCM WAV(PNG 연속 이미지에 함께 담는다)
+const wavBytes = buffer => {
+  const channels = buffer.numberOfChannels,
+    frames = buffer.length,
+    out = new DataView(new ArrayBuffer(44 + frames * channels * 2));
+  const text = (at, value) => [...value].forEach((ch, i) => out.setUint8(at + i, ch.charCodeAt(0)));
+  text(0, "RIFF");
+  out.setUint32(4, 36 + frames * channels * 2, true);
+  text(8, "WAVEfmt ");
+  out.setUint32(16, 16, true);
+  out.setUint16(20, 1, true);
+  out.setUint16(22, channels, true);
+  out.setUint32(24, buffer.sampleRate, true);
+  out.setUint32(28, buffer.sampleRate * channels * 2, true);
+  out.setUint16(32, channels * 2, true);
+  out.setUint16(34, 16, true);
+  text(36, "data");
+  out.setUint32(40, frames * channels * 2, true);
+  const data = [...Array(channels)].map((_, c) => buffer.getChannelData(c));
+  for (let i = 0, at = 44; i < frames; i++)
+    for (let c = 0; c < channels; c++, at += 2)
+      out.setInt16(at, Math.round(Math.max(-1, Math.min(1, data[c][i])) * 0x7fff), true);
+  return new Uint8Array(out.buffer);
+};
+
 // 렌더링 실행. settings는 normalizeSettings 결과. hasBuffers: 버퍼 패스가 있으면 시작 시간 전 프레임을 먼저 그린다.
 // onProgress({ phase: "warmup"|"render"|"finish", done, total }). 끝나면 { blob, name, settings, codec }.
 const render = async ({
@@ -594,6 +835,9 @@ const render = async ({
   onProgress = () => {},
   Encoder = globalThis.VideoEncoder,
   Frame = globalThis.VideoFrame,
+  AudioEncoderClass = globalThis.AudioEncoder,
+  AudioDataClass = globalThis.AudioData,
+  AudioContextClass = globalThis.OfflineAudioContext,
   createCanvas = () => document.createElement("canvas"),
 }) => {
   const check = () => {
@@ -615,8 +859,16 @@ const render = async ({
         `이 브라우저는 ${FORMATS[s.format].label} 인코딩을 지원하지 않습니다. PNG 연속 이미지를 고르세요.`
       );
   }
-  renderer.beginOffline({ width: s.width, height: s.height });
-  let encoder = null;
+  // 오디오 · 영상 파일 채널을 렌더 시간에 맞춘다(재생을 멈추고 오디오 파일을 디코딩). 끝나면 실시간으로 되돌린다.
+  const media = (await renderer.prepareOfflineMedia?.()) || {};
+  try {
+    renderer.beginOffline({ width: s.width, height: s.height });
+  } catch (error) {
+    renderer.endOfflineMedia?.();
+    throw error;
+  }
+  let encoder = null,
+    withAudio = false;
   try {
     const mirror = createCanvas();
     mirror.width = s.width;
@@ -634,7 +886,9 @@ const render = async ({
     // 버퍼 상태 쌓기: 시작 시간 전의 프레임을 같은 간격으로 그린다(저장하지 않음).
     if (hasBuffers && first > 0)
       for (let j = 0; j < first; j++) {
-        await drawFrame({ time: Math.max(0, s.start - (first - j) * dt), delta: dt, frame: j }, () => {});
+        const time = Math.max(0, s.start - (first - j) * dt);
+        await renderer.seekOfflineMedia?.(time);
+        await drawFrame({ time, delta: dt, frame: j }, () => {});
         if (j % 4 === 3 || j === first - 1) {
           onProgress({ phase: "warmup", done: j + 1, total: first });
           await yieldTask();
@@ -688,6 +942,7 @@ const render = async ({
       check();
       if (failure) throw failure;
       // WebGL 캔버스는 그린 직후(같은 작업 안)에만 읽을 수 있으므로 곧바로 2D 캔버스에 옮긴다.
+      await renderer.seekOfflineMedia?.(s.start + i * dt);
       await drawFrame({ time: s.start + i * dt, delta: dt, frame: baseFrame + i }, drawn =>
         context.drawImage(drawn, 0, 0)
       );
@@ -717,7 +972,13 @@ const render = async ({
     check();
     onProgress({ phase: "finish", done: s.frames, total: s.frames });
     let parts;
+    const mixed =
+      media.audio && typeof AudioContextClass === "function"
+        ? await renderAudio(media.audio, s, AudioContextClass)
+        : null;
+    check();
     if (encoder) {
+      if (mixed) withAudio = await encodeAudio(mixed, muxer, { Encoder: AudioEncoderClass, Data: AudioDataClass });
       await encoder.flush();
       if (failure) throw failure;
       encoder.close();
@@ -734,14 +995,26 @@ const render = async ({
         `ffmpeg -framerate ${s.fps} -i frame_%05d.png -c:v libx264 -pix_fmt yuv420p -crf 16 out.mp4`,
         "",
       ].join("\n");
-      zip.add("README.txt", new TextEncoder().encode(note));
+      if (mixed) {
+        zip.add("audio.wav", wavBytes(mixed));
+        withAudio = true;
+      }
+      zip.add(
+        "README.txt",
+        new TextEncoder().encode(
+          mixed
+            ? `${note}소리(audio.wav)까지 넣기:\nffmpeg -framerate ${s.fps} -i frame_%05d.png -i audio.wav -c:v libx264 -pix_fmt yuv420p -crf 16 -c:a aac -shortest out.mp4\n`
+            : note
+        )
+      );
       parts = zip.finish();
     }
     const type = codec ? FORMATS[s.format].mime : "application/zip";
-    return { blob: new Blob(parts, { type }), name: fileName(s), settings: s, codec };
+    return { blob: new Blob(parts, { type }), name: fileName(s), settings: s, codec, audio: withAudio };
   } finally {
     if (encoder && encoder.state !== "closed") encoder.close();
     renderer.endOffline();
+    renderer.endOfflineMedia?.();
   }
 };
 
@@ -760,6 +1033,8 @@ export {
   frameName,
   probeFormats,
   render,
+  opusHead,
+  wavBytes,
   BUDGET,
   assessBudget,
 };

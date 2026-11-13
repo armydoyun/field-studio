@@ -78,6 +78,8 @@ const validateProject = candidate => {
   return copy(candidate);
 };
 
+// 채널 연결이 쓰는 이미지 id: 이미지 채널 {texture: id} · 큐브맵 채널 {cubemap: id}(같은 이미지 자원). 없으면 null.
+const imageOf = ref => ref?.texture || ref?.cubemap || null;
 // 모든 패스의 채널 묶음(버퍼 패스들 + Image)
 const channelGroups = project => [...project.passes.map(pass => pass.channels), project.imageChannels];
 
@@ -114,7 +116,7 @@ const detachMissing = (project, available) => {
   let count = 0;
   for (const channels of channelGroups(project))
     for (const key of Object.keys(channels))
-      if (channels[key].texture && !available.has(channels[key].texture)) {
+      if (imageOf(channels[key]) && !available.has(imageOf(channels[key]))) {
         delete channels[key];
         count++;
       }
@@ -127,6 +129,7 @@ export {
   copy,
   same,
   validateProject,
+  imageOf,
   channelGroups,
   references,
   validCurrent,

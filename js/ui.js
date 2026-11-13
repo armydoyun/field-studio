@@ -2331,6 +2331,7 @@ const mount = (renderer, input, settings) => {
     canvas: $("screen"),
     onFrame: renderer.onFrame,
     redraw: renderer.redraw,
+    audioTracks: () => renderer.mediaAudioTracks?.() || [],
     onChange: ({ recording, ready, elapsed }) => {
       $("recordStop").hidden = !recording;
       // 인코더가 준비되는 동안(느린 컴퓨터에서 1초 남짓)은 '준비'로 보인다. 그동안 누른 중지는 시작된 뒤 잠깐 담고 멈춘다.
