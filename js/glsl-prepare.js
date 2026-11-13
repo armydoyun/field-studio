@@ -116,7 +116,19 @@ const hoistable = code =>
       start: m.index,
       end: m.index + m[0].length,
       names: m[2].split(",").map(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0]),
+      // 이름마다 한 줄짜리 선언(다른 패스에 넣을 때): "uniform vec3 uPoints[3];"
+      decls: m[2].split(",").map(part => `uniform ${m[1]} ${part.trim().replace(/\s+/g, "")};`),
     }));
+// 프로젝트 Uniform: 모든 패스(Image · Buffer)가 선언한 uniform을 [이름, 선언]으로 모은다(먼저 나온 것이 이긴다).
+// Common이 한 패스에만 선언된 Uniform(예: 파라미터)을 쓰면, 그것을 선언하지 않은 다른 패스에는 이 선언을 넣는다.
+// 렌더러가 장면을 적용할 때 만들어 prepareFragment(…, { uniforms })로 넘긴다.
+const projectUniforms = sources => {
+  const found = new Map();
+  for (const source of sources)
+    for (const { names, decls } of hoistable(blankComments(String(source || ""))))
+      names.forEach((name, i) => name && !found.has(name) && found.set(name, decls[i]));
+  return [...found];
+};
 const blankRanges = (text, ranges) =>
   ranges.reduce(
     (out, { start, end }) => out.slice(0, start) + out.slice(start, end).replace(/[^\r\n]/g, " ") + out.slice(end),
@@ -136,10 +148,16 @@ const APP_UNIFORMS = [
   ["iChannel3", "sampler2D"],
   ["iChannelResolution", "vec3", "[4]"],
 ];
-const commonUniforms = (commonCode, known) =>
-  APP_UNIFORMS.filter(
-    ([name]) => new RegExp(`\\b${name}\\b`).test(commonCode) && !uniformType(known, name) && !definesName(known, name)
-  ).map(([name, type, array = ""]) => `uniform ${type} ${name}${array};`);
+const commonUniforms = (commonCode, known, project = []) => {
+  const used = name =>
+    new RegExp(`\\b${name}\\b`).test(commonCode) && !uniformType(known, name) && !definesName(known, name);
+  const app = APP_UNIFORMS.filter(([name]) => used(name)).map(
+    ([name, type, array = ""]) => `uniform ${type} ${name}${array};`
+  );
+  // 다른 패스가 선언한 Uniform(앱 Uniform은 위에서 이미 넣었다)
+  const appNames = new Set(APP_UNIFORMS.map(([name]) => name));
+  return [...app, ...project.filter(([name]) => !appNames.has(name) && used(name)).map(([, decl]) => decl)];
+};
 // 끌어올릴 줄: 문장마다 "#line 컴파일러 줄 0" + 원문. shift = 원래 줄에 더할 수(#version 경로에서 넣은 줄 수).
 const hoistLines = (source, ranges, shift) =>
   ranges.flatMap(({ start, end }) => [`#line ${lineOf(source, start) + shift} 0`, source.slice(start, end)]);
@@ -155,7 +173,8 @@ const commonBlock = (common, resume) => ["#line 1 " + COMMON_SOURCE, ...common.s
 // 패스 코드 앞에 들어간다. 패스의 Uniform 선언은 Common 앞으로 끌어올리고, Common이 쓰는 앱 Uniform은 선언을 넣어
 // Common에서도 uTime · 파라미터 · iChannel을 쓸 수 있다(위 "Common이 Uniform을 쓸 수 있게").
 // 돌려주는 값: { source, injected?, header, entry } — injected는 #version이 있는 코드에 줄을 넣었을 때만.
-const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
+// options.uniforms: projectUniforms()의 결과 — Common이 쓰는데 이 패스 · Common에 선언이 없는 Uniform을 넣을 때 쓴다.
+const prepareFragment = (source, declarations = [], { common = "", uniforms = [] } = {}) => {
   if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
   if (typeof common !== "string") throw new TypeError("Common 코드는 문자열이어야 합니다.");
   const source0 = source; // 끌어올릴 원문(아래에서 source는 그 자리를 지운 사본이 된다)
@@ -173,7 +192,7 @@ const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
     hoisted = found.filter(r => !removed.includes(r));
     declarations = [
       ...declarations,
-      ...commonUniforms(commonCode, `${commonCode}\n${code}\n${declarations.join("\n")}`),
+      ...commonUniforms(commonCode, `${commonCode}\n${code}\n${declarations.join("\n")}`, uniforms),
     ];
     source = blankRanges(source, found);
   }
@@ -233,4 +252,4 @@ const prepareFragment = (source, declarations = [], { common = "" } = {}) => {
   return { source: out, ...(injected ? { injected } : {}), header: false, entry: needsEntry };
 };
 
-export { prepareFragment, blankComments, COMMON_SOURCE };
+export { prepareFragment, projectUniforms, blankComments, COMMON_SOURCE };

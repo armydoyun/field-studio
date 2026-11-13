@@ -196,7 +196,7 @@ void main() {   // main()을 직접 쓰면 그쪽이 진입점이고 mainImage�
           "**찾기 · 바꾸기** — `Ctrl+F`는 찾기만, `Ctrl+H`는 찾아 바꾸기(바꿀 내용 줄이 함께 열림)입니다. 창 안에서도 두 키로 오가고, 찾기 칸 왼쪽 `›` 버튼으로 바꾸기 줄을 여닫습니다. 찾기 칸에서 `Enter`/`Shift+Enter`로 다음·이전 일치로 가고, 바꾸기 줄이 열려 있으면 `Tab`으로 바로 바꿀 내용 칸으로 갑니다. 대소문자(`Alt+C`)·단어 단위(`Alt+W`)·정규식(`Alt+R`)을 켤 수 있고, 정규식으로 바꿀 때 `$1`·`$&`를 씁니다.",
           "**오류** — 컴파일 오류가 난 줄에 표시가 붙고 줄 끝에 이유가 나옵니다. `F8`·`Shift+F8`로 오류 사이를 오가고, `Ctrl+Shift+M`으로 목록을 엽니다.",
           "**주석** — `Ctrl+/` 줄 주석, `Shift+Alt+A` 블록 주석(`/* */`).",
-          "**정의로 이동** — `F12` 또는 `Ctrl+클릭`. **이름 바꾸기** — `F2`. VS Code처럼 커서 아래 이름이 가리키는 그 변수·함수만 바꿉니다(다른 함수의 같은 이름, 안쪽 블록에서 가린 이름은 그대로). Uniform은 다른 패스의 같은 Uniform과 파라미터 값까지 함께 바꾸고, 새 이름이 겹치면 무엇이 바뀌는지 보여 주고 다시 묻습니다. 구조체 필드도 그 구조체의 필드만 바꿉니다(`.` 앞 식의 타입을 따라가므로 다른 구조체의 같은 이름 필드·벡터 성분 `.xyz`는 그대로). 내장 이름은 바꾸지 않고, `#define` 매크로는 이 패스의 같은 이름을 모두 바꿉니다.",
+          "**정의로 이동** — `F12` 또는 `Ctrl+클릭`. **이름 바꾸기** — `F2`. VS Code처럼 커서 아래 이름이 가리키는 그 변수·함수만 바꿉니다(다른 함수의 같은 이름, 안쪽 블록에서 가린 이름은 그대로). Uniform은 다른 패스의 같은 Uniform과 파라미터 값까지 함께 바꾸고, **Common의 이름**(함수 · 변수 · 구조체 · `#define` · Uniform)은 어느 탭에서 바꾸든 Common과 모든 패스의 쓰는 곳을 함께 바꿉니다(그 패스 안에서 따로 선언한 같은 이름은 그대로, Undo 한 번). 또 새 이름이 겹치면 무엇이 바뀌는지 보여 주고 다시 묻습니다. 구조체 필드도 그 구조체의 필드만 바꿉니다(`.` 앞 식의 타입을 따라가므로 다른 구조체의 같은 이름 필드·벡터 성분 `.xyz`는 그대로). 내장 이름은 바꾸지 않고, `#define` 매크로는 이 패스의 같은 이름을 모두 바꿉니다.",
           "**명령 팔레트** — VS Code와 같습니다. `Ctrl+Shift+P`(또는 `F1`, ⋯ 메뉴)는 `>` 명령, `Ctrl+P`는 패스(Image · Common · Buffer)로 이동, `Ctrl+Shift+O`는 `@` 함수·Uniform, `Ctrl+G`는 `:` 줄 번호. 입력 칸에서 접두어를 바꿔 다른 목록으로 넘어갈 수 있습니다.",
           "**숫자 조절** — 숫자 위에 커서를 두고 `Ctrl+↑`/`Ctrl+↓`로 마지막 자릿수 단위만큼 올리고 내립니다(`Shift`를 함께 누르면 10배). `0.25`는 0.01씩, `3.`은 1씩 바뀝니다.",
           "**끌어서 조절** — `Alt`를 누른 채 숫자를 좌우로 끌면 값이 바뀌며 화면이 바로 따라옵니다. 한 번 끈 것은 `Ctrl+Z` 한 번으로 되돌아갑니다.",
@@ -398,7 +398,7 @@ fragColor = max(newColor, history * 0.97);   // 잔상 누적`,
       },
       {
         code: `// Common — uTime · uResolution · iChannel0 · iTime 같은 이름을 그대로 쓴다
-uniform float uSpeed;   // Common이 쓰는 파라미터는 Common에 선언 · @range 0 4 @default 1
+uniform float uSpeed;   // 파라미터는 Common이나 어느 한 패스에 선언 · @range 0 4 @default 1
 float wave(vec2 p) { return sin(p.x * 10.0 + uTime * uSpeed); }
 vec4 history(vec2 fragCoord) { return texture(iChannel0, fragCoord / uResolution); }
 
@@ -411,7 +411,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
       {
         list: [
           "Common에서 앱 Uniform(`uTime` · `uResolution` · `uMouse` · `uFrame` · `uDeltaTime` · `uWheel` · `iChannel0~3` · `iChannelResolution`)과 Shadertoy 이름(`iTime` …)을 선언 없이 그대로 씁니다. 패스가 선언하지 않았으면 실행할 때 그 패스에 선언을 넣고, 패스가 선언했으면 그 선언(타입)을 씁니다.",
-          "패스가 선언한 Uniform도 Common에서 쓸 수 있습니다: 실행할 때 패스의 `uniform` 선언을 Common 앞으로 옮깁니다(편집기 코드는 그대로이고, 오류 줄 번호도 원래 줄입니다). 다만 Common은 **모든** 패스에 붙으므로, 한 패스에만 선언한 Uniform을 쓰면 다른 패스에서 오류가 납니다 — 여러 패스가 쓰는 **파라미터는 Common에 선언**하세요(어노테이션도 Common에서 읽습니다).",
+          "패스가 선언한 Uniform(파라미터 포함)도 Common에서 쓸 수 있습니다. 실행할 때 패스의 `uniform` 선언을 Common 앞으로 옮기고(편집기 코드는 그대로, 오류 줄 번호도 원래 줄), Common이 쓰는데 선언하지 않은 패스에는 **다른 패스의 선언**을 넣습니다. 그래서 파라미터는 Common이나 **어느 한 패스**에 한 번만 선언하면 됩니다(어노테이션은 선언한 곳에서 읽습니다).",
           "`iChannelN`은 패스마다 그 패스에 연결된 입력을 읽습니다. Common의 함수가 `iChannel1`을 읽으면, 그 함수를 부르는 패스마다 iChannel1에 같은 종류(예: 키보드)를 연결하세요. 예제 갤러리의 **Keyboard Control**이 이렇게 씁니다.",
           "Image · Buffer 탭의 자동 완성 · 마우스 설명 · 시그니처 도움말이 Common의 함수 · 상수 · 구조체 · `#define`도 압니다. `F12`(또는 `Ctrl+클릭`)로 Common에 있는 정의로 바로 갑니다.",
           "Common만 고쳐도 모든 패스가 다시 컴파일됩니다. Common에서 난 오류는 **Common** 탭의 그 줄로 표시됩니다(어느 패스를 컴파일하다 났는지도 함께 적습니다).",

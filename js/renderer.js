@@ -161,7 +161,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 앱 내부 셰이더(버퍼 미리보기)는 { internal: true }로 컴파일한다 — 사용자의 Common을 붙이지 않는다.
   const passManager = PassManager.createPassManager(
     gl,
-    (source, { internal = false } = {}) => compileFragment(source, internal ? "" : commonSource),
+    (source, { internal = false } = {}) => compileFragment(source, internal ? NO_SHARED : shared),
     textureInput,
     keyboard,
     media
@@ -363,12 +363,25 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   // 컴파일할 소스: 등록한 Uniform 중 코드에 없는 선언을 넣고, 짧은 머리말 · 가짜 진입점(mainImage)을 붙인다(glsl-prepare.js).
   // Common: 모든 패스(Image · Buffer) 앞에 붙는 공용 코드. 바뀌면 모든 프로그램을 다시 만든다(applyProject).
-  let commonSource = "";
-  const commonOf = scene => (typeof scene?.common === "string" ? scene.common : "");
-  const buildFragment = (source, common = commonSource) => {
+  // 공유 문맥: { common: Common 코드, uniforms: 모든 패스가 선언한 Uniform(projectUniforms) }.
+  // Common이 한 패스에만 선언된 Uniform(파라미터 등)을 쓰면 다른 패스에도 그 선언을 넣는 데 쓴다. 둘 중 하나라도 바뀌면
+  // 모든 프로그램을 다시 만든다(withCommon).
+  const NO_SHARED = Object.freeze({ common: "", uniforms: [] });
+  let shared = NO_SHARED;
+  const sharedOf = scene => {
+    const common = typeof scene?.common === "string" ? scene.common : "";
+    return {
+      common,
+      uniforms: common.trim()
+        ? Prepare.projectUniforms([scene.image, ...(scene.passes || []).map(pass => pass.fragment)])
+        : [],
+    };
+  };
+  const sameShared = (a, b) => a.common === b.common && JSON.stringify(a.uniforms) === JSON.stringify(b.uniforms);
+  const buildFragment = (source, context = shared) => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
     const declarations = [],
-      code = Prepare.blankComments(common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
+      code = Prepare.blankComments(context.common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
     const uniforms = [...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+([^;{}]+);/g)];
     for (const [name, item] of userUniforms) {
       const match = uniforms.find(m => m[2].split(",").some(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name));
@@ -378,10 +391,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           throw new Error(`${name}: GLSL 선언(${match[1]})과 등록 타입(${item.type})이 다릅니다.`);
       } else declarations.push(`uniform ${item.type} ${name};`);
     }
-    return Prepare.prepareFragment(source, declarations, { common });
+    return Prepare.prepareFragment(source, declarations, { common: context.common, uniforms: context.uniforms });
   };
-  const compileFragment = (source, common = commonSource) => {
-    const compiled = buildFragment(source, common);
+  const compileFragment = (source, context = shared) => {
+    const compiled = buildFragment(source, context);
     try {
       return createProgram(compiled.source);
     } catch (error) {
@@ -555,10 +568,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     const message = mismatchMessage();
     if (message) onStatus(message);
   };
-  // common: 검사할 때 쓸 Common 코드(문자열이 아니면 지금 적용된 Common).
-  const validateFragment = (source, common) => {
+  // scene: 검사할 때 쓸 장면(Common · 다른 패스의 Uniform 선언을 그 장면에서 읽는다). 객체가 아니면 지금 적용된 것.
+  const validateFragment = (source, scene) => {
     if (disposed || lost) throw new Error("셰이더를 검사할 수 없는 상태입니다.");
-    const candidate = compileFragment(source, typeof common === "string" ? common : commonSource);
+    const candidate = compileFragment(source, scene && typeof scene === "object" ? sharedOf(scene) : shared);
     gl.deleteProgram(candidate);
     return true;
   };
@@ -1378,8 +1391,9 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     passManager.validateConfiguration(scene.passes, scene.imageChannels);
     try {
       swapUsers(next);
+      const context = sharedOf(scene);
       for (const source of [scene.image, ...scene.passes.map(p => p.fragment)]) {
-        const candidate = compileFragment(source, commonOf(scene));
+        const candidate = compileFragment(source, context);
         gl.deleteProgram(candidate);
       }
     } finally {
@@ -1391,41 +1405,41 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed || lost) throw new Error("Pack을 적용할 수 없는 Renderer 상태입니다.");
     const next = prepareUsers(items),
       old = new Map(userUniforms),
-      previousCommon = commonSource;
+      previousShared = shared;
     try {
       swapUsers(next);
-      commonSource = commonOf(scene);
+      shared = sharedOf(scene);
       replacePrograms(scene.image, () => passManager.setPasses(scene.passes, scene.imageChannels));
       frameCount = 0;
       retainMedia();
       return true;
     } catch (error) {
       swapUsers(old);
-      commonSource = previousCommon;
+      shared = previousShared;
       throw error;
     }
   };
-  // Common이 바뀌면 모든 패스 소스를 새 Common으로 먼저 컴파일해 보고(실패한 패스 이름을 붙여 던진다),
-  // 모두 통과한 뒤에 Common을 바꾸고 apply(true)로 모든 프로그램을 다시 만든다. 같으면 apply(false).
+  // 공유 문맥(Common · 프로젝트 Uniform)이 바뀌면 모든 패스 소스를 새 문맥으로 먼저 컴파일해 보고(실패한 패스 이름을 붙여
+  // 던진다), 모두 통과한 뒤에 문맥을 바꾸고 apply(true)로 모든 프로그램을 다시 만든다. 같으면 apply(false).
   const withCommon = (scene, apply) => {
-    const common = commonOf(scene);
-    if (common === commonSource) return apply(false);
+    const context = sharedOf(scene);
+    if (sameShared(context, shared)) return apply(false);
     for (const [name, source] of [["Image", scene.image], ...scene.passes.map(p => [p.name, p.fragment])]) {
       let candidate;
       try {
-        candidate = compileFragment(source, common);
+        candidate = compileFragment(source, context);
       } catch (error) {
         error.passName ??= name;
         throw error;
       }
       gl.deleteProgram(candidate);
     }
-    const previous = commonSource;
-    commonSource = common;
+    const previous = shared;
+    shared = context;
     try {
       return apply(true);
     } catch (error) {
-      commonSource = previous;
+      shared = previous;
       throw error;
     }
   };
@@ -1657,7 +1671,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     onFrame,
     redraw,
     validateFragment,
-    getCommon: () => commonSource,
+    getCommon: () => shared.common,
     exportScene,
     // 미디어 입력: startMedia(종류, 파일?) → Promise<boolean> · 상태는 mediaState(종류)
     startMedia: (kind, file) => media.start(kind, file),

@@ -7,7 +7,7 @@ require('./esm-vm-bridge.cjs'); // Test-only ESM mock adapter.
 "use strict";
 const fs=require("fs"),path=require("path"),vm=require("vm"),assert=require("assert");
 const load=file=>{let mod;vm.runInNewContext(fs.readFileSync(path.join(__dirname,"..","js",file),"utf8"),{define:(deps,factory)=>mod=factory()},{filename:file});return mod;};
-const {prepareFragment}=load("glsl-prepare.js");
+const {prepareFragment,projectUniforms}=load("glsl-prepare.js");
 let passed=0;const test=(name,fn)=>{fn();passed++;console.log("PASS",name);};
 // "#line N" 지시문을 따라 컴파일러가 매길 줄 번호 → 그 줄의 내용 (GLSL ES 3.00: #line N 다음 줄이 N번)
 // 나중 줄이 같은 번호를 다시 쓰면(#line) 나중 것이 그 번호다. 끝에 붙인 진입점 줄(mainImage 줄 번호를 일부러 다시 씀)과 그 뒤는 뺀다.
@@ -178,5 +178,19 @@ test("Common의 Uniform: Common이 같은 이름을 선언했으면 패스 쪽�
   const out=prepareFragment(user,[],{common:"uniform float uGain;\nfloat g() { return uGain; }"}).source;
   assert.equal(out.split("uniform float uGain;").length,2,"uGain은 Common의 선언 하나만");
   assert(out.includes("\nuniform Light uLight;\nuniform vec3 uPoints[N];\n"),"구조체 타입 · 상수 크기 배열은 제자리");
+});
+test("프로젝트 Uniform: 모든 패스의 uniform 선언을 이름별로 모은다(먼저 나온 것 · 숫자 크기 배열 · 구조체 타입은 빼고)",()=>{
+  const all=projectUniforms(["uniform float uGain; // @range 0 1\nuniform vec2 a, b[2];","uniform vec3 uGain;\nuniform Light uLight;\n// uniform float uHidden;"]);
+  assert.deepEqual(all.map(([n,d])=>[n,d]),[["uGain","uniform float uGain;"],["a","uniform vec2 a;"],["b","uniform vec2 b[2];"]]);
+});
+test("프로젝트 Uniform: Common이 쓰는데 이 패스 · Common에 없으면 다른 패스의 선언을 넣는다(앱 Uniform은 앱 타입으로)",()=>{
+  const uniforms=projectUniforms(["uniform float uGain;\nuniform vec3 uResolution;","void mainImage(out vec4 c, in vec2 p) { c = vec4(1.0); }"]);
+  const common="float g() { return uGain * uResolution.x; }";
+  let out=prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(g()); }",[],{common,uniforms}).source;
+  assert(out.includes("uniform float uGain;")&&out.indexOf("uniform float uGain;")<out.indexOf("float g()"),"uGain을 Common 앞에");
+  assert(out.includes("uniform vec2 uResolution;")&&!out.includes("uniform vec3 uResolution;"),"앱 Uniform은 앱 기본 타입(vec2)");
+  out=prepareFragment("uniform float uGain;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(g()); }",[],{common,uniforms}).source;
+  assert.equal(out.split("uniform float uGain;").length,2,"이 패스가 선언했으면 그 선언 하나(끌어올린 것)");
+  assert(!prepareFragment("void mainImage(out vec4 c, in vec2 p) { c = vec4(1.0); }",[],{common:"float k() { return 1.0; }",uniforms}).source.includes("uGain"),"Common이 쓰지 않으면 넣지 않는다");
 });
 console.log(`GLSL prepare: ${passed} passed`);

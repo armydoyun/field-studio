@@ -71,6 +71,13 @@
     test(!studio.setProject(project(shared, "uniform float uTime;\nuniform vec2 iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(tint(), 1.0); }")), "타입이 틀린 iChannel0 선언");
     test(diagnostics().some(text => /^Common · Line 3 · /.test(text)), `Common에서 쓰는 곳(3번 줄)에 오류: ${diagnostics()}`);
 
+    // 6-1b) Common이 쓰는 파라미터를 한 패스(A)에만 선언해도 된다: 다른 패스(Image)에는 앱이 A의 선언을 넣는다
+    const onlyInA = project("vec3 tint() { return vec3(uLevel, 0.0, 0.0); }", "uniform float uLevel;   // @range 0 1 @default 0.75\nvoid mainImage(out vec4 c, in vec2 p) {\n    c = vec4(tint(), 1.0);\n}");
+    test(studio.setProject(onlyInA), "Common의 파라미터를 A에만 선언한 프로젝트");
+    await frames(4);
+    test(pixel()[0] === 0.75 && !diagnostics().length, `A의 선언으로 Image도 컴파일 · uLevel 0.75: ${pixel()} ${diagnostics()}`);
+    test(r.getUserUniforms().some(u => u.name === "uLevel"), "A의 어노테이션으로 파라미터 등록");
+
     // 6-2) 정의로 이동(F12): Image 탭에서 Common의 함수를 가리키면 Common 탭의 그 줄로 간다
     const jump = project("// 1\n// 2\nvec3 tint() { return vec3(0.5); }");
     jump.image = "uniform sampler2D iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) { c = vec4(tint(), 1.0); }";
