@@ -58,4 +58,14 @@ test("follow · toParameter: 시간 상수로 다가가기 · int 반올림 · u
   assert.equal(L.toParameter("bool",0.5),true);assert.equal(L.toParameter("bool",0.49),false);assert.equal(L.toParameter("float",0.3),0.3);
   assert(L.LINKABLE.has("float")&&!L.LINKABLE.has("vec3"));
 });
+test("키 단위 잇기: 계단 · 천천히 시작/끝 · 없으면 연결 설정 · 모르는 값은 버림",()=>{
+  const [k]=L.validate([{name:"uK",source:"keys",keys:[[0,0,"step"],[1,1,"in"],[2,0,"out"],[3,1],[4,0,"nope"]],ease:"linear"}]);
+  assert.deepEqual(k.keys.map(x=>[...x]),[[0,0,"step"],[1,1,"in"],[2,0,"out"],[3,1],[4,0]]);
+  assert.equal(L.keyValue(k.keys,0.99,0,k.ease),0);       // 계단: 다음 키 전까지 유지
+  assert.equal(L.keyValue(k.keys,1,0,k.ease),1);
+  assert(near(L.keyValue(k.keys,1.5,0,k.ease),1-0.25));   // 천천히 시작: u²
+  assert(near(L.keyValue(k.keys,2.5,0,k.ease),0.75));     // 천천히 끝: 1-(1-u)²
+  assert(near(L.keyValue(k.keys,3.5,0,k.ease),0.5));      // 잇기 없음 → 연결의 직선
+  assert(L.KEY_EASES.includes("step"));
+});
 console.log(`Links: ${passed} passed`);

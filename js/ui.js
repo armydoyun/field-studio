@@ -1538,16 +1538,7 @@ const mount = (renderer, input, settings) => {
     liveLinks.get(name).push(update);
     if (!liveFrame) liveFrame = requestAnimationFrame(liveStep);
   };
-  const openTimeline = name => {
-    const box = $("timeline");
-    box.open = true;
-    timeline.render();
-    box.scrollIntoView({ block: "nearest" });
-    [...box.querySelectorAll(".timeline-lane")]
-      .find(lane => lane.dataset.name === name)
-      ?.querySelector(".timeline-key")
-      ?.focus();
-  };
+  const openTimeline = name => timeline.open(name);
   // ---- 키프레임 정밀 입력: 키프레임 연결 줄의 내비게이터(◀ ◆ ▶ · 재생 위치) · 자동 키 ----
   // 키프레임 연결 줄에서 값을 바꾸면 재생선 위치에 키를 찍는다(그 시간에 키가 있으면 값만 바꾼다).
   // 끄는 동안은 렌더러에만 적용하고, 놓거나(change · pointerup · keyup) 잠시 멈추면 저장한다 — 끌기가 끊기지 않게.
@@ -2968,6 +2959,9 @@ const mount = (renderer, input, settings) => {
     } else if (key === "g") {
       event.preventDefault();
       toggleHud();
+    } else if (key === "t") {
+      event.preventDefault();
+      $("timelineToggle").click();
     } else if (event.key === ".") {
       event.preventDefault();
       attempt(stepFrame);
@@ -3075,7 +3069,8 @@ const mount = (renderer, input, settings) => {
   renderUniforms();
   updateStats();
   const timer = setInterval(updateStats, 500);
-  const timeline = Timeline.mount({ renderer, settings, root: $("timeline") });
+  const timeline = Timeline.mount({ renderer, settings, root: $("timelineDock") });
+  timeline.bindToggle($("timelineToggle"));
   return {
     dispose: () => {
       clearInterval(timer);

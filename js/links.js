@@ -3,8 +3,9 @@
 //   source "audio": band = "bass"(20~250Hz) | "mid"(250~2kHz) | "treble"(2k~8kHz) | "volume"(파형 크기) → 0~1
 //   source "midi" : cc(0~127), channel(0 = 모든 채널, 1~16) → 컨트롤러 값 0~1
 //   source "lfo"  : shape = "sine" | "triangle" | "saw" | "square", period(초), phase(0~1) → 0~1(uTime 기준)
-//   source "keys" : keys = [[시간, 값], …](시간 순), loop(초, 0이면 반복하지 않고 끝 값 유지), ease("linear" | "smooth")
-//                   → 값 자체(min · max로 옮기지 않는다)
+//   source "keys" : keys = [[시간, 값, 잇기?], …](시간 순), loop(초, 0이면 반복하지 않고 끝 값 유지), ease("linear" | "smooth")
+//                   → 값 자체(min · max로 옮기지 않는다). 키의 잇기(이 키에서 다음 키까지)는 KEY_EASES 중 하나,
+//                   없으면 연결의 ease를 따른다.
 // 0~1 소스는 min + (max - min) × 값으로 옮긴다(키프레임은 값 그대로). smooth(초)만큼 부드럽게 따라간다(0이면 바로).
 // 파라미터 타입이 int · uint면 반올림, bool이면 0.5 이상이 참. 벡터 · 행렬 · 램프는 연결할 수 없다.
 // 렌더러가 프레임마다 evaluate로 값을 정하므로 영상 렌더링에서도 렌더 시간에 맞는다.
@@ -14,6 +15,8 @@ const SHAPES = ["sine", "triangle", "saw", "square"];
 const MAX_LINKS = 64,
   MAX_KEYS = 256;
 const LINKABLE = new Set(["float", "int", "uint", "bool"]);
+// 키 하나의 잇기: 부드럽게 · 직선 · 계단(다음 키까지 유지) · 천천히 시작 · 천천히 끝
+const KEY_EASES = ["smooth", "linear", "step", "in", "out"];
 
 const finite = (value, fallback) => (Number.isFinite(value) ? value : fallback);
 const clamp01 = v => Math.min(1, Math.max(0, v));
@@ -51,8 +54,10 @@ const validate = list => {
       const keys = Array.isArray(raw.keys) ? raw.keys : [];
       if (keys.length > MAX_KEYS) throw new Error(`${name}: 키프레임은 최대 ${MAX_KEYS}개입니다.`);
       link.keys = keys
-        .filter(k => Array.isArray(k) && k.length === 2 && Number.isFinite(k[0]) && Number.isFinite(k[1]))
-        .map(([t, v]) => [Math.max(0, t), v])
+        .filter(
+          k => Array.isArray(k) && (k.length === 2 || k.length === 3) && Number.isFinite(k[0]) && Number.isFinite(k[1])
+        )
+        .map(([t, v, ease]) => (KEY_EASES.includes(ease) ? [Math.max(0, t), v, ease] : [Math.max(0, t), v]))
         .sort((a, b) => a[0] - b[0]);
       link.loop = Math.max(0, finite(raw.loop, 0));
       link.ease = raw.ease === "linear" ? "linear" : "smooth";
@@ -96,6 +101,19 @@ const lfo = (shape, period, phase, time) => {
   return 0.5 - 0.5 * Math.cos(2 * Math.PI * x); // 0에서 시작해 반 주기에 1
 };
 
+// 잇기 곡선(0~1 → 0~1). 계단은 다음 키에 닿을 때까지 0.
+const shape = (ease, u) =>
+  ease === "linear"
+    ? u
+    : ease === "step"
+      ? u >= 1
+        ? 1
+        : 0
+      : ease === "in"
+        ? u * u
+        : ease === "out"
+          ? 1 - (1 - u) * (1 - u)
+          : u * u * (3 - 2 * u);
 // 키프레임 값(시간 t). loop > 0이면 t를 loop로 나눈 나머지에서 읽는다. 키가 없으면 null.
 const keyValue = (keys, t, loop = 0, ease = "smooth") => {
   if (!keys.length) return null;
@@ -104,10 +122,10 @@ const keyValue = (keys, t, loop = 0, ease = "smooth") => {
   for (let i = 1; i < keys.length; i++) {
     const [t1, v1] = keys[i];
     if (time <= t1) {
-      const [t0, v0] = keys[i - 1],
+      const [t0, v0, own] = keys[i - 1],
         span = t1 - t0,
         u = span > 0 ? (time - t0) / span : 1,
-        k = ease === "linear" ? u : u * u * (3 - 2 * u);
+        k = shape(own || ease, u);
       return v0 + (v1 - v0) * k;
     }
   }
@@ -146,6 +164,7 @@ export {
   BANDS,
   SHAPES,
   LINKABLE,
+  KEY_EASES,
   MAX_KEYS,
   validate,
   bandLevel,

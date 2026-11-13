@@ -124,9 +124,9 @@
     const looped = await offlineAt([1.5], "uStep");
     test(looped[0] === 5, `1초 반복: 1.5초 → ${looped[0]}`);
     [...editor("uStep").querySelectorAll("button")].find(b => b.textContent === "타임라인에서 편집").click();
-    await until(() => $("timeline").open && document.activeElement?.classList.contains("timeline-key"), "타임라인이 열리고 그 레인의 키에 초점");
-    test(document.activeElement.closest(".timeline-lane").dataset.name === "uStep", "uStep 레인");
-    $("timeline").open = false;
+    await until(() => !$("timelineDock").hidden && !!$("timelineDock").querySelector('.timeline-lane[data-name="uStep"] .timeline-key.is-selected'), "타임라인 도크가 열리고 그 레인의 첫 키가 선택됨");
+    test(document.activeElement === $("timelineDock").querySelector(".timeline-body"), "도크에 초점(방향키로 바로 옮기기)");
+    $("timelineDock").querySelector(".timeline-close").click();
 
     // 3) MIDI: 학습 → 움직인 CC로 연결 · 값을 범위로 · 상태 줄
     row("uGain").querySelector(".link-uniform").click();
