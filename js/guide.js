@@ -446,8 +446,8 @@ layout(location = 1) out vec4 outData;`,
   },
   {
     id: "inputs",
-    title: "이미지 · 키보드 입력",
-    summary: "이미지 파일과 키보드를 채널에 연결",
+    title: "이미지 · 키보드 · 미디어 입력",
+    summary: "이미지 · 키보드 · 마이크 · 오디오 · 웹캠 · 영상을 채널에 연결",
     blocks: [
       { heading: "이미지" },
       {
@@ -493,6 +493,42 @@ bool keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x > 0.5; }
 bool keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x > 0.5; }
 bool keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x > 0.5; }`,
         title: "키 읽기",
+        insert: "cursor",
+      },
+      { heading: "마이크 · 오디오 · 웹캠 · 영상" },
+      {
+        p: "채널 칩의 **입력**에서 **마이크** · **웹캠**을 고르면 권한을 묻고 켭니다. **오디오 파일…** · **영상 파일…**은 파일을 고르면 그 채널에 연결하고 재생합니다(반복 재생, 오디오는 소리도 납니다).",
+      },
+      {
+        table: {
+          head: ["입력", "텍스처", "읽는 법"],
+          rows: [
+            [
+              "마이크 · 오디오 파일",
+              "512×2 (Shadertoy와 같음)",
+              "y = 0.25 줄: 주파수 크기(x = 0 낮은 음 → 1 높은 음) · y = 0.75 줄: 파형(0.5 = 무음)",
+            ],
+            [
+              "웹캠 · 영상 파일",
+              "영상 크기",
+              "이미지처럼 `texture(iChannel0, uv)` · 위쪽이 v = 1 · 크기는 `iChannelResolution`",
+            ],
+          ],
+        },
+      },
+      {
+        list: [
+          "켜지 않은 채널은 검정 · `iChannelResolution` = 0으로 읽힙니다. 칩에 **꺼짐**이 보이면 칩을 눌러 같은 입력을 다시 고르세요.",
+          "마이크 · 카메라 권한과 고른 파일은 **저장되지 않습니다**. 프로젝트에는 연결만 남으므로, 다시 열면 다시 켜거나 파일을 다시 고릅니다.",
+          "어떤 채널도 읽지 않게 되면(연결 해제 · 프로젝트 바꾸기) 마이크 · 카메라를 바로 끕니다.",
+          "마이크 · 카메라는 `http://localhost`나 `https`, 또는 파일로 연 배포본에서 쓸 수 있습니다. 영상 렌더링(오프라인)에서는 렌더링하는 순간의 화면 · 소리가 들어갑니다.",
+        ],
+      },
+      {
+        code: `uniform sampler2D iChannel0;   // 마이크 또는 오디오 파일 연결
+float spectrum(float x) { return texture(iChannel0, vec2(x, 0.25)).x; }   // 0~1 주파수 크기
+float waveform(float x) { return texture(iChannel0, vec2(x, 0.75)).x; }   // 0.5 = 무음`,
+        title: "소리 읽기",
         insert: "cursor",
       },
     ],

@@ -4,6 +4,7 @@ import * as PassManager from "./pass-manager.js";
 import * as TextureInput from "./texture-input.js";
 import * as Diagnostics from "./gpu-diagnostics.js";
 import * as Keyboard from "./keyboard-input.js";
+import * as Media from "./media-input.js";
 import * as Ramp from "./ramp.js";
 import * as Prepare from "./glsl-prepare.js";
 
@@ -155,12 +156,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const textureInput = TextureInput.createTextureInput(gl);
   // 키보드 입력 텍스처(쉐이더토이 호환 256×3). 키를 넘길지는 input.js가 정하고 setKey로 알려 준다.
   const keyboard = Keyboard.create(gl);
+  // 미디어 입력(마이크 · 오디오 파일 · 웹캠 · 영상 파일). 상태가 바뀌면 편집기가 칩을 다시 칠하도록 알린다.
+  const media = Media.create(gl, { onChange: () => document.dispatchEvent(new Event("shader-media-changed")) });
   // 앱 내부 셰이더(버퍼 미리보기)는 { internal: true }로 컴파일한다 — 사용자의 Common을 붙이지 않는다.
   const passManager = PassManager.createPassManager(
     gl,
     (source, { internal = false } = {}) => compileFragment(source, internal ? "" : commonSource),
     textureInput,
-    keyboard
+    keyboard,
+    media
   );
   // 다음 프레임 예약을 취소한다. lastTime을 지워 재시작 첫 delta를 0으로 만든다.
   const cancelFrame = () => {
@@ -412,6 +416,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       if (passManager.ensureTargets(gl.drawingBufferWidth, gl.drawingBufferHeight)) frameCount = 0;
       lastDelta = delta;
       keyboard.upload();
+      media.update(passManager.mediaKinds());
       gl.bindVertexArray(vao);
       passManager.drawPasses(gl.drawingBufferWidth, gl.drawingBufferHeight, uploadGlobals, gpuTimer);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -686,6 +691,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     lastDelta = delta;
     frameCount = index;
     keyboard.upload();
+    media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
     passManager.drawPasses(w, h, uploadGlobals);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -840,6 +846,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     lastDelta = delta;
     frameCount = index;
     keyboard.upload();
+    media.update(passManager.mediaKinds());
     gl.bindVertexArray(vao);
     const measure = tileStats.frames < 3 || tileStats.frames % REMEASURE === 0 || !!offline.tilePixels;
     // 잴 프레임은 앞에서 기다리지 않고 쌓아 둔 GPU 작업을 먼저 비운다(그 시간이 첫 타일의 비용으로 잡히지 않게).
@@ -1073,6 +1080,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       gpuTimer.restore();
       textureInput.restore();
       keyboard.restore();
+      media.restore();
       setFragment(fragmentSource);
       passManager.restore();
       reportMismatches();
@@ -1113,6 +1121,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       for (const entry of rampTextures.values()) gl.deleteTexture(entry.texture);
     }
     rampTextures.clear();
+    media.dispose(); // 마이크 · 카메라를 놓는다(컨텍스트를 잃었어도)
     if (lost) textureInput.dispose();
     program = vao = uniforms = null;
   };
@@ -1388,6 +1397,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       commonSource = commonOf(scene);
       replacePrograms(scene.image, () => passManager.setPasses(scene.passes, scene.imageChannels));
       frameCount = 0;
+      retainMedia();
       return true;
     } catch (error) {
       swapUsers(old);
@@ -1439,9 +1449,12 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       }
       if (result.structural) frameCount = 0;
       if (!imageChanged) reportMismatches();
+      retainMedia();
       return imageChanged || result.changed;
     });
   };
+  // 적용한 구성의 채널이 더는 읽지 않는 미디어(마이크 · 카메라 · 파일)는 끈다.
+  const retainMedia = () => media.retain(passManager.mediaKinds());
   const validatePassConfiguration = (passes, imageChannels = {}) =>
     passManager.validateConfiguration(passes, imageChannels);
   const setPasses = (passes, imageChannels = {}) => {
@@ -1602,6 +1615,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     redraw,
     validateFragment,
     getCommon: () => commonSource,
+    // 미디어 입력: startMedia(종류, 파일?) → Promise<boolean> · 상태는 mediaState(종류)
+    startMedia: (kind, file) => media.start(kind, file),
+    stopMedia: kind => media.stop(kind),
+    mediaState: kind => media.state(kind),
     validatePassConfiguration,
     setFragment,
     setResolutionScale,

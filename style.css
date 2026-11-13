@@ -401,6 +401,9 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .studio-channel-chip .chip-badge.glyph-icon { padding:0;background:transparent;color:var(--text-soft); }
 .studio-channel-chip .chip-tag { min-width:0;overflow:hidden;color:var(--text-soft);font-weight:400;text-overflow:ellipsis;white-space:nowrap; }
 .studio-channel-chip[data-kind="missing"] .chip-tag { color:var(--danger); }
+/* 미디어 입력: 꺼져 있으면 흐리게, 오류면 빨갛게(칩을 눌러 다시 켠다) */
+.studio-channel-chip[data-kind="media"]:is([data-state="off"],[data-state="starting"]) .chip-tag { color:var(--muted);font-style:italic; }
+.studio-channel-chip[data-kind="media"][data-state="error"] .chip-tag { color:var(--danger); }
 /* 코드가 읽는데 비어 있음(경고) · 연결했는데 코드가 안 읽음(약한 표시) */
 .studio-channel-chip[data-warn="empty"]::after,.studio-channel-chip[data-warn="unused"]::after { content:"";position:absolute;top:-3px;right:-3px;width:7px;height:7px;border:1.5px solid var(--bg);border-radius:50%; }
 .studio-channel-chip[data-warn="empty"]::after { background:var(--warning); }

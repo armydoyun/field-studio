@@ -18,6 +18,7 @@ import * as ChannelPicker from "./channel-picker.js";
 import * as PreviewDOM from "./preview-dom.js";
 import * as Scope from "./glsl-scope.js";
 import * as Prepare from "./glsl-prepare.js";
+import * as Media from "./media-input.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -537,42 +538,101 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
             frame: "입력",
             help: "키 상태 텍스처(256×3). x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글. 뷰포트를 클릭하면 키가 셰이더로 갑니다.",
           }
-        : ref.texture
-          ? {
-              source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
-              frame: "이미지",
-              help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
-            }
-          : {
-              source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
-              frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
-              help:
-                ref.frame === "current"
-                  ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
-                  : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
-            };
+        : ref.media
+          ? mediaInfo(ref.media)
+          : ref.texture
+            ? {
+                source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
+                frame: "이미지",
+                help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
+              }
+            : {
+                source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
+                frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
+                help:
+                  ref.frame === "current"
+                    ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
+                    : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
+              };
+  // 미디어 채널 설명: 켜짐이면 이름(파일 이름) · 크기, 아니면 켜는 방법.
+  const mediaInfo = kind => {
+    const media = renderer.mediaState(kind),
+      audio = kind === "mic" || kind === "audio",
+      label = Media.LABELS[kind];
+    const shape = audio
+      ? "512×2 텍스처: y = 0.25 주파수 크기(왼쪽 = 낮은 음) · y = 0.75 파형(0.5 = 무음)"
+      : "영상 텍스처: 이미지처럼 위쪽이 v = 1";
+    const status =
+      media.state === "on"
+        ? `켜짐${media.name !== label ? ` · ${media.name}` : ""}${!audio && media.width ? ` · ${media.width}×${media.height}` : ""}`
+        : media.state === "starting"
+          ? "켜는 중"
+          : media.state === "error"
+            ? `오류 · ${media.error}`
+            : kind === "audio" || kind === "video"
+              ? "꺼짐 · 파일은 저장되지 않습니다. 칩을 눌러 파일을 다시 고르세요"
+              : "꺼짐 · 칩을 눌러 다시 고르면 켭니다(권한 필요)";
+    return { source: label, frame: status, help: shape };
+  };
+  // 채널 연결을 바꾸고, 자동이면 바로 적용한다(칩 고르기 · 미디어 켜기가 같이 쓴다).
+  const setChannel = (i, ref) => {
+    const channels = activeChannels();
+    if (!channels) return;
+    if (ref) channels[i] = ref;
+    else delete channels[i];
+    schedule();
+    renderGraph();
+    syncTextureTargets();
+    syncInputs();
+    if (!$("studioLive").checked) return;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    apply();
+  };
+  // 미디어: 연결한 뒤 켠다(마이크 · 카메라는 권한을 묻고, 파일 종류는 먼저 파일을 고른다).
+  const MEDIA_ACCEPT = { audio: "audio/*", video: "video/*" };
+  const startMedia = async (i, kind, file) => {
+    const label = Media.LABELS[kind];
+    setStatus(`${label} 켜는 중…`, "is-dirty");
+    try {
+      if (await renderer.startMedia(kind, file)) setStatus(`${label} 켜짐 → ${selected}.iChannel${i}`);
+    } catch (error) {
+      setStatus(`${label}: ${error.message}`, "is-error");
+    }
+  };
+  const onMedia = (i, kind) => {
+    if (!MEDIA_ACCEPT[kind]) {
+      setChannel(i, { media: kind });
+      return startMedia(i, kind);
+    }
+    const input = element("input");
+    input.type = "file";
+    input.accept = MEDIA_ACCEPT[kind];
+    input.addEventListener(
+      "change",
+      () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const problem = Media.fileProblem(kind, file);
+        if (problem) return setStatus(problem, "is-error");
+        setChannel(i, { media: kind });
+        startMedia(i, kind, file);
+      },
+      { once: true }
+    );
+    input.click();
+  };
   // 입력 채널 칩과 고르기 팝오버(channel-picker.js). 바뀐 연결은 여기서 초안에 넣고, 자동이면 바로 적용한다.
   const channelPicker = ChannelPicker.create({
     $,
     on,
     element,
     inputInfo,
-    onChange: (i, ref) => {
-      const channels = activeChannels();
-      if (!channels) return;
-      if (ref) channels[i] = ref;
-      else delete channels[i];
-      schedule();
-      renderGraph();
-      syncTextureTargets();
-      syncInputs();
-      if (!$("studioLive").checked) return;
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      apply();
-    },
+    onMedia,
+    mediaState: kind => renderer.mediaState(kind),
+    onChange: setChannel,
     onLoadImage: i => pickImage(i),
     onDropImage: (i, file) => runFile($("studioTextureAdd"), "이미지 읽는 중…", () => loadImage(file, i)),
   });
@@ -2236,6 +2296,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   // 툴바 "최종 Image 보기"·버퍼 뷰어로 미리보기를 바꿔도 버튼 상태를 맞춘다.
   on(document, "shader-preview-changed", syncPreviewControls);
+  // 미디어(마이크 · 웹캠 · 파일)가 켜지거나 꺼지면 칩 · 설명 · 연결 그래프를 다시 칠한다.
+  on(document, "shader-media-changed", () => {
+    channelPicker.refresh();
+    renderGraph();
+  });
   syncPreviewControls();
   editor.registerCommands?.([
     press("셰이더 실행 (적용)", "studioRun", "Alt+Enter"),
