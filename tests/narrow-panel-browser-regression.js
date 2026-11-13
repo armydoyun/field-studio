@@ -95,7 +95,8 @@ void main(){fragColor=vec4(0.2,0.3,0.4,1.0);}`);
     $("tab-input").click(); await frames();
     for (const button of document.querySelectorAll(".theme-choice button"))
       test(button.getBoundingClientRect().height <= 34, `테마 버튼 "${button.textContent}" 글자가 한 줄`);
-    // 노출 슬라이더: 값이 바뀌어도 슬라이더 위치·폭이 그대로이고 값이 패널 안에 보인다(끄는 동안 흔들리지 않게).
+    // 노출 슬라이더: 값이 바뀌어도 슬라이더 위치·폭이 그대로이고 값이 패널 안에 보인다.
+    // 폭은 120px 이상: -8~8(32칸)을 한 칸에 약 4px 이상으로 끌 수 있어야 한다(40px이면 1px마다 값이 튀어 맞출 수 없었다).
     $("tab-profile").click(); await frames();
     const exposure = $("profileExposure"), exposureLabel = $("profileExposureLabel");
     const exposureBefore = exposure.value, boxes = [];
@@ -104,7 +105,7 @@ void main(){fragColor=vec4(0.2,0.3,0.4,1.0);}`);
       const r = exposure.getBoundingClientRect(); boxes.push(`${Math.round(r.left)}:${Math.round(r.width)}`);
       test(contained(exposureLabel,$("view-profile")) && exposureLabel.scrollWidth <= exposureLabel.clientWidth+1, `노출 값 ${exposureLabel.textContent}이 잘리지 않음`);
     }
-    test(new Set(boxes).size === 1 && exposure.getBoundingClientRect().width >= 60, `노출 슬라이더 위치·폭 고정 (${boxes[0]})`);
+    test(new Set(boxes).size === 1 && exposure.getBoundingClientRect().width >= 120, `노출 슬라이더 위치·폭 고정 · 충분히 김 (${boxes[0]})`);
     exposure.value = exposureBefore; exposure.dispatchEvent(new Event("input",{bubbles:true}));
   } finally {
     pointer("pointerup",300); $("uniformEditor").open = false;
