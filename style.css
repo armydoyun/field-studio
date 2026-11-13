@@ -100,9 +100,10 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .fps-control { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch; }
 .fps-control input { border-top-right-radius:0;border-bottom-right-radius:0; }
 .input-unit { display:grid;place-items:center;min-width:44px;padding:0 10px;border:1px solid var(--line-strong);border-left:0;border-radius:0 7px 7px 0;font:10px/1 var(--mono);pointer-events:none; }
-.preset-row { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px; }
-.fps-presets { grid-template-columns:repeat(5,minmax(0,1fr));gap:6px; }
-.fps-presets button { padding-inline:2px; }
+.preset-row { display:flex;flex-wrap:wrap;gap:8px;margin-top:8px; }
+.preset-row>button { flex:1 1 0;min-width:max-content;padding-inline:8px; }
+.fps-presets { gap:6px; }
+.fps-presets>button { padding-inline:6px; }
 .fps-control[hidden] { display:none; }
 .fps-control { margin-top:8px; }
 .preset-row button { min-width:0;min-height:32px;padding:5px;font-family:var(--mono); }
@@ -130,7 +131,7 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .uniform-empty-actions button { min-height:32px;padding:4px 12px;font-size:12px; }
 #view-uniforms .uniform-list:has(>.uniform-empty)~#uniformEditor:not([open]) { display:none; }
 .uniform-empty { padding:20px 12px;border:1px dashed var(--line-strong);border-radius:var(--radius);font-size:11px;line-height:1.75;text-align:center; }
-.uniform-row { display:grid;gap:8px;min-width:0;padding:10px 12px 12px;container:uniform / inline-size; }
+.uniform-row { display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;padding:10px 12px 12px;container:uniform / inline-size; }
 .uniform-row+.uniform-row { border-top:1px solid var(--line); }
 .uniform-top { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 2px;min-height:24px; }
 .uniform-top>div { display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 8px;min-width:0; }
@@ -163,11 +164,16 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .timeline-unit { color:var(--muted); }
 .timeline-bar button { min-height:28px;padding:0 10px;font-size:12px;white-space:nowrap; }
 .timeline-bar .glyph-icon { width:28px;padding:0; }
-.timeline-bar input[type="number"] { width:80px;min-height:28px;padding:3px 8px;font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums; }
+/* 숫자 칸 폭은 글자 수(ch)로 정한다: 글꼴이 달라도(윈도우 등) 자릿수가 잘리지 않게. 위아래 화살표(스핀)는 자리만 차지하므로 숨긴다. */
+.timeline-bar input[type="number"] { width:calc(8ch + 18px);min-height:28px;padding:3px 8px;font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield; }
+.timeline-bar input[type="number"]::-webkit-inner-spin-button,.timeline-bar input[type="number"]::-webkit-outer-spin-button { margin:0;-webkit-appearance:none; }
+.timeline-bar input.timeline-key-value { width:calc(10ch + 18px); }
 .timeline-bar select { width:auto;min-width:0;min-height:28px;padding:2px 24px 2px 8px;font-size:12px; }
-.timeline-bar .timeline-snap { width:92px; }
-.timeline-bar .timeline-speed { width:70px; }
-.timeline-bar .timeline-key-ease { min-width:104px; }
+/* 선택 칸 폭도 글자 기준: 고른 값(예: 0.05초 · 0.25×)이 다 보이고 화살표 자리(24px)가 남게 */
+.timeline-bar .timeline-snap { width:calc(6ch + 1em + 34px); }
+.timeline-bar .timeline-speed { width:calc(5ch + 34px); }
+/* 잇기 칸은 고정 폭: 항목 이름('기본 (부드럽게)' 등)이 바뀌어도 막대가 줄바꿈되거나 흔들리지 않게 */
+.timeline-bar .timeline-key-ease { width:calc(7.5em + 34px);min-width:0; }
 .timeline-bar .timeline-zoom { width:28px;padding:0;font:600 13px var(--mono); }
 /* 붙은 버튼 쌍: ▶ ⟲ · − + (선 하나를 함께 쓴다) */
 .timeline-bar .timeline-play,.timeline-bar .timeline-zoom:first-of-type { border-radius:var(--radius-sm) 0 0 var(--radius-sm); }
@@ -184,8 +190,8 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 /* 좁은 타임라인(설정 패널을 넓히거나 창을 줄였을 때): 칸을 줄이고, 키 칸은 (고르기 전에도) 한 줄을 통째로 쓴다. */
 @container timeline (max-width:760px) {
  .timeline-bar { gap:6px 10px; }
- .timeline-bar input[type="number"] { width:64px; }
- .timeline-bar .timeline-snap { width:84px; }
+ .timeline-bar input[type="number"] { width:calc(7ch + 16px); }
+ .timeline-bar input.timeline-key-value { width:calc(9ch + 16px); }
  .timeline-inspector { flex:1 1 100%;justify-content:flex-start;margin-left:0; }
 }
 @container timeline (max-width:520px) {
@@ -248,13 +254,15 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .link-badge,.key-nav-mode { display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border:1px solid var(--line-strong);border-radius:4px;background:var(--sunken);color:var(--text-soft);font:500 10.5px/1 var(--sans);white-space:nowrap; }
 .link-badge::before { content:"";flex:0 0 5px;width:5px;height:5px;border-radius:50%;background:var(--accent); }
 /* 시트: 파라미터 줄 아래로 펼쳐지는 서랍(줄 폭 전체 · 한 단 낮은 면) */
-.link-editor { display:grid;gap:0;margin:4px -12px -12px;padding:14px 12px 16px;border-top:1px solid var(--line);background:var(--sunken);font-size:12px; }
+.link-editor { display:grid;gap:0;margin:4px -12px 4px;padding:14px 12px 16px;border-block:1px solid var(--line);background:var(--sunken);font-size:12px; }
+.link-editor:last-child { margin-bottom:-12px;border-bottom:0; }
 .link-grid { display:grid;gap:0; }
 .link-label { margin:18px 0 8px;color:var(--faint);font:600 10px/1 var(--mono);letter-spacing:.06em; }
 .link-label:first-child { margin-top:16px; }
 .link-control { display:grid;gap:8px;min-width:0; }
-.link-segmented { display:grid;grid-auto-columns:minmax(0,1fr);grid-auto-flow:column;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg); }
-.link-segmented button { min-width:0;min-height:28px;padding:0 6px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:500 12px/1.2 var(--sans);white-space:nowrap; }
+/* 칸은 같은 폭으로 나누되 글자보다 좁아지지 않는다: 모자라면 다음 줄로 넘어가고, 줄마다 남는 폭을 고르게 채운다. */
+.link-segmented { display:flex;flex-wrap:wrap;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg); }
+.link-segmented button { flex:1 1 0;min-width:max-content;min-height:28px;padding:0 8px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:500 12px/1.2 var(--sans);white-space:nowrap; }
 .link-segmented button:hover { color:var(--text); }
 /* 고른 칸은 초점 링과 헷갈리지 않게 면(액센트 옅은 바탕 + 액센트 글자)으로 표시한다 */
 .link-segmented button[aria-checked="true"] { border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);color:var(--accent-strong);font-weight:650; }
@@ -291,18 +299,21 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .link-range input::-moz-range-track { background:none; }
 .link-range input::-webkit-slider-thumb { pointer-events:auto; }
 .link-range input::-moz-range-thumb { pointer-events:auto; }
-.link-range-ends { display:flex;align-items:end;justify-content:space-between;gap:8px; }
+/* 양 끝 칸 · 뒤집기: 세 칸 격자(가운데는 버튼 폭). 좁으면 칸이 줄고 숫자 칸도 따라 준다(밖으로 밀려나지 않게). */
+.link-range-ends { display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:end;gap:8px; }
+.link-range-ends .link-number,.link-range-ends .link-number input { min-width:0;max-width:100%; }
 .link-flip { flex-shrink:0;min-height:30px;padding:0 8px;color:var(--muted);font-size:11.5px;white-space:nowrap; }
 .link-flip[aria-pressed="true"] { border-color:var(--accent);color:var(--accent-strong); }
 .link-smooth { flex-wrap:nowrap; }
 .link-smooth input[type="range"] { flex:1 1 auto;min-width:40px; }
 .link-smooth .link-number input { width:64px; }
 .link-result output,.link-meter-value { min-width:4.5em;color:var(--text);font:600 12px/1 var(--mono);font-variant-numeric:tabular-nums;text-align:right; }
-.link-pair { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+/* 두 칸이 나란히 들어갈 폭이 없으면 위아래로 쌓는다(라벨이 옆 칸으로 넘어가 겹치지 않게) */
+.link-pair { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,120px),1fr));gap:10px 12px; }
 .link-pair .link-end:last-child { justify-items:start; }
-.link-end { display:grid;gap:5px;justify-items:start; }
+.link-end { display:grid;gap:5px;justify-items:start;min-width:0; }
 .link-end:last-child { justify-items:end; }
-.link-end-label { color:var(--muted);font-size:11px;white-space:nowrap; }
+.link-end-label { max-width:100%;color:var(--muted);font-size:11px;line-height:1.4; }
 /* 연결된 파라미터 줄: 슬라이더 대신 읽기 전용 미터(막대 · 값, 아래에 상태) */
 .link-meter { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 10px;min-height:30px; }
 .link-meter-note { grid-column:1 / -1;color:var(--faint);font-size:11px;white-space:nowrap; }
@@ -310,6 +321,8 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .link-meter.is-idle .link-bar-fill,.link-result.is-idle .link-bar-fill { opacity:.35; }
 /* 키프레임 줄: [한 번 | ↻ N초] ◀ ◆ ▶ 재생 [초] · 아래 줄에 설명 */
 .key-nav { display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px; }
+/* 연결 시트 안의 키프레임 내비게이터: 방식 버튼 바로 아래 */
+.link-editor>.key-nav { margin:12px 0 4px;padding-bottom:12px;border-bottom:1px solid var(--line); }
 .key-nav-button { flex:0 0 28px;width:28px;min-height:28px;height:28px;padding:0;border-radius:0;color:var(--muted);font-size:10px; }
 /* ◀ ◆ ▶: 붙은 버튼 묶음(선 하나를 함께 쓴다) */
 .key-nav-button+.key-nav-button { margin-left:-9px; }
@@ -325,7 +338,8 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .key-nav-time-label { display:inline-flex;flex:1 1 auto;align-items:center;justify-content:flex-end;gap:6px;margin:0;color:var(--muted);font-size:11px;white-space:nowrap; }
 .key-nav .key-nav-time { flex:0 1 72px;width:72px;min-width:56px;min-height:28px;padding:3px 8px;color:var(--text);font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums; }
 .key-nav-caption { display:flex;flex:1 1 100%;flex-wrap:wrap;align-items:center;gap:4px 8px;color:var(--faint);font-size:11px; }
-.key-nav-hint { white-space:nowrap; }
+.key-nav-hint { min-width:0;line-height:1.4; }
+.key-nav-caption { min-width:0; }
 .key-nav-local { color:var(--accent-strong);font-variant-numeric:tabular-nums;white-space:nowrap; }
 .icon-dice { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='3.5'/%3E%3Cg fill='black' stroke='none'%3E%3Ccircle cx='8.8' cy='8.8' r='1.4'/%3E%3Ccircle cx='15.2' cy='8.8' r='1.4'/%3E%3Ccircle cx='12' cy='12' r='1.4'/%3E%3Ccircle cx='8.8' cy='15.2' r='1.4'/%3E%3Ccircle cx='15.2' cy='15.2' r='1.4'/%3E%3C/g%3E%3C/svg%3E"); }
 /* @group: 접히는 묶음. 머리는 목록 행과 같은 폭, 접히면 갈매기표가 오른쪽을 본다 */
@@ -616,7 +630,12 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .preset-bar.is-empty { grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px 10px;padding:6px 8px 6px 12px; }
 .preset-bar.is-empty .preset-items { justify-content:flex-end; }
 .preset-bar.is-empty .preset-notice { grid-column:1/-1; }
-#presetUndo { flex-shrink:0;white-space:nowrap; }
+#presetUndo,#presetFinish { flex-shrink:0;white-space:nowrap; }
+#presetFinish[hidden] { display:none; }
+/* 전환 중: 목표 칩 아래쪽에 진행 막대가 차오른다 */
+.preset-chip.is-morphing { position:relative;overflow:hidden; }
+.preset-chip.is-morphing::after { content:"";position:absolute;left:0;bottom:0;width:calc(var(--morph,0) * 100%);height:2px;background:var(--accent);pointer-events:none; }
+.preset-bar.is-morphing .preset-notice { color:var(--accent-strong); }
 .preset-bar.is-empty .preset-blend,.preset-bar.is-empty .preset-list { display:none; }
 .preset-bar.is-empty .preset-notice:has(#presetNoticeText:empty) { display:none; }
 .preset-chip { position:relative;display:inline-flex;align-items:stretch;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);transition:border-color .15s; }
@@ -871,8 +890,8 @@ kbd { border-color:var(--line-strong);background:var(--elevated);color:var(--tex
 .preset-row button.is-selected { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
 .range-ends { color:var(--faint); }
 /* 화면 테마 선택: 세 칸 분할 버튼 */
-.theme-choice { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:3px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken); }
-.theme-choice button { min-width:0;min-height:32px;padding:5px 6px;border-color:transparent;background:transparent;color:var(--muted);white-space:nowrap; }
+.theme-choice { display:flex;flex-wrap:wrap;gap:4px;padding:3px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken); }
+.theme-choice button { flex:1 1 0;min-width:max-content;min-height:32px;padding:5px 6px;border-color:transparent;background:transparent;color:var(--muted);white-space:nowrap; }
 .theme-choice button:hover { border-color:transparent;background:transparent;color:var(--text); }
 .theme-choice button.is-selected { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
 .theme-choice+.help { margin-top:10px; }
