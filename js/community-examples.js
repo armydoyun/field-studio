@@ -1906,8 +1906,6 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec3 C = fresnel * reflection + scattering;
   fragColor = vec4(aces_tonemap(C * 2.0), 1.0);
 }
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 const skyline = `#version 300 es
 precision highp float;
@@ -2802,8 +2800,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
     fragColor = vec4(sqrt(clamp(finalColor, 0.0, 1.0)),1.0);
 }
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 const clouds2d = `#version 300 es
 precision highp float;
@@ -2961,8 +2957,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     
 	fragColor = vec4( result, 1.0 );
 }
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 const selfReflect = `#version 300 es
 precision highp float;
@@ -3359,8 +3353,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
   
   fragColor = vec4(col, 1.0);
 }
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 const starsGalaxy = `#version 300 es
 precision highp float;
@@ -3689,8 +3681,6 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
   fragColor = vec4(col,1.0);
 }
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 const elementalRing = `#version 300 es
 precision highp float;
@@ -4041,8 +4031,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
     fragColor = vec4(sqrt(clamp(finalColor, 0.0, 1.0)),1.0);
 }
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 const hexPlasma = `#version 300 es
 precision highp float;
@@ -4120,8 +4108,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     col = tanh(0.1 * col);
     fragColor = vec4(col, 1);
 }
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 const noxFire = `#version 300 es
 precision highp float;
@@ -4222,8 +4208,6 @@ void mainImage(out vec4 o, vec2 u) {
 }
 
 */
-
-// FIELD: Shadertoy의 mainImage를 부른다. 알파는 1로 둔다(투명하게 남기면 뒤 배경이 비친다).
 `;
 
 const MIT = "https://opensource.org/license/mit";
