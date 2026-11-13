@@ -251,7 +251,7 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .link-range input::-moz-range-track { background:none; }
 .link-range input::-webkit-slider-thumb { pointer-events:auto; }
 .link-range input::-moz-range-thumb { pointer-events:auto; }
-.link-range-ends { display:flex;align-items:center;justify-content:space-between;gap:6px; }
+.link-range-ends { display:flex;align-items:end;justify-content:space-between;gap:6px; }
 .link-flip { min-height:24px;padding:2px 8px;font-size:11px; }
 .link-flip[aria-pressed="true"] { border-color:var(--accent);color:var(--accent-strong); }
 .link-smooth { flex-wrap:nowrap; }
@@ -267,6 +267,7 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .key-nav-key[aria-pressed="false"] { color:var(--faint); }
 .key-nav .key-nav-time { flex:1 1 56px;width:56px;max-width:84px;min-height:26px;margin-left:4px;padding:2px 6px;font:11px var(--mono); }
 .key-nav-unit { color:var(--muted);font-size:11px; }
+.key-nav-time-label { display:inline-flex;flex:1 1 auto;align-items:center;gap:4px;margin:0;color:var(--muted);font-size:10px;white-space:nowrap; }
 .key-nav-caption { display:flex;flex:1 1 100%;flex-wrap:wrap;gap:0 6px;color:var(--faint);font-size:10px; }
 .key-nav-hint { white-space:nowrap; }
 .key-nav-mode { flex:0 0 auto;padding:1px 6px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:10px;white-space:nowrap; }
@@ -274,8 +275,17 @@ kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24
 .key-nav-local { color:var(--accent-strong);font-variant-numeric:tabular-nums;white-space:nowrap; }
 .key-nav .key-nav-time { font-variant-numeric:tabular-nums; }
 /* 연결된 파라미터 줄: 슬라이더 대신 읽기 전용 미터 */
-.link-meter { display:flex;align-items:center;gap:8px;min-height:24px; }
+.link-meter { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;min-height:24px; }
+.link-meter-note { grid-column:1 / -1; }
 .link-meter-note { color:var(--faint);font-size:10px;white-space:nowrap; }
+.link-meter.is-idle .link-meter-note { color:var(--warning); }
+.link-meter.is-idle .link-bar-fill { opacity:.4; }
+.link-result.is-idle .link-bar-fill { opacity:.4; }
+.link-pair { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+.link-pair .link-end:last-child { justify-items:start; }
+.link-end { display:grid;gap:2px;justify-items:start; }
+.link-end:last-child { justify-items:end; }
+.link-end-label { color:var(--muted);font-size:10px;white-space:nowrap; }
 .icon-dice { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='3.5'/%3E%3Cg fill='black' stroke='none'%3E%3Ccircle cx='8.8' cy='8.8' r='1.4'/%3E%3Ccircle cx='15.2' cy='8.8' r='1.4'/%3E%3Ccircle cx='12' cy='12' r='1.4'/%3E%3Ccircle cx='8.8' cy='15.2' r='1.4'/%3E%3Ccircle cx='15.2' cy='15.2' r='1.4'/%3E%3C/g%3E%3C/svg%3E"); }
 /* @group: 접히는 묶음. 머리는 목록 행과 같은 폭, 접히면 갈매기표가 오른쪽을 본다 */
 .uniform-group+.uniform-group,.uniform-row+.uniform-group,.uniform-group+.uniform-row { border-top:1px solid var(--line); }

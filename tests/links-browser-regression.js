@@ -100,7 +100,7 @@
     await wait(30);
     test(settings.getLinks()[0].min === 1 && settings.getLinks()[0].max === -2, "뒤집기 = 최소 · 최대 맞바꿈");
     test(editor("uWave").querySelector(".link-flip").getAttribute("aria-pressed") === "true", "뒤집기 눌린 상태");
-    choose(field("uWave", "반응 시간(초)"), 0.25);
+    choose(field("uWave", "부드럽게 따라가는 시간(초)"), 0.25);
     await wait(30);
     test(settings.getLinks()[0].smooth === 0.25, "반응 시간");
     await until(() => /^-?\d/.test(row("uWave").querySelector(".link-meter-value").textContent), "미터에 지금 값");
@@ -141,6 +141,10 @@
     await wait(30);
     source("uGain", "MIDI").click();
     await wait(30);
+    // 입력이 없으면 '연결이 정함'이 아니라 까닭과 '값 그대로'를 보인다 · 연결이 값을 정하는 동안 ↺는 꺼짐
+    await until(() => row("uGain").querySelector(".link-meter-note").textContent === "MIDI 신호 없음 · 값 그대로", `입력 없음 표시: ${row("uGain").querySelector(".link-meter-note").textContent}`);
+    test(row("uGain").querySelector(".reset-uniform").disabled, "연결된 줄의 ↺(기본값으로)는 꺼짐");
+    test([...editor("uGain").querySelectorAll(".link-end-label")].map(n => n.textContent).join() === "노브 처음(0),노브 끝(127)", "값 범위 양 끝 라벨이 소스에 맞음");
     editor("uGain").querySelector(".link-learn").click();
     await until(() => r.midiStatus().state === "on", "MIDI 켜짐");
     await until(() => editor("uGain").querySelector(".link-learn").getAttribute("aria-pressed") === "true", "학습 중 표시");
@@ -148,6 +152,7 @@
     await until(() => settings.getLinks().find(l => l.name === "uGain")?.cc === 21, "학습한 CC");
     test(settings.getLinks().find(l => l.name === "uGain").channel === 3, "학습한 채널 3");
     await until(() => Math.abs(value("uGain") - 1) < 1e-4, "CC 127 → 최대 1");
+    await until(() => row("uGain").querySelector(".link-meter-note").textContent === "연결이 정함", "신호가 오면 '연결이 정함'");
     send([0xb2, 21, 0]);
     await until(() => Math.abs(value("uGain")) < 1e-4, "CC 0 → 최소 0");
     send([0xb0, 21, 127]); // 다른 채널은 무시

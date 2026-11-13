@@ -1760,7 +1760,12 @@ const mount = (renderer, input, settings) => {
     const caption = element("div");
     caption.className = "key-nav-caption";
     caption.append(inner, hint);
-    nav.append(mode, prev, key, next, time, caption);
+    const timeLabel = element("label");
+    timeLabel.className = "key-nav-time-label";
+    timeLabel.textContent = "재생";
+    timeLabel.title = "재생 위치(uTime, 초)";
+    timeLabel.append(time);
+    nav.append(mode, prev, key, next, timeLabel, caption);
     let shownLoop = null;
     const update = () => {
       const now = renderer.getStats().time ?? 0,
@@ -1917,8 +1922,12 @@ const mount = (renderer, input, settings) => {
         reset.type = "button";
         reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
         reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
+        // 소리 · MIDI · 흔들기 연결이 값을 정하는 동안은 되돌려도 다음 프레임에 덮어써지므로 끈다(키프레임은 재생선에 키로 남는다)
+        const drivenLink = Links.LINKABLE.has(item.type) ? linkOf(item.name) : null,
+          driven = drivenLink && drivenLink.source !== "keys";
+        if (driven) reset.title = "연결이 값을 정하는 동안은 되돌릴 수 없습니다(연결을 끄면 다시 쓸 수 있음)";
         syncReset = (value = liveValue(item)) => {
-          reset.disabled = sameValue(value, fallback);
+          reset.disabled = driven || sameValue(value, fallback);
         };
         syncReset();
         resetSyncs.set(item.name, syncReset);
@@ -2466,7 +2475,7 @@ const mount = (renderer, input, settings) => {
       const array = typeInfo(item.type).count;
       if (link && !keyed) {
         // 연결이 값을 정하는 동안은 슬라이더 대신 읽기 전용 미터(움직여도 덮어써지는 조작을 두지 않는다)
-        const gauge = LinkSheet.meter(item, link);
+        const gauge = LinkSheet.meter(item, link, () => renderer.linkActive?.(item.name) ?? true);
         watchLink(item.name, gauge.update);
         row.append(gauge.node);
       } else if (array) {
