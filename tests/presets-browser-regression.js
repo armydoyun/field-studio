@@ -63,15 +63,49 @@
     test(value("uGain") === 0.2 && JSON.stringify(value("uTint")) === "[1,0,0]" && value("uMode") === 0, `즉시 '낮': ${value("uGain")} ${value("uTint")} ${value("uMode")}`);
     await until(() => chip("낮").querySelector(".preset-apply").getAttribute("aria-pressed") === "true", "'낮' 눌림");
 
-    // 3) 1초 동안 부드럽게: 중간에는 사이 값, @enum은 가운데에서 바뀜, 끝에는 '밤'
+    // 3) 중간값은 rAF 시각을 직접 제어한다. wait(450)는 CPU/GPU가 바쁘면 이전 프레임의
+    // 값을 읽을 수 있다. 시간만 더 기다리면 반대로 전환이 끝나 버리므로 대기 시간을 늘리지 않는다.
+    const realFrame = window.requestAnimationFrame, realCancel = window.cancelAnimationFrame;
+    const ownNow = Object.getOwnPropertyDescriptor(performance, "now");
+    const pending = new Map();
+    let frameId = 0, now = 1000;
+    const step = ms => {
+      now = 1000 + ms;
+      const callbacks = [...pending.values()];
+      pending.clear();
+      for (const callback of callbacks) callback(now);
+    };
+    try {
+      Object.defineProperty(performance, "now", { configurable: true, value: () => now });
+      window.requestAnimationFrame = callback => { const id = --frameId; pending.set(id, callback); return id; };
+      window.cancelAnimationFrame = id => { if (id < 0) pending.delete(id); else realCancel.call(window, id); };
+      $("presetBlend").value = "1";
+      chip("밤").querySelector(".preset-apply").click();
+      test($("presetBar").classList.contains("is-morphing") && pending.size > 0, "1초 전환 시작");
+      step(0);
+      test(value("uGain") === 0.2 && JSON.stringify(value("uTint")) === "[1,0,0]" && value("uMode") === 0, "시작 프레임은 '낮' 그대로");
+      step(250);
+      test(Math.abs(value("uGain") - 0.325) < 0.006 && Math.abs(value("uTint")[2] - 0.15625) < 0.001 && value("uMode") === 0, "250ms: ease 보간 · enum은 시작 값");
+      step(500);
+      test(Math.abs(value("uGain") - 0.6) < 0.001 && JSON.stringify(value("uTint")) === "[0.5,0,0.5]" && value("uMode") === 2, "500ms: 실수·색 중간값 · enum은 목표 값");
+      step(1000);
+      test(value("uGain") === 1 && JSON.stringify(value("uTint")) === "[0,0,1]" && value("uMode") === 2 && !$("presetBar").classList.contains("is-morphing"), "1000ms: 모든 값 확정 · 전환 UI 종료");
+    } finally {
+      window.requestAnimationFrame = realFrame;
+      window.cancelAnimationFrame = realCancel;
+      if (ownNow) Object.defineProperty(performance, "now", ownNow);
+      else delete performance.now;
+      // 실패 경로에서도 남은 콜백을 실제 스케줄러로 돌려놓는다.
+      for (const callback of pending.values()) realFrame.call(window, callback);
+    }
+
+    // 실제 브라우저 rAF 경로도 확인한다. 끝값 반올림만 먼저 도착할 수 있으므로 전환 UI 종료까지 기다린다.
+    $("presetBlend").value = "0";
+    chip("낮").querySelector(".preset-apply").click();
     $("presetBlend").value = "1";
     chip("밤").querySelector(".preset-apply").click();
-    await wait(450);
-    const mid = value("uGain");
-    test(mid > 0.25 && mid < 0.95 && value("uTint")[2] > 0 && value("uTint")[2] < 1, `전환 중간: uGain ${mid.toFixed(2)} · uTint ${value("uTint").map(v => v.toFixed(2))}`);
-    // 끝 값은 파라미터마다 따로 도착할 수 있다(step에 맞춰 반올림되는 uGain은 마지막 프레임 전에 먼저 1이 된다): 셋 모두를 기다린다
-    await until(() => value("uGain") === 1 && JSON.stringify(value("uTint")) === "[0,0,1]" && value("uMode") === 2, "끝에는 '밤' 그대로");
-    test(true, "끝에는 '밤' 그대로");
+    await until(() => value("uGain") === 1 && JSON.stringify(value("uTint")) === "[0,0,1]" && value("uMode") === 2 && !$("presetBar").classList.contains("is-morphing"), "실제 rAF로 '밤' 전환 완료");
+    test(true, "실제 브라우저 프레임에서도 '밤' 전환 완료");
 
     // 4) 관리 메뉴(⋯): 덮어쓰기는 바뀌는 값을 보여 주고 묻는다(취소하면 그대로) · 되돌리기 · Ctrl+Z · 이름 바꾸기 · 삭제
     const menu = name => { chip(name).querySelector(".preset-more").click(); return chip(name).querySelector(".preset-menu"); };
