@@ -194,7 +194,7 @@ const mount = ({ doc = document } = {}) => {
     // 분리 창 안에서도 Space로 재생/정지, G로 HUD 보이기/숨기기, Esc로 되돌리기.
     d.addEventListener("keydown", event => {
       if (event.defaultPrevented || event.repeat || event.isComposing) return;
-      if (event.target?.closest?.("input, textarea, select, .custom-select, [contenteditable], dialog[open]")) return;
+      if (event.target?.closest?.("input, textarea, select, [contenteditable], dialog[open]")) return;
       if (event.ctrlKey || event.metaKey || event.altKey) {
         if ((event.ctrlKey || event.metaKey) && !event.altKey) {
           const key = event.key.toLowerCase();
