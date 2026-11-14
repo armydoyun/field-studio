@@ -1,7 +1,8 @@
 // Shared select presentation. Native controls remain the source of form values/events.
 export function mount(root = document) {
   const controls = new Map();
-  let opened = null, serial = 0;
+  let opened = null,
+    serial = 0;
   const close = (restore = false) => {
     if (!opened) return;
     const { button, menu, cleanup } = opened;
@@ -107,14 +108,19 @@ export function mount(root = document) {
       const view = document.defaultView;
       const { innerHeight, innerWidth } = view;
       const rect = button.getBoundingClientRect();
-      const below = innerHeight - rect.bottom - 8, above = rect.top - 8;
+      const below = innerHeight - rect.bottom - 8,
+        above = rect.top - 8;
       menu.style.width = `${Math.min(Math.max(rect.width, 180), innerWidth - 16)}px`;
       menu.style.maxHeight = `${Math.min(280, Math.max(below, above))}px`;
       menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - menu.getBoundingClientRect().width - 8))}px`;
       if (below >= Math.min(280, menu.scrollHeight) || below >= above) menu.style.top = `${rect.bottom + 4}px`;
       else menu.style.bottom = `${innerHeight - rect.top + 4}px`;
-      const outside = event => { if (!menu.contains(event.target) && !button.contains(event.target)) close(); };
-      const scroll = event => { if (!menu.contains(event.target)) close(); };
+      const outside = event => {
+        if (!menu.contains(event.target) && !button.contains(event.target)) close();
+      };
+      const scroll = event => {
+        if (!menu.contains(event.target)) close();
+      };
       const resize = () => close();
       const cancel = () => close();
       document.addEventListener("pointerdown", outside, true);
@@ -129,41 +135,91 @@ export function mount(root = document) {
         view.removeEventListener("resize", resize);
         view.removeEventListener("pagehide", cancel);
       };
-      opened = { select, button, menu, items, activate, choose, cleanup, get active() { return active; } };
-      activate(Math.max(0, items.findIndex(item => item.index === select.selectedIndex)));
+      opened = {
+        select,
+        button,
+        menu,
+        items,
+        activate,
+        choose,
+        cleanup,
+        get active() {
+          return active;
+        },
+      };
+      activate(
+        Math.max(
+          0,
+          items.findIndex(item => item.index === select.selectedIndex)
+        )
+      );
     };
     button.addEventListener("click", event => {
       event.preventDefault();
-      if (opened?.button === button) close(); else open();
+      if (opened?.button === button) close();
+      else open();
     });
-    let query = "", lastTyped = 0;
+    let query = "",
+      lastTyped = 0;
     button.addEventListener("keydown", event => {
       const key = event.key;
-      if (key === "Tab") { close(); return; }
-      if (key === "Escape") { if (opened) { event.preventDefault(); event.stopPropagation(); close(true); } return; }
+      if (key === "Tab") {
+        close();
+        return;
+      }
+      if (key === "Escape") {
+        if (opened) {
+          event.preventDefault();
+          event.stopPropagation();
+          close(true);
+        }
+        return;
+      }
       if (["ArrowDown", "ArrowUp", "Home", "End", "Enter", " "].includes(key)) {
-        event.preventDefault(); event.stopPropagation();
-        if (!opened || opened.button !== button) { open(); return; }
+        event.preventDefault();
+        event.stopPropagation();
+        if (!opened || opened.button !== button) {
+          open();
+          return;
+        }
         if (key === "Enter" || key === " ") opened.choose(opened.active);
-        else opened.activate(key === "Home" ? 0 : key === "End" ? opened.items.length - 1 : opened.active + (key === "ArrowDown" ? 1 : -1));
+        else
+          opened.activate(
+            key === "Home"
+              ? 0
+              : key === "End"
+                ? opened.items.length - 1
+                : opened.active + (key === "ArrowDown" ? 1 : -1)
+          );
       } else if (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        event.preventDefault(); event.stopPropagation();
+        event.preventDefault();
+        event.stopPropagation();
         if (!opened || opened.button !== button) open();
         query = Date.now() - lastTyped > 700 ? key : query + key;
         lastTyped = Date.now();
-        const index = opened.items.findIndex(item => item.label.toLocaleLowerCase().startsWith(query.toLocaleLowerCase()));
+        const index = opened.items.findIndex(item =>
+          item.label.toLocaleLowerCase().startsWith(query.toLocaleLowerCase())
+        );
         if (index >= 0) opened.activate(index);
       }
     });
     select.addEventListener("change", sync);
     select.addEventListener("focus", () => button.focus());
-    select.addEventListener("invalid", event => { event.preventDefault(); button.focus(); });
+    select.addEventListener("invalid", event => {
+      event.preventDefault();
+      button.focus();
+    });
     for (const property of ["value", "selectedIndex"]) {
       const descriptor = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, property);
       Object.defineProperty(select, property, {
         configurable: true,
-        get() { return descriptor.get.call(this); },
-        set(value) { descriptor.set.call(this, value); sync(); },
+        get() {
+          return descriptor.get.call(this);
+        },
+        set(value) {
+          descriptor.set.call(this, value);
+          sync();
+        },
       });
     }
     controls.set(select, { button, sync });
@@ -171,19 +227,40 @@ export function mount(root = document) {
   };
   const refresh = () => {
     for (const [select, control] of controls) {
-      if (!select.isConnected) { if (opened?.select === select) close(); control.button.remove(); controls.delete(select); }
-      else control.sync();
+      if (!select.isConnected) {
+        if (opened?.select === select) close();
+        control.button.remove();
+        controls.delete(select);
+      } else control.sync();
     }
     root.querySelectorAll("select").forEach(enhance);
   };
   const observer = new MutationObserver(records => {
     if (!records.some(record => !record.target.closest?.(".custom-select, .custom-select-menu"))) return;
-    if (opened && records.some(record => record.target === opened.select || opened.select.contains(record.target))) close();
+    if (opened && records.some(record => record.target === opened.select || opened.select.contains(record.target)))
+      close();
     refresh();
   });
-  observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "disabled", "label", "selected", "aria-label", "required"] });
-  root.addEventListener("pointerdown", event => { if (opened && !opened.menu.contains(event.target) && !opened.button.contains(event.target)) close(); }, true);
-  root.addEventListener("scroll", event => { if (opened && !opened.menu.contains(event.target)) close(); }, true);
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["hidden", "disabled", "label", "selected", "aria-label", "required"],
+  });
+  root.addEventListener(
+    "pointerdown",
+    event => {
+      if (opened && !opened.menu.contains(event.target) && !opened.button.contains(event.target)) close();
+    },
+    true
+  );
+  root.addEventListener(
+    "scroll",
+    event => {
+      if (opened && !opened.menu.contains(event.target)) close();
+    },
+    true
+  );
   window.addEventListener("resize", () => close());
   root.addEventListener("reset", () => queueMicrotask(refresh));
   root.addEventListener("click", event => {

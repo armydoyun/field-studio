@@ -1937,7 +1937,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   on(document, "keydown", event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
-    if (event.target instanceof Element && event.target.closest("input,textarea,select,.custom-select,[contenteditable]")) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("input,textarea,select,.custom-select,[contenteditable]")
+    )
+      return;
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       toggle();
@@ -2066,7 +2070,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (event.defaultPrevented || !openState) return;
     const step = passStep(event);
     if (!step) return;
-    if (event.target instanceof Element && event.target.closest("input, textarea, select, .custom-select, [contenteditable]")) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("input, textarea, select, .custom-select, [contenteditable]")
+    )
+      return;
     if (document.querySelector("dialog[open]")) return;
     event.preventDefault();
     stepPass(step);
