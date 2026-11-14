@@ -69,8 +69,9 @@
     await wait(450);
     const mid = value("uGain");
     test(mid > 0.25 && mid < 0.95 && value("uTint")[2] > 0 && value("uTint")[2] < 1, `전환 중간: uGain ${mid.toFixed(2)} · uTint ${value("uTint").map(v => v.toFixed(2))}`);
-    await until(() => value("uGain") === 1, "전환 끝");
-    test(JSON.stringify(value("uTint")) === "[0,0,1]" && value("uMode") === 2, "끝에는 '밤' 그대로");
+    // 끝 값은 파라미터마다 따로 도착할 수 있다(step에 맞춰 반올림되는 uGain은 마지막 프레임 전에 먼저 1이 된다): 셋 모두를 기다린다
+    await until(() => value("uGain") === 1 && JSON.stringify(value("uTint")) === "[0,0,1]" && value("uMode") === 2, "끝에는 '밤' 그대로");
+    test(true, "끝에는 '밤' 그대로");
 
     // 4) 관리 메뉴(⋯): 덮어쓰기는 바뀌는 값을 보여 주고 묻는다(취소하면 그대로) · 되돌리기 · Ctrl+Z · 이름 바꾸기 · 삭제
     const menu = name => { chip(name).querySelector(".preset-more").click(); return chip(name).querySelector(".preset-menu"); };
