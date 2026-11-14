@@ -18,6 +18,7 @@ css/
   components/           ← 디자인 시스템 본체. 클래스는 모두 ui- 로 시작한다
     button.css          ui-btn · ui-icon-btn · ui-link · ui-btn-group · ui-toolbar · ui-sep
     field.css           input · select · ui-number · ui-dense · ui-field · ui-label · ui-hint · ui-error · ui-input-group · ui-search
+    matrix.css          ui-matrix: 고정 N×N 요약 · 전체 값 입력 · 확대 편집
     select.css          ui-select · ui-select-menu · ui-select-option (단일 선택)
     choice.css          checkbox · radio · ui-check · ui-switch · range · ui-range-ends · ui-meter · progress
     segmented.css       ui-seg · ui-tabs
@@ -74,6 +75,7 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 화면 탭 | `ui-tabs` > button · `ui-tabs--line`(문서 탭) | |
 | 글자 · 숫자 칸 | `<input>` | 크기 `ui-input--sm · --lg`. 숫자 전용 `ui-number` |
 | 선택 상자 | `<select>` → `ui-select` | `js/custom-select.js`가 자동 보강. `ui-input--sm · --lg`, `ui-dense` 공유 |
+| 행렬 | `ui-matrix` | `js/matrix-control.js`의 create(). N×N 고정, 선택 셀 전체 값·확대 편집 |
 | 촘촘한 영역 | 감싸는 요소에 `ui-dense` | 안의 칸 28px · 숫자 고정폭 |
 | 라벨 + 칸 + 설명 | `ui-field` > `ui-label`(+`ui-label-hint`) + 칸 + `ui-hint` / `ui-error` | |
 | 칸 + 단위 | `ui-input-group` > input + `ui-unit` | |
@@ -181,3 +183,15 @@ UI.iconButtonClass("reset", "xs", "my-hook");
 
 적용 위치: 렌더링 최대 픽셀 수, 프리셋 전환 시간, 파라미터 추가/enum/연결, 버퍼 설정,
 텍스처 샘플링, 편집기 들여쓰기, 타임라인 선택, 영상 내보내기. 기능별 CSS에는 폭·배치만 정의한다.
+
+## 행렬 입력 (`css/components/matrix.css`)
+
+`js/matrix-control.js`가 mat2/3/4와 행렬 배열 원소의 공통 편집기를 만든다.
+`create({name, size, read, onChange})`는 `node`, `refresh()`, `dispose()`를 돌려준다.
+
+- 화면은 행→열 순서, 데이터 인덱스는 GLSL 그대로 `column * size + row`. 머리글/선택 위치는 1부터, GLSL 좌표 힌트는 0부터 표시한다.
+- 패널이 좁아져도 차원은 고정이다. 셀은 실제 폭/글꼴에 맞는 요약만 표시하며 `≈`는 근삿값이다. 입력칸과 title/접근성 이름에는 원래 Number 전체를 넣는다.
+- 아래 입력칸은 기존 `ui-number`/`ui-field`를 사용한다. 긴 소수·지수 표기를 단일 줄에서 편집한다. 표시·포커스·셀 이동만으로 원본 값을 다시 저장하지 않는다.
+- 방향키는 행렬의 공간 방향으로 이동, Enter/Space/클릭은 선택 셀의 전체 값 입력으로 진입한다. Enter/변경 확정으로 적용, Escape는 미확정 텍스트를 복원한다. 입력칸의 Tab/Shift+Tab은 화면 순서대로 다음/이전 셀로 이동하며 양 끝에서는 다음 조작으로 나간다.
+- 확대 편집은 기존 `ui-dialog--md`/머리/본문/바닥/버튼 컴포넌트를 조합한다. 초안은 적용 전까지 렌더러와 분리한다. 취소/닫기/Escape는 초안을 버린다.
+- 새 프로젝트/목록 재생성/폐기 시 열린 편집창과 ResizeObserver를 정리한다.

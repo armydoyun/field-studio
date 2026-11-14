@@ -104,18 +104,22 @@
     "uniform float uSeed;      // @seed",
     "uniform sampler2D uRamp;  // 그라데이션 · @gradient",
     "uniform float uFog;       // 안개 · @range 0 1 @group 분위기",
+    "uniform mat3 uMatrix;     // 변환 · @default 1",
     "void mainImage(out vec4 c, in vec2 p) {",
     "  vec3 col = texture(uRamp, p / iResolution.xy).rgb * uTint * uGain + uFog + uSeed * 0.0;",
     "  c = vec4(col + vec3(uOffset, 0.0) + normalize(uLight + 0.001) * 0.05 + float(uMode) * 0.02, 1.0);",
     "}",
   ].join("\n");
   test(studio.setProject({ image, passes: [], imageChannels: {} }), "파라미터가 있는 프로젝트");
-  await until(() => r.getUserUniforms().length === 8, "파라미터 등록");
+  await until(() => r.getUserUniforms().length === 9, "파라미터 등록");
   if (document.body.classList.contains("panel-hidden")) $("panelToggle").click();
 
   // ---- 설정 패널 ----
   $("tab-uniforms").click();
   await audit("파라미터 탭");
+  document.querySelector(".ui-matrix .ui-matrix-tools button").click();
+  await audit("행렬 확대 편집");
+  document.querySelector('dialog[aria-label="uMatrix 행렬 확대 편집"] .ui-icon-btn').click();
   document.querySelector(".link-uniform").click();
   await audit("연결 시트(끄기)");
   [...document.querySelectorAll('.link-sources [role="radio"]')].find(b => b.textContent.includes("흔들기")).click();

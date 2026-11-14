@@ -1,3 +1,4 @@
+import * as MatrixControl from "./matrix-control.js";
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
 import * as StageMenu from "./stage-menu.js";
 import * as Recorder from "./recorder.js";
@@ -1218,6 +1219,7 @@ const mount = (renderer, input, settings) => {
     $("uniformNotice").textContent = "";
   };
   let uniformSnapshot = "";
+  const matrixViews = [];
   // 목록을 다시 그릴지 가늠하는 요약. 연결된 파라미터의 값은 프레임마다 바뀌므로 빼고(미터 · 내비게이터가 따로 따라간다)
   // 나머지(이름 · 타입 · 설정 · 연결 없는 값)만 본다 — 그러지 않으면 0.5초마다 목록 전체를 다시 그려 누르기 · 끌기가 끊긴다.
   const snapshotOf = items => {
@@ -1946,6 +1948,8 @@ const mount = (renderer, input, settings) => {
     liveLinks.clear();
     resetSyncs.clear();
     playButtons.clear();
+    for (const view of matrixViews) view.dispose();
+    matrixViews.length = 0;
     userList.replaceChildren();
     // @group: 묶음 없는 파라미터가 먼저, 묶음은 처음 나온 순서대로. 검색 중에는 접힌 묶음도 펼쳐 보여 준다.
     const groups = new Map();
@@ -2384,39 +2388,37 @@ const mount = (renderer, input, settings) => {
           row.append(dial);
         } else if (item.options?.dir) {
           row.append(directionControl(item, commit, () => [...(liveValue(item) || item.value)]));
+        } else if (typeInfo(item.type).kind === "m") {
+          const view = MatrixControl.create({
+            name: item.name,
+            size: Math.round(Math.sqrt(item.value.length)),
+            read: () => liveValue(item) || item.value,
+            onChange: commit,
+            getContext: () => renderer.getFragmentSource(),
+          });
+          matrixViews.push(view);
+          row.append(view.node);
         } else if (typeInfo(item.type).components > 1) {
-          // 벡터는 X/Y/Z/W, 행렬은 column-major 순서의 [열,행] 칸으로 편집한다. bvec 성분은 체크박스.
+          // 벡터는 X/Y/Z/W 성분별로 편집한다. bvec 성분은 체크박스.
           // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
-          const { kind } = typeInfo(item.type),
-            dim = kind === "m" ? Math.round(Math.sqrt(item.value.length)) : 0;
+          const { kind } = typeInfo(item.type);
           // 배치: bvec은 X·Y… 토글 칩 한 줄, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
-          // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자], 행렬은 열 단위 격자.
+          // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자].
           const opts = item.options || {},
-            ranged = !dim && kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
-          const layout = dim
-            ? "is-matrix"
-            : kind === "b"
-              ? "is-bool"
-              : ranged
-                ? "is-ranged"
-                : item.value.length <= 2
-                  ? "is-inline"
-                  : "is-stacked";
+            ranged = kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
+          const layout =
+            kind === "b" ? "is-bool" : ranged ? "is-ranged" : item.value.length <= 2 ? "is-inline" : "is-stacked";
           const grid = element("div");
           grid.className = `uniform-vector ${layout}`;
-          if (dim) grid.style.setProperty("--uniform-columns", String(dim));
           item.value.forEach((value, index) => {
             const field = element(kind === "b" ? "label" : "div");
             field.className =
               kind === "b" ? "ui-chip uniform-axis" : ranged ? "uniform-axis is-ranged" : "uniform-axis";
             const label = element(kind === "b" ? "span" : "label");
             label.className = "uniform-axis-label";
-            label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
+            label.textContent = ["X", "Y", "Z", "W"][index];
             const input = element("input");
-            input.setAttribute(
-              "aria-label",
-              `${item.name} ${dim ? `열 ${Math.floor(index / dim)} 행 ${index % dim}` : label.textContent}`
-            );
+            input.setAttribute("aria-label", `${item.name} ${label.textContent}`);
             if (kind === "b") {
               input.type = "checkbox";
               input.checked = value;
@@ -2450,7 +2452,7 @@ const mount = (renderer, input, settings) => {
             const axis = opts.ranges?.[index]
               ? { min: opts.ranges[index][0], max: opts.ranges[index][1], step: opts.ranges[index][2] }
               : opts;
-            if (kind !== "b" && !dim)
+            if (kind !== "b")
               scrubbable(label, {
                 kind,
                 min: axis.min,
@@ -3364,7 +3366,9 @@ const mount = (renderer, input, settings) => {
       pixelSelect.append(custom);
     }
     if (active !== pixelSelect) pixelSelect.value = String(s.maxPixels);
+    for (const view of matrixViews) view.refresh();
     if (
+      !matrixViews.some(view => view.isOpen) &&
       !$("view-uniforms").hidden &&
       !(active instanceof Element && active.closest("#uniformList")) &&
       uniformSnapshot !== snapshotOf(renderer.getUserUniforms())
@@ -3422,6 +3426,7 @@ const mount = (renderer, input, settings) => {
   return {
     dispose: () => {
       clearInterval(timer);
+      for (const view of matrixViews) view.dispose();
       timeline.dispose();
       recorder.dispose(); // 창을 닫는 중에는 녹화 파일을 내려받지 않고 버린다.
       controller.abort();
