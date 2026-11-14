@@ -1312,9 +1312,12 @@ const mount = (renderer, input, settings) => {
   };
   // 셰이더 주석(@default·@range…)에서 읽은 파라미터 기본값. 코드에 어노테이션이 없는 파라미터는 되돌릴 값이 없다.
   const annotatedDefaults = () => {
-    const project = window.shaderStudio?.getProject?.();
-    if (!project) return new Map();
-    const specs = Annotations.collect([project.image, ...(project.passes || []).map(p => p.fragment)]);
+    // 초기 복원 중에도 편집기 전역은 아직 없을 수 있다. 실행에 적용된 소스를 읽는다.
+    const specs = Annotations.collect([
+      renderer.getFragmentSource(),
+      renderer.getCommon?.(),
+      ...(renderer.getPassDefinitions?.() || []).map(pass => pass.fragment),
+    ]);
     return new Map(specs.filter(spec => !spec.error).map(spec => [spec.name, spec]));
   };
   const sameValue = (a, b) =>
@@ -3537,6 +3540,8 @@ const mount = (renderer, input, settings) => {
     $("studioPreviewTarget").setAttribute("aria-label", `미리보기: ${previewName}`);
     syncFpsPresets(s.fpsLimit);
   };
+  // @group·설명·@if·기본값은 Uniform 옵션과 별개다. 컴파일 성공 후 메타데이터만 바뀌어도 반영한다.
+  listen(document, "shader-annotations-changed", renderUniforms);
   listen(document, "shader-settings-applied", () => {
     clearDeleted();
     $("uniformSearch").value = "";

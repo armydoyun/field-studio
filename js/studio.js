@@ -488,13 +488,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   // 컴파일 성공 후 GLSL 주석 어노테이션(@range/@step/@default/@color)을 파라미터에 반영한다.
   // 미등록 Uniform은 새로 등록하고, 등록된 것은 옵션만 갱신한다(값은 새 범위로 보정). 한 번의 재컴파일로 처리한다.
+  let annotationSnapshot = "";
   const syncAnnotations = () => {
     const specs = Annotations.collect([
       project.image,
       ...(hasCommon() ? [project.common] : []),
       ...project.passes.map(p => p.fragment),
     ]);
-    if (!specs.length) return "";
     const users = renderer.getUserUniforms(),
       next = users.map(u => ({ ...u, options: { ...u.options } })),
       added = [],
@@ -523,6 +523,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       }
       checkpoint.users = renderer.getUserUniforms();
       document.dispatchEvent(new Event("shader-settings-applied"));
+    }
+    // 그룹·설명·조건·기본값은 Renderer 옵션에 없으므로 설정 갱신 이벤트만으로는 UI에 전달되지 않는다.
+    // 첫 복원도 포함하고, 마지막 태그 삭제도 알린다. 일반 코드 편집에는 조작 DOM을 유지한다.
+    const snapshot = JSON.stringify(specs);
+    if (snapshot !== annotationSnapshot) {
+      annotationSnapshot = snapshot;
+      document.dispatchEvent(new Event("shader-annotations-changed"));
     }
     const parts = [
       added.length && `등록 ${added.join(", ")}`,
