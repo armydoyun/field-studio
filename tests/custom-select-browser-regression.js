@@ -14,6 +14,11 @@
   const key = value => button.dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }));
   try {
     check(button.matches('.ui-select[role="combobox"]'), "동적 select에 공통 템플릿 적용");
+    const arrowInset = () => {
+      const style = getComputedStyle(button), arrow = getComputedStyle(button, "::after");
+      check(style.paddingRight === style.paddingLeft && parseFloat(arrow.marginRight) === 0, "화살표에 native 선택 상자의 여백이 중복 적용되지 않음");
+    };
+    arrowInset();
     check(getComputedStyle(select).display === "none", "브라우저 기본 선택 UI 숨김");
     button.focus(); button.click();
     check(dialog.querySelector('[role="listbox"]'), "모달 내부 최상위 레이어에 목록 표시");
@@ -29,9 +34,9 @@
     select.hidden = false; select.disabled = true; await tick(); check(button.disabled, "비활성 상태 동기화");
     select.disabled = false; await tick();
     select.classList.add("ui-input--sm"); await tick();
-    check(button.getBoundingClientRect().height === 28, "공통 sm 높이 토큰 28px 적용");
+    check(button.getBoundingClientRect().height === 28, "공통 sm 높이 토큰 28px 적용"); arrowInset();
     select.classList.replace("ui-input--sm", "ui-input--lg"); await tick();
-    check(button.getBoundingClientRect().height === 36, "공통 lg 높이 토큰 36px 적용");
+    check(button.getBoundingClientRect().height === 36, "공통 lg 높이 토큰 36px 적용"); arrowInset();
     select.innerHTML = '<option value="c">Gamma</option><option value="d">Delta</option>'; await tick();
     check(button.textContent === "Gamma", "옵션 교체 반영");
     button.click(); key("d"); key("Enter");

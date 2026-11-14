@@ -4,7 +4,7 @@ select.ui-select-source { display:none !important; }
 .ui-select { display:inline-flex;align-items:center;justify-content:space-between;gap:var(--space-6);min-width:0;text-align:left;font-family:var(--sans);font-weight:400;letter-spacing:normal; }
 .ui-select[hidden] { display:none !important; }
 .ui-select>span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.ui-select::after { content:"";flex:0 0 6px;width:6px;height:6px;margin-right:var(--space-1);border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;color:var(--muted);transform:translateY(-2px) rotate(45deg); }
+.ui-select::after { content:"";flex:0 0 6px;width:6px;height:6px;margin-right:0;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;color:var(--muted);transform:translateY(-2px) rotate(45deg); }
 .ui-select[aria-expanded="true"] { border-color:var(--accent); }
 .ui-select[aria-expanded="true"]::after { transform:translateY(2px) rotate(225deg);color:var(--accent-strong); }
 .ui-select[aria-invalid="true"] { border-color:var(--danger); }

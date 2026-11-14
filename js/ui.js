@@ -71,13 +71,95 @@ const mount = (renderer, input, settings) => {
     const integerDigits = Math.max(1, Math.floor(Math.log10(Math.abs(value))) + 1);
     return String(Number(value.toPrecision(Math.min(15, Math.max(6, integerDigits + 4)))));
   };
-  const showNumber = (field, value) => {
-    field.value = displayNumber(value);
+  // Summary is presentation only: entering a field restores the exact Number. A focus/blur
+  // cycle must never commit the rounded summary or interrupt a running animation.
+  const numberEdits = new WeakMap();
+  const showNumber = (field, value, read) => {
+    let state = numberEdits.get(field);
+    if (!state) {
+      state = { value, rendered: "", editing: false, dirty: false, read };
+      numberEdits.set(field, state);
+      field.classList.add("ui-number");
+      const latest = () => {
+        const live = state.read?.();
+        if (Number.isFinite(live)) {
+          state.value = live;
+          field.title = String(live);
+        }
+      };
+      field.addEventListener("focus", () => {
+        latest();
+        state.editing = true;
+        field.value = state.rendered = String(state.value);
+      });
+      field.addEventListener("input", () => {
+        state.dirty = true;
+      });
+      field.addEventListener(
+        "change",
+        event => {
+          latest();
+          const raw = field.value,
+            untouched = !state.dirty && (raw === state.rendered || raw === String(state.value)),
+            same = !state.dirty && raw.trim() !== "" && Number(raw) === state.value;
+          state.dirty = false;
+          if (untouched || same) event.stopImmediatePropagation?.();
+        },
+        { capture: true }
+      );
+      field.addEventListener("blur", () => {
+        state.editing = false;
+        // Native change runs before blur and owns validation/commit. Do not replace a draft
+        // merely because the renderer is publishing live values while it is being edited.
+        if (!state.dirty) field.value = state.rendered = displayNumber(state.value);
+      });
+      field.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.stopPropagation();
+          field.dispatchEvent(new Event("change", { bubbles: true }));
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          latest();
+          state.dirty = false;
+          field.value = state.rendered = String(state.value);
+          if (field.getAttribute?.("aria-invalid") === "true") showError("");
+          field.removeAttribute("aria-invalid");
+        }
+      });
+    }
+    if (read) state.read = read;
+    state.value = value;
     field.title = String(value);
+    if (state.editing && state.dirty) return;
+    field.value = state.rendered = state.editing ? String(value) : displayNumber(value);
   };
+  // Scrub handles/pads prevent the browser's normal focus change. Commit an active draft
+  // before their pointer handlers read the model, so one component cannot overwrite another.
+  document.addEventListener(
+    "pointerdown",
+    event => {
+      const active = document.activeElement;
+      if (
+        event.button !== 0 ||
+        active === event.target ||
+        !event.target.closest?.(".is-scrub,.uniform-dir-pad,.uniform-curve-pad,.uniform-ramp-track")
+      )
+        return;
+      if (numberEdits.get(active)?.dirty || active?.classList?.contains("ui-matrix-input")) {
+        active.dispatchEvent(new Event("change", { bubbles: true }));
+        active.blur?.();
+      }
+    },
+    { capture: true, signal }
+  );
   // 범위가 있는 숫자 칸의 폭: 최소·최대·step 소수 자릿수로 가장 긴 값을 계산해 고정한다(슬라이더 끝과 최소·최대 표시가 어긋나지 않게).
   const rangedWidth = opts => {
-    const decimals = (String(opts.step).split(".")[1] || "").length,
+    const [coefficient, exponent = "0"] = String(Number.isFinite(opts.step) ? opts.step : 1)
+      .toLowerCase()
+      .split("e");
+    const decimals = Math.max(0, (coefficient.split(".")[1] || "").length - Number(exponent)),
       digits = Math.max(
         displayNumber(Math.trunc(opts.min)).replace("-", "").length,
         displayNumber(Math.trunc(opts.max)).replace("-", "").length
@@ -2426,7 +2508,7 @@ const mount = (renderer, input, settings) => {
               input.type = "number";
               input.step = kind === "f" || kind === "m" ? "any" : "1";
               if (kind === "u") input.min = "0";
-              showNumber(input, value);
+              showNumber(input, value, () => liveValue(item)?.[index]);
             }
             const update = (source, next) => {
               const values = liveValue(item);
@@ -2438,6 +2520,7 @@ const mount = (renderer, input, settings) => {
                 else showNumber(input, item.value[index]);
                 return false;
               }
+              if (kind !== "b") showNumber(input, liveValue(item)?.[index] ?? next);
               return true;
             };
             let slider = null;
@@ -2497,7 +2580,7 @@ const mount = (renderer, input, settings) => {
           number.type = "number";
           number.step = kind === "f" ? "any" : "1";
           if (item.type === "uint") number.min = "0";
-          showNumber(number, item.value);
+          showNumber(number, item.value, () => liveValue(item));
           number.setAttribute("aria-label", item.name);
           const opts = item.options || {},
             ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
@@ -2516,13 +2599,13 @@ const mount = (renderer, input, settings) => {
             } catch (error) {
               showError(`${item.name}: ${error.message}`);
               number.setAttribute("aria-invalid", "true");
-              showNumber(number, item.value);
+              showNumber(number, liveValue(item) ?? item.value);
               return;
             }
             if (commit(number, value)) {
               if (range) range.value = String(toSlider(value));
               showNumber(number, value);
-            } else showNumber(number, item.value);
+            } else showNumber(number, liveValue(item) ?? item.value);
           };
           number.addEventListener("change", changeNumber);
           if (ranged) {
@@ -2768,11 +2851,28 @@ const mount = (renderer, input, settings) => {
     $("rangeFields").hidden =
       !["f", "i", "u"].includes(kind) || ["color", "hdr", "dir", "angle", "enum"].includes(display);
   };
+  const typeDrafts = new Map();
+  const draftFields = [
+    "uniformValue",
+    "uniformBoolValue",
+    "uniformDisplay",
+    "uniformEnumLabels",
+    "uniformMin",
+    "uniformMax",
+    "uniformStep",
+  ];
+  let draftType = null;
   const updateTypeFields = () => {
     const t = $("uniformType").value,
       bool = t === "bool",
       ramp = t === "sampler2D",
       { components: size, kind } = typeInfo(t);
+    if (draftType === t) {
+      updateDisplayFields();
+      return;
+    }
+    if (draftType !== null) typeDrafts.set(draftType, Object.fromEntries(draftFields.map(id => [id, $(id).value])));
+    const draft = typeDrafts.get(t);
     $("uniformValue").hidden = bool || ramp;
     $("uniformValue").required = !bool && !ramp;
     $("uniformBoolValue").hidden = !bool;
@@ -2802,8 +2902,11 @@ const mount = (renderer, input, settings) => {
     );
     select.value = choices.some(choice => choice.value === previous) ? previous : ramp ? choices[0].value : "";
     $("uniformDisplayField").hidden = !choices.length;
-    updateDisplayFields();
     $("uniformValue").value = defaultValue(t);
+    for (const id of ["uniformMin", "uniformMax", "uniformStep", "uniformEnumLabels"]) $(id).value = "";
+    if (draft) for (const id of draftFields) $(id).value = draft[id];
+    draftType = t;
+    updateDisplayFields();
   };
   listen($("uniformType"), "change", updateTypeFields);
   listen($("uniformDisplay"), "change", updateDisplayFields);
