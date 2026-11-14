@@ -266,7 +266,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       points = [];
     for (let i = 0; i <= steps; i++) {
       const t = view.start + (i / steps) * span(),
-        v = Links.keyValue(link.keys, t, link.loop, link.ease);
+        v = Links.keyValue(link.keys, t, link.loop, link.ease, link.wrap);
       if (v === null) continue;
       const y = 100 - ((v - info.low) / (info.high - info.low || 1)) * 100;
       points.push(`${points.length ? "L" : "M"}${(i / steps) * 1000} ${Math.min(102, Math.max(-2, y)).toFixed(2)}`);
@@ -326,11 +326,15 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     const mode = element(
       "span",
       link.loop > 0 ? "ui-tag timeline-lane-mode is-loop" : "ui-tag timeline-lane-mode",
-      link.loop > 0 ? `↻ ${round(link.loop, 2)}초마다 반복` : "한 번 · 끝 값 유지"
+      link.loop > 0
+        ? link.wrap
+          ? `↻ ${round(link.loop, 2)}초 이어 반복`
+          : `↻ ${round(link.loop, 2)}초마다 반복`
+        : "한 번 · 끝 값 유지"
     );
     mode.title =
       link.loop > 0
-        ? `재생 시간을 ${round(link.loop, 2)}초 길이로 잘라 0 ~ ${round(link.loop, 2)}초의 키를 되풀이합니다. 흐린 키는 되풀이되는 모습(고칠 때는 첫 바퀴의 진한 키를)`
+        ? `재생 시간을 ${round(link.loop, 2)}초 길이로 잘라 0 ~ ${round(link.loop, 2)}초의 키를 되풀이합니다. 흐린 키는 되풀이되는 모습(고칠 때는 첫 바퀴의 진한 키를)${link.wrap ? " · 마지막 키에서 다음 바퀴의 첫 키로 값을 이어 갑니다" : ""}`
         : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다";
     head.append(name, remove, mode, range);
     graph.setAttribute("viewBox", "0 0 1000 100");
@@ -646,6 +650,12 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       }
       drag.result = result;
       drag.next = moving.map(entry => ({ name: entry.link.name, t: drafts.get(entry.link.name).keys[entry.index][0] }));
+      // 끄는 동안에도 '선택한 키' 칸의 시간 · 값이 따라 바뀐다(놓을 때까지 기다리지 않는다)
+      const moved = moving.map(entry => drafts.get(entry.link.name).keys[entry.index]),
+        values = [...new Set(moved.map(k => k[1]))];
+      keyTime.value = moved.length === 1 ? String(round(moved[0][0], 3)) : "";
+      keyValue.value = values.length === 1 ? String(round(values[0], 4)) : "";
+      keyValue.placeholder = values.length > 1 ? "여러 값" : "";
       preview(result);
     };
     const up = () => {

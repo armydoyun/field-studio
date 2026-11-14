@@ -373,6 +373,26 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       );
       warn.hidden = !outside;
       row("반복 길이", length, status, warn);
+      // 바퀴가 바뀔 때: 마지막 키 값에서 첫 키 값으로 건너뛸지(유지), 마지막 키 → 다음 바퀴의 첫 키로 이어 갈지(잇기)
+      row(
+        "끝과 처음",
+        segmented(
+          "반복의 끝과 처음",
+          [
+            ["hold", "끝 값 유지"],
+            ["wrap", "처음으로 잇기"],
+          ],
+          link.wrap ? "wrap" : "hold",
+          next => change({ wrap: next === "wrap" })
+        ),
+        element(
+          "p",
+          "ui-hint link-note",
+          link.wrap
+            ? "마지막 키에서 다음 바퀴의 첫 키까지 값을 이어 갑니다. 바퀴가 바뀔 때 튀지 않습니다."
+            : "마지막 키 값을 바퀴 끝까지 유지하고, 다음 바퀴에서 첫 키 값으로 바로 바뀝니다."
+        )
+      );
       live.push(() => {
         const t = renderer.getStats().time ?? 0,
           cycle = Math.floor(t / link.loop);

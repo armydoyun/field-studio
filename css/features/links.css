@@ -1,6 +1,8 @@
 /* 연결(links.js) · 연결 시트(link-sheet.js) · 파라미터 줄의 키프레임 내비게이터.
    방식 고르기는 ui-seg, 막대는 ui-meter, 버튼 · 칸은 컴포넌트 그대로(시트는 ui-dense 목록 안에 있다).
    액센트(파랑)는 지금 값 · 고른 상태 · 연결됨 표시에만 쓴다. 여기에는 시트의 배치만 둔다. */
+/* 이름 옆 연결 배지: 글이 길면(키프레임 3개 · 4초 반복) 옆 아이콘을 덮지 않고 줄어들며 말줄임한다 */
+.link-badge { flex:0 1 auto;justify-content:flex-start;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis; }
 /* 시트: 파라미터 줄 아래로 펼쳐지는 서랍(줄 폭 전체 · 한 단 낮은 면) */
 .link-editor { display:grid;gap:0;margin:4px -12px 4px;padding:14px 12px 16px;border-block:1px solid var(--line);background:var(--sunken);font-size:var(--text-sm); }
 .link-editor:last-child { margin-bottom:-12px;border-bottom:0; }

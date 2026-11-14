@@ -71,6 +71,8 @@
     let first = dots("uGain")[0];
     pointer(first, "pointerdown", center(first));
     pointer(document, "pointermove", at(plot("uGain"), 0.203, 1));
+    // 끄는 동안(놓기 전)에도 '선택한 키' 칸의 시간 · 값이 바로 따라 바뀐다
+    test(q(".timeline-key-time").value === "1" && Math.abs(Number(q(".timeline-key-value").value)) < 0.01, `끄는 동안 칸에 시간 · 값: ${q(".timeline-key-time").value}초 · ${q(".timeline-key-value").value}`);
     pointer(document, "pointerup", at(plot("uGain"), 0.203, 1));
     await until(() => near(JSON.parse(keysOf("uGain"))[0][0], 1), `끌기 → 1초: ${keysOf("uGain")}`);
     test(Math.abs(JSON.parse(keysOf("uGain"))[0][1]) < 0.01, `끌기 → 값 0 근처: ${keysOf("uGain")}`);

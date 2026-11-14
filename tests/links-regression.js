@@ -42,6 +42,28 @@ test("키프레임: 앞은 첫 값 · 사이는 부드럽게(또는 직선) · �
   assert.equal(L.keyValue(keys,6,4),5,"loop 4초: 6초 = 2초");
   assert.equal(L.keyValue([],1),null);
 });
+test("keyValue 반복 잇기(wrap): 마지막 키에서 다음 바퀴의 첫 키로 이어 간다",()=>{
+  // 4초 반복, 키는 1초(0) · 3초(10). 마지막 키 → 다음 바퀴 첫 키까지 2초(3 → 5초 = 다음 바퀴 1초)
+  const keys=[[1,0],[3,10]];
+  assert.equal(L.keyValue(keys,3.5,4,"linear"),10,"끄면 바퀴 끝까지 마지막 값");
+  assert.equal(L.keyValue(keys,0.5,4,"linear"),0,"끄면 첫 키 앞은 첫 값(바퀴가 바뀔 때 10 → 0으로 튄다)");
+  assert(near(L.keyValue(keys,3.5,4,"linear",true),7.5),"마지막 키 뒤: 10에서 0으로 가는 길의 1/4");
+  assert(near(L.keyValue(keys,0,4,"linear",true),5),"바퀴가 바뀌는 순간: 가운데 값");
+  assert(near(L.keyValue(keys,4,4,"linear",true),L.keyValue(keys,3.9999999,4,"linear",true),1e-4),"바퀴 경계에서 값이 이어진다");
+  assert(near(L.keyValue(keys,0.5,4,"linear",true),2.5),"첫 키 앞: 남은 3/4 지점");
+  assert.equal(L.keyValue(keys,2,4,"linear",true),5,"키 사이는 그대로");
+  assert.equal(L.keyValue(keys,1,4,"linear",true),0);assert.equal(L.keyValue(keys,3,4,"linear",true),10);
+  // 마지막 키의 잇기를 따른다(계단이면 다음 바퀴 첫 키에 닿을 때까지 유지)
+  assert.equal(L.keyValue([[1,0],[3,10,"step"]],0.5,4,"linear",true),10);
+  // 반복 길이 밖의 키는 쓰이지 않는다 · 키가 하나면 그 값 · 반복이 아니면 wrap은 뜻이 없다
+  assert(near(L.keyValue([[1,0],[3,10],[9,99]],3.5,4,"linear",true),7.5));
+  assert.equal(L.keyValue([[1,7]],3,4,"linear",true),7);
+  assert.equal(L.keyValue(keys,5,0,"linear",true),10);
+  // 검사한 사본에는 켰을 때만 남는다 · target이 넘긴다
+  const [on,off]=L.validate([{name:"uA",source:"keys",keys,loop:4,ease:"linear",wrap:true},{name:"uB",source:"keys",keys,loop:4,wrap:false}]);
+  assert.equal(on.wrap,true);assert(!("wrap" in off));
+  assert(near(L.target(on,{time:3.5}),7.5));assert.equal(L.target(off,{time:3.5}),10);
+});
 test("target: 0~1 소스는 min~max로 옮기고 키프레임은 그대로 · 입력이 없으면 null",()=>{
   const time=2;
   assert(near(L.target({source:"lfo",shape:"sine",period:4,phase:0,min:10,max:20},{time}),20));
