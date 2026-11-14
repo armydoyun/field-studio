@@ -17,7 +17,17 @@ function mount(root = document) {
     if (restore) button.focus();
   };
   const enhance = select => {
-    if (controls.has(select) || select.multiple || select.size > 1) return;
+    if (select.multiple || select.size > 1) return;
+    if (controls.has(select)) {
+      // 원본 select만 다른 부모로 옮겨진 경우(타임라인이 다시 그릴 때 '+ 파라미터' 칸): 보이는 버튼을 따라 옮긴다.
+      // 옮기지 않으면 버튼은 떼어진 예전 부모에 남고 원본은 숨겨져 있어 칸이 화면에서 사라진다.
+      const { button, sync } = controls.get(select);
+      if (select.nextElementSibling !== button) {
+        select.after(button);
+        sync();
+      }
+      return;
+    }
     if (known.has(select)) {
       const control = known.get(select);
       select.after(control.button);
