@@ -114,6 +114,11 @@
                     <section class="ui-section ui-section--flush uniform-section">
                         <div class="ui-section-head"><h2>프로젝트 파라미터 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="params" aria-label="파라미터·어노테이션 가이드" title="파라미터·어노테이션 사용법"></button></h2><span id="uniformCount" class="ui-tag ui-tag--plain">0</span></div>
                                                 <p id="uiError" class="ui-notice ui-notice--danger" role="alert" aria-live="polite"></p>
+                        <div class="parameter-actions" role="group" aria-label="파라미터 일괄 작업">
+                            <button id="uniformWriteDefaults" type="button" class="ui-btn--sm" title="바뀐 값을 모든 패스의 @default에 반영">바뀐 값 모두 코드에 반영</button>
+                            <button id="uniformRandomize" type="button" class="ui-btn--sm" title="잠금·숨김·연결·램프 제외 · Ctrl+Z로 되돌리기">🎲 전체 무작위</button>
+                            <button id="uniformJitter" type="button" class="ui-btn--sm" title="현재 값의 ±10% 안에서 변경 · 0이면 범위 기준 · 잠금·숨김·연결·램프 제외">조금씩 바꾸기</button>
+                        </div>
                         <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" class="ui-btn--sm" hidden>삭제 되돌리기</button></div>
                         <div id="presetBar" class="ui-card preset-bar" role="group" aria-labelledby="presetTitle">
                             <div class="preset-head"><span id="presetTitle" class="preset-title">프리셋</span><label class="preset-blend" title="프리셋을 고를 때 값이 바뀌는 시간">전환 <select id="presetBlend" class="ui-input--sm"><option value="0">즉시</option><option value="0.5">0.5초</option><option value="1" selected>1초</option><option value="2">2초</option><option value="4">4초</option></select></label></div>

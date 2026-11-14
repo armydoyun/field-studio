@@ -329,12 +329,12 @@ uniform float uTime;
 uniform sampler2D iChannel0;
 uniform int uShape;          // 유리 모양 · @enum 구 둥근상자 도넛 팔면체 @default 0 @group 유리
 uniform float uIOR;          // 굴절률(물 1.33 · 유리 1.5 · 다이아몬드 2.42) · @range 1 2.5 @step 0.01 @default 1.5 @group 유리
-uniform float uDispersion;   // 분산(빨강~파랑 굴절률 차이, 0이면 끔) · @range 0 0.15 @step 0.001 @default 0.02 @group 유리
-uniform vec3 uGlassTint;     // 유리 색(두꺼운 곳일수록 이 색으로 물든다) · @color @default 0.62 0.92 0.86 @group 유리
-uniform float uDensity;      // 흡수 세기(0 = 완전히 맑음) · @range 0 4 @step 0.01 @default 0.8 @group 유리
-uniform int uBounces;        // 안에서 튕길 수 있는 최대 횟수(내부 전반사) · @range 1 8 @step 1 @default 4 @group 유리
+uniform float uDispersion;   // 분산(빨강~파랑 굴절률 차이, 0이면 끔) · @range 0 0.15 @step 0.001 @default 0.02 @group 유리 @if uView == 결과 || uView == 굴절만
+uniform vec3 uGlassTint;     // 유리 색(두꺼운 곳일수록 이 색으로 물든다) · @color @default 0.62 0.92 0.86 @group 유리 @if uView != 프레넬 && uView != 두께
+uniform float uDensity;      // 흡수 세기(0 = 완전히 맑음) · @range 0 4 @step 0.01 @default 0.8 @group 유리 @if uView == 결과 || uView == 굴절만
+uniform int uBounces;        // 안에서 튕길 수 있는 최대 횟수(내부 전반사) · @range 1 8 @step 1 @default 4 @group 유리 @if uView != 프레넬 && uView != 반사만
 uniform float uSpin;         // 유리가 도는 속도 · @range 0 1 @step 0.01 @default 0.15 @group 유리
-uniform int uView;           // 보기(▶: 차례로) · @enum 결과 반사만 굴절만 프레넬 두께 @default 0 @anim 2
+uniform int uView;           // 보기(▶: 차례로) · @enum 결과 반사만 굴절만 프레넬 두께 @default 0 @anim 2 @group 보기
 
 ${orbitCamera(GLASS_HOME)}
 
@@ -549,11 +549,11 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform sampler2D iChannel0;
 uniform int uBounces;        // 반사를 따라가는 최대 횟수(0 = 반사 없음) · @range 0 5 @step 1 @default 3 @group 반사
-uniform float uRoughScale;   // 모든 구의 거칠기 배율 · @range 0 2 @step 0.01 @default 1 @group 재질
-uniform float uFloorRough;   // 바닥 거칠기(0 = 매끈한 바닥에 비친다) · @range 0 1 @step 0.01 @default 0.18 @group 재질
-uniform vec3 uSunCol;        // 햇빛 색 · @color @default 1 0.93 0.82 @group 빛
-uniform float uSunAngle;     // 해의 방위(천천히 돌려 하이라이트가 움직이는 것을 보자) · @range 0 6.283 @step 0.01 @default 2.2 @anim 20 @group 빛
-uniform int uView;           // 보기(▶: 차례로) · @enum 결과 법선 그림자 틈새어둠 반사횟수 반사만 @default 0 @anim 2
+uniform float uRoughScale;   // 모든 구의 거칠기 배율 · @range 0 2 @step 0.01 @default 1 @group 재질 @if uView == 결과 || uView >= 반사횟수
+uniform float uFloorRough;   // 바닥 거칠기(0 = 매끈한 바닥에 비친다) · @range 0 1 @step 0.01 @default 0.18 @group 재질 @if uView == 결과 || uView >= 반사횟수
+uniform vec3 uSunCol;        // 햇빛 색 · @color @default 1 0.93 0.82 @group 빛 @if uView == 결과 || uView == 반사만
+uniform float uSunAngle;     // 해의 방위(천천히 돌려 하이라이트가 움직이는 것을 보자) · @angle @default 2.2 @anim 20 @group 빛 @if uView == 결과 || uView == 그림자 || uView == 반사만
+uniform int uView;           // 보기(▶: 차례로) · @enum 결과 법선 그림자 틈새어둠 반사횟수 반사만 @default 0 @anim 2 @group 보기
 
 ${orbitCamera(MATERIAL_HOME)}
 

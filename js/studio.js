@@ -1,3 +1,4 @@
+import * as ParameterTools from "./parameter-tools.js";
 // 사용자 편집 상태만 소유한다. GPU 자원과 연결 규칙은 Renderer/PassManager가 검증한다.
 // 외부 코드 에디터나 네트워크 요청은 사용하지 않는다. file:// 배포는 deploy/ 번들을 사용한다.
 // 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
@@ -1316,6 +1317,36 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     syncHistory();
     return true;
   };
+  // Panel batches are one Studio history entry, including all passes and values.
+  const writeParameterDefaults = (names = null) => {
+    if (disposed) return false;
+    rememberEditor();
+    const users = renderer.getUserUniforms().filter(item => !names || names.includes(item.name)),
+      before = copy(project);
+    for (const tab of tabNames())
+      setSourceOf(project, tab, ParameterTools.writeDefaults(sourceOf(project, tab), users));
+    if (same(before, project)) return false;
+    checkpoint.users = renderer.getUserUniforms();
+    renderEditor();
+    recordEdit(false, true);
+    const applied = apply();
+    if (applied) setStatus("현재 값을 @default에 반영했습니다 · Ctrl+Z로 되돌리기");
+    return true; // The source edit remains available even if a pending shader edit fails to compile.
+  };
+  const setParameterValues = items => {
+    if (disposed || !items.length) return false;
+    checkpoint.users = renderer.getUserUniforms();
+    const updates = new Map(items.map(item => [item.name, item.value]));
+    renderer.setUserUniforms(
+      renderer
+        .getUserUniforms()
+        .map(item => (updates.has(item.name) ? { ...item, value: updates.get(item.name) } : item))
+    );
+    recordEdit(false, true);
+    saveLocal();
+    document.dispatchEvent(new Event("shader-settings-applied"));
+    return true;
+  };
   // Uniform 이름 바꾸기(편집기 F2가 부른다): 지금 패스(spots), 같은 Uniform을 선언한 다른 패스, 등록된 파라미터 값을
   // 한 번에 바꾸고 Undo 한 번으로 되돌린다. 실행에 실패해도(컴파일 오류) 코드 변경은 남기고 오류를 보인다.
   //   돌려주는 값: {passes: 함께 바꾼 다른 패스 수, parameter: 파라미터 값을 옮겼는지} 또는 null(편집기가 지금 패스만 바꾼다)
@@ -2538,6 +2569,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     loadExample,
     insertSnippet,
     insertCode,
+    writeParameterDefaults,
+    setParameterValues,
     getEditorSource: () => $("studioCode").value,
     undo: () => historyMove(true),
     redo: () => historyMove(false),

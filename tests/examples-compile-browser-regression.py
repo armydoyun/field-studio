@@ -62,6 +62,23 @@ with sync_playwright() as p:
     for id in cards: page.evaluate('async id => { await document.querySelector(`.gallery-card[data-id="${id}"]`).click(); }',id)
     projects=page.evaluate('() => picked')
     check(len(projects)==len(cards) and len(cards)>=12,f'every gallery card hands a project to Studio ({len(cards)} cards)')
+    # Parse complete projects, including cross-pass conditions and intentionally omitted defaults.
+    annotation_errors=page.evaluate("""projects => {
+      const A=__testModules.annotations, errors=[];
+      for(let i=0;i<projects.length;i++) {
+        const p=projects[i], specs=A.collect([p.image,p.common,...(p.passes||[]).map(pass=>pass.fragment)]);
+        const names=new Set(specs.map(s=>s.name));
+        if(specs.length>64) errors.push(`${i}: more than 64 parameters`);
+        if(specs.filter(s=>s.type==="sampler2D").length>8) errors.push(`${i}: more than 8 ramps`);
+        for(const s of specs) {
+          if(s.error) errors.push(`${i}/${s.name}: ${s.error}`);
+          for(const term of s.when?.any?.flat() || (s.when?[s.when]:[]))
+            if(!names.has(term.name)) errors.push(`${i}/${s.name}: missing condition target ${term.name}`);
+        }
+      }
+      return errors;
+    }""",projects)
+    check(not annotation_errors,f'all gallery annotations and condition references are valid: {annotation_errors}')
     sources=[]
     for id,proj in zip(cards,projects):
         if proj.get('studioOwned') in ('pipeline','feedback'):continue   # Studio 소유 예제는 아래에서 Studio 소스로 확인
