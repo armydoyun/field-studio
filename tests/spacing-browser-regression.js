@@ -120,6 +120,10 @@
   document.querySelector(".ui-matrix .ui-matrix-tools button").click();
   await audit("행렬 확대 편집");
   document.querySelector('dialog[aria-label="uMatrix 행렬 확대 편집"] .ui-icon-btn').click();
+  document.querySelector('.value-edit-open[data-name="uOffset"]').click();
+  document.querySelector('dialog[aria-label="uOffset 값 편집"] details').open = true;
+  await audit("벡터 전체 값 · 일괄 입력");
+  document.querySelector('dialog[aria-label="uOffset 값 편집"] .ui-icon-btn').click();
   document.querySelector(".link-uniform").click();
   await audit("연결 시트(끄기)");
   [...document.querySelectorAll('.link-sources [role="radio"]')].find(b => b.textContent.includes("흔들기")).click();

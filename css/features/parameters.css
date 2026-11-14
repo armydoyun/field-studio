@@ -61,11 +61,12 @@
 /* 벡터·행렬: 성분 글자는 칸 앞에 붙인다 */
 .uniform-vector { display:grid;gap:6px; }
 .uniform-vector.is-inline { grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
-.uniform-axis { display:flex;align-items:center;gap:8px;min-width:0; }
+.uniform-axis { min-width:0; }
+.uniform-axis:not(.ui-input-group) { display:flex;align-items:center;gap:8px; }
 .uniform-axis-label { flex:0 0 14px;margin:0;color:var(--faint);font:600 var(--text-2xs)/1 var(--mono);text-align:center; }
 .uniform-axis input[type="number"] { flex:1 1 auto;width:100%;min-width:0; }
 /* bvec: X·Y… 토글 칩(ui-chip 안에 체크박스) */
-.uniform-vector.is-bool { display:flex;flex-wrap:wrap;gap:6px; }
+.uniform-vector.is-bool { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
 .uniform-vector.is-bool .uniform-axis { gap:6px;min-height:var(--control-sm); }
 .uniform-vector.is-bool .uniform-axis-label { flex:none;color:inherit;font-size:var(--text-xs); }
 .uniform-vector input[type="checkbox"] { width:14px;height:14px; }
@@ -146,3 +147,5 @@
 @container settings (max-width:284px) {
  .range-grid,.uniform-form-actions { grid-template-columns:minmax(0,1fr); }
 }
+
+.uniform-array-item>.value-edit-open { justify-self:end; }

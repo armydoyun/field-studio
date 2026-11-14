@@ -1,3 +1,4 @@
+import * as ValueEditor from "./value-editor.js";
 import * as MatrixControl from "./matrix-control.js";
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
 import * as StageMenu from "./stage-menu.js";
@@ -1301,7 +1302,8 @@ const mount = (renderer, input, settings) => {
     $("uniformNotice").textContent = "";
   };
   let uniformSnapshot = "";
-  const matrixViews = [];
+  const parameterViews = [];
+  let componentSerial = 0;
   // 목록을 다시 그릴지 가늠하는 요약. 연결된 파라미터의 값은 프레임마다 바뀌므로 빼고(미터 · 내비게이터가 따로 따라간다)
   // 나머지(이름 · 타입 · 설정 · 연결 없는 값)만 본다 — 그러지 않으면 0.5초마다 목록 전체를 다시 그려 누르기 · 끌기가 끊긴다.
   const snapshotOf = items => {
@@ -2030,8 +2032,8 @@ const mount = (renderer, input, settings) => {
     liveLinks.clear();
     resetSyncs.clear();
     playButtons.clear();
-    for (const view of matrixViews) view.dispose();
-    matrixViews.length = 0;
+    for (const view of parameterViews) view.dispose();
+    parameterViews.length = 0;
     userList.replaceChildren();
     // @group: 묶음 없는 파라미터가 먼저, 묶음은 처음 나온 순서대로. 검색 중에는 접힌 묶음도 펼쳐 보여 준다.
     const groups = new Map();
@@ -2189,6 +2191,29 @@ const mount = (renderer, input, settings) => {
         badge.title = "연결이 프레임마다 이 값을 정합니다(직접 바꿔도 다음 프레임에 덮어씁니다)";
         title.append(badge);
       }
+      const valueEditor = (target, change, compact = true) => {
+        const view = ValueEditor.create({
+          name: target.name,
+          type: target.type,
+          options: target.options,
+          read: () => liveValue(target),
+          onChange: change,
+          compact,
+          getContext: () => renderer.getFragmentSource(),
+          onApplied: () => {
+            renderUniforms();
+            [...$("uniformList").querySelectorAll(".value-edit-open")]
+              .find(button => button.dataset.name === target.name)
+              ?.focus();
+          },
+        });
+        parameterViews.push(view);
+        return view;
+      };
+      if (!typeInfo(item.type).count && ["f", "i", "u", "b"].includes(typeInfo(item.type).kind) && !(link && !keyed)) {
+        const editor = valueEditor(item, (source, next) => commit(source, next));
+        extras.push(editor.button);
+      }
       top.append(title, ...extras, ...(reset ? [reset] : []), remove);
       if (description) top.append(description);
       const commit = (field, value) => {
@@ -2256,8 +2281,10 @@ const mount = (renderer, input, settings) => {
           // 숫자가 아닌 값 · 로그 눈금 · 다이얼 · 선택지 위젯은 위젯 자신의 갱신 함수로
           if (typeof value !== "number" || item.options?.log || item.options?.angle || item.options?.enum)
             return playViews.get(item.name)?.(typeof value === "number" ? Number(value.toFixed(4)) : value);
-          const number = row.querySelector('input[type="number"]:not(.key-nav-time)'),
-            slider = row.querySelector('input[type="range"]');
+          // 연결 시트의 반복 길이·부드러움 입력은 파라미터 값이 아니다.
+          // 실제 값 위젯만 갱신해야 설정 초안과 저장된 반복 길이를 덮어쓰지 않는다.
+          const number = row.querySelector('.uniform-pair > input[type="number"]'),
+            slider = row.querySelector('.uniform-pair > input[type="range"]');
           if (number) {
             number.value = value.toFixed(digits);
             number.title = String(value);
@@ -2270,17 +2297,17 @@ const mount = (renderer, input, settings) => {
       const widget = (row, item, commit, name) => {
         if (item.type === "bool") {
           const label = element("label");
-          label.className = "ui-switch uniform-switch";
+          label.className = "ui-switch ui-switch--field uniform-switch";
           const input = element("input");
           input.type = "checkbox";
           input.checked = item.value;
           input.setAttribute("role", "switch");
           const text = element("span");
-          text.textContent = String(item.value);
+          text.textContent = item.value ? "켜짐 · true" : "꺼짐 · false";
           input.setAttribute("aria-label", item.name);
           input.addEventListener("change", () => {
             if (!commit(input, input.checked)) input.checked = item.value;
-            text.textContent = String(input.checked);
+            text.textContent = input.checked ? "켜짐 · true" : "꺼짐 · false";
           });
           label.append(input, text);
           row.append(label);
@@ -2478,13 +2505,13 @@ const mount = (renderer, input, settings) => {
             onChange: commit,
             getContext: () => renderer.getFragmentSource(),
           });
-          matrixViews.push(view);
+          parameterViews.push(view);
           row.append(view.node);
         } else if (typeInfo(item.type).components > 1) {
           // 벡터는 X/Y/Z/W 성분별로 편집한다. bvec 성분은 체크박스.
           // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
           const { kind } = typeInfo(item.type);
-          // 배치: bvec은 X·Y… 토글 칩 한 줄, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
+          // 배치: bvec은 X·Y… 토글 칩 두 칸씩, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
           // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자].
           const opts = item.options || {},
             ranged = kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
@@ -2495,12 +2522,18 @@ const mount = (renderer, input, settings) => {
           item.value.forEach((value, index) => {
             const field = element(kind === "b" ? "label" : "div");
             field.className =
-              kind === "b" ? "ui-chip uniform-axis" : ranged ? "uniform-axis is-ranged" : "uniform-axis";
+              kind === "b"
+                ? "ui-chip ui-chip--lg uniform-axis"
+                : ranged
+                  ? "uniform-axis is-ranged"
+                  : "ui-input-group ui-input-group--prefix uniform-axis";
             const label = element(kind === "b" ? "span" : "label");
-            label.className = "uniform-axis-label";
+            label.className = kind === "b" || ranged ? "uniform-axis-label" : "ui-unit uniform-axis-label";
             label.textContent = ["X", "Y", "Z", "W"][index];
             const input = element("input");
             input.setAttribute("aria-label", `${item.name} ${label.textContent}`);
+            input.id = `uniform-component-${++componentSerial}`;
+            label.htmlFor = input.id;
             if (kind === "b") {
               input.type = "checkbox";
               input.checked = value;
@@ -2684,6 +2717,8 @@ const mount = (renderer, input, settings) => {
             return true;
           };
           widget(cell, part, commitPart, label);
+          if (["f", "i", "u", "b"].includes(typeInfo(part.type).kind))
+            cell.append(valueEditor(part, commitPart, false).button);
           list.append(cell);
         }
         row.append(list);
@@ -3469,9 +3504,9 @@ const mount = (renderer, input, settings) => {
       pixelSelect.append(custom);
     }
     if (active !== pixelSelect) pixelSelect.value = String(s.maxPixels);
-    for (const view of matrixViews) view.refresh();
+    for (const view of parameterViews) view.refresh();
     if (
-      !matrixViews.some(view => view.isOpen) &&
+      !parameterViews.some(view => view.isOpen) &&
       !$("view-uniforms").hidden &&
       !(active instanceof Element && active.closest("#uniformList")) &&
       uniformSnapshot !== snapshotOf(renderer.getUserUniforms())
@@ -3529,7 +3564,7 @@ const mount = (renderer, input, settings) => {
   return {
     dispose: () => {
       clearInterval(timer);
-      for (const view of matrixViews) view.dispose();
+      for (const view of parameterViews) view.dispose();
       timeline.dispose();
       recorder.dispose(); // 창을 닫는 중에는 녹화 파일을 내려받지 않고 버린다.
       controller.abort();

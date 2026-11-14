@@ -1,0 +1,7 @@
+/* 공통 스칼라/벡터 값 편집 창. 모양은 입력·스위치·dialog 컴포넌트, 여기서는 내부 배치만 정의한다. */
+.ui-value-editor { display:grid;gap:var(--space-8);min-width:0; }
+.ui-value-fields { display:grid;gap:var(--space-10);min-width:0; }
+.ui-value-fields>.ui-field { margin:0; }
+.ui-value-fields input { text-align:left; }
+.ui-value-paste { display:block;resize:vertical;min-height:calc(2 * var(--control-lg));max-width:100%; }
+.ui-value-actions { display:flex;justify-content:flex-end;gap:var(--space-4);margin-top:var(--space-4); }
