@@ -2281,8 +2281,10 @@ const mount = (renderer, input, settings) => {
           // 숫자가 아닌 값 · 로그 눈금 · 다이얼 · 선택지 위젯은 위젯 자신의 갱신 함수로
           if (typeof value !== "number" || item.options?.log || item.options?.angle || item.options?.enum)
             return playViews.get(item.name)?.(typeof value === "number" ? Number(value.toFixed(4)) : value);
-          const number = row.querySelector('input[type="number"]:not(.key-nav-time)'),
-            slider = row.querySelector('input[type="range"]');
+          // 연결 시트의 반복 길이·부드러움 입력은 파라미터 값이 아니다.
+          // 실제 값 위젯만 갱신해야 설정 초안과 저장된 반복 길이를 덮어쓰지 않는다.
+          const number = row.querySelector('.uniform-pair > input[type="number"]'),
+            slider = row.querySelector('.uniform-pair > input[type="range"]');
           if (number) {
             number.value = value.toFixed(digits);
             number.title = String(value);
