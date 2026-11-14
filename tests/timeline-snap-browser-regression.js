@@ -62,12 +62,31 @@
       pointer(document, "pointermove", { clientX: x, clientY: p.top + p.height * 0.18 });
       const guide = plot().querySelector(".timeline-guide.is-value");
       test(guide && !guide.hidden, "자석이 붙으면 값 점선이 보임");
+      test(dots()[1].classList.contains("is-magnet-target"), "값이 붙은 대상 키(3초 · 0.83)를 강조");
       pointer(document, "pointermove", { clientX: x, clientY: p.top + p.height * 0.42 });
       test(guide.hidden, "자석에서 벗어나면 점선이 숨음");
       pointer(document, "pointerup", { clientX: x, clientY: p.top + p.height * 0.42 });
       await until(() => !plot().querySelector(".timeline-guide.is-value"), "놓으면 값 점선이 없어짐");
+      test(!dock.querySelector(".is-magnet-target"), "놓으면 대상 강조도 없어짐");
       const m = q(".timeline-magnet");
       test(!m.textContent.trim() && m.classList.contains("icon-magnet") && m.getAttribute("aria-label").startsWith("자석"), "자석 버튼은 아이콘 + aria-label");
+    }
+    // 세로선: 키가 재생선과 같은 시간에 있으면, 위아래로만 끌어도(좌우 0 · 1px 떨림 모두) 계속 보이고 재생선이 굵어진다
+    {
+      await reset();
+      r.setTime(1);
+      await wait(50);
+      const dot = dots()[0], d = dot.getBoundingClientRect(), p = plot().getBoundingClientRect(), x = d.left + d.width / 2;
+      const vertical = () => dock.querySelector(".timeline-overlay .timeline-guide"), head = () => dock.querySelector(".timeline-playhead");
+      pointer(dot, "pointerdown", { clientX: x, clientY: d.top + d.height / 2 });
+      pointer(document, "pointermove", { clientX: x, clientY: p.top + p.height * 0.5 });
+      test(!vertical().hidden && head().classList.contains("is-caught"), "좌우 0: 재생선에 붙은 세로선 · 재생선 굵게");
+      pointer(document, "pointermove", { clientX: x + 1, clientY: p.top + p.height * 0.45 });
+      test(!vertical().hidden && head().classList.contains("is-caught"), "좌우 1px 떨림에도 세로선 유지");
+      pointer(document, "pointerup", { clientX: x + 1, clientY: p.top + p.height * 0.45 });
+      await until(() => vertical().hidden && !head().classList.contains("is-caught"), "놓으면 세로선 · 굵은 재생선 해제");
+      test(near(keys()[0][0], 1), `시간은 그대로 1초: ${keys()[0][0]}`);
+      r.setTime(0);
     }
     // 값 스냅을 꺼도 자석은 동작한다(예전에는 격자가 없으면 '격자보다 가까운' 자석이 있을 수 없어 붙지 않았다)
     await reset();
