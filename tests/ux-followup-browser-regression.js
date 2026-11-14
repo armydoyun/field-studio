@@ -6,6 +6,7 @@
 //  4) 잇기의 '서로 다름'은 고른 키들의 잇기가 다를 때만 보인다
 //  5) 프리셋 전환 중에는 칩에 진행 막대와 '바로 끝내기' · 직접 만지면 멈추고 알린다
 (async () => {
+  const { withFrameClock } = await import("./tests/helpers/frame-clock.mjs");
   const autoAnswer = setInterval(() => { const d = document.getElementById("studioPromptDialog"), alt = document.getElementById("studioDialogAlt"); if (d?.open && !alt.hidden) alt.click(); }, 50);
   const r = window.shaderPlayground, studio = window.shaderStudio, settings = window.shaderSettings, $ = id => document.getElementById(id);
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
@@ -123,27 +124,33 @@
     await until(() => $("presetList").querySelectorAll(".preset-chip").length === 2, "프리셋 2");
     $("presetBlend").value = "1";
     const chips = () => [...$("presetList").querySelectorAll(".preset-chip")];
-    chips()[0].querySelector(".preset-apply").click();
-    await until(() => chips()[0].classList.contains("is-morphing"), "전환 시작: 목표 칩에 진행 표시");
-    test(!$("presetFinish").hidden && $("presetNoticeText").textContent.includes("바꾸는 중"), "전환 중이라고 알리고 '바로 끝내기'");
-    await wait(300);
-    const progress = Number(chips()[0].style.getPropertyValue("--morph"));
-    test(progress > 0 && progress < 1, `진행 막대가 차오름 (${progress.toFixed(2)})`);
-    const mid = r.getUserUniforms().find(u => u.name === "uGain").value;
-    test(Math.abs(mid * 100 - Math.round(mid * 100)) < 1e-6, `전환 중 값은 간격(0.01) 자릿수 (${mid})`);
-    $("presetFinish").click();
-    await until(() => r.getUserUniforms().find(u => u.name === "uGain").value === 0, "바로 끝내기 → 끝 값");
-    test($("presetFinish").hidden && !chips()[0].classList.contains("is-morphing"), "끝나면 전환 표시 사라짐");
-    chips()[1].querySelector(".preset-apply").click();
-    await until(() => chips()[1].classList.contains("is-morphing"), "다시 전환");
-    await wait(200);
-    const slider = row("uGain").querySelector('input[type="range"]');
-    slider.value = "0.3";
-    slider.dispatchEvent(new Event("input", { bubbles: true }));
-    slider.dispatchEvent(new Event("change", { bubbles: true }));
-    await wait(150);
-    test($("presetNoticeText").textContent.includes("멈췄습니다") && $("presetFinish").hidden, "직접 만지면 전환이 멈추고 알린다");
-    test(Math.abs(r.getUserUniforms().find(u => u.name === "uGain").value - 0.3) < 1e-9, "직접 바꾼 값이 이긴다");
+    withFrameClock(window, ({ step, pendingCount }) => {
+      chips()[0].querySelector(".preset-apply").click();
+      test(chips()[0].classList.contains("is-morphing") && pendingCount() > 0, "전환 시작: 목표 칩에 진행 표시");
+      test(!$("presetFinish").hidden && $("presetNoticeText").textContent.includes("바꾸는 중"), "전환 중이라고 알리고 '바로 끝내기'");
+      // 실제 프레임 도착 시각 대신 전환 시각을 직접 진행한다(CI에서 wait(300)는 진행률 0을 읽을 수 있다).
+      step(300);
+      const progress = Number(chips()[0].style.getPropertyValue("--morph"));
+      test(Math.abs(progress - 0.3) < 1e-6, `300ms: 진행 막대가 30% 차오름 (${progress.toFixed(2)})`);
+      const mid = r.getUserUniforms().find(u => u.name === "uGain").value;
+      test(mid > 0 && mid < 1 && Math.abs(mid * 100 - Math.round(mid * 100)) < 1e-6, `전환 중 값은 간격(0.01) 자릿수 (${mid})`);
+      $("presetFinish").click();
+      test(r.getUserUniforms().find(u => u.name === "uGain").value === 0, "바로 끝내기 → 끝 값");
+      test($("presetFinish").hidden && !chips()[0].classList.contains("is-morphing"), "끝나면 전환 표시 사라짐");
+      step(1200);
+      test(r.getUserUniforms().find(u => u.name === "uGain").value === 0, "바로 끝낸 전환의 예약 프레임은 값을 덮어쓰지 않음");
+      chips()[1].querySelector(".preset-apply").click();
+      test(chips()[1].classList.contains("is-morphing"), "다시 전환");
+      step(1400); // 두 번째 전환 시작(1200ms)에서 200ms 진행
+      test(Number(chips()[1].style.getPropertyValue("--morph")) > 0, "두 번째 전환도 진행 중");
+      const slider = row("uGain").querySelector('input[type="range"]');
+      slider.value = "0.3";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+      test($("presetNoticeText").textContent.includes("멈췄습니다") && $("presetFinish").hidden && !chips()[1].classList.contains("is-morphing"), "직접 만지면 전환이 멈추고 알린다");
+      step(2400); // 원래 전환이 끝날 시각까지 진행해 취소된 콜백이 값을 덮어쓰지 않는지 검사
+      test(Math.abs(r.getUserUniforms().find(u => u.name === "uGain").value - 0.3) < 1e-9, "전환 종료 시각이 지나도 직접 바꾼 값이 유지됨");
+    });
   } finally {
     clearInterval(autoAnswer);
     wide.remove();

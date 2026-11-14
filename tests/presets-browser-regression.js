@@ -4,6 +4,7 @@
 //  · ⋯ 메뉴: 덮어쓰기(바뀌는 값을 보여 주고 확인 · 취소 · 되돌리기 · Ctrl+Z) · 이름 바꾸기 · 삭제와 되돌리기
 //  · 자동 저장 · 프로젝트 파일(Pack)에 담김 · 다시 열면 복원 · 새 프로젝트는 프리셋 없이 · Undo로 돌아옴
 (async () => {
+  const { withFrameClock } = await import("./tests/helpers/frame-clock.mjs");
   // 작업을 바꿀 때 뜨는 '저장하지 않은 변경' 확인(세 갈래)에는 '저장하지 않고 계속'으로 답한다.
   const autoAnswer = setInterval(() => { const d = document.getElementById("studioPromptDialog"), alt = document.getElementById("studioDialogAlt"); if (d?.open && !alt.hidden) alt.click(); }, 50);
   const r = window.shaderPlayground, studio = window.shaderStudio, $ = id => document.getElementById(id);
@@ -65,23 +66,10 @@
 
     // 3) 중간값은 rAF 시각을 직접 제어한다. wait(450)는 CPU/GPU가 바쁘면 이전 프레임의
     // 값을 읽을 수 있다. 시간만 더 기다리면 반대로 전환이 끝나 버리므로 대기 시간을 늘리지 않는다.
-    const realFrame = window.requestAnimationFrame, realCancel = window.cancelAnimationFrame;
-    const ownNow = Object.getOwnPropertyDescriptor(performance, "now");
-    const pending = new Map();
-    let frameId = 0, now = 1000;
-    const step = ms => {
-      now = 1000 + ms;
-      const callbacks = [...pending.values()];
-      pending.clear();
-      for (const callback of callbacks) callback(now);
-    };
-    try {
-      Object.defineProperty(performance, "now", { configurable: true, value: () => now });
-      window.requestAnimationFrame = callback => { const id = --frameId; pending.set(id, callback); return id; };
-      window.cancelAnimationFrame = id => { if (id < 0) pending.delete(id); else realCancel.call(window, id); };
+    withFrameClock(window, ({ step, pendingCount }) => {
       $("presetBlend").value = "1";
       chip("밤").querySelector(".preset-apply").click();
-      test($("presetBar").classList.contains("is-morphing") && pending.size > 0, "1초 전환 시작");
+      test($("presetBar").classList.contains("is-morphing") && pendingCount() > 0, "1초 전환 시작");
       step(0);
       test(value("uGain") === 0.2 && JSON.stringify(value("uTint")) === "[1,0,0]" && value("uMode") === 0, "시작 프레임은 '낮' 그대로");
       step(250);
@@ -90,14 +78,7 @@
       test(Math.abs(value("uGain") - 0.6) < 0.001 && JSON.stringify(value("uTint")) === "[0.5,0,0.5]" && value("uMode") === 2, "500ms: 실수·색 중간값 · enum은 목표 값");
       step(1000);
       test(value("uGain") === 1 && JSON.stringify(value("uTint")) === "[0,0,1]" && value("uMode") === 2 && !$("presetBar").classList.contains("is-morphing"), "1000ms: 모든 값 확정 · 전환 UI 종료");
-    } finally {
-      window.requestAnimationFrame = realFrame;
-      window.cancelAnimationFrame = realCancel;
-      if (ownNow) Object.defineProperty(performance, "now", ownNow);
-      else delete performance.now;
-      // 실패 경로에서도 남은 콜백을 실제 스케줄러로 돌려놓는다.
-      for (const callback of pending.values()) realFrame.call(window, callback);
-    }
+    });
 
     // 실제 브라우저 rAF 경로도 확인한다. 끝값 반올림만 먼저 도착할 수 있으므로 전환 UI 종료까지 기다린다.
     $("presetBlend").value = "0";
