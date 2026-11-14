@@ -9,8 +9,7 @@
 .timeline-field { display:inline-flex;align-items:center;gap:4px;margin:0;color:var(--muted);white-space:nowrap; }
 .timeline-unit { color:var(--muted); }
 .timeline-bar button { white-space:nowrap; }
-.timeline-bar .glyph-icon,.timeline-bar .timeline-zoom { width:var(--control-sm);padding:0; }
-.timeline-bar .timeline-zoom { font:600 var(--text-md) var(--mono); }
+.timeline-bar .glyph-icon { width:var(--control-sm);padding:0; }
 /* 숫자 칸 폭은 글자 수(ch)로 정한다: 글꼴이 달라도(윈도우 등) 자릿수가 잘리지 않게. */
 .timeline-bar input[type="number"] { width:calc(8ch + 18px); }
 .timeline-bar input.timeline-key-value { width:calc(10ch + 18px); }
@@ -62,6 +61,9 @@
 .timeline-loop::after { content:"";position:absolute;top:0;bottom:0;left:4px;border-left:1.5px dashed var(--muted); }
 .timeline-overlay { position:absolute;top:0;bottom:0;left:var(--timeline-head);right:0;z-index:3;pointer-events:none; }
 .timeline-playhead { position:absolute;top:0;bottom:0;width:0;border-left:1.5px solid var(--danger); }
+/* 자석 점선: 끄는 키가 재생선 · 다른 키 · 범위 끝에 붙은 자리(시간은 세로, 값은 그 레인의 가로) */
+.timeline-guide { position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--accent);pointer-events:none; }
+.timeline-guide.is-value { right:0;bottom:auto;left:0;width:auto;height:0;border-top:1px dashed var(--accent);border-left:0; }
 .timeline-overlay .timeline-edge { position:absolute;top:2px;right:2px;min-height:20px;padding:0 6px;border-color:var(--danger);background:var(--panel);color:var(--danger);font:var(--text-2xs) var(--mono);font-variant-numeric:tabular-nums;pointer-events:auto; }
 .timeline-overlay .timeline-edge.is-before { right:auto;left:2px; }
 .timeline-box { position:absolute;z-index:4;border:1px solid var(--accent);background:var(--accent-soft);pointer-events:none; }

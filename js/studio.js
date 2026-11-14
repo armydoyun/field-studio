@@ -1084,6 +1084,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioPassImpact").hidden = !p;
     $("studioPassToolsLabel").textContent = common ? "Common" : "버퍼 설정";
     $("studioPassImpact").textContent = refs.length ? `삭제 시 연결 ${refs.length}개 해제` : "다른 패스의 참조 없음";
+    $("studioRemove").setAttribute("aria-label", p ? `${selected} 삭제` : common ? "Common 삭제" : "삭제");
     $("studioRemove").title = p
       ? `${selected} 삭제${refs.length ? ` · 함께 해제: ${refs.join(", ")}` : ""} · Undo로 복원`
       : common
