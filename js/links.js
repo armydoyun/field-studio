@@ -3,7 +3,8 @@
 //   source "audio": band = "bass"(20~250Hz) | "mid"(250~2kHz) | "treble"(2k~8kHz) | "volume"(파형 크기) → 0~1
 //   source "midi" : cc(0~127), channel(0 = 모든 채널, 1~16) → 컨트롤러 값 0~1
 //   source "lfo"  : shape = "sine" | "triangle" | "saw" | "square", period(초), phase(0~1) → 0~1(uTime 기준)
-//   source "keys" : keys = [[시간, 값, 잇기?], …](시간 순), loop(초, 0이면 반복하지 않고 끝 값 유지), ease("linear" | "smooth")
+//   source "keys" : keys = [[시간, 값, 잇기?], …](시간 순), loop(초, 0이면 반복하지 않고 끝 값 유지), ease("linear" | "smooth"),
+//                   wrap(반복일 때만 뜻이 있다: true면 마지막 키에서 다음 바퀴의 첫 키로 이어 간다 — 바퀴가 바뀔 때 값이 튀지 않는다)
 //                   → 값 자체(min · max로 옮기지 않는다). 키의 잇기(이 키에서 다음 키까지)는 KEY_EASES 중 하나,
 //                   없으면 연결의 ease를 따른다.
 // 0~1 소스는 min + (max - min) × 값으로 옮긴다(키프레임은 값 그대로). smooth(초)만큼 부드럽게 따라간다(0이면 바로).
@@ -61,6 +62,7 @@ const validate = list => {
         .sort((a, b) => a[0] - b[0]);
       link.loop = Math.max(0, finite(raw.loop, 0));
       link.ease = raw.ease === "linear" ? "linear" : "smooth";
+      if (raw.wrap === true) link.wrap = true;
     }
     return link;
   });
@@ -115,9 +117,23 @@ const shape = (ease, u) =>
           ? 1 - (1 - u) * (1 - u)
           : u * u * (3 - 2 * u);
 // 키프레임 값(시간 t). loop > 0이면 t를 loop로 나눈 나머지에서 읽는다. 키가 없으면 null.
-const keyValue = (keys, t, loop = 0, ease = "smooth") => {
+// wrap(반복일 때만): 마지막 키 뒤 ~ 첫 키 앞 구간을 '마지막 키 → 다음 바퀴의 첫 키'로 잇는다(마지막 키의 잇기를 따른다).
+// 끄면 그 구간은 가까운 키 값을 유지하다가 바퀴가 바뀔 때 첫 키 값으로 건너뛴다.
+const keyValue = (keys, t, loop = 0, ease = "smooth", wrap = false) => {
   if (!keys.length) return null;
   const time = loop > 0 ? ((t % loop) + loop) % loop : t;
+  if (loop > 0 && wrap) {
+    // 바퀴 안(시간 < loop)의 키만 쓰인다
+    let end = keys.length - 1;
+    while (end > 0 && keys[end][0] >= loop) end--;
+    const [t0, v0] = keys[0],
+      [t1, v1, own] = keys[end];
+    if (end > 0 && (time < t0 || time > t1)) {
+      const gap = t0 + loop - t1,
+        u = gap > 0 ? ((time < t0 ? time + loop : time) - t1) / gap : 1;
+      return v1 + (v0 - v1) * shape(own || ease, u);
+    }
+  }
   if (time <= keys[0][0]) return keys[0][1];
   for (let i = 1; i < keys.length; i++) {
     const [t1, v1] = keys[i];
@@ -136,7 +152,7 @@ const keyValue = (keys, t, loop = 0, ease = "smooth") => {
 // 쓸 수 있는 입력이 없으면(소리가 꺼짐 · MIDI 신호 없음) null — 파라미터를 건드리지 않는다.
 const target = (link, inputs) => {
   let unit = null;
-  if (link.source === "keys") return keyValue(link.keys, inputs.time, link.loop, link.ease);
+  if (link.source === "keys") return keyValue(link.keys, inputs.time, link.loop, link.ease, link.wrap);
   if (link.source === "lfo") unit = lfo(link.shape, link.period, link.phase, inputs.time);
   else if (link.source === "audio") unit = inputs.audio ? inputs.audio[link.band] : null;
   else if (link.source === "midi") unit = inputs.midi ? inputs.midi(link.channel, link.cc) : null;

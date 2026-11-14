@@ -131,6 +131,13 @@
     await wait(30);
     const looped = await offlineAt([1.5], "uStep");
     test(looped[0] === 5, `1초 반복: 1.5초 → ${looped[0]}`);
+    // 끝과 처음: 기본은 '끝 값 유지', '처음으로 잇기'를 고르면 저장되고 설명이 바뀐다 · 다시 끄면 설정에서 빠진다
+    const wrapMode = label => [...editor("uStep").querySelectorAll('[aria-label="반복의 끝과 처음"] [role="radio"]')].find(b => b.textContent.startsWith(label));
+    test(wrapMode("끝 값 유지").getAttribute("aria-checked") === "true", "반복이면 '끝과 처음' 선택이 보이고 기본은 유지");
+    wrapMode("처음으로 잇기").click();
+    await until(() => settings.getLinks().find(l => l.name === "uStep").wrap === true && editor("uStep").textContent.includes("튀지 않습니다"), "'처음으로 잇기' 저장 · 설명");
+    wrapMode("끝 값 유지").click();
+    await until(() => !("wrap" in settings.getLinks().find(l => l.name === "uStep")), "다시 끄면 설정에서 빠짐");
     [...editor("uStep").querySelectorAll("button")].find(b => b.textContent === "타임라인에서 편집").click();
     await until(() => !$("timelineDock").hidden && !!$("timelineDock").querySelector('.timeline-lane[data-name="uStep"] .timeline-key.is-selected'), "타임라인 도크가 열리고 그 레인의 첫 키가 선택됨");
     test(document.activeElement === $("timelineDock").querySelector(".timeline-body"), "도크에 초점(방향키로 바로 옮기기)");
