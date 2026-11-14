@@ -123,7 +123,7 @@
 #uniformEditor[open] .summary-plus { transform:rotate(45deg); }
 #uniformForm { display:grid;gap:16px;margin:12px 0 0;padding:16px;background:var(--elevated); }
 #uniformForm .ui-field { margin:0; }
-#uniformForm .ui-hint { min-height:18px; }
+#uniformValueHelp { min-height:18px; }
 .range-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .range-grid label { display:block;margin:0 0 6px;color:var(--faint);font-size:var(--text-2xs); }
 .uniform-form-actions { display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px; }
@@ -145,8 +145,8 @@
  .uniform-vector.is-matrix { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .uniform-color { grid-template-columns:36px minmax(0,1fr); }
  .uniform-color code { grid-column:1/-1;white-space:normal;overflow-wrap:anywhere;text-align:left; }
- /* 긴 선택지: 칸이 글자보다 좁아지면 줄을 넘기고 글자도 꺾는다 */
- .uniform-enum>button { flex:1 1 100px;min-width:0;padding-block:4px;white-space:normal;overflow-wrap:anywhere; }
+ /* 짧은 선택지는 한 줄에 두고, 긴 선택지만 다음 줄로 넘긴다. 줄보다 긴 글자는 꺾는다 */
+ .uniform-enum>button { flex:1 1 auto;min-width:min(100%,max-content);padding-block:4px;white-space:normal;overflow-wrap:anywhere; }
 }
 @container settings (max-width:284px) {
  .range-grid,.uniform-form-actions { grid-template-columns:minmax(0,1fr); }
