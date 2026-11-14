@@ -23,7 +23,7 @@ uniform float uTime;
 uniform vec2 uMouse;
 uniform float uSpeed;      // 날아가는 속도(원본 speed) · @range 0 0.05 @step 0.0005 @default 0.01 @group 비행
 uniform float uZoom;       // 시야(원본 zoom, 클수록 넓게) · @log @range 0.2 3 @default 0.8 @group 비행
-uniform float uFormula;    // 무늬를 정하는 상수(원본 formuparam, ▶로 훑기) · @range 0.4 0.6 @step 0.001 @default 0.53 @anim 30 @group 성운
+uniform float uFormula;    // 무늬를 정하는 상수(원본 formuparam, ▶로 훑기) · @range 0.4 0.6 @step 0.001 @default 0.53 @anim 30 @group 성운 @seed
 uniform float uTile;       // 공간을 접는 크기(원본 tile) · @range 0.5 1.2 @step 0.005 @default 0.85 @group 성운
 uniform float uDarkMatter; // 암흑 물질(원본 darkmatter) · @range 0 1 @step 0.01 @default 0.3 @group 성운
 uniform float uFade;       // 멀수록 흐려지는 정도(원본 distfading) · @range 0.5 0.9 @step 0.005 @default 0.73 @group 빛
@@ -100,7 +100,7 @@ precision highp float;
 // 평면마다 4D 아폴로니안 프랙탈(apollian)을 단면으로 잘라 금빛 고리 무늬를 만든다.
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uSpeed; // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed; // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 #define PI              3.141592654
 #define TAU             (2.0*PI)
@@ -498,9 +498,9 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec2 uMouse;
-uniform float uHeight;   // 산 높이(원본 H) · @range 4 30 @step 0.1 @default 16 @group 지형
-uniform float uSnow;     // 눈이 쌓이기 시작하는 높이 · @range 0 1 @step 0.01 @default 0.55 @group 지형
-uniform float uExposure; // 노출(원본 uExp) · @range 0.2 2 @step 0.01 @default 1 @group 빛과 하늘
+uniform float uHeight;   // 산 높이(원본 H) · @range 4 30 @step 0.1 @default 16 @group 지형 @anim 20
+uniform float uSnow;     // 눈이 쌓이기 시작하는 높이 · @range 0 1 @step 0.01 @default 0.55 @group 지형 @anim 12
+uniform float uExposure; // 노출(원본 uExp) · @log @range 0.2 2 @step 0.01 @default 1 @group 빛과 하늘
 uniform float uSeed;     // 지형 고르기 · @seed @range 0 100 @step 1 @default 0 @group 지형
 uniform vec3 uSunCol;    // 햇빛 · @color @default 1 0.92 0.7 @group 빛과 하늘
 uniform vec3 uSky1;      // 지평선 쪽 하늘 · @color @default 0.34 0.56 0.9 @group 빛과 하늘
@@ -1676,7 +1676,7 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -1924,7 +1924,7 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -2815,7 +2815,7 @@ precision highp float;
 // 원리: 그래디언트 노이즈를 옥타브마다 회전·확대해 더한 fbm으로 구름 모양(밀도)과 색을 따로 만들고, 시간에 따라 흘려 보낸다.
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -2971,7 +2971,7 @@ precision highp float;
 // 원리: 다면체 거리장 안쪽으로 굴절해 들어간 광선이 안쪽 면에서 반사되는 과정을 여러 번 되풀이하며 색을 모은다.
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -3368,7 +3368,7 @@ precision highp float;
 // 원리: 하늘을 구면 격자로 나눠 칸마다 별을 하나씩 두고, 노이즈로 만든 은하수 띠와 대기 빛을 겹친다.
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -3698,7 +3698,7 @@ precision highp float;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform vec4 uMouse;   // xy = 커서(뷰포트 밖이면 -1), zw = 누른 위치(누르는 중 양수)
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -4045,7 +4045,7 @@ precision highp float;
 // 원리: 화면을 육각 격자 좌표로 바꾸고, 칸 중심까지의 거리와 시간으로 만든 무늬를 겹쳐 빛나는 선을 만든다.
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)
@@ -4123,7 +4123,7 @@ precision highp float;
 // 원리: 광선을 100번 나아가며 sin 노이즈로 깎은 터널까지의 거리를 재고, 가까울수록 밝기(1/s)를 더해 불꽃처럼 보이게 한다.
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1
+uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @default 1 @anim 12 @group 움직임
 
 // Shadertoy 이름 → FIELD Uniform
 #define iResolution vec3(uResolution, 1.0)

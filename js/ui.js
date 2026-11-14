@@ -1,3 +1,4 @@
+import * as ParameterTools from "./parameter-tools.js";
 import * as ValueEditor from "./value-editor.js";
 import * as MatrixControl from "./matrix-control.js";
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
@@ -1425,6 +1426,56 @@ const mount = (renderer, input, settings) => {
       Math.min(opts.max, opts.min + Math.round((r * (opts.max - opts.min)) / opts.step) * opts.step).toFixed(decimals)
     );
   };
+  // Locks affect exploratory batch changes only; presets and direct edits still work.
+  const lockedParameters = new Set();
+  const writeDefaults = names => {
+    stopMorph();
+    const changed = window.shaderStudio?.writeParameterDefaults(names);
+    if (changed) {
+      renderUniforms();
+      $("uniformNotice").textContent = "현재 값을 코드의 @default에 반영했습니다 · Ctrl+Z로 되돌리기";
+    } else $("uniformNotice").textContent = "반영할 변경이 없습니다. GLSL 선언을 확인하세요.";
+  };
+  listen($("uniformWriteDefaults"), "click", () => {
+    const defaults = annotatedDefaults();
+    writeDefaults(
+      renderer
+        .getUserUniforms()
+        .filter(item => {
+          const spec = defaults.get(item.name);
+          return !spec || spec.type !== item.type || !sameValue(item.value, spec.value);
+        })
+        .map(item => item.name)
+    );
+  });
+  const varyParameters = jitter => {
+    stopMorph();
+    const hidden = new Set(conditionHidden(renderer.getUserUniforms(), annotatedDefaults())),
+      items = renderer
+        .getUserUniforms()
+        .filter(
+          item =>
+            !lockedParameters.has(item.name) &&
+            !hidden.has(item.name) &&
+            !linkOf(item.name) &&
+            ParameterTools.canVary(item)
+        );
+    for (const item of items) playing.delete(item.name);
+    syncPlayButtons();
+    attempt(() => {
+      window.shaderStudio?.setParameterValues(
+        items.map(item => ({
+          ...item,
+          value: ParameterTools.varyValue(item, jitter),
+        }))
+      );
+      renderUniforms();
+      $("uniformNotice").textContent =
+        `${items.length}개 ${jitter ? "조금씩 바꿈" : "무작위 변경"} · 잠금·숨김·연결·램프 제외 · Ctrl+Z로 되돌리기`;
+    });
+  };
+  listen($("uniformRandomize"), "click", () => varyParameters(false));
+  listen($("uniformJitter"), "click", () => varyParameters(true));
   // @group 접힘 상태(이 화면에서만 기억).
   const collapsedGroups = new Set();
   // ---- 파라미터 프리셋(presets.js · settings.getPresets/setPresets) ----
@@ -2130,6 +2181,32 @@ const mount = (renderer, input, settings) => {
       }
       // 덧붙이는 버튼: 🎲 무작위(@seed) · ▶ 재생(@anim).
       const extras = [];
+      const lock = element("button");
+      lock.className = "ui-icon-btn ui-icon-btn--xs lock-uniform";
+      lock.type = "button";
+      const syncLock = () => {
+        const locked = lockedParameters.has(item.name);
+        lock.textContent = locked ? "🔒" : "🔓";
+        lock.setAttribute("aria-pressed", String(locked));
+        lock.setAttribute("aria-label", `${item.name} 무작위 변경 잠금`);
+        lock.title = locked
+          ? "잠금 해제: 전체 무작위·조금씩 바꾸기에 포함"
+          : "잠금: 전체 무작위·조금씩 바꾸기에서 제외";
+      };
+      syncLock();
+      lock.addEventListener("click", () => {
+        if (lockedParameters.has(item.name)) lockedParameters.delete(item.name);
+        else lockedParameters.add(item.name);
+        syncLock();
+      });
+      const write = element("button");
+      write.className = "ui-icon-btn ui-icon-btn--xs write-default-uniform";
+      write.type = "button";
+      write.textContent = "↓";
+      write.title = "현재 값을 코드의 @default에 반영 · Ctrl+Z로 되돌리기";
+      write.setAttribute("aria-label", `${item.name} 현재 값을 코드에 반영`);
+      write.addEventListener("click", () => writeDefaults([item.name]));
+      extras.push(lock, write);
       if (item.options?.seed) {
         const dice = element("button");
         dice.className = "ui-icon-btn ui-icon-btn--xs seed-uniform glyph-icon icon-dice";

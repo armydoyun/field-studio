@@ -22,12 +22,20 @@ const DECLARATION =
 const sizeOf = text => (text ? Number(/\d+/.exec(text)[0]) : 0);
 const CONDITION = /^(!?)\s*([A-Za-z_]\w*)\s*(?:(==|!=|>=|<=|>|<)\s*(\S+))?$/;
 // @if 글 → { not, name, op, value(글 그대로) } · 형식이 틀리면 null
-const parseCondition = text => {
+const parseSingleCondition = text => {
   const match = CONDITION.exec(text.trim());
-  if (!match) return null;
+  if (!match || /[&|()!<>=]/.test(match[4] || "")) return null;
   const [, not, name, op = "", value = ""] = match;
   return { not: !!not, name, op, value };
 };
+// && binds more tightly than ||. Keep the original leaf shape for single conditions.
+const parseCondition = text => {
+  const groups = text.split("||").map(group => group.split("&&").map(parseSingleCondition));
+  if (groups.some(group => group.some(term => !term))) return null;
+  if (groups.length === 1 && groups[0].length === 1) return groups[0][0];
+  return { any: groups };
+};
+const conditionNames = when => (when.any ? when.any.flat().map(term => term.name) : [when.name]);
 const SIZES = {
   float: 1,
   int: 1,
@@ -185,8 +193,10 @@ const parseOne = (type, name, comment, count = 0) => {
   let when = null;
   if (tags.if !== undefined) {
     when = parseCondition(raw.if);
-    if (!when) error = "@if는 '이름', '!이름', '이름 == 값'(== != > < >= <=) 형식이어야 합니다. 예: @if uMode == 2";
-    else if (when.name === name) error = "@if는 자기 자신을 조건으로 쓸 수 없습니다.";
+    if (!when)
+      error =
+        "@if는 '이름', '!이름', '이름 == 값'(== != > < >= <=) 형식이어야 합니다. && · ||로 연결할 수 있습니다. 예: @if uMode == 2 && uOn";
+    else if (conditionNames(when).includes(name)) error = "@if는 자기 자신을 조건으로 쓸 수 없습니다.";
   }
   const finish = item => (item ? { ...item, when, error: item.error || error } : item);
   return finish(count ? parseArray(type, name, comment, tags, count) : parseItem(type, name, comment, tags));
@@ -312,7 +322,7 @@ const collect = sources => {
   const found = new Map();
   for (const source of sources)
     if (typeof source === "string")
-      for (const line of source.split("\n")) {
+      for (const line of source.split(/\r?\n/)) {
         for (const item of parseLine(line)) if (item && !found.has(item.name)) found.set(item.name, item);
       }
   return [...found.values()];
@@ -350,6 +360,7 @@ const sameOptions = (a = {}, b = {}) =>
 // 조건이 가리키는 파라미터가 없으면 보인다(true).
 const visible = (when, value, specs = new Map()) => {
   if (!when) return true;
+  if (when.any) return when.any.some(group => group.every(term => visible(term, value, specs)));
   const current = value(when.name);
   if (current === undefined || Array.isArray(current)) return true;
   const number = typeof current === "boolean" ? (current ? 1 : 0) : current;

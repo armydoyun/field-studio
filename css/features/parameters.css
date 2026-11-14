@@ -131,6 +131,8 @@
 .builtin-reference .ui-link { margin-top:8px; }
 /* 창이 넓어도 설정 패널만 좁힐 수 있으므로 실제 줄의 너비에 맞춰 배치한다. */
 @container uniform (max-width:260px) {
+ /* Keep name/type/link status above the actions so badges do not shift the controls. */
+ .uniform-title { flex-basis:100%;padding-right:0; }
  .uniform-dir { grid-template-columns:minmax(0,1fr); }
  .uniform-dir-pad { justify-self:center; }
  .uniform-dir-value { white-space:normal;overflow-wrap:anywhere; }
@@ -149,3 +151,5 @@
 }
 
 .uniform-array-item>.value-edit-open { justify-self:end; }
+
+.parameter-actions { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }

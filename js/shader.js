@@ -238,7 +238,7 @@ const rayUniforms = [
     "float",
     0.001,
     { min: 0.00001, max: 0.01, step: 0.00001, log: true },
-    { description: "법선을 구할 때 옆으로 비킬 거리", group: RAY_GROUP },
+    { description: "법선을 구할 때 옆으로 비킬 거리", group: RAY_GROUP, when: "!uRMHeatmap" },
   ],
   ["uRMHeatmap", "bool", false, {}, { description: "걸음 수를 색으로 보기(빨갈수록 많이 걸음)", group: RAY_GROUP }],
 ];
@@ -251,6 +251,7 @@ const annotate = (source, uniforms) =>
     if (options.min !== undefined) tags.push(`@range ${options.min} ${options.max}`, `@step ${options.step}`);
     tags.push(`@default ${value}`);
     if (meta.group) tags.push(`@group ${meta.group}`);
+    if (meta.when) tags.push(`@if ${meta.when}`);
     const line = `uniform ${type} ${name};`;
     if (!code.includes(line)) throw new Error(`Ray Marching 예제에 ${line}이 없습니다.`);
     return code.replace(line, `${line} // ${meta.description ? `${meta.description} · ` : ""}${tags.join(" ")}`);
