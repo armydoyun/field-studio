@@ -231,8 +231,9 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     playhead = null,
     guide = null,
     edge = null;
-  // 자석이 마지막으로 붙인 시간 · 값(안 붙었으면 null). 끄는 동안 점선(guide)으로 보여 준다.
-  const caught = { t: null, v: null };
+  // 자석이 마지막으로 붙인 시간 · 값(안 붙었으면 null)과 붙은 대상. 끄는 동안 점선(guide)과 대상 강조로 보여 준다.
+  // 대상: "playhead"(재생선) · { name, t }(그 레인의 t초 키) · "min"/"max"(범위 끝)
+  const caught = { t: null, tBy: null, v: null, vBy: null };
   const lanes = new Map(); // 이름 → { area, plot, path, low, high, item, link, dots: [] }
 
   const links = () => settings.getLinks?.() || [];
@@ -291,12 +292,14 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     let best = step ? Math.round(t / step) * step : t,
       hit = false;
     if (magnet) {
-      const magnets = [now()];
-      for (const link of keyLinks()) for (const [k] of link.keys) if (!exclude(link.name, k)) magnets.push(k);
+      const magnets = [[now(), "playhead"]];
+      for (const link of keyLinks())
+        for (const [k] of link.keys) if (!exclude(link.name, k)) magnets.push([k, { name: link.name, t: k }]);
       let reach = pixel * 6;
-      for (const m of magnets) if (Math.abs(m - t) <= reach) [best, hit, reach] = [m, true, Math.abs(m - t)];
+      for (const [m, by] of magnets) if (Math.abs(m - t) <= reach) [best, hit, reach] = [m, by, Math.abs(m - t)];
     }
     caught.t = hit ? Math.max(0, round(best)) : null;
+    caught.tBy = hit || null;
     return Math.max(0, round(best));
   };
   // 값 격자: { step, origin } 또는 null(끔 · 간격을 알 수 없음 · bool). 범위가 있는 파라미터는 최소값에서부터 센다.
@@ -318,12 +321,17 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       hit = false;
     if (magnet) {
       const { min, max } = info.item?.options || {},
-        magnets = [min, max].filter(Number.isFinite);
-      for (const [k, kv] of info.link.keys) if (!exclude(info.link.name, k)) magnets.push(kv);
+        magnets = [
+          [min, "min"],
+          [max, "max"],
+        ].filter(([m]) => Number.isFinite(m));
+      for (const [k, kv] of info.link.keys)
+        if (!exclude(info.link.name, k)) magnets.push([kv, { name: info.link.name, t: k }]);
       let reach = pixel * 6;
-      for (const m of magnets) if (Math.abs(m - v) <= reach) [best, hit, reach] = [m, true, Math.abs(m - v)];
+      for (const [m, by] of magnets) if (Math.abs(m - v) <= reach) [best, hit, reach] = [m, by, Math.abs(m - v)];
     }
     caught.v = hit ? best : null;
+    caught.vBy = hit || null;
     return best;
   };
   const xOf = t => `${((t - view.start) / span()) * 100}%`;
@@ -712,13 +720,23 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     const valueGuide = element("div", "timeline-guide is-value");
     valueGuide.hidden = true;
     info.plot.append(valueGuide);
-    const showGuides = (t, v) => {
+    // 붙은 대상도 강조한다: 다른 키는 테두리 고리, 재생선은 굵게 — 무엇에 붙었는지 바로 보이게
+    const dotOf = by => {
+      const lane = by && typeof by === "object" ? lanes.get(by.name) : null,
+        at = lane ? lane.link.keys.findIndex(([k]) => Math.abs(k - by.t) < EPS) : -1;
+      return at >= 0 ? lane.dots[at] : null;
+    };
+    const showGuides = (t, v, tBy = null, vBy = null) => {
       if (guide) {
         guide.hidden = t === null;
         if (t !== null) guide.style.left = xOf(t);
       }
       valueGuide.hidden = v === null;
       if (v !== null) valueGuide.style.top = yOf(v, info);
+      for (const node of track.querySelectorAll(".timeline-key.is-magnet-target"))
+        node.classList.remove("is-magnet-target");
+      for (const by of [tBy, vBy]) dotOf(by)?.classList.add("is-magnet-target");
+      playhead?.classList.toggle("is-caught", tBy === "playhead");
     };
     const move = e => {
       let dx = e.clientX - drag.x,
@@ -734,8 +752,12 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
           ? Math.max(0, round(raw))
           : snapTime(raw, width, (n, k) => moving.some(m => m.link.name === n && Math.abs(m.key[0] - k) < EPS)),
         dt = dx ? grabbed - key[0] : 0,
-        timeHit = dx && !e.altKey ? caught.t : null;
-      let valueHit = null;
+        // 잡은 키의 시간이 자석 자리와 같으면(좌우로 움직였든 아니든) 세로선을 보인다: 손 떨림으로 깜빡이지 않게
+        timeHit = !e.altKey && caught.t !== null && Math.abs(caught.t - Math.max(0, round(key[0] + dt))) < EPS,
+        timeBy = timeHit ? caught.tBy : null;
+      let valueHit = false,
+        valueBy = null,
+        grabbedValue = null;
       const drafts = new Map();
       for (const entry of moving) {
         const lane = entry.info,
@@ -750,7 +772,12 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
             keys: entry.link.keys.map(k => [...k]),
             moved: new Set(),
           };
-        if (grabbedKey && dy && !e.altKey) valueHit = caught.v;
+        if (grabbedKey) grabbedValue = v;
+        if (grabbedKey && !e.altKey) {
+          if (!dy) snapValue(v, lane, own); // 값은 그대로 · 자석 자리와 같은지만 본다
+          valueHit = caught.v !== null && Math.abs(caught.v - v) < EPS;
+          valueBy = valueHit ? caught.vBy : null;
+        }
         draft.keys[entry.index] = [t, v, ...entry.key.slice(2)];
         draft.moved.add(entry.index);
         drafts.set(entry.link.name, draft);
@@ -763,7 +790,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         lanes.get(name).path.setAttribute("d", curveOf(next, lanes.get(name)));
         result.set(name, next);
       }
-      showGuides(timeHit, valueHit);
+      showGuides(timeHit ? caught.t : null, valueHit ? grabbedValue : null, timeBy, valueBy);
       drag.result = result;
       drag.next = moving.map(entry => ({ name: entry.link.name, t: drafts.get(entry.link.name).keys[entry.index][0] }));
       // 끄는 동안에도 '선택한 키' 칸의 시간 · 값이 따라 바뀐다(놓을 때까지 기다리지 않는다)

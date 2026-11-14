@@ -52,6 +52,8 @@
 .timeline-key.is-step { background:var(--panel);transform:none; }
 .timeline-key:hover { background:var(--accent-soft); }
 .timeline-key.is-selected { border-color:var(--accent-strong);background:var(--accent-strong);outline:2px solid var(--accent-soft); }
+/* 자석이 붙은 대상 키: 바깥 고리로 '여기에 붙었다'를 보인다 */
+.timeline-key.is-magnet-target { outline:1.5px solid var(--accent);outline-offset:3px; }
 .timeline-ghost { position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border:1px solid var(--accent-strong);opacity:.35;transform:rotate(45deg);pointer-events:none; }
 .timeline-cycle { position:absolute;top:0;bottom:0;border-left:1px dashed var(--line-strong);pointer-events:none; }
 .timeline-loop-shade { position:absolute;top:0;bottom:0;right:0;background:var(--overlay);opacity:.15;pointer-events:none; }
@@ -61,6 +63,8 @@
 .timeline-loop::after { content:"";position:absolute;top:0;bottom:0;left:4px;border-left:1.5px dashed var(--muted); }
 .timeline-overlay { position:absolute;top:0;bottom:0;left:var(--timeline-head);right:0;z-index:3;pointer-events:none; }
 .timeline-playhead { position:absolute;top:0;bottom:0;width:0;border-left:1.5px solid var(--danger); }
+/* 재생선에 자석이 붙으면 굵게 */
+.timeline-playhead.is-caught { border-left-width:3px;margin-left:-0.75px; }
 /* 자석 점선: 끄는 키가 재생선 · 다른 키 · 범위 끝에 붙은 자리(시간은 세로, 값은 그 레인의 가로) */
 .timeline-guide { position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--accent);pointer-events:none; }
 .timeline-guide.is-value { right:0;bottom:auto;left:0;width:auto;height:0;border-top:1px dashed var(--accent);border-left:0; }
