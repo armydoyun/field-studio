@@ -3,6 +3,7 @@
      숫자  ui-number(고정폭 · 자릿수 정렬 · 스핀 버튼 없음)
      묶음  ui-field(라벨 + 칸 + 설명) · ui-label · ui-label-hint · ui-hint · ui-error
      촘촘한 영역  ui-dense: 안의 칸 · 선택 상자가 28px가 되고 숫자 칸은 ui-number처럼 된다(파라미터 목록 · 연결 시트 · 타임라인)
+     성분  ui-input-group--prefix > ui-unit + input (X/Y/Z/W)
      단위  ui-input-group > input + ui-unit     검색  ui-search > ui-search-icon + input (+ kbd) */
 :where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),:is(select,.ui-select),.ui-input) { width:100%;min-height:var(--control-md);margin:0;padding:4px 10px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);font-size:var(--text-sm);line-height:1.5; }
 :where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),:is(select,.ui-select),.ui-input):hover { border-color:var(--line-hover); }
@@ -46,3 +47,7 @@ select.ui-input--sm { padding-right:24px; }
 @media (hover:none) and (pointer:coarse) {
  .ui-search>kbd { display:none; }
 }
+/* 성분 이름 + 숫자: FPS 접미 단위와 같은 입력 묶음을 앞쪽 라벨로 사용한다. */
+.ui-input-group--prefix { grid-template-columns:auto minmax(0,1fr);gap:0; }
+.ui-input-group--prefix>.ui-unit { min-width:var(--control-sm);padding-inline:var(--space-3);border-left:1px solid var(--line-strong);border-right:0;border-radius:var(--radius-sm) 0 0 var(--radius-sm);pointer-events:auto; }
+.ui-input-group--prefix>input { border-radius:0 var(--radius-sm) var(--radius-sm) 0; }

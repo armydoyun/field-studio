@@ -18,6 +18,7 @@ css/
   components/           ← 디자인 시스템 본체. 클래스는 모두 ui- 로 시작한다
     button.css          ui-btn · ui-icon-btn · ui-link · ui-btn-group · ui-toolbar · ui-sep
     field.css           input · select · ui-number · ui-dense · ui-field · ui-label · ui-hint · ui-error · ui-input-group · ui-search
+    value-editor.css    ui-value-editor: 스칼라·벡터 전체 값 편집 창
     matrix.css          ui-matrix: 고정 N×N 요약 · 전체 값 입력 · 확대 편집
     select.css          ui-select · ui-select-menu · ui-select-option (단일 선택)
     choice.css          checkbox · radio · ui-check · ui-switch · range · ui-range-ends · ui-meter · progress
@@ -78,10 +79,12 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 행렬 | `ui-matrix` | `js/matrix-control.js`의 create(). N×N 고정, 선택 셀 전체 값·확대 편집 |
 | 촘촘한 영역 | 감싸는 요소에 `ui-dense` | 안의 칸 28px · 숫자 고정폭 |
 | 라벨 + 칸 + 설명 | `ui-field` > `ui-label`(+`ui-label-hint`) + 칸 + `ui-hint` / `ui-error` | |
+| 성분 + 칸 | `ui-input-group ui-input-group--prefix` > `ui-unit` + input | X/Y/Z/W 라벨을 왼쪽에 붙임 |
+| 값 편집 | `ui-value-editor` · `ui-value-fields` | `js/value-editor.js`의 create(). 스칼라·벡터 초안 편집 |
 | 칸 + 단위 | `ui-input-group` > input + `ui-unit` | |
 | 검색 칸 | `ui-search` > `ui-search-icon` + input (+ kbd) | |
 | 체크 · 라디오 | `ui-check` > input + 글자 | |
-| 스위치 | `ui-switch` > input[type=checkbox] + span | |
+| 스위치 | `ui-switch` > input[type=checkbox] + span | `ui-switch--field`: 입력칸 면·높이·테두리를 공유하는 상태 필드 |
 | 슬라이더 | `<input type="range">` (+ `ui-range-ends`) | 브라우저 기본 그리기 + 액센트 색 |
 | 읽기 전용 막대 | `ui-meter` > `ui-meter-fill`(width) | `ui-meter--lg · --success` |
 | 꼬리표 | `ui-tag` | `--plain · --pill · --dot · --accent · --success · --warning · --danger` |
@@ -202,3 +205,13 @@ UI.iconButtonClass("reset", "xs", "my-hook");
 - 파라미터 숫자 칸의 짧은 표시는 표시 전용이다. 포커스하면 기존 Number 전체를 편집하고 변경 없는 focus/blur/change는 모델에 쓰지 않는다. Enter는 확정, Escape는 최신 원래 값을 복원한다. 입력 중인 텍스트는 재생 갱신으로 덮어쓰지 않는다.
 - 일반 숫자/벡터는 편집 직전에 live 값을 읽고, 벡터의 다른 성분은 현재 모델에서 유지한다. 작은 step의 입력 폭은 `1e-8` 같은 지수 표기의 소수 자릿수도 계산한다.
 - 파라미터 추가 폼은 타입마다 초기값·표시 방식·범위·선택지 이름 초안을 메모리에 보관한다. 타입을 돌아오면 해당 초안을 복원하며, 처음 고른 타입에는 기본값을 쓴다. GLSL 이름은 타입 변경과 관계없이 유지한다.
+
+## 스칼라·벡터 값 편집 (`css/components/value-editor.css`)
+
+`js/value-editor.js`의 `create({name, type, options, read, onChange, onApplied, getContext})`는 열기 버튼과 `refresh()`·`dispose()`를 만든다. float/int/uint/bool 및 vec/ivec/uvec/bvec2/3/4, 배열 원소가 같은 편집기를 쓴다.
+
+- 패널은 빠른 숫자·슬라이더 조작을 유지한다. 범위 없는 벡터는 `ui-input-group--prefix`로 축 라벨과 입력칸을 묶고, bool은 `ui-switch--field`의 켜짐/꺼짐·true/false 텍스트, bvec은 체크 상태가 보이는 `ui-chip--lg`를 쓴다.
+- 행 머리의 확대 아이콘(값 편집)으로 공통 대화상자를 연다. 각 성분은 한 줄 전체 폭과 원래 Number 값을 쓰며 긴 값은 입력칸 안에서 가로 이동한다. 취소·닫기·Escape는 모델을 수정하지 않는다. 숫자 칸에서 Escape는 먼저 그 칸의 초안을 복원한다.
+- 벡터 일괄 입력은 쉼표·공백·줄바꿈 또는 해당 GLSL 생성자를 받는다. 성분 개수·유한성·타입을 모두 검증한 뒤 초안에 한꺼번에 채우고, 적용에서만 저장한다. 정수는 32비트 범위, uint는 음수·소수 금지, bool은 true/false/1/0이다.
+- 변경 없는 적용은 저장하지 않는다. 편집 중 외부에서 갱신된 성분 중 손대지 않은 값은 최신 모델에서 유지한다. 색은 RGBA, 각도는 라디안, 방향은 0 벡터 검증과 정규화, enum은 선택지 의미를 유지한다.
+- 목록 재생성·프로젝트 변경·폐기 시 열린 창을 정리한다. 기존 `ui-dialog`의 초점·스크롤·테마·버튼을 공유한다.

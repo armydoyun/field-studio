@@ -71,7 +71,7 @@ await test('Malformed comma vectors are rejected without adding a zero component
 });
 await test('Boolean parameter uses an accessible switch with explicit true/false text',async(f,n,row)=>{
   f.renderer.defineUniform('uEnabled','bool',false);await n('uniformSearch').dispatchEvent({type:'input'});
-  const label=row().children[1],[input,text]=label.children;assert.equal(label.className,'ui-switch uniform-switch');assert.equal(input.type,'checkbox');assert.equal(input.attrs.role,'switch');assert.equal(input.checked,false);assert.match(text.textContent,/false/);
+  const label=row().children[1],[input,text]=label.children;assert.equal(label.className,'ui-switch ui-switch--field uniform-switch');assert.equal(input.type,'checkbox');assert.equal(input.attrs.role,'switch');assert.equal(input.checked,false);assert.match(text.textContent,/false/);
   input.checked=true;await input.dispatchEvent({type:'change'});assert.equal(f.renderer.getUserUniforms()[0].value,true);assert.match(text.textContent,/true/);
   f.renderer.setUniform=()=>{throw Error('forced failure');};input.checked=false;await input.dispatchEvent({type:'change'});assert.equal(input.checked,true);assert.match(text.textContent,/true/);
 });

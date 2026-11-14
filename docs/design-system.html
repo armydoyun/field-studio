@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="../css/components/menu.css">
     <link rel="stylesheet" href="../css/components/select.css">
     <link rel="stylesheet" href="../css/components/matrix.css">
+    <link rel="stylesheet" href="../css/components/value-editor.css">
     <link rel="stylesheet" href="../css/components/dialog.css">
     <link rel="stylesheet" href="../css/components/notice.css">
     <link rel="stylesheet" href="../css/components/surface.css">
@@ -225,6 +226,15 @@ rgba 0.250 0.500 0.750 1.000</output></div></div>
     </section>
 
     <section class="ds-group">
+        <h2>스칼라 · 벡터 편집</h2>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-input-group--prefix</code><div class="ds-demo"><div class="ui-input-group ui-input-group--prefix"><label class="ui-unit" for="vectorPrefixDemo">X</label><input id="vectorPrefixDemo" class="ui-number" value="0.123456789012345"></div></div></div>
+            <div class="ds-row"><code>ui-switch--field</code><div class="ds-demo"><label id="valueSwitchDemo" class="ui-switch ui-switch--field"><input type="checkbox" role="switch" checked><span>켜짐 · true</span></label></div></div>
+            <div class="ds-row"><code>ui-value-editor · ui-value-fields</code><div id="valueEditorDemo" class="ds-demo"></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
         <h2>아이콘</h2>
         <p><code>glyph-icon icon-*</code> — 24px 격자 · 1.8 획의 SVG 마스크(<code>css/icons.css</code>). 글자 기호(▶ ✓ ↺)로 아이콘을 그리지 않는다.</p>
         <div id="icons" class="ui-card ds-demo" style="padding:12px"></div>
@@ -233,8 +243,18 @@ rgba 0.250 0.500 0.750 1.000</output></div></div>
 <script type="module">
     import * as UI from "../js/ui-kit.js";
     import * as CustomSelect from "../js/custom-select.js";
+    import * as ValueEditor from "../js/value-editor.js";
     import * as MatrixControl from "../js/matrix-control.js";
     CustomSelect.mount();
+    const switchDemo = document.getElementById("valueSwitchDemo");
+    switchDemo.querySelector("input").addEventListener("change", event => {
+        switchDemo.querySelector("span").textContent = event.target.checked ? "켜짐 · true" : "꺼짐 · false";
+    });
+    let vectorValue = [0.123456789012345, 2e-12, -3, 1];
+    document.getElementById("valueEditorDemo").append(ValueEditor.create({
+        name: "uVector", type: "vec4", compact: false, read: () => vectorValue,
+        onChange: (_field, value) => { vectorValue = value; return true; },
+    }).button);
     let matrixValue = [1.23456789012345, 0, 0, 0, 1, 0, 0, 0, 1];
     document.getElementById("matrixDemo").append(MatrixControl.create({
         name: "uTransform", size: 3, read: () => matrixValue,

@@ -1,6 +1,6 @@
 /* 고르기 — 체크 · 라디오 · 스위치 · 슬라이더. 입력 요소는 클래스 없이도 같은 모양이다.
      ui-check   label > input[type=checkbox|radio] + 글자
-     ui-switch  label > input[type=checkbox] + 글자(켜고 끄는 설정)
+     ui-switch  label > input[type=checkbox] + 글자(켜고 끄는 설정), --field 입력칸 면·높이
      슬라이더   input[type=range] — 브라우저 기본 그리기에 액센트 색만 입힌다(채움 · 접근성 유지)
      ui-range-ends  슬라이더 아래 양 끝 값     ui-meter > ui-meter-fill  읽기 전용 막대 */
 :where(input[type="checkbox"],input[type="radio"]) { flex:0 0 auto;width:16px;height:16px;margin:0;appearance:none;-webkit-appearance:none;border:1px solid var(--line-hover);border-radius:4px;background:var(--sunken) center/12px no-repeat;vertical-align:middle;cursor:pointer;transition:background-color var(--ease),border-color var(--ease); }
@@ -32,3 +32,5 @@ input[type="checkbox"]:focus-visible,input[type="radio"]:focus-visible,input[typ
 .ui-meter--lg { height:6px;border-radius:3px; }
 .ui-meter--success>.ui-meter-fill { background:var(--success); }
 progress { display:block;width:100%;height:8px;accent-color:var(--accent); }
+/* 단일 값 선택용 스위치: 숫자 입력과 같은 면·모서리·높이를 공유한다. */
+.ui-switch--field { min-width:0;min-height:var(--control-md);padding:var(--space-2) var(--space-4);border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken); }
