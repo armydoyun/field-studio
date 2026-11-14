@@ -26,6 +26,21 @@ const SNAPS = [
   ["f30", "1/30초"],
   ["f60", "1/60초"],
 ];
+// 값 스냅: 끔 · 파라미터의 슬라이더 간격(@range의 step) · 범위를 N칸으로 나눈 격자 · 절대 간격
+const VALUE_SNAPS = [
+  ["0", "끔"],
+  ["step", "슬라이더 간격"],
+  ["d4", "범위 1/4"],
+  ["d8", "범위 1/8"],
+  ["d10", "범위 1/10"],
+  ["d20", "범위 1/20"],
+  ["0.01", "0.01"],
+  ["0.05", "0.05"],
+  ["0.1", "0.1"],
+  ["0.25", "0.25"],
+  ["0.5", "0.5"],
+  ["1", "1"],
+];
 const EASE_LABEL = { smooth: "부드럽게", linear: "직선", step: "계단", in: "천천히 시작", out: "천천히 끝" };
 const TICKS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
 const HEAD = 132; // 레인 이름 칸 너비(px) — CSS --timeline-head로 넘긴다
@@ -65,8 +80,11 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   // ---- 저장한 설정 ----
   const saved = Store.readJSON(KEY, {}) || {};
   let height = Number.isFinite(saved.height) ? saved.height : 220,
-    snapChoice = SNAPS.some(([v]) => v === saved.snap) ? saved.snap : "0.05";
-  const remember = () => Store.writeJSON(KEY, { open: !root.hidden, height, snap: snapChoice });
+    snapChoice = SNAPS.some(([v]) => v === saved.snap) ? saved.snap : "0.05",
+    valueChoice = VALUE_SNAPS.some(([v]) => v === saved.valueSnap) ? saved.valueSnap : "0",
+    magnet = saved.magnet !== false;
+  const remember = () =>
+    Store.writeJSON(KEY, { open: !root.hidden, height, snap: snapChoice, valueSnap: valueChoice, magnet });
 
   // ---- 뼈대 ----
   const resize = element("div", "ui-resizer timeline-resize");
@@ -80,6 +98,13 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     start = button("ui-btn--sm timeline-start glyph-icon icon-reset", "처음으로", "", "재생 위치를 0초로"),
     timeField = element("input", "timeline-time"),
     snapSelect = element("select", "timeline-snap"),
+    valueSelect = element("select", "timeline-value-snap"),
+    magnetToggle = button(
+      "ui-btn ui-btn--sm timeline-magnet",
+      "자석: 재생선 · 다른 키 · 범위 끝에 붙기",
+      "자석",
+      "자석 — 끌 때 가까운 재생선 · 다른 키의 시간, 같은 레인의 다른 키 값 · 범위의 최소/최대에 붙는다(6px 안)"
+    ),
     speedSelect = element("select", "timeline-speed"),
     zoomOut = button("ui-btn--sm timeline-zoom", "축소", "−"),
     zoomIn = button("ui-btn--sm timeline-zoom", "확대", "+"),
@@ -104,6 +129,16 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     snapSelect.append(option);
   }
   snapSelect.value = snapChoice;
+  for (const [value, text] of VALUE_SNAPS) {
+    const option = element("option", "", text);
+    option.value = value;
+    valueSelect.append(option);
+  }
+  valueSelect.value = valueChoice;
+  valueSelect.setAttribute("aria-label", "값 스냅");
+  valueSelect.title =
+    "키를 위아래로 끌거나 ↑↓로 옮길 때 값을 맞출 간격 · 슬라이더 간격 = 파라미터의 @range 간격 · 범위 1/N = 레인 범위를 N칸으로(격자선 표시) · Alt를 누르고 끌면 끔";
+  magnetToggle.setAttribute("aria-pressed", String(magnet));
   // 재생 속도: 타임라인을 재생 조작의 한 곳으로 모은다(설정 패널 렌더링 탭의 배속 버튼과 같은 값 · 같은 저장).
   for (const value of ["0.25", "0.5", "1", "2"]) {
     const option = element("option", "", `${value}×`);
@@ -112,8 +147,9 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   }
   speedSelect.setAttribute("aria-label", "재생 속도");
   speedSelect.title = "재생 속도(uTime이 흐르는 빠르기) · 설정 패널 렌더링 탭과 같은 값";
-  snapSelect.setAttribute("aria-label", "스냅");
-  snapSelect.title = "키를 끌거나 방향키로 옮길 때 맞출 간격 · 재생선 · 다른 키에도 붙는다(Alt를 누르고 끌면 끔)";
+  snapSelect.setAttribute("aria-label", "시간 스냅");
+  snapSelect.title =
+    "키를 좌우로 끌거나 ←→로 옮길 때 시간을 맞출 간격(Alt를 누르고 끌면 끔 · Shift를 누르면 한 방향으로만)";
   addSelect.setAttribute("aria-label", "키프레임 레인 추가");
   keyTime.type = "number";
   keyTime.min = "0";
@@ -163,7 +199,8 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   );
   bar.append(
     group(joined(play, start), labelled("", timeField, "초"), speedSelect),
-    group(labelled("스냅", snapSelect), joined(zoomOut, zoomIn), fit),
+    group(labelled("시간 스냅", snapSelect), labelled("값 스냅", valueSelect), magnetToggle),
+    group(joined(zoomOut, zoomIn), fit),
     inspector,
     close
   );
@@ -243,10 +280,36 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     const step = snapStep(),
       pixel = span() / Math.max(1, width);
     let best = step ? Math.round(t / step) * step : t;
-    const magnets = [now()];
-    for (const link of keyLinks()) for (const [k] of link.keys) if (!exclude(link.name, k)) magnets.push(k);
-    for (const m of magnets) if (Math.abs(m - t) <= pixel * 6 && Math.abs(m - t) < Math.abs(best - t)) best = m;
+    if (magnet) {
+      const magnets = [now()];
+      for (const link of keyLinks()) for (const [k] of link.keys) if (!exclude(link.name, k)) magnets.push(k);
+      for (const m of magnets) if (Math.abs(m - t) <= pixel * 6 && Math.abs(m - t) < Math.abs(best - t)) best = m;
+    }
     return Math.max(0, round(best));
+  };
+  // 값 격자: { step, origin } 또는 null(끔 · 간격을 알 수 없음 · bool). 범위가 있는 파라미터는 최소값에서부터 센다.
+  const valueGrid = info => {
+    const { item, low, high } = info;
+    if (valueChoice === "0" || !item || item.type === "bool") return null;
+    const { min, max, step } = item.options || {},
+      ranged = Number.isFinite(min) && Number.isFinite(max) && min < max,
+      [from, to] = ranged ? [min, max] : [low, high];
+    if (valueChoice === "step") return Number.isFinite(step) && step > 0 ? { step, origin: ranged ? min : 0 } : null;
+    if (valueChoice.startsWith("d")) return { step: (to - from) / Number(valueChoice.slice(1)), origin: from };
+    return { step: Number(valueChoice), origin: 0 };
+  };
+  // 값 맞추기: 격자 + 자석(같은 레인의 다른 키 값 · 범위의 최소/최대, 6px 안). exclude(name, t)가 참인 키는 뺀다.
+  const snapValue = (v, info, exclude = () => false) => {
+    const grid = valueGrid(info),
+      pixel = (info.high - info.low) / Math.max(1, info.plot.clientHeight);
+    let best = grid ? grid.origin + Math.round((v - grid.origin) / grid.step) * grid.step : v;
+    if (magnet) {
+      const { min, max } = info.item?.options || {},
+        magnets = [min, max].filter(Number.isFinite);
+      for (const [k, kv] of info.link.keys) if (!exclude(info.link.name, k)) magnets.push(kv);
+      for (const m of magnets) if (Math.abs(m - v) <= pixel * 6 && Math.abs(m - v) < Math.abs(best - v)) best = m;
+    }
+    return best;
   };
   const xOf = t => `${((t - view.start) / span()) * 100}%`;
   const timeAt = (clientX, node) => {
@@ -349,6 +412,23 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     plot.append(graph);
     area.append(plot);
     const info = { lane, area, plot, path, low, high, item, link, dots: [] };
+    // 값 스냅 격자선: 칸이 너무 촘촘하면(24줄 넘음) 그리지 않는다
+    const grid = valueGrid(info);
+    if (grid && (high - low) / grid.step <= 24) {
+      for (
+        let v = grid.origin + Math.ceil((low - grid.origin) / grid.step - 1e-9) * grid.step;
+        v <= high + 1e-9;
+        v += grid.step
+      ) {
+        const line = svg("line"),
+          y = 100 - ((v - low) / (high - low || 1)) * 100;
+        for (const [k, value] of Object.entries({ x1: 0, x2: 1000, y1: y, y2: y })) line.setAttribute(k, String(value));
+        line.classList.add("timeline-gridline");
+        line.setAttribute("vector-effect", "non-scaling-stroke");
+        graph.insertBefore(line, mid);
+      }
+      mid.remove();
+    }
     lanes.set(link.name, info);
     path.setAttribute("d", curveOf(link, info));
     // 반복: 그 뒤는 흐리게, 표시를 끌어 길이를 바꾸고 더블클릭으로 없앤다
@@ -425,7 +505,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       if (event.target.closest(".timeline-key, .timeline-loop")) return;
       const raw = timeAt(event.clientX, area),
         t = local(link, event.altKey ? round(raw) : snapTime(raw, area.clientWidth)),
-        v = fitValue(item, valueAt(event.clientY, info));
+        v = fitValue(item, event.altKey ? valueAt(event.clientY, info) : snapValue(valueAt(event.clientY, info), info));
       selected = [{ name: link.name, t }];
       save(
         new Map([
@@ -630,7 +710,9 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         const lane = entry.info,
           dv = (-dy / Math.max(1, lane.plot.clientHeight)) * (lane.high - lane.low),
           t = Math.max(0, round(entry.key[0] + dt)),
-          v = dy ? fitValue(lane.item, entry.key[1] + dv) : entry.key[1],
+          free = entry.key[1] + dv,
+          own = (n, k) => moving.some(m => m.link.name === n && Math.abs(m.key[0] - k) < EPS),
+          v = dy ? fitValue(lane.item, e.altKey ? free : snapValue(free, lane, own)) : entry.key[1],
           draft = drafts.get(entry.link.name) || {
             link: entry.link,
             keys: entry.link.keys.map(k => [...k]),
@@ -836,8 +918,19 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       editSelected(({ key: k, item, link }) => {
         const lane = lanes.get(link.name),
           integer = ["int", "uint", "bool"].includes(item?.type),
-          dv = integer ? 1 : (lane.high - lane.low) / (event.shiftKey ? 10 : 100);
-        return [k[0], fitValue(item, k[1] + value * dv), ...k.slice(2)];
+          grid = integer ? null : valueGrid(lane),
+          dv = integer
+            ? 1
+            : grid
+              ? grid.step * (event.shiftKey ? 10 : 1)
+              : (lane.high - lane.low) / (event.shiftKey ? 10 : 100),
+          next = k[1] + value * dv;
+        // 값 스냅이 켜져 있으면 ↑↓는 격자 한 칸씩 옮기고 격자에 맞춘다
+        return [
+          k[0],
+          fitValue(item, grid ? grid.origin + Math.round((next - grid.origin) / grid.step) * grid.step : next),
+          ...k.slice(2),
+        ];
       });
     }
   });
@@ -854,6 +947,16 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   });
   on(snapSelect, "change", () => {
     snapChoice = snapSelect.value;
+    remember();
+  });
+  on(valueSelect, "change", () => {
+    valueChoice = valueSelect.value;
+    remember();
+    render(); // 격자선을 다시 그린다
+  });
+  on(magnetToggle, "click", () => {
+    magnet = !magnet;
+    magnetToggle.setAttribute("aria-pressed", String(magnet));
     remember();
   });
   // 배속은 설정 패널의 배속 버튼을 눌러 바꾼다: 저장 · 표시 · 되돌리기가 한 길로 간다(없으면 렌더러에 직접).
@@ -1029,6 +1132,10 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     fitSelect(
       snapSelect,
       SNAPS.map(([, text]) => text)
+    );
+    fitSelect(
+      valueSelect,
+      VALUE_SNAPS.map(([, text]) => text)
     );
     fitSelect(keyEase, easeLabels());
   };

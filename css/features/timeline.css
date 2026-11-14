@@ -47,6 +47,8 @@
 .timeline-curve { position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none; }
 .timeline-curve path { fill:none;stroke:var(--accent-strong);stroke-width:1.5; }
 .timeline-midline { stroke:var(--line);stroke-dasharray:3 4; }
+/* 값 스냅 격자선: 키가 붙는 값의 자리 */
+.timeline-gridline { stroke:var(--line); }
 .timeline-key { position:absolute;z-index:1;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border:1.5px solid var(--accent-strong);background:var(--surface);transform:rotate(45deg);cursor:grab;touch-action:none; }
 .timeline-key.is-step { background:var(--panel);transform:none; }
 .timeline-key:hover { background:var(--accent-soft); }
