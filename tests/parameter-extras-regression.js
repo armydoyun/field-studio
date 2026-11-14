@@ -16,7 +16,9 @@ const ui=async(name,code,fn)=>run(name,async()=>{const f=fixture();let mounted;t
   Node.prototype.classList=undefined;
   f.document.querySelectorAll=()=>[];
   for(const id of ['uniformType','uniformValue','uniformMin','uniformMax','uniformStep','uniformName','uniformSearch','uniformDisplay','uniformDisplayField','uniformEnumLabels','rangeFields'])f.document.getElementById(id);
-  f.window.shaderStudio={getProject:()=>({image:code,passes:[]}),getPlaybackState:()=>true,togglePlayback(){}};
+  f.window.shaderStudio={getPlaybackState:()=>true,togglePlayback(){}};
+  // UI reads applied renderer sources, including before the editor global exists.
+  f.renderer.setFragment(code+'\nvoid mainImage(out vec4 c,in vec2 p){c=vec4(0.0);}');
   for(const spec of Annotations.collect([code]))f.renderer.defineUniform(spec.name,spec.type,spec.value,spec.options);
   mounted=f.load('ui').mount(f.renderer,{getCamera:()=>null,resetCamera(){}},f.settings);
   const n=id=>f.nodes.get(id);await n('uniformSearch').dispatchEvent({type:'input'});
