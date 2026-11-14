@@ -1,0 +1,26 @@
+/* 작은 표시 — 꼬리표 · 칩 · 점 · 개수 · 키 이름.
+     ui-tag    읽기 전용 꼬리표(개수 · 상태 · 종류). 색: --accent · --success · --warning · --danger, 모양: --pill, 앞 점: --dot, 테두리만: --plain
+     ui-chip   누르는 작은 칸(토글 · 필터 · 바로 고르기). 켜짐 = aria-pressed="true" · .is-active · 안의 체크박스가 켜짐. 모양: --pill
+     ui-dot    상태 점(--success · --warning · --danger)     ui-count  개수 방울     kbd  키 이름 */
+.ui-tag { display:inline-flex;align-items:center;justify-content:center;gap:5px;flex-shrink:0;min-height:20px;padding:0 7px;border:1px solid var(--line-strong);border-radius:4px;background:var(--sunken);color:var(--text-soft);font:500 var(--text-xs)/1 var(--sans);white-space:nowrap; }
+.ui-tag--plain { border-color:var(--line);background:transparent;color:var(--muted);font:600 var(--text-2xs)/1 var(--mono); }
+.ui-tag--pill { border-radius:var(--radius-pill); }
+.ui-tag--dot::before { content:"";flex:0 0 5px;width:5px;height:5px;border-radius:50%;background:var(--accent); }
+.ui-tag--accent { border-color:var(--accent-line);color:var(--accent-strong); }
+.ui-tag--success { border-color:var(--success-line);color:var(--success); }
+.ui-tag--warning { border-color:var(--warning-line);color:var(--warning); }
+.ui-tag--danger { border-color:var(--danger-line);color:var(--danger); }
+.ui-chip { display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:28px;min-height:var(--control-xs);padding:0 8px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);color:var(--text-soft);font:600 var(--text-xs)/1 var(--sans);white-space:nowrap;cursor:pointer; }
+.ui-chip:hover { border-color:var(--line-hover);background:var(--sunken);color:var(--text); }
+.ui-chip:is([aria-pressed="true"],.is-active),.ui-chip:has(input:checked) { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
+.ui-chip--pill { border-radius:var(--radius-pill); }
+.ui-chip--lg { min-height:var(--control-sm);padding:0 10px;font-size:var(--text-sm);font-weight:550; }
+.ui-dot { flex:0 0 6px;display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--faint); }
+.ui-dot--success { background:var(--success); }
+.ui-dot--warning { background:var(--warning); }
+.ui-dot--danger { background:var(--danger); }
+.ui-count { min-width:16px;padding:0 4px;border-radius:8px;background:var(--accent-fill);color:var(--accent-ink);font:600 var(--text-2xs)/16px var(--mono);text-align:center; }
+kbd { display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:23px;padding:3px 6px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--elevated);color:var(--text-soft);font:var(--text-2xs)/1.3 var(--mono);white-space:nowrap; }
+/* 버튼 안의 키 이름: 버튼 글자색을 따른다 */
+button>kbd { min-width:0;min-height:20px;padding:2px 4px; }
+:is(.ui-btn--primary,.ui-btn--danger-solid)>kbd { border-color:currentColor;background:transparent;color:inherit;opacity:.8; }

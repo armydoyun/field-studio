@@ -1,4 +1,4 @@
-from esm_for_browser import load_modules, EditorModel
+from esm_for_browser import load_modules, EditorModel, read_css
 # python tests/undo-browser-regression.py (Playwright/Chromium, GPU-independent mock renderer)
 import os
 from pathlib import Path
@@ -9,7 +9,7 @@ with sync_playwright() as p:
     browser=p.chromium.launch(headless=True, executable_path=os.environ.get('CHROMIUM_PATH') or None,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1440,'height':900}); errors=[]
     page.on('pageerror',lambda err: errors.append(str(err)))
-    page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
+    page.set_content(html);page.add_style_tag(content=read_css(root))
     load_modules(page,root,['studio'])   # studio와 의존 모듈(code-editor, glsl-highlight, annotations)
     page.evaluate('''() => {
       const frag="#version 300 es\\nprecision highp float;\\nout vec4 fragColor;\\nvoid main(){fragColor=vec4(1.);}";

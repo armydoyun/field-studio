@@ -1163,7 +1163,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   const palette = document.createElement("div"),
     paletteInput = document.createElement("input"),
     paletteList = document.createElement("div");
-  palette.className = "studio-palette";
+  palette.className = "ui-popover studio-palette";
   palette.hidden = true;
   palette.setAttribute("role", "dialog");
   palette.setAttribute("aria-label", "명령 팔레트");

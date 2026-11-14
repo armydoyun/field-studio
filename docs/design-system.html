@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIELD Studio — 디자인 시스템 카탈로그</title>
+    <!-- 앱과 같은 스타일시트를 그대로 쓴다(토큰 → 기본 → 아이콘 → 컴포넌트). 컴포넌트를 고치면 이 페이지에서 바로 확인한다.
+         열기: 프로젝트 루트에서 python -m http.server 8000 → http://127.0.0.1:8000/docs/design-system.html -->
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/icons.css">
+    <link rel="stylesheet" href="../css/components/button.css">
+    <link rel="stylesheet" href="../css/components/field.css">
+    <link rel="stylesheet" href="../css/components/choice.css">
+    <link rel="stylesheet" href="../css/components/segmented.css">
+    <link rel="stylesheet" href="../css/components/tag.css">
+    <link rel="stylesheet" href="../css/components/menu.css">
+    <link rel="stylesheet" href="../css/components/dialog.css">
+    <link rel="stylesheet" href="../css/components/notice.css">
+    <link rel="stylesheet" href="../css/components/surface.css">
+    <style>
+        /* 이 페이지의 배치만. 컴포넌트 모양은 건드리지 않는다. */
+        html,body { height:auto;overflow:auto; }
+        .ds-page { max-width:1040px;margin:0 auto;padding:32px 24px 80px; }
+        .ds-top { display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:8px; }
+        .ds-top h1 { margin:0;font-size:var(--text-2xl);font-weight:700;letter-spacing:-.3px; }
+        .ds-lead { margin:0 0 28px;color:var(--muted);line-height:1.7; }
+        .ds-group { margin-top:36px; }
+        .ds-group>h2 { margin:0 0 4px;font-size:var(--text-xl);font-weight:700; }
+        .ds-group>p { margin:0 0 14px;color:var(--muted);font-size:var(--text-sm);line-height:1.7; }
+        .ds-row { display:grid;grid-template-columns:200px minmax(0,1fr);align-items:center;gap:8px 20px;padding:12px 14px;border-top:1px solid var(--line); }
+        .ds-row:first-of-type { border-top:0; }
+        .ds-row>code { color:var(--accent-strong);font:var(--text-xs)/1.6 var(--mono);overflow-wrap:anywhere; }
+        .ds-demo { display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0; }
+        .ds-swatches { display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px; }
+        .ds-swatch { display:grid;grid-template-columns:28px minmax(0,1fr);align-items:center;gap:10px;padding:8px;font:var(--text-xs)/1.4 var(--mono); }
+        .ds-swatch i { width:28px;height:28px;border:1px solid var(--line-strong);border-radius:var(--radius-sm); }
+        .ds-scale { display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;padding:14px; }
+        .ds-scale div { display:grid;justify-items:center;gap:6px;color:var(--muted);font:var(--text-2xs)/1.3 var(--mono); }
+        .ds-scale i { display:block;background:var(--accent-soft);border:1px solid var(--accent-line); }
+        .ds-static { position:static;width:260px; }
+        .ds-dialog { position:static;display:block;margin:0; }
+        @media (max-width:640px) { .ds-row { grid-template-columns:minmax(0,1fr); } }
+    </style>
+</head>
+<body>
+<div class="ds-page">
+    <div class="ds-top">
+        <h1>FIELD Studio 디자인 시스템</h1>
+        <div class="ui-seg" role="group" aria-label="테마">
+            <button type="button" data-theme-pick="" aria-pressed="true">시스템</button>
+            <button type="button" data-theme-pick="light" aria-pressed="false">라이트</button>
+            <button type="button" data-theme-pick="dark" aria-pressed="false">다크</button>
+        </div>
+    </div>
+    <p class="ds-lead">앱의 모든 화면은 아래 컴포넌트를 조합해 만든다. 왼쪽이 붙이는 클래스, 오른쪽이 결과다. 규칙과 사용법은 <code>docs/DESIGN_SYSTEM.md</code>, 정의는 <code>css/components/*.css</code>, JS로 만들 때는 <code>js/ui-kit.js</code>.</p>
+
+    <section class="ds-group">
+        <h2>토큰 · 색</h2>
+        <p>색은 토큰으로만 쓴다(<code>css/tokens.css</code>). 면은 bg → panel → surface → elevated 순으로 밝아지고, 액센트는 고른 상태 · 지금 값 · 주 행동에만 쓴다.</p>
+        <div id="swatches" class="ui-card ds-swatches" style="padding:8px"></div>
+    </section>
+
+    <section class="ds-group">
+        <h2>토큰 · 크기</h2>
+        <p>조작 높이는 네 단계, 간격은 2px 격자, 글자 크기는 일곱 단계만 쓴다.</p>
+        <div class="ui-card ds-scale">
+            <div><i style="width:60px;height:var(--control-xs)"></i>--control-xs 24</div>
+            <div><i style="width:60px;height:var(--control-sm)"></i>--control-sm 28</div>
+            <div><i style="width:60px;height:var(--control-md)"></i>--control-md 32</div>
+            <div><i style="width:60px;height:var(--control-lg)"></i>--control-lg 36</div>
+            <div><i style="width:40px;height:40px;border-radius:var(--radius-xs)"></i>--radius-xs</div>
+            <div><i style="width:40px;height:40px;border-radius:var(--radius-sm)"></i>--radius-sm</div>
+            <div><i style="width:40px;height:40px;border-radius:var(--radius)"></i>--radius</div>
+            <div><i style="width:40px;height:40px;border-radius:var(--radius-pill)"></i>--radius-pill</div>
+        </div>
+        <div class="ui-card ds-scale" style="margin-top:8px;align-items:baseline">
+            <div><span style="font-size:var(--text-2xs);color:var(--text)">가나다 Aa</span>--text-2xs 10</div>
+            <div><span style="font-size:var(--text-xs);color:var(--text)">가나다 Aa</span>--text-xs 11</div>
+            <div><span style="font-size:var(--text-sm);color:var(--text)">가나다 Aa</span>--text-sm 12</div>
+            <div><span style="font-size:var(--text-md);color:var(--text)">가나다 Aa</span>--text-md 13</div>
+            <div><span style="font-size:var(--text-lg);color:var(--text)">가나다 Aa</span>--text-lg 14</div>
+            <div><span style="font-size:var(--text-xl);color:var(--text)">가나다 Aa</span>--text-xl 16</div>
+            <div><span style="font-size:var(--text-2xl);color:var(--text)">가나다 Aa</span>--text-2xl 20</div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>버튼</h2>
+        <p><code>&lt;button&gt;</code>은 클래스 없이도 기본 버튼이다. 변형 · 크기 클래스만 덧붙인다. 한 화면에 채운 버튼(primary)은 하나만.</p>
+        <div class="ui-card">
+            <div class="ds-row"><code>(클래스 없음) · ui-btn</code><div class="ds-demo"><button type="button">기본</button><button type="button" class="glyph-icon icon-image">아이콘 + 글자</button><button type="button" disabled>끔</button></div></div>
+            <div class="ds-row"><code>ui-btn--primary</code><div class="ds-demo"><button type="button" class="ui-btn--primary">추가하고 적용</button><button type="button" class="ui-btn--primary glyph-icon icon-play">실행 <kbd>Alt+↵</kbd></button></div></div>
+            <div class="ds-row"><code>ui-btn--ghost</code><div class="ds-demo"><button type="button" class="ui-btn--ghost">취소</button><button type="button" class="ui-btn--ghost glyph-icon icon-plus">Common</button></div></div>
+            <div class="ds-row"><code>ui-btn--tonal</code><div class="ds-demo"><button type="button" class="ui-btn--tonal">편집기에서 열기</button></div></div>
+            <div class="ds-row"><code>ui-btn--danger<br>ui-btn--danger-solid</code><div class="ds-demo"><button type="button" class="ui-btn--danger">렌더링 설정 초기화</button><button type="button" class="ui-btn--danger-solid">삭제</button></div></div>
+            <div class="ds-row"><code>ui-btn--dashed</code><div class="ds-demo"><button type="button" class="ui-btn--dashed glyph-icon icon-plus">지금 값 저장</button></div></div>
+            <div class="ds-row"><code>ui-btn--xs · --sm · (기본) · --lg</code><div class="ds-demo"><button type="button" class="ui-btn--xs">xs 24</button><button type="button" class="ui-btn--sm">sm 28</button><button type="button">md 32</button><button type="button" class="ui-btn--lg">lg 36</button></div></div>
+            <div class="ds-row"><code>ui-btn--block</code><div class="ds-demo" style="display:grid"><button type="button" class="ui-btn--lg ui-btn--block">화면 배치 초기화</button></div></div>
+            <div class="ds-row"><code>ui-icon-btn (+ --xs · --sm · --lg)<br>glyph-icon icon-*</code><div class="ds-demo"><button type="button" class="ui-icon-btn ui-icon-btn--xs glyph-icon icon-reset" aria-label="되돌리기"></button><button type="button" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-search" aria-label="찾기"></button><button type="button" class="ui-icon-btn glyph-icon icon-code" aria-label="편집기"></button><button type="button" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close" aria-label="닫기"></button></div></div>
+            <div class="ds-row"><code>aria-pressed="true" · .is-active</code><div class="ds-demo"><button type="button" class="ui-btn" aria-pressed="true">켜짐</button><button type="button" class="ui-icon-btn glyph-icon icon-pin" aria-pressed="true" aria-label="고정"></button><button type="button" class="ui-btn--ghost" aria-pressed="true">켜짐(ghost)</button></div></div>
+            <div class="ds-row"><code>ui-btn-group</code><div class="ds-demo"><span class="ui-btn-group"><button type="button" class="ui-btn--sm">◀</button><button type="button" class="ui-btn--sm">◆</button><button type="button" class="ui-btn--sm">▶</button></span><span class="ui-btn-group"><button type="button" class="ui-btn--sm">−</button><button type="button" class="ui-btn--sm">+</button></span></div></div>
+            <div class="ds-row"><code>ui-toolbar · ui-sep</code><div class="ds-demo"><div class="ui-toolbar ui-hud" style="padding:3px"><button type="button" class="ui-icon-btn glyph-icon icon-undo" aria-label="되돌리기"></button><button type="button" class="ui-icon-btn glyph-icon icon-redo" aria-label="다시 실행"></button><span class="ui-sep"></span><button type="button" class="ui-icon-btn glyph-icon icon-expand" aria-label="확대"></button></div></div></div>
+            <div class="ds-row"><code>ui-link</code><div class="ds-demo"><button type="button" class="ui-link">설정 설명 →</button></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>세그먼트 · 탭</h2>
+        <p>값 하나를 고르면 <code>ui-seg</code>(액센트), 화면을 바꾸면 <code>ui-tabs</code>(중성 면). 칸은 <code>&lt;button&gt;</code>, 고른 칸은 <code>aria-pressed · aria-checked · aria-selected</code> 또는 <code>.is-active · .is-selected</code>.</p>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-seg</code><div class="ds-demo"><div class="ui-seg" style="width:280px"><button type="button" aria-pressed="true">Auto</button><button type="button">30</button><button type="button">60</button><button type="button">120</button></div></div></div>
+            <div class="ds-row"><code>ui-seg + glyph-icon</code><div class="ds-demo"><div class="ui-seg" style="width:280px"><button type="button" class="glyph-icon icon-monitor" aria-pressed="true">시스템</button><button type="button" class="glyph-icon icon-sun">라이트</button><button type="button" class="glyph-icon icon-moon">다크</button></div></div></div>
+            <div class="ds-row"><code>ui-seg ui-seg--sm</code><div class="ds-demo"><div class="ui-seg ui-seg--sm"><button type="button" aria-pressed="true">RGB</button><button type="button">R</button><button type="button">G</button><button type="button">B</button><button type="button">A</button></div></div></div>
+            <div class="ds-row"><code>ui-tabs ui-seg--lg</code><div class="ds-demo"><div class="ui-tabs ui-seg--lg" role="tablist" style="width:280px"><button type="button" role="tab" aria-selected="true">파라미터</button><button type="button" role="tab">렌더링</button><button type="button" role="tab">성능</button></div></div></div>
+            <div class="ds-row"><code>ui-tabs ui-tabs--line</code><div class="ds-demo"><div class="ui-tabs ui-tabs--line" role="tablist"><button type="button" role="tab" class="is-active">Image</button><button type="button" role="tab">Buffer A</button><button type="button" role="tab">Buffer B</button></div></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>입력</h2>
+        <p>글자 · 숫자 칸과 선택 상자는 클래스 없이도 같은 모양이다. 촘촘한 영역(목록 · 도구 막대)은 감싸는 요소에 <code>ui-dense</code>를 붙이면 안의 칸이 28px · 고정폭 숫자가 된다.</p>
+        <div class="ui-card">
+            <div class="ds-row"><code>input · select</code><div class="ds-demo"><input type="text" placeholder="uStrength" style="width:160px"><select style="width:160px"><option>제한 없음 · Native</option><option>1280 × 720</option></select></div></div>
+            <div class="ds-row"><code>ui-input--sm · (기본) · --lg</code><div class="ds-demo"><input class="ui-input--sm" value="sm 28" style="width:100px"><input value="md 32" style="width:100px"><input class="ui-input--lg" value="lg 36" style="width:100px"><select class="ui-input--sm" style="width:100px"><option>1초</option></select></div></div>
+            <div class="ds-row"><code>ui-number</code><div class="ds-demo"><input class="ui-number" type="number" value="0.25" step="0.01" style="width:90px"></div></div>
+            <div class="ds-row"><code>ui-dense</code><div class="ds-demo ui-dense"><input type="number" value="1.5" style="width:80px"><select style="width:110px"><option>부드럽게</option></select><input type="text" value="#3399ff" style="width:90px"></div></div>
+            <div class="ds-row"><code>ui-input-group · ui-unit</code><div class="ds-demo"><div class="ui-input-group" style="width:180px"><input type="number" value="60"><span class="ui-unit">FPS</span></div></div></div>
+            <div class="ds-row"><code>ui-search · ui-search-icon</code><div class="ds-demo"><label class="ui-search" style="width:260px"><span class="ui-search-icon glyph-icon icon-search" aria-hidden="true"></span><input type="search" placeholder="이름 또는 타입으로 검색"><kbd>/</kbd></label></div></div>
+            <div class="ds-row"><code>ui-field · ui-label · ui-label-hint · ui-hint · ui-error</code><div class="ds-demo" style="display:block;max-width:300px"><div class="ui-field"><label class="ui-label">GLSL 이름 <span class="ui-label-hint">선택 사항</span></label><input placeholder="uStrength"><p class="ui-hint">숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.</p><span class="ui-error">이미 있는 이름입니다.</span></div></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>고르기 · 슬라이더</h2>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-check (checkbox)</code><div class="ds-demo"><label class="ui-check"><input type="checkbox" checked> 자동</label><label class="ui-check"><input type="checkbox"> 밉맵</label><label class="ui-check"><input type="checkbox" disabled> 끔</label></div></div>
+            <div class="ds-row"><code>ui-check (radio)</code><div class="ds-demo"><label class="ui-check"><input type="radio" name="ds-radio" checked> 한 번</label><label class="ui-check"><input type="radio" name="ds-radio"> 반복</label></div></div>
+            <div class="ds-row"><code>ui-switch</code><div class="ds-demo"><label class="ui-switch"><input type="checkbox" role="switch" checked><span>true</span></label><label class="ui-switch"><input type="checkbox" role="switch"><span>false</span></label></div></div>
+            <div class="ds-row"><code>input[type=range] · ui-range-ends</code><div class="ds-demo" style="display:block;max-width:260px"><input type="range" min="0" max="1" step="0.05" value="0.6"><div class="ui-range-ends"><span>25%</span><span>100%</span></div></div></div>
+            <div class="ds-row"><code>ui-meter &gt; ui-meter-fill<br>ui-meter--lg · --success</code><div class="ds-demo" style="display:grid;gap:10px;max-width:260px"><div class="ui-meter"><span class="ui-meter-fill" style="width:62%"></span></div><div class="ui-meter ui-meter--lg ui-meter--success"><span class="ui-meter-fill" style="width:40%"></span></div><progress max="1" value="0.3"></progress></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>꼬리표 · 칩 · 점</h2>
+        <p><code>ui-tag</code>는 읽기 전용, <code>ui-chip</code>은 누르는 것.</p>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-tag (+ --plain · --pill · --dot)</code><div class="ds-demo"><span class="ui-tag">한 번</span><span class="ui-tag ui-tag--plain">3 / 64</span><span class="ui-tag ui-tag--pill">EXT</span><span class="ui-tag ui-tag--dot">소리 · 저음</span></div></div>
+            <div class="ds-row"><code>ui-tag--accent · --success · --warning · --danger</code><div class="ds-demo"><span class="ui-tag ui-tag--accent">↻ 4초</span><span class="ui-tag ui-tag--success">반영됨</span><span class="ui-tag ui-tag--warning">적용 대기</span><span class="ui-tag ui-tag--danger">오류</span></div></div>
+            <div class="ds-row"><code>ui-chip (+ --pill · --lg)</code><div class="ds-demo"><button type="button" class="ui-chip">+X</button><button type="button" class="ui-chip" aria-pressed="true">+Y</button><label class="ui-chip"><input type="checkbox" checked> Z</label><button type="button" class="ui-chip ui-chip--pill ui-chip--lg is-active">노이즈</button><button type="button" class="ui-chip ui-chip--pill ui-chip--lg">SDF</button></div></div>
+            <div class="ds-row"><code>ui-dot · ui-count · kbd</code><div class="ds-demo"><span class="ui-dot"></span><span class="ui-dot ui-dot--success"></span><span class="ui-dot ui-dot--warning"></span><span class="ui-dot ui-dot--danger"></span><span class="ui-count">3</span><kbd>Ctrl+S</kbd><kbd>/</kbd></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>메뉴 · 팝오버</h2>
+        <p>새 메뉴는 <code>UI.menu({ anchor, items })</code>로 연다(바깥 클릭 · Esc · 방향키 처리 포함). 아래 버튼을 눌러 본다.</p>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-popover ui-menu<br>ui-menu-item · -title · -sep · -row · -note</code><div class="ds-demo" style="align-items:flex-start">
+                <div class="ui-popover ui-menu ds-static">
+                    <p class="ui-menu-title">편집</p>
+                    <button type="button" class="ui-menu-item"><span>찾아 바꾸기</span><kbd>Ctrl+H</kbd></button>
+                    <button type="button" class="ui-menu-item glyph-icon icon-timeline" aria-pressed="true"><span>키프레임 타임라인</span><kbd>T</kbd></button>
+                    <button type="button" class="ui-menu-item" disabled><span>쓸 수 없는 항목</span></button>
+                    <hr class="ui-menu-sep">
+                    <label class="ui-menu-row"><span>들여쓰기</span><select class="ui-input--sm"><option>공백 4</option></select></label>
+                    <button type="button" class="ui-menu-item is-danger"><span>삭제</span></button>
+                    <span class="ui-menu-note">작은 설명 글</span>
+                </div>
+                <button id="menuDemo" type="button">UI.menu() 열기</button>
+            </div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>대화상자</h2>
+        <p>묻기 · 확인은 <code>js/studio-dialog.js</code>의 <code>ask() · confirm()</code>을 쓴다. 고유한 대화상자는 <code>&lt;dialog class="ui-dialog"&gt;</code> 뼈대를 쓴다.</p>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-dialog<br>ui-dialog-head · -mark · -text<br>ui-dialog-field · ui-dialog-foot</code><div class="ds-demo">
+                <dialog open class="ui-dialog ds-dialog">
+                    <header class="ui-dialog-head"><div class="ui-dialog-mark glyph-icon icon-edit" aria-hidden="true"></div><div class="ui-dialog-text"><h2>프리셋 저장</h2><p>지금 파라미터 값 전체를 이름 붙여 저장합니다.</p></div><button type="button" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close" aria-label="닫기"></button></header>
+                    <label class="ui-dialog-field">이름<input class="ui-input--lg" type="text" value="낮"></label>
+                    <footer class="ui-dialog-foot"><button type="button" class="ui-btn--lg">취소 <kbd>Esc</kbd></button><button type="button" class="ui-btn--primary ui-btn--lg">확인 <kbd>Enter</kbd></button></footer>
+                </dialog>
+            </div></div>
+            <div class="ds-row"><code>data-danger="true"</code><div class="ds-demo">
+                <dialog open class="ui-dialog ds-dialog" data-danger="true">
+                    <header class="ui-dialog-head"><div class="ui-dialog-mark glyph-icon icon-edit" aria-hidden="true"></div><div class="ui-dialog-text"><h2>'밤' 프리셋을 삭제할까요?</h2><p>삭제한 뒤 되돌릴 수 있습니다.</p></div><button type="button" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close" aria-label="닫기"></button></header>
+                    <footer class="ui-dialog-foot"><button type="button" class="ui-btn--lg">취소 <kbd>Esc</kbd></button><button type="button" class="ui-btn--primary ui-btn--lg">삭제 <kbd>Enter</kbd></button></footer>
+                </dialog>
+            </div></div>
+            <div class="ds-row"><code>ui-dialog-head--bar<br>ui-dialog-eyebrow</code><div class="ds-demo">
+                <dialog open class="ui-dialog ui-dialog--md ds-dialog">
+                    <header class="ui-dialog-head ui-dialog-head--bar"><div class="ui-dialog-text"><span class="ui-dialog-eyebrow">FIELD STUDIO GUIDE</span><h2>가이드</h2></div><button type="button" class="ui-btn--primary">UI 둘러보기</button><button type="button" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close" aria-label="닫기"></button></header>
+                    <div class="ui-dialog-body" style="padding-top:16px"><p class="ui-hint" style="margin:0">큰 대화상자의 머리. 본문은 ui-dialog-body.</p></div>
+                </dialog>
+            </div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>알림 · 빈 상태</h2>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-notice (+ --accent · --success · --warning · --danger)</code><div class="ds-demo" style="display:grid;gap:8px"><p class="ui-notice">중립 알림</p><p class="ui-notice ui-notice--accent">안내: 값을 바꾸면 이 시간에 키가 찍힙니다.</p><p class="ui-notice ui-notice--success">완료했습니다.</p><p class="ui-notice ui-notice--warning">버퍼 패스가 있어 2배 해상도 저장을 쓸 수 없습니다.</p><p class="ui-notice ui-notice--danger">ERROR: 0:3: 'broken' : undeclared identifier</p></div></div>
+            <div class="ds-row"><code>ui-notice--bar</code><div class="ds-demo" style="display:block"><div class="ui-notice ui-notice--warning ui-notice--bar"><span>복구 가능한 미적용 편집본이 있습니다.</span><button type="button" class="ui-btn--sm">편집본 복구</button><button type="button" class="ui-btn--sm">버리기</button></div></div></div>
+            <div class="ds-row"><code>ui-empty</code><div class="ds-demo" style="display:block"><div class="ui-empty">아직 파라미터가 없습니다.</div></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>면 · 구조</h2>
+        <div class="ui-card">
+            <div class="ds-row"><code>ui-card (+ --pad)</code><div class="ds-demo"><div class="ui-card ui-card--pad" style="background:var(--elevated)">선으로 두른 면</div></div></div>
+            <div class="ds-row"><code>ui-section · ui-section-head</code><div class="ds-demo" style="display:block;max-width:320px;border:1px solid var(--line)"><section class="ui-section" style="border-top:0"><div class="ui-section-head"><h2>프로젝트 파라미터</h2><span class="ui-tag ui-tag--plain">3 / 64</span></div><p class="ui-hint ui-hint--lead">구역 설명(ui-hint ui-hint--lead)</p><div class="ui-stack"><button type="button" class="ui-btn--primary ui-btn--lg ui-btn--block">셰이더 편집기 열기</button><button type="button" class="ui-btn--lg ui-btn--block">버퍼 뷰어 열기</button></div></section></div></div>
+            <div class="ds-row"><code>ui-disclosure</code><div class="ds-demo"><details class="ui-disclosure"><summary>내장 Uniform 참조</summary><p class="ui-hint">펼친 내용</p></details></div></div>
+            <div class="ds-row"><code>ui-resizer<br>aria-orientation</code><div class="ds-demo"><div style="display:flex;flex-direction:column;width:160px;height:60px;border:1px solid var(--line)"><div style="flex:1"></div><div class="ui-resizer" role="separator" aria-orientation="horizontal" tabindex="0"></div><div style="flex:1"></div></div><div style="display:flex;width:100px;height:60px;border:1px solid var(--line)"><div style="flex:1"></div><div class="ui-resizer" role="separator" aria-orientation="vertical" tabindex="0"></div><div style="flex:1"></div></div></div></div>
+            <div class="ds-row"><code>ui-hud</code><div class="ds-demo" style="padding:16px;background:#7a2cff"><div class="ui-hud" style="padding:6px 10px;color:var(--text-soft);font-size:var(--text-xs)">셰이더 화면 위의 면</div></div></div>
+            <div class="ds-row"><code>ui-readout</code><div class="ds-demo" style="display:block"><output class="ui-readout">Buffer A (128, 64)
+rgba 0.250 0.500 0.750 1.000</output></div></div>
+        </div>
+    </section>
+
+    <section class="ds-group">
+        <h2>아이콘</h2>
+        <p><code>glyph-icon icon-*</code> — 24px 격자 · 1.8 획의 SVG 마스크(<code>css/icons.css</code>). 글자 기호(▶ ✓ ↺)로 아이콘을 그리지 않는다.</p>
+        <div id="icons" class="ui-card ds-demo" style="padding:12px"></div>
+    </section>
+</div>
+<script type="module">
+    import * as UI from "../js/ui-kit.js";
+    // 테마 고르기(앱과 같은 방식: html[data-theme])
+    for (const button of document.querySelectorAll("[data-theme-pick]"))
+        button.addEventListener("click", () => {
+            const theme = button.dataset.themePick;
+            if (theme) document.documentElement.dataset.theme = theme;
+            else delete document.documentElement.dataset.theme;
+            for (const other of document.querySelectorAll("[data-theme-pick]")) other.setAttribute("aria-pressed", String(other === button));
+            paintSwatches();
+        });
+    // 색 토큰 견본: 지금 테마의 실제 값을 읽어 보여 준다
+    const COLORS = ["bg", "panel", "surface", "surface-hover", "elevated", "sunken", "line", "line-strong", "line-hover", "text", "text-soft", "muted", "faint", "accent", "accent-strong", "accent-fill", "accent-soft", "success", "warning", "danger"];
+    const paintSwatches = () => {
+        const style = getComputedStyle(document.documentElement);
+        document.getElementById("swatches").replaceChildren(
+            ...COLORS.map(name => {
+                const row = UI.el("div", "ds-swatch"), chip = UI.el("i");
+                chip.style.background = `var(--${name})`;
+                row.append(chip, UI.el("span", "", `--${name} ${style.getPropertyValue(`--${name}`).trim()}`));
+                return row;
+            })
+        );
+    };
+    paintSwatches();
+    // 아이콘 목록
+    const ICONS = ["close", "up", "down", "chevron", "pin", "eye", "plus", "pause", "play", "image", "help", "code", "expand", "sun", "moon", "monitor", "edit", "popout", "undo", "redo", "reset", "search", "goto", "complete", "snippet", "more", "timeline", "link", "dice"];
+    document.getElementById("icons").append(...ICONS.map(icon => UI.iconButton({ icon, label: `icon-${icon}` })));
+    // UI.menu() 시연
+    const demo = document.getElementById("menuDemo");
+    demo.addEventListener("click", () =>
+        UI.menu({
+            anchor: demo,
+            items: [
+                { title: "프리셋" },
+                { label: "지금 값으로 덮어쓰기…", icon: "reset" },
+                { label: "이름 바꾸기…", icon: "edit", kbd: "F2" },
+                { separator: true },
+                { label: "삭제", danger: true },
+            ],
+        })
+    );
+</script>
+</body>
+</html>

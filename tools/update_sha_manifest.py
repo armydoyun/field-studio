@@ -1,6 +1,6 @@
 """Regenerate SOURCE_SHA256_Runtime.txt after intentional runtime source changes. Standard library only.
 
-Covers index.html, style.css and every js/*.js file, matching tests/runtime-integrity.js.
+Covers index.html, every css/**/*.css and every js/*.js file, matching tests/runtime-integrity.js.
 Line endings are normalized to LF before hashing, so Windows (CRLF) and Linux checkouts agree.
 
     python tools/update_sha_manifest.py           # 목록을 다시 쓴다 (npm run sha)
@@ -19,7 +19,7 @@ def digest(path):
 
 
 def build():
-    files = sorted(['index.html', 'style.css', *('js/' + p.name for p in (ROOT / 'js').glob('*.js'))])
+    files = sorted(['index.html', *(p.relative_to(ROOT).as_posix() for p in (ROOT / 'css').rglob('*.css')), *('js/' + p.name for p in (ROOT / 'js').glob('*.js'))])
     return files, '\n'.join(f'{digest(ROOT / name)}  {name}' for name in files) + '\n'
 
 

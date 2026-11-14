@@ -1,0 +1,13 @@
+/* 알림 — 상태를 알리는 글 상자.
+     ui-notice  색: --warning · --danger · --success · --accent(안내). 화면 위에 떠도 읽히게 면은 불투명하다
+     ui-notice--bar   영역 아래에 붙는 띠(위 선만): 글 + 버튼
+     ui-empty   비어 있을 때의 안내(점선 상자) */
+.ui-notice { margin:0;padding:8px 12px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);color:var(--text-soft);font-size:var(--text-xs);line-height:1.6;overflow-wrap:anywhere; }
+.ui-notice--warning { border-color:var(--warning-line);background:var(--warning-surface);color:var(--warning); }
+.ui-notice--danger { border-color:var(--danger-line);background:var(--danger-surface);color:var(--danger); }
+.ui-notice--success { border-color:var(--success-line);background:var(--success-soft);color:var(--text-soft); }
+.ui-notice--accent { border-color:var(--accent-line);background:var(--accent-soft);color:var(--text-soft); }
+.ui-notice--bar { display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;flex-shrink:0;padding:8px 12px;border-width:1px 0 0;border-radius:0; }
+.ui-notice--bar>span { flex:1;min-width:160px; }
+.ui-notice--bar>button { flex-shrink:0; }
+.ui-empty { margin:0;padding:20px 12px;border:1px dashed var(--line-strong);border-radius:var(--radius);color:var(--muted);font-size:var(--text-xs);line-height:1.75;text-align:center; }

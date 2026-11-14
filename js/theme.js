@@ -1,6 +1,6 @@
 // 화면 테마: "system"(기본, 운영체제 밝기 설정을 따름) · "light" · "dark".
 // 선택은 localStorage에 보관하고 <html data-theme>로 적용한다. 첫 그리기 전 적용은 index.html <head>의 작은 스크립트가 맡는다.
-// 색은 전부 style.css의 토큰이므로 여기서는 속성만 바꾸고, 캔버스로 그리는 모듈은 "theme-changed" 이벤트를 듣는다.
+// 색은 전부 css/tokens.css의 토큰이므로 여기서는 속성만 바꾸고, 캔버스로 그리는 모듈은 "theme-changed" 이벤트를 듣는다.
 const KEY = "field.theme.v1";
 const CHOICES = ["system", "light", "dark"];
 

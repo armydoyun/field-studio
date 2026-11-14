@@ -36,7 +36,7 @@ jobs:
       - name: Check formatting (Prettier)
         run: npm run format:check
 
-      # js/*.js · index.html · style.css를 고치고 SHA 목록을 갱신하지 않았으면 여기서 바로 알려 준다.
+      # js/*.js · index.html · css/**/*.css를 고치고 SHA 목록을 갱신하지 않았으면 여기서 바로 알려 준다.
       - name: Check SHA manifest
         run: npm run sha:check
 

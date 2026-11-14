@@ -81,6 +81,17 @@ export default [
     rules: {...softened, ...bugs},
   },
 
+  // 빌드 · 테스트가 함께 쓰는 CommonJS 도우미(tools/css-files.cjs)
+  {
+    files: ["tools/**/*.cjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "commonjs",
+      globals: {...globals.node},
+    },
+    rules: {...softened, ...bugs},
+  },
+
   // GLSL 코드 조각은 편집기 자리표시자 문법(${1:이름})을 문자열에 그대로 담는다. 템플릿 리터럴 실수가 아니다.
   {
     files: ["js/glsl-language.js", "js/cm-editor.js"],

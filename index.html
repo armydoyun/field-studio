@@ -11,7 +11,36 @@
     <!-- 설정 패널 자리·너비(workspace-layout.js와 같은 규칙): 첫 그리기 전에 적용해 기본 배치가 잠깐 보였다 바뀌지 않게 한다. -->
     <script>try{var p=JSON.parse(localStorage.getItem("field.panel.layout.v1")||"{}")||{},r=document.documentElement;if(p.side==="right")r.classList.add("panel-right");if(isFinite(p.width))r.style.setProperty("--panel-width",Math.round(Math.max(240,Math.min(Math.max(240,Math.min(560,Math.round(innerWidth*.45))),p.width)))+"px");}catch(e){}</script>
     <title>FIELD Studio — WebGL2 Shader Workspace</title>
-    <link rel="stylesheet" href="./style.css">
+    <!-- 스타일시트: 위에서 아래로 토큰 → 기본 → 컴포넌트 → 배치 → 기능. 순서가 곧 우선순위다(docs/DESIGN_SYSTEM.md). -->
+    <link rel="stylesheet" href="./css/tokens.css">
+    <link rel="stylesheet" href="./css/base.css">
+    <link rel="stylesheet" href="./css/icons.css">
+    <link rel="stylesheet" href="./css/components/button.css">
+    <link rel="stylesheet" href="./css/components/field.css">
+    <link rel="stylesheet" href="./css/components/choice.css">
+    <link rel="stylesheet" href="./css/components/segmented.css">
+    <link rel="stylesheet" href="./css/components/tag.css">
+    <link rel="stylesheet" href="./css/components/menu.css">
+    <link rel="stylesheet" href="./css/components/dialog.css">
+    <link rel="stylesheet" href="./css/components/notice.css">
+    <link rel="stylesheet" href="./css/components/surface.css">
+    <link rel="stylesheet" href="./css/layout/workspace.css">
+    <link rel="stylesheet" href="./css/layout/panel.css">
+    <link rel="stylesheet" href="./css/layout/stage.css">
+    <link rel="stylesheet" href="./css/layout/dock.css">
+    <link rel="stylesheet" href="./css/features/parameters.css">
+    <link rel="stylesheet" href="./css/features/presets.css">
+    <link rel="stylesheet" href="./css/features/links.css">
+    <link rel="stylesheet" href="./css/features/timeline.css">
+    <link rel="stylesheet" href="./css/features/project-menu.css">
+    <link rel="stylesheet" href="./css/features/channels.css">
+    <link rel="stylesheet" href="./css/features/editor.css">
+    <link rel="stylesheet" href="./css/features/editor-codemirror.css">
+    <link rel="stylesheet" href="./css/features/video-dialog.css">
+    <link rel="stylesheet" href="./css/features/gallery.css">
+    <link rel="stylesheet" href="./css/features/guide.css">
+    <link rel="stylesheet" href="./css/features/profiler.css">
+    <link rel="stylesheet" href="./css/features/popout.css">
 </head>
 <body>
     <!-- UI는 Renderer의 공개 API만 사용한다. Stage와 Panel은 서로 독립적인 영역이다. -->
@@ -25,10 +54,10 @@
                     <div class="brand-text"><strong>FIELD<span>studio</span></strong><small>SHADER WORKSPACE</small></div>
                 </div>
                 <button id="panelGrip" class="dock-grip" type="button" aria-label="설정 패널 위치 옮기기" title="끌어서 설정 패널을 화면 왼쪽·오른쪽으로 옮기기 · ←→로도 옮김"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
-                <button id="panelClose" class="icon-button close-panel glyph-icon icon-close" type="button" aria-label="설정 패널 숨기기" title="패널 숨기기 (H)"></button>
+                <button id="panelClose" class="ui-icon-btn close-panel glyph-icon icon-close" type="button" aria-label="설정 패널 숨기기" title="패널 숨기기 (H)"></button>
             </header>
 
-            <nav id="panelTabs" class="panel-tabs" role="tablist" aria-label="설정 종류">
+            <nav id="panelTabs" class="ui-tabs ui-seg--lg panel-tabs" role="tablist" aria-label="설정 종류">
                 <button type="button" role="tab" id="tab-uniforms" aria-controls="view-uniforms" aria-selected="true" data-tab="uniforms" class="is-active">파라미터</button>
                 <button type="button" role="tab" id="tab-render" aria-controls="view-render" aria-selected="false" data-tab="render" tabindex="-1">렌더링</button>
                 <button type="button" role="tab" id="tab-profile" tabindex="-1" aria-controls="view-profile" aria-selected="false" data-tab="profile">성능</button>
@@ -38,25 +67,25 @@
             <div class="panel-scroll">
                 <div id="view-render" class="panel-view" role="tabpanel" aria-labelledby="tab-render" data-panel="render" hidden>
 
-                    <section class="control-section">
-                        <div class="section-heading"><h2>렌더링 품질</h2><span class="section-note">GPU</span></div>
-                        <div class="field">
-                            <label id="fpsTitle" for="fpsLimit">프레임 제한</label>
-                            <div class="preset-row fps-presets" role="group" aria-labelledby="fpsTitle"><button type="button" data-fps-preset="0">Auto</button><button type="button" data-fps-preset="30">30</button><button type="button" data-fps-preset="60">60</button><button type="button" data-fps-preset="120">120</button><button type="button" data-fps-custom aria-pressed="false" title="원하는 FPS를 직접 입력">직접</button></div>
-                            <div class="fps-control" hidden><input id="fpsLimit" type="number" min="0" max="240" step="1" value="0" inputmode="numeric"><span class="input-unit">FPS</span></div>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>렌더링 품질</h2></div>
+                        <div class="ui-field">
+                            <label id="fpsTitle" class="ui-label" for="fpsLimit">프레임 제한</label>
+                            <div class="ui-seg fps-presets" role="group" aria-labelledby="fpsTitle"><button type="button" data-fps-preset="0">Auto</button><button type="button" data-fps-preset="30">30</button><button type="button" data-fps-preset="60">60</button><button type="button" data-fps-preset="120">120</button><button type="button" data-fps-custom aria-pressed="false" title="원하는 FPS를 직접 입력">직접</button></div>
+                            <div class="ui-input-group fps-control" hidden><input id="fpsLimit" type="number" min="0" max="240" step="1" value="0" inputmode="numeric"><span class="ui-unit">FPS</span></div>
                         </div>
-                        <div class="field">
-                            <label id="timeScaleTitle">재생 속도 <output id="timeScaleLabel">1×</output></label>
-                            <div class="preset-row" role="group" aria-labelledby="timeScaleTitle"><button type="button" data-time-scale="0.25">0.25×</button><button type="button" data-time-scale="0.5">0.5×</button><button type="button" data-time-scale="1">1×</button><button type="button" data-time-scale="2">2×</button></div>
-                            <button id="stepFrame" type="button" class="step-frame" title="한 프레임(1/60초) 진행 · 재생 중이면 먼저 멈춥니다 (.)">한 프레임 진행 <kbd>.</kbd></button>
+                        <div class="ui-field">
+                            <label id="timeScaleTitle" class="ui-label">재생 속도 <output id="timeScaleLabel">1×</output></label>
+                            <div class="ui-seg" role="group" aria-labelledby="timeScaleTitle"><button type="button" data-time-scale="0.25">0.25×</button><button type="button" data-time-scale="0.5">0.5×</button><button type="button" data-time-scale="1">1×</button><button type="button" data-time-scale="2">2×</button></div>
+                            <button id="stepFrame" type="button" class="ui-btn--block step-frame" title="한 프레임(1/60초) 진행 · 재생 중이면 먼저 멈춥니다 (.)">한 프레임 진행 <kbd>.</kbd></button>
                                                     </div>
-                        <div class="field">
-                            <label for="resolutionScale">해상도 배율 <output id="resolutionLabel">100%</output></label>
-                            <input id="resolutionScale" class="range-accent" type="range" min="0.25" max="1" step="0.05" value="1">
-                            <div class="range-ends"><span>25%</span><span>100%</span></div>
+                        <div class="ui-field">
+                            <label class="ui-label" for="resolutionScale">해상도 배율 <output id="resolutionLabel">100%</output></label>
+                            <input id="resolutionScale" type="range" min="0.25" max="1" step="0.05" value="1">
+                            <div class="ui-range-ends"><span>25%</span><span>100%</span></div>
                         </div>
-                        <div class="field">
-                            <label for="maxPixels" title="화면 비율은 그대로 두고 실제로 그리는 픽셀 수만 제한합니다">최대 픽셀 수</label>
+                        <div class="ui-field">
+                            <label class="ui-label" for="maxPixels" title="화면 비율은 그대로 두고 실제로 그리는 픽셀 수만 제한합니다">최대 픽셀 수</label>
                             <select id="maxPixels">
                                 <option value="0">제한 없음 · Native</option>
                                 <option value="230400">640 × 360 · 0.23 MP</option>
@@ -67,113 +96,113 @@
                         </div>
                     </section>
 
-                    <section class="control-section">
-                        <div class="section-heading"><h2>버퍼 · 멀티패스 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법"></button></h2><span class="section-note">MULTI-PASS</span></div>
-                        <p class="help section-description">버퍼는 편집기에서 만들고, 버퍼마다의 결과는 버퍼 뷰어에서 봅니다.</p>
-                        <button id="studioOpenFromPanel" type="button" class="studio-launch glyph-icon icon-code">셰이더 편집기 열기</button>
-                        <div class="buffer-actions">
-                            <button id="openBufferViewer" type="button" class="glyph-icon icon-image" title="성능 탭의 버퍼 뷰어로 이동">버퍼 뷰어 열기</button>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>버퍼 · 멀티패스 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법"></button></h2></div>
+                        <p class="ui-hint ui-hint--lead">버퍼는 편집기에서 만들고, 버퍼마다의 결과는 버퍼 뷰어에서 봅니다.</p>
+                        <div class="ui-stack">
+                            <button id="studioOpenFromPanel" type="button" class="ui-btn--primary ui-btn--lg ui-btn--block glyph-icon icon-code">셰이더 편집기 열기</button>
+                            <button id="openBufferViewer" type="button" class="ui-btn--lg ui-btn--block glyph-icon icon-image" title="성능 탭의 버퍼 뷰어로 이동">버퍼 뷰어 열기</button>
                         </div>
                     </section>
                 </div>
 
                 <div id="view-uniforms" class="panel-view is-active" role="tabpanel" aria-labelledby="tab-uniforms" data-panel="uniforms">
-                    <div class="uniform-search-wrap"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="uniformSearch" type="search" placeholder="이름 또는 타입으로 검색" autocomplete="off" spellcheck="false" aria-label="Uniform 검색"><kbd>/</kbd></div>
-                    <section class="control-section uniform-section">
-                        <div class="section-heading"><h2>프로젝트 파라미터 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="params" aria-label="파라미터·어노테이션 가이드" title="파라미터·어노테이션 사용법"></button></h2><span id="uniformCount" class="count-badge">0</span></div>
-                                                <p id="uiError" role="alert" aria-live="polite"></p>
-                        <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" hidden>삭제 되돌리기</button></div>
-                        <div id="presetBar" class="preset-bar" role="group" aria-labelledby="presetTitle">
-                            <div class="preset-head"><span id="presetTitle" class="preset-title">프리셋</span><label class="preset-blend" title="프리셋을 고를 때 값이 바뀌는 시간">전환 <select id="presetBlend"><option value="0">즉시</option><option value="0.5">0.5초</option><option value="1" selected>1초</option><option value="2">2초</option><option value="4">4초</option></select></label></div>
-                            <div class="preset-items"><div id="presetList" class="preset-list" role="list"></div><button id="presetSave" type="button" class="glyph-icon icon-plus" title="지금 파라미터 값 전체를 이름 붙여 저장">지금 값 저장</button></div>
-                            <p id="presetNotice" class="help preset-notice" role="status"><span id="presetNoticeText"></span><button id="presetFinish" type="button" hidden>바로 끝내기</button><button id="presetUndo" type="button" hidden>되돌리기</button></p>
+                    <div class="ui-search uniform-search-wrap"><span class="ui-search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="uniformSearch" type="search" placeholder="이름 또는 타입으로 검색" autocomplete="off" spellcheck="false" aria-label="Uniform 검색"><kbd>/</kbd></div>
+                    <section class="ui-section uniform-section">
+                        <div class="ui-section-head"><h2>프로젝트 파라미터 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="params" aria-label="파라미터·어노테이션 가이드" title="파라미터·어노테이션 사용법"></button></h2><span id="uniformCount" class="ui-tag ui-tag--plain">0</span></div>
+                                                <p id="uiError" class="ui-notice ui-notice--danger" role="alert" aria-live="polite"></p>
+                        <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" class="ui-btn--sm" hidden>삭제 되돌리기</button></div>
+                        <div id="presetBar" class="ui-card preset-bar" role="group" aria-labelledby="presetTitle">
+                            <div class="preset-head"><span id="presetTitle" class="preset-title">프리셋</span><label class="preset-blend" title="프리셋을 고를 때 값이 바뀌는 시간">전환 <select id="presetBlend" class="ui-input--sm"><option value="0">즉시</option><option value="0.5">0.5초</option><option value="1" selected>1초</option><option value="2">2초</option><option value="4">4초</option></select></label></div>
+                            <div class="preset-items"><div id="presetList" class="preset-list" role="list"></div><button id="presetSave" type="button" class="ui-btn--dashed ui-btn--sm glyph-icon icon-plus" title="지금 파라미터 값 전체를 이름 붙여 저장">지금 값 저장</button></div>
+                            <p id="presetNotice" class="ui-hint preset-notice" role="status"><span id="presetNoticeText"></span><button id="presetFinish" type="button" class="ui-btn--xs" hidden>바로 끝내기</button><button id="presetUndo" type="button" class="ui-btn--xs" hidden>되돌리기</button></p>
                         </div>
-                        <p id="uniformResults" class="help" role="status"></p>
-                        <div id="uniformList" class="uniform-list"></div>
+                        <p id="uniformResults" class="ui-hint" role="status"></p>
+                        <div id="uniformList" class="ui-card ui-dense uniform-list"></div>
                         <details id="uniformEditor">
-                            <summary><span class="summary-plus glyph-icon icon-plus" aria-hidden="true"></span> 파라미터 추가</summary>
-                                                        <form id="uniformForm">
-                                <div class="field"><label for="uniformName">GLSL 이름</label><input id="uniformName" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="uStrength" spellcheck="false" autocomplete="off" required></div>
-                                <div class="field"><label for="uniformType">타입</label><select id="uniformType"><optgroup label="Scalar"><option value="float">float</option><option value="int">int</option><option value="uint">uint</option><option value="bool">bool</option></optgroup><optgroup label="Vector"><option value="vec2">vec2</option><option value="vec3">vec3</option><option value="vec4">vec4</option><option value="ivec2">ivec2</option><option value="ivec3">ivec3</option><option value="ivec4">ivec4</option><option value="uvec2">uvec2</option><option value="uvec3">uvec3</option><option value="uvec4">uvec4</option><option value="bvec2">bvec2</option><option value="bvec3">bvec3</option><option value="bvec4">bvec4</option></optgroup><optgroup label="Matrix"><option value="mat2">mat2</option><option value="mat3">mat3</option><option value="mat4">mat4</option></optgroup><optgroup label="Ramp"><option value="sampler2D">sampler2D · 그라데이션·곡선</option></optgroup></select></div>
-                                <div class="field"><label for="uniformValue">초기 값</label><input id="uniformValue" value="0.5" required><select id="uniformBoolValue" aria-label="bool 초기 값" hidden><option value="false">false · 꺼짐</option><option value="true">true · 켜짐</option></select><p id="uniformValueHelp" class="help">숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.</p></div><div id="uniformDisplayField" class="field" hidden><label for="uniformDisplay">표시 방식</label><select id="uniformDisplay"><option value="">기본 (숫자·슬라이더)</option></select><input id="uniformEnumLabels" placeholder="선택지 이름 (빈칸·쉼표로 구분) 예: 결과 밀도 투과율" aria-label="선택지 이름" hidden><p id="uniformDisplayHelp" class="help"></p></div>
-                                <div id="rangeFields" class="field" role="group" aria-labelledby="rangeFieldsLabel"><div class="section-heading"><span id="rangeFieldsLabel" class="field-legend">슬라이더 범위 <span class="field-hint">선택 사항</span></span></div>
+                            <summary class="ui-btn ui-btn--dashed ui-btn--sm"><span class="summary-plus glyph-icon icon-plus" aria-hidden="true"></span> 파라미터 추가</summary>
+                                                        <form id="uniformForm" class="ui-card">
+                                <div class="ui-field"><label class="ui-label" for="uniformName">GLSL 이름</label><input id="uniformName" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="uStrength" spellcheck="false" autocomplete="off" required></div>
+                                <div class="ui-field"><label class="ui-label" for="uniformType">타입</label><select id="uniformType"><optgroup label="Scalar"><option value="float">float</option><option value="int">int</option><option value="uint">uint</option><option value="bool">bool</option></optgroup><optgroup label="Vector"><option value="vec2">vec2</option><option value="vec3">vec3</option><option value="vec4">vec4</option><option value="ivec2">ivec2</option><option value="ivec3">ivec3</option><option value="ivec4">ivec4</option><option value="uvec2">uvec2</option><option value="uvec3">uvec3</option><option value="uvec4">uvec4</option><option value="bvec2">bvec2</option><option value="bvec3">bvec3</option><option value="bvec4">bvec4</option></optgroup><optgroup label="Matrix"><option value="mat2">mat2</option><option value="mat3">mat3</option><option value="mat4">mat4</option></optgroup><optgroup label="Ramp"><option value="sampler2D">sampler2D · 그라데이션·곡선</option></optgroup></select></div>
+                                <div class="ui-field"><label class="ui-label" for="uniformValue">초기 값</label><input id="uniformValue" value="0.5" required><select id="uniformBoolValue" aria-label="bool 초기 값" hidden><option value="false">false · 꺼짐</option><option value="true">true · 켜짐</option></select><p id="uniformValueHelp" class="ui-hint">숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.</p></div><div id="uniformDisplayField" class="ui-field" hidden><label class="ui-label" for="uniformDisplay">표시 방식</label><select id="uniformDisplay"><option value="">기본 (숫자·슬라이더)</option></select><input id="uniformEnumLabels" placeholder="선택지 이름 (빈칸·쉼표로 구분) 예: 결과 밀도 투과율" aria-label="선택지 이름" hidden><p id="uniformDisplayHelp" class="ui-hint"></p></div>
+                                <div id="rangeFields" class="ui-field" role="group" aria-labelledby="rangeFieldsLabel"><span id="rangeFieldsLabel" class="ui-label">슬라이더 범위 <span class="ui-label-hint">선택 사항</span></span>
                                     <div class="range-grid"><div><label for="uniformMin">최소</label><input id="uniformMin" type="number" step="any" placeholder="0" inputmode="decimal"></div><div><label for="uniformMax">최대</label><input id="uniformMax" type="number" step="any" placeholder="1" inputmode="decimal"></div><div><label for="uniformStep">간격</label><input id="uniformStep" type="number" step="any" placeholder="0.01" inputmode="decimal"></div></div>
                                 </div>
-                                <div class="uniform-form-actions"><button id="uniformCancel" type="button">취소</button><button id="uniformCreate" class="primary" type="submit">추가하고 적용</button></div>
+                                <div class="uniform-form-actions"><button id="uniformCancel" class="ui-btn--ghost" type="button">취소</button><button id="uniformCreate" class="ui-btn--primary" type="submit">추가하고 적용</button></div>
                             </form>
                         </details>
-                        <details class="builtin-reference"><summary>내장 Uniform 참조</summary><p class="help">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>float uWheel</dt><dd>마우스 휠 누적 칸 수 (위로 +1)</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
+                        <details class="ui-disclosure builtin-reference"><summary>내장 Uniform 참조</summary><p class="ui-hint">필요한 변수만 GLSL에 선언하여 사용하세요. 별도로 추가할 필요가 없습니다.</p><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>float uWheel</dt><dd>마우스 휠 누적 칸 수 (위로 +1)</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="ui-link guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
                     </section>
                 </div>
 
                 <div id="view-profile" class="panel-view" role="tabpanel" aria-labelledby="tab-profile" data-panel="profile" hidden>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>프레임 타임라인 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="debug" aria-label="디버깅·성능 가이드" title="그래프·지표 읽는 법"></button></h2><label class="profile-toggle" title="EXT_disjoint_timer_query_webgl2 기반 패스별 GPU 시간 측정"><input id="profileGpuTiming" type="checkbox" checked> GPU 타이머</label></div>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>프레임 타임라인 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="debug" aria-label="디버깅·성능 가이드" title="그래프·지표 읽는 법"></button></h2><label class="ui-check" title="EXT_disjoint_timer_query_webgl2 기반 패스별 GPU 시간 측정"><input id="profileGpuTiming" type="checkbox" checked> GPU 타이머</label></div>
                         <div id="profileKpis" class="profile-kpis" aria-live="off"></div>
                         <canvas id="profileChart" class="profile-chart" aria-label="최근 프레임 시간 그래프"></canvas>
-                        <div class="profile-legend"><span data-series="gpu">GPU</span><span data-series="cpu">CPU</span><span data-series="frame">프레임</span><button id="profileReset" type="button">지우기</button></div>
+                        <div class="profile-legend"><span data-series="gpu">GPU</span><span data-series="cpu">CPU</span><span data-series="frame">프레임</span><button id="profileReset" type="button" class="ui-btn--ghost ui-btn--xs">지우기</button></div>
                     </section>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>패스별 GPU 시간</h2><span class="section-note">AVG</span></div>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>패스별 GPU 시간</h2></div>
                         <div id="profilePasses" class="profile-passes"></div>
                     </section>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>버퍼 뷰어 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="debug" aria-label="버퍼 뷰어 가이드" title="버퍼 뷰어 사용법"></button></h2><span class="section-note">LIVE</span></div>
-                        <p class="help section-description">썸네일을 누르면 뷰포트에 해당 버퍼(출력)를 표시합니다. 다시 누르면 Image로 돌아갑니다.</p>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>버퍼 뷰어 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="debug" aria-label="버퍼 뷰어 가이드" title="버퍼 뷰어 사용법"></button></h2></div>
+                        <p class="ui-hint ui-hint--lead">썸네일을 누르면 뷰포트에 해당 버퍼(출력)를 표시합니다. 다시 누르면 Image로 돌아갑니다.</p>
                         <div id="profileBuffers" class="profile-buffers"></div>
                         <div class="profile-view-controls">
-                            <div id="profileChannel" class="profile-segment" role="group" aria-label="표시 채널"><button type="button" data-channel="0" aria-pressed="true">RGB</button><button type="button" data-channel="1" aria-pressed="false">R</button><button type="button" data-channel="2" aria-pressed="false">G</button><button type="button" data-channel="3" aria-pressed="false">B</button><button type="button" data-channel="4" aria-pressed="false">A</button></div>
+                            <div id="profileChannel" class="ui-seg ui-seg--sm profile-segment" role="group" aria-label="표시 채널"><button type="button" data-channel="0" aria-pressed="true">RGB</button><button type="button" data-channel="1" aria-pressed="false">R</button><button type="button" data-channel="2" aria-pressed="false">G</button><button type="button" data-channel="3" aria-pressed="false">B</button><button type="button" data-channel="4" aria-pressed="false">A</button></div>
                             <label class="profile-exposure" title="HDR·작은 값 확인용 노출 배율 (미리보기·썸네일에만 적용)">노출 <input id="profileExposure" type="range" min="-8" max="8" step="0.5" value="0"><output id="profileExposureLabel">×1</output></label>
                         </div>
-                        <output id="profilePixel" class="studio-pixel-readout profile-pixel">버퍼를 선택하고 뷰포트 위에 포인터를 올리면 그 위치의 실제 값을 읽습니다.</output>
+                        <output id="profilePixel" class="ui-readout profile-pixel">버퍼를 선택하고 뷰포트 위에 포인터를 올리면 그 위치의 실제 값을 읽습니다.</output>
                     </section>
-                    <section id="studioDependencies" class="control-section">
-                        <div class="section-heading"><h2>패스 연결 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법"></button></h2><span class="section-note">GRAPH</span></div>
-                        <p class="help section-description">패스마다 어떤 입력을 읽는지 실행 순서대로 보여 줍니다. 누르면 편집기에서 그 패스를 엽니다.</p>
-                            <p id="studioGraphState" class="studio-hint" role="status">실행에 반영된 구성</p><div id="studioGraph" class="studio-graph" aria-label="버퍼 의존성 흐름"></div>
+                    <section id="studioDependencies" class="ui-section">
+                        <div class="ui-section-head"><h2>패스 연결 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="버퍼·멀티패스 가이드" title="버퍼·멀티패스 사용법"></button></h2></div>
+                        <p class="ui-hint ui-hint--lead">패스마다 어떤 입력을 읽는지 실행 순서대로 보여 줍니다. 누르면 편집기에서 그 패스를 엽니다.</p>
+                            <p id="studioGraphState" class="ui-hint ui-hint--lead" role="status">실행에 반영된 구성</p><div id="studioGraph" class="studio-graph" aria-label="버퍼 의존성 흐름"></div>
                     </section>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>Uniform 진단 <button type="button" class="guide-hint glyph-icon icon-help" data-guide="uniforms" aria-label="내장 Uniform 가이드" title="내장 Uniform 목록"></button></h2><span id="profileUniformCount" class="count-badge">0</span></div>
-                        <p class="help section-description">셰이더가 실제로 쓰는 Uniform입니다. <b>미등록</b>은 값이 늘 0이니 <b>등록</b>해 파라미터로 만드세요.</p>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>Uniform 진단 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="uniforms" aria-label="내장 Uniform 가이드" title="내장 Uniform 목록"></button></h2><span id="profileUniformCount" class="ui-tag ui-tag--plain">0</span></div>
+                        <p class="ui-hint ui-hint--lead">셰이더가 실제로 쓰는 Uniform입니다. <b>미등록</b>은 값이 늘 0이니 <b>등록</b>해 파라미터로 만드세요.</p>
                         <p id="profileUniformStatus" class="profile-status" role="status"></p>
                         <div id="profileUniforms" class="profile-uniforms"></div>
                     </section>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>GPU 정보</h2><span class="section-note">DEVICE</span></div>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>GPU 정보</h2></div>
                         <dl id="profileGpu" class="profile-gpu"></dl>
                     </section>
                 </div>
 
                 <div id="view-input" class="panel-view" role="tabpanel" aria-labelledby="tab-input" data-panel="input" hidden>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>단축키</h2><span class="section-note">SHORTCUTS</span></div>
-                        <button type="button" class="secondary-action glyph-icon icon-help" data-guide="shortcuts">단축키 전체 보기</button>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>단축키</h2></div>
+                        <button type="button" class="ui-btn--lg ui-btn--block glyph-icon icon-help" data-guide="shortcuts">단축키 전체 보기</button>
                     </section>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>화면 테마</h2><span class="section-note">THEME</span></div>
-                        <div class="theme-choice" role="group" aria-label="화면 테마">
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>화면 테마</h2></div>
+                        <div class="ui-seg theme-choice" role="group" aria-label="화면 테마">
                             <button type="button" class="glyph-icon icon-monitor is-selected" data-theme-choice="system" aria-pressed="true">시스템</button>
                             <button type="button" class="glyph-icon icon-sun" data-theme-choice="light" aria-pressed="false">라이트</button>
                             <button type="button" class="glyph-icon icon-moon" data-theme-choice="dark" aria-pressed="false">다크</button>
                         </div>
                     </section>
-                    <section class="control-section">
-                        <div class="section-heading"><h2>화면 배치</h2><span class="section-note">LAYOUT</span></div>
-                        <p class="help">경계를 끌면 너비가, 손잡이(⠿)를 끌면 자리가 바뀝니다.</p>
-                        <button id="layoutReset" class="secondary-action" type="button">화면 배치 초기화</button>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>화면 배치</h2></div>
+                        <p class="ui-hint">경계를 끌면 너비가, 손잡이(⠿)를 끌면 자리가 바뀝니다.</p>
+                        <button id="layoutReset" class="ui-btn--lg ui-btn--block" type="button">화면 배치 초기화</button>
                     </section>
-                    <section class="control-section settings-section">
-                        <div class="section-heading"><h2>브라우저 설정</h2></div>
-                        <button id="resetSettings" class="danger-action" type="button">렌더링 설정 초기화</button>
-                        <p class="help">화질 · 프레임 제한 · 패널 표시만 되돌립니다. 코드와 파라미터는 그대로입니다.</p>
+                    <section class="ui-section">
+                        <div class="ui-section-head"><h2>브라우저 설정</h2></div>
+                        <button id="resetSettings" class="ui-btn--danger ui-btn--lg ui-btn--block" type="button">렌더링 설정 초기화</button>
+                        <p class="ui-hint">화질 · 프레임 제한 · 패널 표시만 되돌립니다. 코드와 파라미터는 그대로입니다.</p>
                     </section>
                 </div>
             </div>
 
-            <footer class="panel-footer"><div class="storage-indicator"><span class="storage-dot" aria-hidden="true"></span><span id="storageStatus" role="status">설정 저장소 확인 중</span></div></footer>
+            <footer class="panel-footer"><div class="storage-indicator"><span class="ui-dot ui-dot--success" aria-hidden="true"></span><span id="storageStatus" role="status">설정 저장소 확인 중</span></div></footer>
         </aside>
 
-        <div id="panelResize" class="panel-resizer" role="separator" aria-label="설정 패널 너비 조절" aria-orientation="vertical" aria-controls="panel" tabindex="0" aria-valuemin="240" aria-valuemax="560" aria-valuenow="300" title="드래그 또는 ←→로 설정 패널 너비 조절 · 끝까지 줄여 놓으면 패널 숨기기 · Home/End · 두 번 클릭해 기본 너비 복원"><span></span></div>
+        <div id="panelResize" class="ui-resizer panel-resizer" role="separator" aria-label="설정 패널 너비 조절" aria-orientation="vertical" aria-controls="panel" tabindex="0" aria-valuemin="240" aria-valuemax="560" aria-valuenow="300" title="드래그 또는 ←→로 설정 패널 너비 조절 · 끝까지 줄여 놓으면 패널 숨기기 · Home/End · 두 번 클릭해 기본 너비 복원"></div>
         <button id="panelBackdrop" class="panel-backdrop" type="button" aria-label="설정 패널 닫기"></button>
         <main id="stage" tabindex="0" aria-label="셰이더 뷰포트">
             <div id="renderViewport" class="render-viewport">
@@ -184,24 +213,24 @@
                 <button id="previewPopoutReturn" type="button">여기로 되돌리기</button>
             </div>
             <header id="stageHeader" class="stage-header">
-                <div class="stage-label"><span class="live-indicator" aria-hidden="true"></span><span id="renderState">재생 중</span></div>
-                <button id="hudReveal" type="button" class="hud-reveal" title="HUD 다시 보기 (G · Esc)">HUD 다시 보기 <kbd>G</kbd></button>
+                <div class="ui-hud stage-label"><span class="ui-dot live-indicator" aria-hidden="true"></span><span id="renderState">재생 중</span></div>
+                <button id="hudReveal" type="button" class="ui-hud hud-reveal" title="HUD 다시 보기 (G · Esc)">HUD 다시 보기 <kbd>G</kbd></button>
                 <div class="project-menu-wrap">
-                    <button id="projectMenuToggle" type="button" class="project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+S)"><span id="projectMenuLabel">새 작업</span></button>
+                    <button id="projectMenuToggle" type="button" class="ui-hud project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+S)"><span id="projectMenuLabel">새 작업</span></button>
                     <!-- 바뀐 내용이 있을 때만 보이는 저장 버튼: 메뉴를 열지 않고 한 번에 저장(이름 없는 작업이면 이름만 묻는다) · Ctrl+S와 같다 -->
-                    <button id="projectMenuState" type="button" class="project-save-state" title="지금 작업을 프로젝트로 저장 (Ctrl+S)" hidden>저장</button>
-                    <div id="projectMenu" class="project-menu" role="dialog" aria-label="프로젝트" hidden>
+                    <button id="projectMenuState" type="button" class="ui-hud project-save-state" title="지금 작업을 프로젝트로 저장 (Ctrl+S)" hidden>저장</button>
+                    <div id="projectMenu" class="ui-popover project-menu" role="dialog" aria-label="프로젝트" hidden>
                         <section id="studioFiles" class="project-menu-section" aria-labelledby="projectMenuFilesTitle"><h2 id="projectMenuFilesTitle">프로젝트</h2>
                             <div class="studio-projects">
                                 <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">프로젝트로 저장하지 않은 작업</p>
-                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" title="이 브라우저의 프로젝트 보관함에 이름을 붙여 저장 (Ctrl+S) · 코드·파라미터·설정·이미지 포함">프로젝트 저장…</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장 (Ctrl+Shift+S)" hidden>다른 이름으로 저장</button></div>
+                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" class="ui-btn--primary" title="이 브라우저의 프로젝트 보관함에 이름을 붙여 저장 (Ctrl+S) · 코드·파라미터·설정·이미지 포함">프로젝트 저장…</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장 (Ctrl+Shift+S)" hidden>다른 이름으로 저장</button></div>
                                 <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
                             </div>
-                            <p class="studio-hint">다른 컴퓨터·브라우저로 옮길 때는 프로젝트 파일(코드·파라미터·설정·이미지 포함)로 내보내세요.</p>
+                            <p class="ui-hint">다른 컴퓨터·브라우저로 옮길 때는 프로젝트 파일(코드·파라미터·설정·이미지 포함)로 내보내세요.</p>
                             <div class="studio-file-actions"><button id="studioExportPack" type="button" title="코드·파라미터·연결된 이미지·렌더 설정을 프로젝트 파일(Pack .json)로 내려받기 · 내려받는 순간의 내용만 담깁니다">프로젝트 파일 내보내기</button><button id="studioImportPack" type="button" title="내보낸 프로젝트 파일(Pack)을 열어 이미지까지 복원">프로젝트 파일 열기</button></div>
                             <div class="studio-file-actions"><button id="studioExportHTML" type="button" title="지금 작품을 재생 전용 HTML 한 파일로 내려받기 · 서버 · 인터넷 없이 더블클릭해 전체 화면으로 재생 · 코드 · 파라미터 값 · 이미지 포함(편집 불가)">HTML로 내보내기 (재생 전용)</button></div>
                         <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
-                            <details class="project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="studio-hint">코드와 버퍼 구성만 담습니다. 파라미터·이미지 원본은 빠집니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트의 코드·버퍼 구성만 JSON 파일로 내보내기 (파라미터·이미지 원본 제외)">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
+                            <details class="ui-disclosure project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="ui-hint">코드와 버퍼 구성만 담습니다. 파라미터·이미지 원본은 빠집니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="현재 프로젝트의 코드·버퍼 구성만 JSON 파일로 내보내기 (파라미터·이미지 원본 제외)">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
                             <button id="studioReset" type="button" title="모든 패스와 파라미터를 지우고 기본 Shader Art 장면으로 새로 시작 · Undo 가능">새 프로젝트 (기본 장면)</button>
                         <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
                         </section>
@@ -212,43 +241,43 @@
                         </section>
                     </div>
                 </div>
-                <div id="stageToolbar" role="toolbar" aria-label="뷰포트 도구">
-                    <button id="panelToggle" type="button" class="tool-button" title="설정 패널 (H)" aria-label="설정 패널 숨기기" aria-pressed="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg></button>
-                    <button id="previewPause" type="button" class="tool-button glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 뷰포트에서 Space"></button>
-                    <button id="previewImage" type="button" class="tool-button glyph-icon icon-image" title="최종 Image 보기" aria-label="최종 Image 보기"></button>
-                    <button id="studioToggle" type="button" aria-controls="studioDock" aria-expanded="false" class="tool-button studio-toggle glyph-icon icon-code" title="셰이더 코드와 버퍼 편집기 (E)" aria-label="셰이더 편집기 열기"></button>
+                <div id="stageToolbar" class="ui-toolbar ui-hud" role="toolbar" aria-label="뷰포트 도구">
+                    <button id="panelToggle" type="button" class="ui-icon-btn" title="설정 패널 (H)" aria-label="설정 패널 숨기기" aria-pressed="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg></button>
+                    <button id="previewPause" type="button" class="ui-icon-btn glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 뷰포트에서 Space"></button>
+                    <button id="previewImage" type="button" class="ui-icon-btn glyph-icon icon-image" title="최종 Image 보기" aria-label="최종 Image 보기"></button>
+                    <button id="studioToggle" type="button" aria-controls="studioDock" aria-expanded="false" class="ui-icon-btn glyph-icon icon-code" title="셰이더 코드와 버퍼 편집기 (E)" aria-label="셰이더 편집기 열기"></button>
                     <button id="recordStop" type="button" class="record-stop" title="녹화 중지" aria-label="녹화 중지" hidden><span class="record-dot" aria-hidden="true"></span><span id="recordTime">0:00</span></button>
-                    <button id="quickShot" type="button" class="tool-button" title="스크린샷 저장(PNG) · 고해상도 · 영상은 옆의 ▾" aria-label="스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg></button>
-                    <button id="captureToggle" type="button" class="tool-button capture-toggle" title="캡처 메뉴 · 고해상도 PNG · 영상 렌더링 · 녹화" aria-label="캡처 메뉴" aria-controls="captureMenu"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5"/></svg></button>
-                    <button id="fullscreenToggle" type="button" class="tool-button" title="전체화면 (F)" aria-label="전체화면"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>
-                    <button id="moreToggle" type="button" class="tool-button glyph-icon icon-more" title="더보기 · 갤러리 · 가이드 · 타임라인 · HUD · 테마" aria-label="더보기 메뉴" aria-controls="moreMenu"></button>
+                    <button id="quickShot" type="button" class="ui-icon-btn" title="스크린샷 저장(PNG) · 고해상도 · 영상은 옆의 ▾" aria-label="스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg></button>
+                    <button id="captureToggle" type="button" class="ui-icon-btn" title="캡처 메뉴 · 고해상도 PNG · 영상 렌더링 · 녹화" aria-label="캡처 메뉴" aria-controls="captureMenu"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5"/></svg></button>
+                    <button id="fullscreenToggle" type="button" class="ui-icon-btn" title="전체화면 (F)" aria-label="전체화면"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>
+                    <button id="moreToggle" type="button" class="ui-icon-btn glyph-icon icon-more" title="더보기 · 갤러리 · 가이드 · 타임라인 · HUD · 테마" aria-label="더보기 메뉴" aria-controls="moreMenu"></button>
                     <!-- 캡처 ▾ 메뉴 -->
-                    <div id="captureMenu" class="stage-menu" role="group" aria-label="캡처" hidden>
-                        <button id="screenshotButton" type="button" class="stage-menu-item" title="화면을 PNG로 저장" aria-label="PNG 스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>스크린샷 저장</span><kbd>PNG</kbd></button>
-                        <button id="screenshot2x" type="button" class="stage-menu-item" data-capture="2" title="지금 화면을 두 배 해상도로 다시 그려 PNG로 저장 · 버퍼 패스가 없는 프로젝트만" aria-label="2배 해상도 PNG 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>2배 해상도로 저장</span><kbd>2×</kbd></button>
-                        <button id="screenshot4k" type="button" class="stage-menu-item" data-capture="4k" title="긴 변 3840px(4K)로 다시 그려 PNG로 저장 · 무거운 셰이더는 몇 초 걸릴 수 있음 · 버퍼 패스가 없는 프로젝트만" aria-label="4K PNG 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>4K로 저장</span><kbd>4K</kbd></button>
-                        <button id="videoRenderOpen" type="button" class="stage-menu-item" title="시간·FPS·크기를 정해 프레임마다 정확히 그려 영상 파일로 만들기 (화면이 느려도 끊기지 않음)" aria-label="영상 렌더링" aria-haspopup="dialog" aria-controls="videoRenderDialog"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></svg><span>영상 렌더링…</span><kbd>고급</kbd></button>
-                        <button id="recordButton" type="button" class="stage-menu-item" title="뷰포트를 영상으로 녹화" aria-label="녹화 시작"><span class="record-dot" aria-hidden="true"></span><span id="recordButtonLabel">녹화 시작</span><kbd id="recordFormat">WebM</kbd></button>
+                    <div id="captureMenu" class="ui-popover ui-menu stage-menu" role="group" aria-label="캡처" hidden>
+                        <button id="screenshotButton" type="button" class="ui-menu-item" title="화면을 PNG로 저장" aria-label="PNG 스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>스크린샷 저장</span><kbd>PNG</kbd></button>
+                        <button id="screenshot2x" type="button" class="ui-menu-item" data-capture="2" title="지금 화면을 두 배 해상도로 다시 그려 PNG로 저장 · 버퍼 패스가 없는 프로젝트만" aria-label="2배 해상도 PNG 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>2배 해상도로 저장</span><kbd>2×</kbd></button>
+                        <button id="screenshot4k" type="button" class="ui-menu-item" data-capture="4k" title="긴 변 3840px(4K)로 다시 그려 PNG로 저장 · 무거운 셰이더는 몇 초 걸릴 수 있음 · 버퍼 패스가 없는 프로젝트만" aria-label="4K PNG 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>4K로 저장</span><kbd>4K</kbd></button>
+                        <button id="videoRenderOpen" type="button" class="ui-menu-item" title="시간·FPS·크기를 정해 프레임마다 정확히 그려 영상 파일로 만들기 (화면이 느려도 끊기지 않음)" aria-label="영상 렌더링" aria-haspopup="dialog" aria-controls="videoRenderDialog"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></svg><span>영상 렌더링…</span><kbd>고급</kbd></button>
+                        <button id="recordButton" type="button" class="ui-menu-item" title="뷰포트를 영상으로 녹화" aria-label="녹화 시작"><span class="record-dot" aria-hidden="true"></span><span id="recordButtonLabel">녹화 시작</span><kbd id="recordFormat">WebM</kbd></button>
                     </div>
                     <!-- ⋯ 더보기 메뉴: 자주 쓰지 않는 도구. 단축키(X ? H G)는 그대로 동작한다. -->
-                    <div id="moreMenu" class="stage-menu" role="group" aria-label="더보기" hidden>
-                        <button id="galleryToggle" type="button" class="stage-menu-item" title="예제 갤러리 (X)" aria-label="예제 갤러리 열기" aria-haspopup="dialog" aria-controls="gallery"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg><span>예제 갤러리</span><kbd>X</kbd></button>
-                        <button id="helpToggle" type="button" class="stage-menu-item glyph-icon icon-help" title="사용법과 단축키 (?)" aria-label="사용법 및 단축키 도움말" aria-haspopup="dialog" aria-controls="quickHelp"><span>가이드 · 단축키</span><kbd>?</kbd></button>
-                        <hr class="stage-menu-sep">
-                        <button id="timelineToggle" type="button" class="stage-menu-item glyph-icon icon-timeline" title="키프레임 타임라인 (T) · 미리보기 아래에 열림" aria-label="키프레임 타임라인" aria-pressed="false"><span>키프레임 타임라인</span><kbd>T</kbd></button>
-                        <button id="hudToggle" type="button" class="stage-menu-item" title="HUD 보이기/숨기기 (G) · 숨기면 도구 막대·프로젝트 이름·FPS까지 모두 숨기고 셰이더만 보입니다" aria-label="HUD 숨기기" aria-pressed="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5h4M16 5h4v4M4 15v4h4M16 19h4v-4"/><circle cx="12" cy="12" r="2"/></svg><span>HUD</span><kbd>G</kbd></button>
-                        <button id="previewPopout" type="button" class="stage-menu-item glyph-icon icon-popout" title="미리보기를 별도 창으로 분리" aria-label="미리보기를 별도 창으로 분리" aria-pressed="false"><span>미리보기 분리 창</span></button>
-                        <button id="themeToggle" type="button" class="stage-menu-item glyph-icon icon-sun" title="라이트 테마로 전환" aria-label="라이트 테마로 전환"><span>테마 전환</span></button>
+                    <div id="moreMenu" class="ui-popover ui-menu stage-menu" role="group" aria-label="더보기" hidden>
+                        <button id="galleryToggle" type="button" class="ui-menu-item" title="예제 갤러리 (X)" aria-label="예제 갤러리 열기" aria-haspopup="dialog" aria-controls="gallery"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg><span>예제 갤러리</span><kbd>X</kbd></button>
+                        <button id="helpToggle" type="button" class="ui-menu-item glyph-icon icon-help" title="사용법과 단축키 (?)" aria-label="사용법 및 단축키 도움말" aria-haspopup="dialog" aria-controls="quickHelp"><span>가이드 · 단축키</span><kbd>?</kbd></button>
+                        <hr class="ui-menu-sep">
+                        <button id="timelineToggle" type="button" class="ui-menu-item glyph-icon icon-timeline" title="키프레임 타임라인 (T) · 미리보기 아래에 열림" aria-label="키프레임 타임라인" aria-pressed="false"><span>키프레임 타임라인</span><kbd>T</kbd></button>
+                        <button id="hudToggle" type="button" class="ui-menu-item" title="HUD 보이기/숨기기 (G) · 숨기면 도구 막대·프로젝트 이름·FPS까지 모두 숨기고 셰이더만 보입니다" aria-label="HUD 숨기기" aria-pressed="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5h4M16 5h4v4M4 15v4h4M16 19h4v-4"/><circle cx="12" cy="12" r="2"/></svg><span>HUD</span><kbd>G</kbd></button>
+                        <button id="previewPopout" type="button" class="ui-menu-item glyph-icon icon-popout" title="미리보기를 별도 창으로 분리" aria-label="미리보기를 별도 창으로 분리" aria-pressed="false"><span>미리보기 분리 창</span></button>
+                        <button id="themeToggle" type="button" class="ui-menu-item glyph-icon icon-sun" title="라이트 테마로 전환" aria-label="라이트 테마로 전환"><span>테마 전환</span></button>
                     </div>
                 </div>
             </header>
-            <div id="stageHint" class="stage-hint" aria-hidden="true">E 편집기 열기 · / 파라미터 찾기</div>
+            <div id="stageHint" class="ui-hud stage-hint" aria-hidden="true">E 편집기 열기 · / 파라미터 찾기</div>
             <p id="keyboardHint" class="keyboard-hint" role="status" hidden>키보드 입력 중 · 키가 셰이더로 갑니다 · <kbd>Esc</kbd>로 나가기</p>
-            <p id="previewNotice" class="preview-notice" role="status" hidden></p>
-            <div id="perfSuggest" class="perf-suggest" role="status" hidden><span id="perfSuggestText"></span><span class="perf-suggest-actions"><button id="perfSuggestApply" type="button" class="primary"></button><button id="perfSuggestDismiss" type="button">그대로 두기</button></span></div>
+            <p id="previewNotice" class="ui-notice ui-notice--warning preview-notice" role="status" hidden></p>
+            <div id="perfSuggest" class="ui-popover perf-suggest" role="status" hidden><span id="perfSuggestText"></span><span class="perf-suggest-actions"><button id="perfSuggestApply" type="button" class="ui-btn--primary ui-btn--sm"></button><button id="perfSuggestDismiss" type="button" class="ui-btn--sm">그대로 두기</button></span></div>
             <div id="viewportFooter" class="viewport-footer">
-            <div id="viewportInfo" class="viewport-info"><span class="info-dot"></span><span>미리보기</span><span id="viewportMode">IMAGE</span></div>
-            <div id="stats" class="stage-stats" aria-live="off">
+            <div id="viewportInfo" class="ui-hud viewport-info"><span class="ui-dot ui-dot--success"></span><span>미리보기</span><span id="viewportMode">IMAGE</span></div>
+            <div id="stats" class="ui-hud stage-stats" aria-live="off">
                 <div class="stat-item"><span class="stat-caption">FPS</span><strong id="statFps">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">RESOLUTION</span><strong id="statResolution">--</strong></div>
                 <div class="stat-item"><span class="stat-caption">TIME</span><strong id="statTime">--</strong></div>
@@ -256,51 +285,51 @@
                 <div class="stat-item"><span class="stat-caption">GPU</span><strong id="statGpu">--</strong></div>
             </div>
             </div>
-            <div id="uiToast" role="alert" aria-live="assertive" hidden><span id="toastMessage"></span><button id="uiDismiss" type="button" aria-label="오류 알림 닫기" class="glyph-icon icon-close"></button></div>
-            <div id="status" role="status"></div>
+            <div id="uiToast" class="ui-notice ui-notice--danger" role="alert" aria-live="assertive" hidden><span id="toastMessage"></span><button id="uiDismiss" type="button" aria-label="오류 알림 닫기" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-close"></button></div>
+            <div id="status" class="ui-notice ui-notice--danger" role="status"></div>
             </div><!-- /renderViewport -->
-            <div id="studioResize" class="studio-resizer" role="separator" aria-label="편집기 높이 조절" aria-orientation="horizontal" tabindex="0" aria-valuemin="25" aria-valuemax="85" aria-valuenow="55" title="드래그 또는 ↑↓로 높이 조절 · Home/End · 두 번 클릭해 기본 높이 복원" hidden><span></span></div>
+            <div id="studioResize" class="ui-resizer studio-resizer" role="separator" aria-label="편집기 높이 조절" aria-orientation="horizontal" tabindex="0" aria-valuemin="25" aria-valuemax="85" aria-valuenow="55" title="드래그 또는 ↑↓로 높이 조절 · Home/End · 두 번 클릭해 기본 높이 복원" hidden></div>
             <section id="studioDock" class="studio-dock" aria-label="셰이더 및 버퍼 편집기" tabindex="-1" hidden>
                 <!-- 1줄: 패스 탭 · 실행 · 창 도구. 버퍼 설정은 버퍼를 고를 때만 아래 한 줄 요약으로 나타난다. -->
                 <header class="studio-top">
                     <div class="studio-tabs">
-                        <div id="studioPassTabs" class="studio-pass-tabs" role="tablist" aria-label="셰이더 패스"></div>
-                        <button id="studioAdd" type="button" class="glyph-icon icon-plus studio-add" aria-label="버퍼 패스 추가" title="새 버퍼 패스 추가 (최대 8개)"></button>
-                        <button id="studioAddCommon" type="button" class="glyph-icon icon-plus studio-add-common" title="Common 추가 · 모든 패스(Image · Buffer) 앞에 붙는 공용 코드(함수 · 상수)">Common</button>
+                        <div id="studioPassTabs" class="ui-tabs ui-tabs--line studio-pass-tabs" role="tablist" aria-label="셰이더 패스"></div>
+                        <button id="studioAdd" type="button" class="ui-btn--dashed ui-btn--sm glyph-icon icon-plus studio-add" aria-label="버퍼 패스 추가" title="새 버퍼 패스 추가 (최대 8개)"></button>
+                        <button id="studioAddCommon" type="button" class="ui-btn--ghost ui-btn--sm glyph-icon icon-plus studio-add-common" title="Common 추가 · 모든 패스(Image · Buffer) 앞에 붙는 공용 코드(함수 · 상수)">Common</button>
                     </div>
-                    <div class="studio-window-tools" role="group" aria-label="편집기 창 조작">
-                        <div class="studio-run-tools" role="group" aria-label="실행과 편집 이력">
-                            <button id="studioUndo" type="button" class="glyph-icon icon-undo" aria-label="되돌리기" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled></button>
-                            <button id="studioRedo" type="button" class="glyph-icon icon-redo" aria-label="다시 실행" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled></button>
-                            <label class="studio-live" title="코드를 고치면 0.9초 뒤 자동으로 적용"><input id="studioLive" type="checkbox" checked> 자동</label>
-                            <button id="studioRun" type="button" class="studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Alt+Enter)">실행 <span>Alt+↵</span></button>
+                    <div class="ui-toolbar studio-window-tools" role="group" aria-label="편집기 창 조작">
+                        <div class="ui-toolbar studio-run-tools" role="group" aria-label="실행과 편집 이력">
+                            <button id="studioUndo" type="button" class="ui-icon-btn glyph-icon icon-undo" aria-label="되돌리기" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled></button>
+                            <button id="studioRedo" type="button" class="ui-icon-btn glyph-icon icon-redo" aria-label="다시 실행" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled></button>
+                            <label class="ui-check studio-live" title="코드를 고치면 0.9초 뒤 자동으로 적용"><input id="studioLive" type="checkbox" checked> 자동</label>
+                            <button id="studioRun" type="button" class="ui-btn--primary studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Alt+Enter)">실행 <span>Alt+↵</span></button>
                         </div>
-                        <span class="studio-tool-sep" aria-hidden="true"></span>
-                        <button id="studioPause" type="button" class="glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
-                        <button id="studioResetFrames" type="button" class="glyph-icon icon-reset" aria-label="시간 초기화" title="시간·프레임 카운터와 피드백 버퍼 데이터 초기화"></button>
+                        <span class="ui-sep studio-tool-sep" aria-hidden="true"></span>
+                        <button id="studioPause" type="button" class="ui-icon-btn glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>
+                        <button id="studioResetFrames" type="button" class="ui-icon-btn glyph-icon icon-reset" aria-label="시간 초기화" title="시간·프레임 카운터와 피드백 버퍼 데이터 초기화"></button>
                         <button id="studioDockGrip" class="dock-grip" type="button" aria-label="편집기 위치 옮기기" title="끌어서 편집기를 미리보기의 왼쪽·오른쪽·위·아래로 옮기기 · 방향키로도 옮김"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
-                        <button id="studioMaximize" type="button" aria-pressed="false" aria-label="집중 모드 전환" title="집중 모드 · 미리보기를 일시정지하고 코드 영역 확대" class="glyph-icon icon-expand"></button>
-                        <button id="studioHide" type="button" title="셰이더 편집기 닫기 (E)" aria-label="편집기 닫기" class="glyph-icon icon-close"></button>
+                        <button id="studioMaximize" type="button" aria-pressed="false" aria-label="집중 모드 전환" title="집중 모드 · 미리보기를 일시정지하고 코드 영역 확대" class="ui-icon-btn glyph-icon icon-expand"></button>
+                        <button id="studioHide" type="button" title="셰이더 편집기 닫기 (E)" aria-label="편집기 닫기" class="ui-icon-btn glyph-icon icon-close"></button>
                     </div>
                 </header>
-                <details id="studioPassTools" class="studio-pass-settings">
+                <details id="studioPassTools" class="ui-disclosure studio-pass-settings">
                     <summary><span id="studioPassToolsLabel" class="studio-pass-settings-label">버퍼 설정</span><span id="studioPassSummary" class="studio-pass-summary"></span></summary>
                     <div class="studio-pass-settings-body">
                         <div class="studio-pass-fields">
-                            <label id="studioFormatField" title="RGBA8 = 일반 색 · 16F/32F = 음수·1 초과 값(시뮬레이션·HDR)">형식 <select id="studioFormat"><option value="rgba8">RGBA8</option><option value="rgba16f">RGBA16F</option><option value="rgba32f">RGBA32F</option></select></label>
-                            <label id="studioScaleField" title="화면 비율 또는 고정 해상도. 고정 크기는 시뮬레이션 상태 저장에 적합합니다.">크기 <select id="studioScale"><optgroup label="화면 비율"><option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option><option value="0.125">12.5%</option></optgroup><optgroup label="고정 해상도"><option value="size:64x64">64×64</option><option value="size:256x256">256×256</option><option value="size:512x512">512×512</option><option value="size:1024x1024">1024×1024</option></optgroup></select></label>
-                            <label id="studioOutputsField" title="출력 수(MRT). GLSL에서 layout(location = N) out vec4 로 각 출력에 씁니다.">출력 수 <select id="studioOutputs"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
-                            <label id="studioFilterField" title="이 버퍼를 다른 패스에서 읽을 때의 필터">필터 <select id="studioFilter"><option value="linear">Linear</option><option value="nearest">Nearest</option></select></label>
-                            <label id="studioWrapField" title="이 버퍼를 읽을 때 0~1 밖 좌표 처리">가장자리 <select id="studioWrap"><option value="clamp">Clamp</option><option value="repeat">Repeat</option><option value="mirror">Mirror</option></select></label>
-                            <label id="studioMipField" class="studio-pass-check" title="렌더링할 때마다 밉맵을 생성합니다. textureLod/블러에 사용 (메모리 +33%)"><input id="studioMip" type="checkbox"> 밉맵</label>
+                            <label id="studioFormatField" title="RGBA8 = 일반 색 · 16F/32F = 음수·1 초과 값(시뮬레이션·HDR)">형식 <select id="studioFormat" class="ui-input--sm"><option value="rgba8">RGBA8</option><option value="rgba16f">RGBA16F</option><option value="rgba32f">RGBA32F</option></select></label>
+                            <label id="studioScaleField" title="화면 비율 또는 고정 해상도. 고정 크기는 시뮬레이션 상태 저장에 적합합니다.">크기 <select id="studioScale" class="ui-input--sm"><optgroup label="화면 비율"><option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option><option value="0.125">12.5%</option></optgroup><optgroup label="고정 해상도"><option value="size:64x64">64×64</option><option value="size:256x256">256×256</option><option value="size:512x512">512×512</option><option value="size:1024x1024">1024×1024</option></optgroup></select></label>
+                            <label id="studioOutputsField" title="출력 수(MRT). GLSL에서 layout(location = N) out vec4 로 각 출력에 씁니다.">출력 수 <select id="studioOutputs" class="ui-input--sm"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+                            <label id="studioFilterField" title="이 버퍼를 다른 패스에서 읽을 때의 필터">필터 <select id="studioFilter" class="ui-input--sm"><option value="linear">Linear</option><option value="nearest">Nearest</option></select></label>
+                            <label id="studioWrapField" title="이 버퍼를 읽을 때 0~1 밖 좌표 처리">가장자리 <select id="studioWrap" class="ui-input--sm"><option value="clamp">Clamp</option><option value="repeat">Repeat</option><option value="mirror">Mirror</option></select></label>
+                            <label id="studioMipField" class="ui-check studio-pass-check" title="렌더링할 때마다 밉맵을 생성합니다. textureLod/블러에 사용 (메모리 +33%)"><input id="studioMip" type="checkbox"> 밉맵</label>
                         </div>
                         <div class="studio-pass-actions">
-                            <button id="studioUp" type="button" aria-label="패스를 앞으로 이동" title="선택한 버퍼의 실행 순서를 앞으로 이동" class="glyph-icon icon-up"></button>
-                            <button id="studioDown" type="button" aria-label="패스를 뒤로 이동" title="선택한 버퍼의 실행 순서를 뒤로 이동" class="glyph-icon icon-down"></button>
-                            <button id="studioDuplicate" type="button" title="현재 버퍼와 연결 설정 복제">복제</button>
-                            <button id="studioRemove" type="button" class="studio-danger" title="선택한 버퍼 삭제 (Image는 삭제 불가)">삭제</button>
+                            <button id="studioUp" type="button" aria-label="패스를 앞으로 이동" title="선택한 버퍼의 실행 순서를 앞으로 이동" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-up"></button>
+                            <button id="studioDown" type="button" aria-label="패스를 뒤로 이동" title="선택한 버퍼의 실행 순서를 뒤로 이동" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-down"></button>
+                            <button id="studioDuplicate" type="button" class="ui-btn--sm" title="현재 버퍼와 연결 설정 복제">복제</button>
+                            <button id="studioRemove" type="button" class="ui-btn--danger ui-btn--sm" title="선택한 버퍼 삭제 (Image는 삭제 불가)">삭제</button>
                             <span id="studioPassImpact" class="studio-pass-impact" hidden></span>
-                            <button type="button" class="guide-link" data-guide="buffers" title="형식·크기·출력 수·필터·가장자리·밉맵 설명">설정 설명 →</button>
+                            <button type="button" class="ui-link guide-link" data-guide="buffers" title="형식·크기·출력 수·필터·가장자리·밉맵 설명">설정 설명 →</button>
                         </div>
                     </div>
                 </details>
@@ -308,42 +337,42 @@
                     <div class="studio-code-pane">
                         <!-- 코드 머리줄: 파일 이름·상태 | 함수 이동·검색·줄 이동·자동 완성·코드 조각·더보기 메뉴 -->
                         <div class="studio-code-label">
-                            <span id="studioCodeTitle">Image.frag</span><button id="studioInputsToggle" type="button" class="studio-inputs-toggle" aria-controls="studioInputs" aria-expanded="false" title="이 패스의 입력 채널(iChannel0–3) 펼치기/접기"><span class="studio-inputs-label">입력</span><span id="studioInputsCount" class="studio-inputs-count" hidden></span><span class="studio-inputs-chevron icon-chevron" aria-hidden="true"></span></button><span id="studioState" class="studio-state" role="status" data-state="applied">실행 반영됨</span><button id="studioPreviewTarget" type="button" class="studio-preview-target glyph-icon icon-eye" aria-label="미리보기: Image">Image</button><button id="studioPreviewPin" type="button" class="studio-preview-pin glyph-icon icon-pin" aria-pressed="false" aria-label="미리보기 고정" title="미리보기 고정: 켜면 탭을 바꿔도 미리보기를 바꾸지 않습니다"></button>
-                            <div class="studio-editor-tools" role="toolbar" aria-label="검색과 코드 탐색">
-                                <button id="studioFunctions" type="button" class="studio-crumb" aria-haspopup="dialog" aria-label="현재 위치 · 함수·변수로 이동 (Ctrl+Shift+O)" title="함수·변수로 이동 (Ctrl+Shift+O)"><span class="studio-crumb-kind" aria-hidden="true"></span><span class="studio-crumb-name">함수</span><span class="studio-crumb-chevron" aria-hidden="true"></span></button>
-                                <button id="studioFind" type="button" class="glyph-icon icon-search" aria-label="찾기" title="찾기 (Ctrl+F) · 찾아 바꾸기 Ctrl+H"></button>
-                                <button id="studioGoto" type="button" class="glyph-icon icon-goto" aria-label="줄 번호로 이동" title="줄 번호로 이동 (Ctrl+G)"></button>
-                                <button id="studioComplete" type="button" class="glyph-icon icon-complete" aria-label="자동 완성" title="이름 자동 완성 (Ctrl+Space)"></button>
-                                <button id="studioSnippets" type="button" class="glyph-icon icon-snippet" data-guide="snippets" aria-label="코드 조각" title="코드 조각 모음에서 함수 삽입 (노이즈·SDF·색…)"></button>
+                            <span id="studioCodeTitle">Image.frag</span><button id="studioInputsToggle" type="button" class="ui-btn ui-btn--xs studio-inputs-toggle" aria-controls="studioInputs" aria-expanded="false" title="이 패스의 입력 채널(iChannel0–3) 펼치기/접기"><span class="studio-inputs-label">입력</span><span id="studioInputsCount" class="ui-count" hidden></span><span class="studio-inputs-chevron icon-chevron" aria-hidden="true"></span></button><span id="studioState" class="ui-tag studio-state" role="status" data-state="applied">실행 반영됨</span><button id="studioPreviewTarget" type="button" class="ui-btn--ghost ui-btn--xs studio-preview-target glyph-icon icon-eye" aria-label="미리보기: Image">Image</button><button id="studioPreviewPin" type="button" class="ui-icon-btn ui-icon-btn--xs studio-preview-pin glyph-icon icon-pin" aria-pressed="false" aria-label="미리보기 고정" title="미리보기 고정: 켜면 탭을 바꿔도 미리보기를 바꾸지 않습니다"></button>
+                            <div class="ui-toolbar studio-editor-tools" role="toolbar" aria-label="검색과 코드 탐색">
+                                <button id="studioFunctions" type="button" class="ui-btn--ghost ui-btn--sm studio-crumb" aria-haspopup="dialog" aria-label="현재 위치 · 함수·변수로 이동 (Ctrl+Shift+O)" title="함수·변수로 이동 (Ctrl+Shift+O)"><span class="studio-crumb-kind" aria-hidden="true"></span><span class="studio-crumb-name">함수</span><span class="studio-crumb-chevron" aria-hidden="true"></span></button>
+                                <button id="studioFind" type="button" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-search" aria-label="찾기" title="찾기 (Ctrl+F) · 찾아 바꾸기 Ctrl+H"></button>
+                                <button id="studioGoto" type="button" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-goto" aria-label="줄 번호로 이동" title="줄 번호로 이동 (Ctrl+G)"></button>
+                                <button id="studioComplete" type="button" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-complete" aria-label="자동 완성" title="이름 자동 완성 (Ctrl+Space)"></button>
+                                <button id="studioSnippets" type="button" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-snippet" data-guide="snippets" aria-label="코드 조각" title="코드 조각 모음에서 함수 삽입 (노이즈·SDF·색…)"></button>
                                 <details id="studioCodeTools" class="studio-menu">
-                                    <summary class="glyph-icon icon-more" aria-label="편집기 메뉴" title="파일 · 삽입 · 표시 설정 · 배치"></summary>
-                                    <div class="studio-menu-panel" role="group" aria-label="편집기 메뉴">
-                                        <button id="studioPaletteOpen" type="button" class="studio-menu-palette" title="모든 명령을 이름으로 검색해 실행 · > 를 지우면 패스로 이동(Ctrl+P) · @ 함수·변수 · : 줄 번호">명령 팔레트… <kbd>Ctrl+Shift+P</kbd></button>
-                                        <p class="studio-menu-title">편집</p>
-                                        <button id="studioReplace" type="button" title="찾아 바꾸기 (Ctrl+H)">찾아 바꾸기 <kbd>Ctrl+H</kbd></button>
-                                        <button id="studioDefinition" type="button" title="커서 아래 이름의 정의로 이동 (F12 · Ctrl+클릭)">정의로 이동 <kbd>F12</kbd></button>
-                                        <button id="studioRename" type="button" title="커서 아래 이름이 가리키는 그 변수·함수·구조체 필드·Uniform만 바꾸기 (F2) · 다른 함수의 같은 이름은 그대로 · Uniform은 다른 패스와 파라미터 값까지 함께">이름 바꾸기 <kbd>F2</kbd></button>
-                                        <button id="studioLintPanel" type="button" title="컴파일 오류를 목록으로 보기 · F8로 다음 오류 (Ctrl+Shift+M)">오류 목록 <kbd>Ctrl+Shift+M</kbd></button>
-                                        <div class="studio-menu-row"><span>코드 접기</span><span class="studio-stepper"><button id="studioFoldAll" type="button" title="모든 블록 접기 (Ctrl+K Ctrl+0)">모두 접기</button><button id="studioUnfoldAll" type="button" title="모든 블록 펴기 (Ctrl+K Ctrl+J)">펴기</button></span></div>
-                                        <p class="studio-menu-title">삽입</p>
-                                        <button id="studioSampleUV" type="button" title="texture(iChannel0, uv) 샘플 코드 삽입">texture() 읽기 코드 <kbd>texture</kbd></button>
-                                        <button id="studioSamplePixel" type="button" title="texelFetch(iChannel0, 정수 픽셀 좌표, 0) 삽입">texelFetch() 픽셀 읽기 코드 <kbd>texelFetch</kbd></button>
-                                        <p class="studio-menu-title">창</p>
-                                        <button id="studioSplitEdit" type="button" aria-pressed="false" title="미리보기를 별도 창으로 빼고 편집기를 화면 가득 확대 · 다시 누르면 원래대로 (Ctrl+K P · 편집기 밖에서는 P)">미리보기 분리 + 편집기 확대 <kbd>Ctrl+K P</kbd></button>
-                                        <button id="studioLayout" type="button" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>
-                                        <button id="studioParameters" type="button" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 패널 열기</button>
-                                        <p class="studio-menu-title">파일 · 현재 패스만</p>
-                                        <button id="studioOpenGLSL" type="button" title="현재 패스의 GLSL 소스를 파일에서 열기">.frag 파일 열기…</button>
-                                        <button id="studioSaveGLSL" type="button" title="현재 GLSL만 .frag 파일로 저장">.frag 파일로 저장</button>
+                                    <summary class="ui-btn ui-icon-btn ui-icon-btn--sm glyph-icon icon-more" aria-label="편집기 메뉴" title="파일 · 삽입 · 표시 설정 · 배치"></summary>
+                                    <div class="ui-popover ui-menu studio-menu-panel" role="group" aria-label="편집기 메뉴">
+                                        <button id="studioPaletteOpen" type="button" class="ui-menu-item studio-menu-palette" title="모든 명령을 이름으로 검색해 실행 · > 를 지우면 패스로 이동(Ctrl+P) · @ 함수·변수 · : 줄 번호">명령 팔레트… <kbd>Ctrl+Shift+P</kbd></button>
+                                        <p class="ui-menu-title">편집</p>
+                                        <button id="studioReplace" type="button" class="ui-menu-item" title="찾아 바꾸기 (Ctrl+H)">찾아 바꾸기 <kbd>Ctrl+H</kbd></button>
+                                        <button id="studioDefinition" type="button" class="ui-menu-item" title="커서 아래 이름의 정의로 이동 (F12 · Ctrl+클릭)">정의로 이동 <kbd>F12</kbd></button>
+                                        <button id="studioRename" type="button" class="ui-menu-item" title="커서 아래 이름이 가리키는 그 변수·함수·구조체 필드·Uniform만 바꾸기 (F2) · 다른 함수의 같은 이름은 그대로 · Uniform은 다른 패스와 파라미터 값까지 함께">이름 바꾸기 <kbd>F2</kbd></button>
+                                        <button id="studioLintPanel" type="button" class="ui-menu-item" title="컴파일 오류를 목록으로 보기 · F8로 다음 오류 (Ctrl+Shift+M)">오류 목록 <kbd>Ctrl+Shift+M</kbd></button>
+                                        <div class="ui-menu-row"><span>코드 접기</span><span class="studio-stepper"><button id="studioFoldAll" type="button" class="ui-btn--xs" title="모든 블록 접기 (Ctrl+K Ctrl+0)">모두 접기</button><button id="studioUnfoldAll" type="button" class="ui-btn--xs" title="모든 블록 펴기 (Ctrl+K Ctrl+J)">펴기</button></span></div>
+                                        <p class="ui-menu-title">삽입</p>
+                                        <button id="studioSampleUV" type="button" class="ui-menu-item" title="texture(iChannel0, uv) 샘플 코드 삽입">texture() 읽기 코드 <kbd>texture</kbd></button>
+                                        <button id="studioSamplePixel" type="button" class="ui-menu-item" title="texelFetch(iChannel0, 정수 픽셀 좌표, 0) 삽입">texelFetch() 픽셀 읽기 코드 <kbd>texelFetch</kbd></button>
+                                        <p class="ui-menu-title">창</p>
+                                        <button id="studioSplitEdit" type="button" class="ui-menu-item" aria-pressed="false" title="미리보기를 별도 창으로 빼고 편집기를 화면 가득 확대 · 다시 누르면 원래대로 (Ctrl+K P · 편집기 밖에서는 P)">미리보기 분리 + 편집기 확대 <kbd>Ctrl+K P</kbd></button>
+                                        <button id="studioLayout" type="button" class="ui-menu-item" aria-pressed="false" title="편집기를 캔버스 오른쪽에 나란히 배치">편집기를 오른쪽에 배치</button>
+                                        <button id="studioParameters" type="button" class="ui-menu-item" title="프로젝트 파라미터 패널 열기" aria-controls="view-uniforms">파라미터 패널 열기</button>
+                                        <p class="ui-menu-title">파일 · 현재 패스만</p>
+                                        <button id="studioOpenGLSL" type="button" class="ui-menu-item" title="현재 패스의 GLSL 소스를 파일에서 열기">.frag 파일 열기…</button>
+                                        <button id="studioSaveGLSL" type="button" class="ui-menu-item" title="현재 GLSL만 .frag 파일로 저장">.frag 파일로 저장</button>
                                         <input id="studioGLSLFile" type="file" accept=".frag,.glsl,.fs,text/plain" hidden>
-                                        <span id="studioExportState" class="studio-menu-note" title="브라우저에 마지막으로 다운로드를 요청한 파일입니다. 파일 저장 완료나 이후 변경사항의 포함을 보장하지 않습니다.">파일 · 이 세션에서 내보내기 요청 없음</span>
-                                        <details class="studio-menu-more"><summary>편집기 설정 · 글자 크기 · 들여쓰기 · 줄바꿈</summary>
-                                        <div class="studio-menu-row"><span>글자 크기</span><span class="studio-stepper"><button id="studioZoomOut" type="button" aria-label="글자 작게" title="편집기 글씨 크기 -1">A−</button><span id="studioFontSize">12px</span><button id="studioZoomIn" type="button" aria-label="글자 크게" title="편집기 글씨 크기 +1">A+</button></span></div>
-                                        <label class="studio-menu-row" title="Tab 키로 넣을 공백 수"><span>들여쓰기</span><select id="studioIndent" aria-label="들여쓰기 공백 수"><option value="4">공백 4</option><option value="2">공백 2</option></select></label>
-                                        <button id="studioLineWrap" type="button" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
-                                        <button id="studioCtrlSRuns" type="button" aria-pressed="false" title="켜면 Ctrl+S가 프로젝트 저장 대신 셰이더 실행이 됩니다(이전 방식). 실행은 언제나 Alt+Enter로도 됩니다.">Ctrl+S로 실행 (이전 방식)</button>
+                                        <span id="studioExportState" class="ui-menu-note" title="브라우저에 마지막으로 다운로드를 요청한 파일입니다. 파일 저장 완료나 이후 변경사항의 포함을 보장하지 않습니다.">파일 · 이 세션에서 내보내기 요청 없음</span>
+                                        <details class="ui-disclosure studio-menu-more"><summary>편집기 설정 · 글자 크기 · 들여쓰기 · 줄바꿈</summary>
+                                        <div class="ui-menu-row"><span>글자 크기</span><span class="studio-stepper"><button id="studioZoomOut" type="button" class="ui-btn--xs" aria-label="글자 작게" title="편집기 글씨 크기 -1">A−</button><span id="studioFontSize">12px</span><button id="studioZoomIn" type="button" class="ui-btn--xs" aria-label="글자 크게" title="편집기 글씨 크기 +1">A+</button></span></div>
+                                        <label class="ui-menu-row" title="Tab 키로 넣을 공백 수"><span>들여쓰기</span><select id="studioIndent" class="ui-input--sm" aria-label="들여쓰기 공백 수"><option value="4">공백 4</option><option value="2">공백 2</option></select></label>
+                                        <button id="studioLineWrap" type="button" class="ui-menu-item" aria-pressed="false" title="긴 줄을 편집기 폭에 맞춰 줄바꿈">긴 줄 자동 줄바꿈</button>
+                                        <button id="studioCtrlSRuns" type="button" class="ui-menu-item" aria-pressed="false" title="켜면 Ctrl+S가 프로젝트 저장 대신 셰이더 실행이 됩니다(이전 방식). 실행은 언제나 Alt+Enter로도 됩니다.">Ctrl+S로 실행 (이전 방식)</button>
                                         </details>
-                                        <button id="studioHelp" type="button" title="편집기 도움말 및 단축키 (?)" aria-haspopup="dialog" aria-controls="quickHelp">도움말 · 단축키 <kbd>?</kbd></button>
+                                        <button id="studioHelp" type="button" class="ui-menu-item" title="편집기 도움말 및 단축키 (?)" aria-haspopup="dialog" aria-controls="quickHelp">도움말 · 단축키 <kbd>?</kbd></button>
                                     </div>
                                 </details>
                             </div>
@@ -351,20 +380,20 @@
                         <div id="studioInputs" class="studio-inputs" role="group" aria-labelledby="studioInputsTitle" hidden>
                             <span id="studioInputsTitle" class="studio-inputs-title">Image · 입력</span>
                             <div id="studioChannels" class="studio-channel-bar"></div>
-                            <button type="button" class="guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="입력 채널 연결 규칙" title="iChannel0–3 연결 규칙: current는 앞선 패스, previous는 직전 프레임"></button>
+                            <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="buffers" aria-label="입력 채널 연결 규칙" title="iChannel0–3 연결 규칙: current는 앞선 패스, previous는 직전 프레임"></button>
                             <p id="studioChannelRules" class="studio-channel-rules" hidden></p>
                         </div>
                         <!-- CodeMirror 6 편집기(js/cm-editor.js)가 이 안에 화면을 만든다. 아래 textarea는 studio가 소스를 읽고 쓰는 숨은 창구다. -->
                         <div class="studio-editor-frame"><textarea id="studioCode" class="studio-code-model" hidden tabindex="-1" aria-hidden="true" spellcheck="false" autocomplete="off"></textarea></div>
                     </div>
                 </div>
-                <div id="studioDraft" class="studio-draft" hidden><span>복구 가능한 미적용 편집본이 있습니다.</span><button id="studioDraftRestore" title="저장된 미적용 편집본 복구">편집본 복구</button><button id="studioDraftDiscard" title="미적용 편집본 버리기">버리기</button></div>
-                <div id="studioChangeNotice" class="studio-change-notice" hidden><span id="studioChangeText" role="status"></span><button id="studioChangeUndo" type="button">변경 되돌리기</button></div>
+                <div id="studioDraft" class="ui-notice ui-notice--warning ui-notice--bar" hidden><span>복구 가능한 미적용 편집본이 있습니다.</span><button id="studioDraftRestore" type="button" class="ui-btn--sm" title="저장된 미적용 편집본 복구">편집본 복구</button><button id="studioDraftDiscard" type="button" class="ui-btn--sm" title="미적용 편집본 버리기">버리기</button></div>
+                <div id="studioChangeNotice" class="ui-notice ui-notice--bar" hidden><span id="studioChangeText" role="status"></span><button id="studioChangeUndo" type="button" class="ui-btn--sm">변경 되돌리기</button></div>
                 <div id="studioDiagnostics" class="studio-diagnostics" hidden></div>
                 <!-- 상태 줄 하나: 메시지 | 오류 펼치기 | 브라우저 보관 상태 | 커서 위치 -->
                 <footer class="studio-bottom">
                     <span id="studioMessage" role="status">준비됨 · 코드를 편집하면 자동으로 적용됩니다.</span>
-                    <button id="studioErrorToggle" type="button" hidden title="GLSL 컴파일러의 전체 오류 메시지 펼치기">전체 오류 보기</button>
+                    <button id="studioErrorToggle" type="button" class="ui-btn--xs" hidden title="GLSL 컴파일러의 전체 오류 메시지 펼치기">전체 오류 보기</button>
                     <span id="studioStorageState" class="studio-storage" data-state="none" role="status" title="자동 복구본은 이 브라우저 탭의 코드·채널 구성입니다. 파라미터·이미지까지 이름을 붙여 보관하려면 프로젝트 저장(Ctrl+S)을 쓰세요.">복구본 기록 전</span>
                     <span id="studioCursor" class="studio-cursor">Ln 1, Col 1</span>
                 </footer>
@@ -375,64 +404,64 @@
         <section id="timelineDock" class="timeline-dock" aria-label="키프레임 타임라인" hidden></section>
     </div>
 
-    <dialog id="studioPromptDialog" class="studio-prompt-dialog" aria-labelledby="studioDialogTitle" aria-describedby="studioDialogMessage">
+    <dialog id="studioPromptDialog" class="ui-dialog studio-prompt-dialog" aria-labelledby="studioDialogTitle" aria-describedby="studioDialogMessage">
         <form id="studioDialogForm" method="dialog">
-            <header class="studio-dialog-head"><div class="studio-dialog-mark glyph-icon icon-edit" aria-hidden="true"></div><div><h2 id="studioDialogTitle">확인</h2><p id="studioDialogMessage"></p></div><button id="studioDialogClose" type="button" aria-label="닫기" title="닫기 (Esc)" class="glyph-icon icon-close"></button></header>
-            <label id="studioDialogField" class="studio-dialog-field" for="studioDialogInput" hidden>값 입력<input id="studioDialogInput" type="text" autocomplete="off" required aria-describedby="studioDialogError"><span id="studioDialogError" class="studio-dialog-error" role="alert" hidden></span></label>
-            <footer class="studio-dialog-actions"><button id="studioDialogCancel" type="button">취소 <kbd>Esc</kbd></button><button id="studioDialogAlt" type="button" hidden></button><button id="studioDialogOK" type="submit">확인 <kbd>Enter</kbd></button></footer>
+            <header class="ui-dialog-head"><div class="ui-dialog-mark glyph-icon icon-edit" aria-hidden="true"></div><div class="ui-dialog-text"><h2 id="studioDialogTitle">확인</h2><p id="studioDialogMessage"></p></div><button id="studioDialogClose" type="button" aria-label="닫기" title="닫기 (Esc)" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close"></button></header>
+            <label id="studioDialogField" class="ui-dialog-field" for="studioDialogInput" hidden>값 입력<input id="studioDialogInput" class="ui-input--lg" type="text" autocomplete="off" required aria-describedby="studioDialogError"><span id="studioDialogError" class="ui-error" role="alert" hidden></span></label>
+            <footer class="ui-dialog-foot"><button id="studioDialogCancel" type="button" class="ui-btn--lg">취소 <kbd>Esc</kbd></button><button id="studioDialogAlt" type="button" class="ui-btn--lg" hidden></button><button id="studioDialogOK" type="submit" class="ui-btn--primary ui-btn--lg">확인 <kbd>Enter</kbd></button></footer>
         </form>
     </dialog>
 
     <!-- 영상 렌더링(오프라인): js/video-dialog.js가 연결한다. 실제 렌더링·인코딩은 js/video-render.js -->
-    <dialog id="videoRenderDialog" class="video-render-dialog" aria-labelledby="videoRenderTitle" aria-describedby="videoRenderIntro">
+    <dialog id="videoRenderDialog" class="ui-dialog ui-dialog--md video-render-dialog" aria-labelledby="videoRenderTitle" aria-describedby="videoRenderIntro">
         <form id="videoRenderForm" method="dialog" novalidate>
-            <header class="studio-dialog-head"><div class="studio-dialog-mark video-render-mark" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></svg></div><div><h2 id="videoRenderTitle">영상 렌더링</h2><p id="videoRenderIntro">시간을 프레임마다 정확히 진행하며 한 장씩 그려 파일로 만듭니다. 화면이 느려도 결과 영상은 끊기지 않고, 크기는 화면과 상관없이 정할 수 있습니다.</p></div><button id="videoRenderClose" type="button" aria-label="닫기" title="닫기 (Esc)" class="glyph-icon icon-close"></button></header>
-            <div class="video-render-body">
+            <header class="ui-dialog-head"><div class="ui-dialog-mark" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></svg></div><div class="ui-dialog-text"><h2 id="videoRenderTitle">영상 렌더링</h2><p id="videoRenderIntro">시간을 프레임마다 정확히 진행하며 한 장씩 그려 파일로 만듭니다. 화면이 느려도 결과 영상은 끊기지 않고, 크기는 화면과 상관없이 정할 수 있습니다.</p></div><button id="videoRenderClose" type="button" aria-label="닫기" title="닫기 (Esc)" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close"></button></header>
+            <div class="ui-dialog-body">
                 <fieldset id="videoRenderFields" class="video-render-grid">
-                    <label for="videoStart"><span class="video-label">시작 시간 <span class="field-hint">초 · uTime</span></span><input id="videoStart" type="number" min="0" max="86400" step="0.1" value="0" inputmode="decimal"></label>
-                    <label for="videoDuration"><span class="video-label">길이 <span class="field-hint">초 · 최대 600</span></span><input id="videoDuration" type="number" min="0.1" max="600" step="0.1" value="5" inputmode="decimal"></label>
-                    <label for="videoFps"><span class="video-label">FPS <span class="field-hint">1~120 정수</span></span><input id="videoFps" type="number" min="1" max="120" step="1" value="30" inputmode="numeric" list="videoFpsPresets"><datalist id="videoFpsPresets"><option value="24"></option><option value="25"></option><option value="30"></option><option value="50"></option><option value="60"></option><option value="120"></option></datalist></label>
-                    <label for="videoSize"><span class="video-label">크기</span><select id="videoSize"><option value="screen">지금 화면</option><option value="1280x720">1280 × 720 · HD</option><option value="1920x1080" selected>1920 × 1080 · Full HD</option><option value="2560x1440">2560 × 1440 · QHD</option><option value="3840x2160">3840 × 2160 · 4K</option><option value="1080x1080">1080 × 1080 · 정사각</option><option value="1080x1920">1080 × 1920 · 세로</option><option value="custom">직접 입력</option></select></label>
-                    <label for="videoWidth" class="video-custom-size" hidden><span class="video-label">너비 <span class="field-hint">px</span></span><input id="videoWidth" type="number" min="16" step="2" value="1920" inputmode="numeric"></label>
-                    <label for="videoHeight" class="video-custom-size" hidden><span class="video-label">높이 <span class="field-hint">px</span></span><input id="videoHeight" type="number" min="16" step="2" value="1080" inputmode="numeric"></label>
-                    <label for="videoFormat"><span class="video-label">형식</span><select id="videoFormat"><option value="mp4-h264" selected>MP4 · H.264</option><option value="webm-vp9">WebM · VP9</option><option value="webm-vp8">WebM · VP8</option><option value="png">PNG 연속 이미지 (ZIP)</option></select></label>
-                    <label for="videoQuality" id="videoQualityField"><span class="video-label">품질</span><select id="videoQuality"><option value="standard">보통</option><option value="high" selected>높음</option><option value="max">최고</option></select></label>
+                    <label for="videoStart"><span class="video-label">시작 시간 <span class="ui-label-hint">초 · uTime</span></span><input id="videoStart" class="ui-input--lg" type="number" min="0" max="86400" step="0.1" value="0" inputmode="decimal"></label>
+                    <label for="videoDuration"><span class="video-label">길이 <span class="ui-label-hint">초 · 최대 600</span></span><input id="videoDuration" class="ui-input--lg" type="number" min="0.1" max="600" step="0.1" value="5" inputmode="decimal"></label>
+                    <label for="videoFps"><span class="video-label">FPS <span class="ui-label-hint">1~120 정수</span></span><input id="videoFps" class="ui-input--lg" type="number" min="1" max="120" step="1" value="30" inputmode="numeric" list="videoFpsPresets"><datalist id="videoFpsPresets"><option value="24"></option><option value="25"></option><option value="30"></option><option value="50"></option><option value="60"></option><option value="120"></option></datalist></label>
+                    <label for="videoSize"><span class="video-label">크기</span><select id="videoSize" class="ui-input--lg"><option value="screen">지금 화면</option><option value="1280x720">1280 × 720 · HD</option><option value="1920x1080" selected>1920 × 1080 · Full HD</option><option value="2560x1440">2560 × 1440 · QHD</option><option value="3840x2160">3840 × 2160 · 4K</option><option value="1080x1080">1080 × 1080 · 정사각</option><option value="1080x1920">1080 × 1920 · 세로</option><option value="custom">직접 입력</option></select></label>
+                    <label for="videoWidth" class="video-custom-size" hidden><span class="video-label">너비 <span class="ui-label-hint">px</span></span><input id="videoWidth" class="ui-input--lg" type="number" min="16" step="2" value="1920" inputmode="numeric"></label>
+                    <label for="videoHeight" class="video-custom-size" hidden><span class="video-label">높이 <span class="ui-label-hint">px</span></span><input id="videoHeight" class="ui-input--lg" type="number" min="16" step="2" value="1080" inputmode="numeric"></label>
+                    <label for="videoFormat"><span class="video-label">형식</span><select id="videoFormat" class="ui-input--lg"><option value="mp4-h264" selected>MP4 · H.264</option><option value="webm-vp9">WebM · VP9</option><option value="webm-vp8">WebM · VP8</option><option value="png">PNG 연속 이미지 (ZIP)</option></select></label>
+                    <label for="videoQuality" id="videoQualityField"><span class="video-label">품질</span><select id="videoQuality" class="ui-input--lg"><option value="standard">보통</option><option value="high" selected>높음</option><option value="max">최고</option></select></label>
                 </fieldset>
                 <p id="videoRenderSummary" class="video-render-summary" aria-live="polite"></p>
-                <p class="help video-render-note" title="uTime = 시작 + 번호 ÷ FPS · uDeltaTime = 1 ÷ FPS · 재생 배속과 상관없음 · 렌더링 중 마우스·키 입력은 고정 · 버퍼 패스가 있으면 0초부터 시작 시간까지 먼저 계산(저장하지 않음) · 화면의 시뮬레이션은 렌더링 전 상태 그대로 이어짐">프레임마다 시간을 정확히 진행해 그립니다(재생 배속 · 마우스 입력과 무관).</p>
+                <p class="ui-hint video-render-note" title="uTime = 시작 + 번호 ÷ FPS · uDeltaTime = 1 ÷ FPS · 재생 배속과 상관없음 · 렌더링 중 마우스·키 입력은 고정 · 버퍼 패스가 있으면 0초부터 시작 시간까지 먼저 계산(저장하지 않음) · 화면의 시뮬레이션은 렌더링 전 상태 그대로 이어짐">프레임마다 시간을 정확히 진행해 그립니다(재생 배속 · 마우스 입력과 무관).</p>
                 <div id="videoRenderProgressBox" class="video-render-progress" hidden>
                     <progress id="videoRenderProgress" max="1" value="0"></progress>
                     <p id="videoRenderStatus" role="status"></p>
                 </div>
             </div>
-            <footer class="studio-dialog-actions"><button id="videoRenderCancel" type="button">닫기 <kbd>Esc</kbd></button><button id="videoRenderStart" type="submit" class="primary">렌더링 시작</button></footer>
+            <footer class="ui-dialog-foot"><button id="videoRenderCancel" type="button" class="ui-btn--lg">닫기 <kbd>Esc</kbd></button><button id="videoRenderStart" type="submit" class="ui-btn--primary ui-btn--lg">렌더링 시작</button></footer>
         </form>
     </dialog>
 
-    <dialog id="gallery" class="gallery" aria-labelledby="galleryTitle" data-welcome="false">
-        <header class="gallery-head">
-            <div>
-                <span class="section-index gallery-welcome-only">WELCOME TO FIELD STUDIO</span>
+    <dialog id="gallery" class="ui-dialog ui-dialog--2xl ui-dialog--column gallery" aria-labelledby="galleryTitle" data-welcome="false">
+        <header class="ui-dialog-head ui-dialog-head--bar gallery-head">
+            <div class="ui-dialog-text">
+                <span class="ui-dialog-eyebrow gallery-welcome-only">WELCOME TO FIELD STUDIO</span>
                 <h2 id="galleryTitle"><span class="gallery-welcome-only">무엇을 만들어 볼까요?</span><span class="gallery-browse-only">예제 갤러리</span></h2>
                 <p>예제를 고르면 코드·버퍼·파라미터가 함께 열립니다. 언제든 <kbd>Ctrl+Z</kbd>로 이전 작업으로 돌아갈 수 있어요.</p>
             </div>
-            <button id="galleryClose" type="button" class="glyph-icon icon-close" aria-label="갤러리 닫기" title="닫기 (Esc)"></button>
+            <button id="galleryClose" type="button" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close" aria-label="갤러리 닫기" title="닫기 (Esc)"></button>
         </header>
-        <div class="gallery-body">
-            <div class="gallery-search"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="gallerySearch" type="search" placeholder="제목·태그·설명·작가로 찾기 (예: SDF, 유체, noise)" title="예제 검색 (/) · Enter로 첫 결과 열기 · Esc로 지우기" autocomplete="off" spellcheck="false" aria-label="예제 검색" aria-controls="galleryResults"><span id="galleryCount" class="gallery-count" aria-live="polite"></span></div>
+        <div class="ui-dialog-body gallery-body">
+            <div class="gallery-search"><label class="ui-search"><span class="ui-search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="gallerySearch" type="search" placeholder="제목·태그·설명·작가로 찾기 (예: SDF, 유체, noise)" title="예제 검색 (/) · Enter로 첫 결과 열기 · Esc로 지우기" autocomplete="off" spellcheck="false" aria-label="예제 검색" aria-controls="galleryResults"></label><span id="galleryCount" class="gallery-count" aria-live="polite"></span></div>
             <div class="gallery-start gallery-welcome-only" role="group" aria-label="시작하기">
                 <button id="galleryStartDefault" type="button" class="gallery-start-card is-primary"><b>기본 예제로 시작</b><span>지금 보이는 장면의 코드를 열고 숫자 하나부터 바꿔 봅니다</span></button>
                 <button id="galleryStartBlank" type="button" class="gallery-start-card"><b>빈 프로젝트</b><span>편집기를 열고 짧은 셰이더 한 장에서 직접 만들어 갑니다</span></button>
                 <button id="galleryStartFile" type="button" class="gallery-start-card"><b>파일 열기</b><span>내보낸 프로젝트 파일(.json)을 이미지까지 불러옵니다</span></button>
             </div>
-            <details class="gallery-tips gallery-welcome-only"><summary>처음이라면 · 화면 구성과 단축키</summary>
+            <details class="ui-disclosure gallery-tips gallery-welcome-only"><summary>처음이라면 · 화면 구성과 단축키</summary>
             <ol class="gallery-steps">
                 <li><kbd>E</kbd><span><b>편집기</b> 열기 — 코드를 고치면 0.9초 뒤 자동 적용, <kbd>Alt+Enter</kbd>로 즉시 실행, <kbd>Ctrl+S</kbd>로 프로젝트 저장</span></li>
                 <li><kbd>/</kbd><span><b>파라미터</b> — 슬라이더로 값을 조절하고 Uniform을 추가</span></li>
                 <li><kbd>성능</kbd><span><b>프로파일러</b> — 패스별 GPU 시간과 미등록 Uniform을 확인</span></li>
                 <li><kbd>?</kbd><span><b>가이드</b> — 모든 기능 설명·코드 예시, 처음이라면 아래 <b>UI 둘러보기</b></span></li>
             </ol></details>
-            <details class="gallery-perf-legend"><summary>카드 오른쪽 위 성능 배지란?</summary><span>이 컴퓨터에서, 지금 미리보기 크기(해상도 배율 포함)로 한 프레임을 그리는 데 걸리는 시간의 어림값입니다. 카드가 화면에 보이면 잽니다.</span><span><span class="gallery-perf" data-level="light">가벼움</span> 4ms 미만 · <span class="gallery-perf" data-level="medium">보통</span> 12ms 미만 · <span class="gallery-perf" data-level="heavy">무거움</span> 33ms 미만 · <span class="gallery-perf" data-level="extreme">매우 무거움</span></span></details>
+            <details class="ui-disclosure gallery-perf-legend"><summary>카드 오른쪽 위 성능 배지란?</summary><span>이 컴퓨터에서, 지금 미리보기 크기(해상도 배율 포함)로 한 프레임을 그리는 데 걸리는 시간의 어림값입니다. 카드가 화면에 보이면 잽니다.</span><span><span class="gallery-perf" data-level="light">가벼움</span> 4ms 미만 · <span class="gallery-perf" data-level="medium">보통</span> 12ms 미만 · <span class="gallery-perf" data-level="heavy">무거움</span> 33ms 미만 · <span class="gallery-perf" data-level="extreme">매우 무거움</span></span></details>
             <div id="galleryResults">
             <section class="gallery-section"><h3>Shader Art</h3>
             <div id="galleryGrid" class="gallery-grid"></div></section>
@@ -448,13 +477,13 @@
     </dialog>
 
     <!-- 앱 내장 가이드: 주제·검색·코드 예시는 js/guide.js가 채운다. 아래 정적 내용은 스크립트 실패 시 대체 안내다. -->
-    <dialog id="quickHelp" class="guide" aria-labelledby="helpTitle">
-        <header class="guide-head">
-            <div class="guide-title"><span class="section-index">FIELD STUDIO GUIDE</span><h2 id="helpTitle">가이드</h2></div>
+    <dialog id="quickHelp" class="ui-dialog ui-dialog--xl ui-dialog--column guide" aria-labelledby="helpTitle">
+        <header class="ui-dialog-head ui-dialog-head--bar guide-head">
+            <div class="ui-dialog-text guide-title"><span class="ui-dialog-eyebrow">FIELD STUDIO GUIDE</span><h2 id="helpTitle">가이드</h2></div>
             <div class="guide-head-tools">
-                <label class="guide-search"><span class="search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="guideSearch" type="search" placeholder="검색 · 예: 마우스, MRT, 노출" autocomplete="off" spellcheck="false" aria-label="가이드 검색"></label>
-                <button id="guideTour" type="button" class="primary" title="화면 요소를 하나씩 강조하며 설명합니다">UI 둘러보기</button>
-                <button id="helpClose" type="button" title="가이드 닫기 (Esc)" aria-label="가이드 닫기" class="glyph-icon icon-close"></button>
+                <label class="ui-search guide-search"><span class="ui-search-icon" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><input id="guideSearch" type="search" placeholder="검색 · 예: 마우스, MRT, 노출" autocomplete="off" spellcheck="false" aria-label="가이드 검색"></label>
+                <button id="guideTour" type="button" class="ui-btn--primary" title="화면 요소를 하나씩 강조하며 설명합니다">UI 둘러보기</button>
+                <button id="helpClose" type="button" title="가이드 닫기 (Esc)" aria-label="가이드 닫기" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close"></button>
             </div>
         </header>
         <div class="guide-body">

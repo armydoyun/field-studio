@@ -1,0 +1,23 @@
+/* 미리보기 분리 창(popout.js): 캔버스와 상단 도구는 원본을 옮기고, 하단 HUD는 갱신되는 사본을 둔다. */
+.preview-popout-notice { position:absolute;inset:0;z-index:1;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:var(--stage-bg);color:var(--muted);text-align:center; }
+.preview-popout-notice p { display:grid;gap:4px;max-width:340px;margin:0;font-size:var(--text-sm);line-height:1.6; }
+.preview-popout-notice b { color:var(--text);font-size:var(--text-md);font-weight:600; }
+.preview-popout-mark { display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line-strong);border-radius:var(--radius);color:var(--faint); }
+.preview-popout-mark.glyph-icon::before { flex-basis:20px;width:20px;height:20px; }
+/* 분리 창 본문도 미리보기 컨테이너로 삼는다: 머리줄·HUD가 #stage 밖(창 본문)으로 옮겨 가므로, 이것이 없으면
+   작은 분리 창에서 '@container preview' 규칙(라벨 숨김·HUD 줄이기·저장 상태 점)이 적용되지 않아 머리줄이 겹친다. */
+.preview-popout-window { background:var(--stage-bg);container:preview / size; }
+.preview-popout-window #screen { width:100vw;height:100vh; }
+.preview-popout-window .stage-header { position:fixed;flex-wrap:wrap;gap:6px; }
+.preview-popout-window #stageToolbar { margin-left:auto; }
+@media (max-width:620px) {
+ .preview-popout-window .stage-header { padding:8px; }
+ .preview-popout-window .project-menu-wrap { flex:1; }
+ .preview-popout-window .project-toggle { max-width:100%; }
+}
+/* HUD는 분리 창으로 옮겨 보인다(popout.js가 사본을 둔다). 메인 창의 원본은 그동안 숨긴다. */
+.preview-popout-window>[data-mirror="hud"] { position:fixed;inset:auto 12px 12px; }
+.preview-popped .viewport-footer { display:none; }
+@container preview (max-height:220px) {
+ .preview-popout-notice p span { display:none; }
+}

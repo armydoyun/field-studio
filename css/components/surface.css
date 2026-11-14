@@ -1,0 +1,28 @@
+/* 면과 구조 — 카드 · 구역 · 접이식 · 크기 조절 막대 · HUD.
+     ui-card        선으로 두른 면(목록 · 묶음).  --pad: 안쪽 여백
+     ui-section     설정 패널의 구역     ui-section-head > h2 (+ ui-tag)
+     ui-disclosure  <details>: summary 앞 갈매기표가 열리면 아래를 본다
+     ui-resizer     끌어서 크기를 바꾸는 막대. aria-orientation="horizontal"(위아래로 끄는 가로 띠) · "vertical"(좌우로 끄는 세로 띠)
+     ui-stack       세로로 쌓기(간격 8px)     ui-readout  고정폭 값 표시 상자
+     ui-hud         셰이더 화면 위에 얹는 면(거의 불투명 · 블러 없음) */
+.ui-card { border:1px solid var(--line);border-radius:var(--radius);background:var(--surface); }
+.ui-card--pad { padding:10px 12px; }
+.ui-section { padding:18px var(--panel-inset);border-top:1px solid var(--line); }
+.ui-section-head { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px;min-width:0; }
+.ui-section-head h2 { min-width:0;margin:0;font-size:var(--text-md);font-weight:650;line-height:1.5; }
+.ui-disclosure>summary { display:flex;align-items:center;gap:6px;width:max-content;max-width:100%;min-height:var(--control-sm);padding:4px 8px 4px 0;color:var(--muted);font-size:var(--text-sm);list-style:none; }
+.ui-disclosure>summary::-webkit-details-marker { display:none; }
+.ui-disclosure>summary::before { content:"";flex:0 0 12px;width:12px;height:12px;background:currentColor;-webkit-mask:var(--icon-chevron) center/contain no-repeat;mask:var(--icon-chevron) center/contain no-repeat;transition:transform var(--ease); }
+.ui-disclosure[open]>summary::before { transform:rotate(90deg); }
+.ui-disclosure>summary:hover { color:var(--text); }
+.ui-resizer { display:grid;place-items:center;flex:0 0 auto;z-index:var(--z-resizer);background:var(--panel);touch-action:none;outline:none; }
+.ui-resizer::before { content:"";border-radius:2px;background:var(--line-strong); }
+.ui-resizer[aria-orientation="horizontal"] { flex-basis:8px;height:8px;border-block:1px solid var(--line);cursor:row-resize; }
+.ui-resizer[aria-orientation="horizontal"]::before { width:48px;height:2px; }
+.ui-resizer[aria-orientation="vertical"] { flex-basis:6px;width:6px;border-inline:1px solid var(--line);cursor:col-resize; }
+.ui-resizer[aria-orientation="vertical"]::before { width:2px;height:44px; }
+.ui-resizer:hover,.ui-resizer:focus-visible,.ui-resizer.is-collapsing { background:var(--accent-soft); }
+.ui-resizer:hover::before,.ui-resizer:focus-visible::before,.ui-resizer.is-collapsing::before { background:var(--accent); }
+.ui-hud { border:1px solid var(--line);border-radius:var(--radius);background:var(--hud-bg); }
+.ui-stack { display:grid;gap:8px;min-width:0; }
+.ui-readout { display:block;min-height:44px;margin:0;padding:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken);color:var(--text-soft);font:var(--text-xs)/1.7 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere; }

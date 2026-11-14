@@ -1,0 +1,74 @@
+/* 연결(links.js) · 연결 시트(link-sheet.js) · 파라미터 줄의 키프레임 내비게이터.
+   방식 고르기는 ui-seg, 막대는 ui-meter, 버튼 · 칸은 컴포넌트 그대로(시트는 ui-dense 목록 안에 있다).
+   액센트(파랑)는 지금 값 · 고른 상태 · 연결됨 표시에만 쓴다. 여기에는 시트의 배치만 둔다. */
+/* 시트: 파라미터 줄 아래로 펼쳐지는 서랍(줄 폭 전체 · 한 단 낮은 면) */
+.link-editor { display:grid;gap:0;margin:4px -12px 4px;padding:14px 12px 16px;border-block:1px solid var(--line);background:var(--sunken);font-size:var(--text-sm); }
+.link-editor:last-child { margin-bottom:-12px;border-bottom:0; }
+.link-grid { display:grid;gap:0; }
+.link-label { margin:18px 0 8px;color:var(--muted);font:600 var(--text-xs)/1 var(--sans); }
+.link-label:first-child { margin-top:16px; }
+.link-control { display:grid;gap:8px;min-width:0; }
+.link-segmented { background:var(--bg); }
+.link-sources>button { padding:0 4px;letter-spacing:-.02em; }
+.link-hint,.link-note { margin:0;font-size:var(--text-xs);line-height:1.6; }
+.link-hint { margin-top:12px; }
+.link-loop-status { color:var(--text-soft);font-variant-numeric:tabular-nums; }
+.link-warn { color:var(--warning); }
+.link-go { margin-left:2px;vertical-align:baseline; }
+.link-inline { display:flex;flex-wrap:wrap;align-items:center;gap:8px; }
+.link-unit { color:var(--muted);font-size:var(--text-xs);white-space:nowrap; }
+.link-number { display:inline-flex;align-items:center;gap:6px;margin:0; }
+.link-number input { width:76px; }
+.link-inline select { width:auto; }
+/* 값 막대 */
+.link-bar { flex:1 1 80px;min-width:60px; }
+.link-bands { display:grid;gap:7px;padding:2px 0; }
+.link-bands[hidden] { display:none; }
+.link-bands .link-bar:not(.is-picked) .link-bar-fill { opacity:.5; }
+.link-band-line { display:grid;grid-template-columns:3em minmax(0,1fr);align-items:center;gap:8px;color:var(--muted);font-size:var(--text-xs); }
+.link-wave { display:block;width:100%;height:44px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface); }
+.link-wave path { fill:none;stroke:var(--accent);stroke-width:1.5; }
+.link-wave circle { fill:var(--accent-strong); }
+/* 값 범위: 겹친 슬라이더 둘(손잡이만 누를 수 있다) + 사이 채움 · 양 끝 칸 위에 소스별 뜻 */
+.link-range { position:relative;height:24px; }
+.link-range::before { content:"";position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;border-radius:2px;background:var(--line-strong); }
+.link-range-fill { position:absolute;top:50%;height:4px;margin-top:-2px;border-radius:2px;background:var(--accent); }
+.link-range input { position:absolute;inset:0;width:100%;height:100%;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none; }
+.link-range input::-webkit-slider-runnable-track { background:none; }
+.link-range input::-moz-range-track { background:none; }
+.link-range input::-webkit-slider-thumb { pointer-events:auto; }
+.link-range input::-moz-range-thumb { pointer-events:auto; }
+/* 양 끝 칸 · 뒤집기: 세 칸 격자(가운데는 버튼 폭). 좁으면 칸이 줄고 숫자 칸도 따라 준다(밖으로 밀려나지 않게). */
+.link-range-ends { display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:end;gap:8px; }
+.link-range-ends .link-number,.link-range-ends .link-number input { min-width:0;max-width:100%; }
+.link-flip { flex-shrink:0;padding-inline:8px;color:var(--muted);font-size:var(--text-xs);white-space:nowrap; }
+.link-smooth { flex-wrap:nowrap; }
+.link-smooth input[type="range"] { flex:1 1 auto;min-width:40px; }
+.link-smooth .link-number input { width:64px; }
+.link-result output,.link-meter-value { min-width:4.5em;color:var(--text);font:600 var(--text-sm)/1 var(--mono);font-variant-numeric:tabular-nums;text-align:right; }
+/* 두 칸이 나란히 들어갈 폭이 없으면 위아래로 쌓는다(라벨이 옆 칸으로 넘어가 겹치지 않게) */
+.link-pair { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,120px),1fr));gap:10px 12px; }
+.link-end { display:grid;gap:5px;justify-items:start;min-width:0; }
+.link-end:last-child { justify-items:end; }
+.link-pair .link-end:last-child { justify-items:start; }
+.link-end-label { max-width:100%;color:var(--muted);font-size:var(--text-xs);line-height:1.4; }
+/* 연결된 파라미터 줄: 슬라이더 대신 읽기 전용 미터(막대 · 값, 아래에 상태) */
+.link-meter { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 10px;min-height:var(--control-sm); }
+.link-meter-note { grid-column:1 / -1;color:var(--faint);font-size:var(--text-xs);white-space:nowrap; }
+.link-meter.is-idle .link-meter-note { color:var(--warning); }
+.link-meter.is-idle .link-bar-fill,.link-result.is-idle .link-bar-fill { opacity:.35; }
+/* 키프레임 줄: ◀ ◆ ▶(ui-btn-group) 재생 [초] · 아래 줄에 [한 번 | ↻ N초] 설명 */
+.key-nav { display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px; }
+/* 연결 시트 안의 키프레임 내비게이터: 방식 버튼 바로 아래 */
+.link-editor>.key-nav { margin:12px 0 4px;padding-bottom:12px;border-bottom:1px solid var(--line); }
+.key-nav-button { width:var(--control-sm);padding:0;color:var(--muted);font-size:var(--text-2xs); }
+.key-nav-button:disabled { opacity:.35; }
+.key-nav-key { font-size:var(--text-sm); }
+.key-nav-key[aria-pressed="true"] { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
+.key-nav-key[aria-pressed="false"] { color:var(--faint); }
+.key-nav-mode.is-loop,.timeline-lane-mode.is-loop { border-color:var(--accent-line);color:var(--accent-strong); }
+.key-nav-time-label { display:inline-flex;flex:1 1 auto;align-items:center;justify-content:flex-end;gap:6px;margin:0;color:var(--muted);font-size:var(--text-xs);white-space:nowrap; }
+.key-nav .key-nav-time { flex:0 1 72px;width:72px;min-width:56px;color:var(--text);text-align:left; }
+.key-nav-caption { display:flex;flex:1 1 100%;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0;color:var(--faint);font-size:var(--text-xs); }
+.key-nav-hint { min-width:0;line-height:1.4; }
+.key-nav-local { color:var(--accent-strong);font-variant-numeric:tabular-nums;white-space:nowrap; }

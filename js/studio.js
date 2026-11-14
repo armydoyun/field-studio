@@ -888,7 +888,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     holder.replaceChildren();
     if (!assets.length) {
       const hint = element("p");
-      hint.className = "studio-hint";
+      hint.className = "ui-hint";
       hint.textContent = "등록된 이미지가 없습니다. PNG·JPEG·WebP 파일을 추가하고 입력 채널에 연결하세요.";
       holder.append(hint);
     } else {
@@ -907,6 +907,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         const clean = element("button");
         clean.type = "button";
         clean.id = "studioTextureCleanup";
+        clean.className = "ui-btn--sm";
         clean.textContent = "쓰지 않는 이미지 정리…";
         clean.addEventListener("click", cleanupTextures);
         summary.append(clean);
@@ -917,13 +918,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       const row = element("div"),
         name = element("span"),
         del = element("button");
-      row.className = "studio-texture";
+      row.className = "ui-card studio-texture";
       const state = usage.current.has(asset.id) ? "current" : usage.kept.has(asset.id) ? "history" : "unused";
       row.dataset.usage = state;
       const size = renderer.getTextureFile(asset.id)?.size || 0;
       name.textContent = `${asset.name} · ${asset.width}×${asset.height}${size ? ` · ${megabytes(size)}` : ""} · ${{ current: "사용 중", history: "되돌리기 기록에서 씀", unused: "쓰지 않음" }[state]}`;
       del.type = "button";
-      del.className = "glyph-icon icon-close";
+      del.className = "ui-icon-btn ui-icon-btn--sm glyph-icon icon-close";
       del.title = `${asset.name} 삭제`;
       del.setAttribute("aria-label", del.title);
       del.addEventListener("click", async () => {
@@ -959,12 +960,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       });
       const use = element("button");
       use.type = "button";
-      use.className = "texture-connect";
+      use.className = "ui-btn--sm texture-connect";
       use.dataset.assetName = asset.name;
       textureButtons.push(use);
       use.addEventListener("click", () => connectTexture(asset.id));
       const controls = element("div");
-      controls.className = "studio-sampling";
+      controls.className = "ui-dense studio-sampling";
       for (const [key, title, values] of [
         [
           "filter",

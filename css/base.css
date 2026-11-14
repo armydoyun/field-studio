@@ -1,0 +1,23 @@
+/* 기본: 초기화 · 문서 · 요소 기본 모양. 요소 선택자는 :where()로 감싸 우선순위를 0으로 둔다 —
+   컴포넌트 · 기능 파일의 클래스 한 개가 언제나 이긴다. 컴포넌트 클래스는 css/components/ 에 있다. */
+* { box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent; }
+html,body { width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font:var(--text-md)/1.5 var(--sans);-webkit-font-smoothing:antialiased; }
+/* 한글은 낱말 중간이 아니라 띄어쓰기에서 줄을 바꾼다. 띄어쓰기 없이 긴 문자열만 어쩔 수 없을 때 끊는다. */
+body { word-break:keep-all;overflow-wrap:break-word; }
+/* 코드 글꼴(JetBrains Mono·Cascadia Code)의 합자 끄기: -> <= != == 같은 두 글자가 한 글자처럼 합쳐 보이지 않고
+   입력한 그대로 보이게 한다. 이 글꼴들은 합자를 calt(문맥 대체)로 넣으므로 contextual까지 끈다.
+   font 단축 속성(font:13px/1.6 var(--mono) 등)이 요소마다 이 두 속성을 기본값으로 되돌리므로, 상속 대신 모든 요소에
+   !important로 둔다(편집기·코드 예시·HUD·입력 칸 모두). */
+*,::before,::after { font-variant-ligatures:no-common-ligatures no-contextual !important;font-feature-settings:"liga" 0,"calt" 0 !important; }
+::selection { background:var(--accent-soft); }
+[hidden] { display:none !important; }
+svg { display:block;flex-shrink:0; }
+:where(button,input,select,textarea,summary) { font:inherit; }
+:where(input,select,textarea,summary) { color:inherit; }
+:where(input,select) { min-width:0; }
+:where(summary) { cursor:pointer; }
+/* 초점: 버튼류는 바깥 2px 링, 글자 칸은 테두리 색(components/field.css) */
+button:focus-visible,summary:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+@media (prefers-reduced-motion:reduce) {
+ *,*::before,*::after { transition:none !important;animation:none !important; }
+}

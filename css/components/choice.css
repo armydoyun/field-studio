@@ -1,0 +1,34 @@
+/* 고르기 — 체크 · 라디오 · 스위치 · 슬라이더. 입력 요소는 클래스 없이도 같은 모양이다.
+     ui-check   label > input[type=checkbox|radio] + 글자
+     ui-switch  label > input[type=checkbox] + 글자(켜고 끄는 설정)
+     슬라이더   input[type=range] — 브라우저 기본 그리기에 액센트 색만 입힌다(채움 · 접근성 유지)
+     ui-range-ends  슬라이더 아래 양 끝 값     ui-meter > ui-meter-fill  읽기 전용 막대 */
+:where(input[type="checkbox"],input[type="radio"]) { flex:0 0 auto;width:16px;height:16px;margin:0;appearance:none;-webkit-appearance:none;border:1px solid var(--line-hover);border-radius:4px;background:var(--sunken) center/12px no-repeat;vertical-align:middle;cursor:pointer;transition:background-color var(--ease),border-color var(--ease); }
+:where(input[type="radio"]) { border-radius:50%; }
+:where(input[type="checkbox"],input[type="radio"]):hover { border-color:var(--muted); }
+:where(input[type="checkbox"]):checked { border-color:var(--accent-fill);background-color:var(--accent-fill);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E"); }
+:where(input[type="radio"]):checked { border-color:var(--accent-fill);background-color:var(--accent-fill);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='2.6' fill='white'/%3E%3C/svg%3E"); }
+input[type="checkbox"]:focus-visible,input[type="radio"]:focus-visible,input[type="range"]:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+:where(input[type="checkbox"],input[type="radio"]):disabled { opacity:.45;cursor:not-allowed; }
+.ui-check { display:inline-flex;align-items:center;gap:6px;margin:0;color:var(--muted);font-size:var(--text-xs);font-weight:500;line-height:1.4;white-space:nowrap;cursor:pointer; }
+.ui-check:hover { color:var(--text-soft); }
+/* 스위치 */
+.ui-switch { display:flex;align-items:center;gap:10px;min-height:var(--control-sm);color:var(--muted);font:var(--text-sm)/1.5 var(--mono);cursor:pointer; }
+.ui-switch>input { position:relative;flex:0 0 32px;width:32px;height:18px;border:1px solid var(--line-strong);border-radius:9px;background:var(--sunken); }
+.ui-switch>input::before { content:"";position:absolute;top:50%;left:2px;width:12px;height:12px;border-radius:50%;background:var(--muted);transform:translateY(-50%);transition:transform var(--ease); }
+.ui-switch>input:checked { border-color:var(--accent);background:var(--accent); }
+.ui-switch>input:checked::before { background:var(--accent-ink);transform:translate(14px,-50%); }
+.ui-switch>input:checked+span { color:var(--text); }
+@media (forced-colors:active) {
+ :where(input[type="checkbox"],input[type="radio"]),.ui-switch>input { appearance:auto;-webkit-appearance:auto; }
+ .ui-switch>input::before { display:none; }
+}
+/* 슬라이더 */
+:where(input[type="range"]) { display:block;width:100%;height:20px;margin:0;accent-color:var(--accent);cursor:pointer; }
+.ui-range-ends { display:flex;align-items:center;justify-content:space-between;margin-top:4px;color:var(--faint);font:var(--text-2xs)/1.5 var(--mono); }
+/* 읽기 전용 막대(값 · 진행률): 얇은 트랙 + 채움. 채움 폭은 JS가 ui-meter-fill의 width로 준다 */
+.ui-meter { position:relative;height:4px;overflow:hidden;border-radius:2px;background:var(--line-strong); }
+.ui-meter-fill { position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;background:var(--accent); }
+.ui-meter--lg { height:6px;border-radius:3px; }
+.ui-meter--success>.ui-meter-fill { background:var(--success); }
+progress { display:block;width:100%;height:8px;accent-color:var(--accent); }

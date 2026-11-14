@@ -1,0 +1,87 @@
+/* CodeMirror 6 화면(cm-editor.js · cm-search-panel.js · cm-glsl-features.js): 문법 색 · 찾기 창 · 말풍선 · 접기 · 오류 표시.
+   예외 구역: CodeMirror가 자기 스타일을 스크립트로 넣기 때문에, 여기 규칙은 그것을 이기도록 .studio-cm-host 로 우선순위를 올려 쓴다.
+   찾기 창의 칸 · 버튼은 그래서 ui-* 컴포넌트를 쓰지 못하고 같은 토큰(높이 28px · 선 · 면)으로 직접 맞춘다. */
+.glsl-comment { color:var(--syn-comment);font-style:italic; }
+.glsl-directive { color:var(--syn-directive); }
+.glsl-keyword { color:var(--syn-keyword); }
+.glsl-type { color:var(--syn-type); }
+.glsl-number { color:var(--syn-number); }
+.glsl-builtin { color:var(--syn-builtin); }
+.glsl-string { color:var(--syn-string); }
+/* CodeMirror 6 편집기: #studioCode(숨은 textarea)는 studio.js용 소스 창구이고, 화면은 CodeMirror가 그린다. */
+.studio-cm-host { position:relative;display:flex;flex:1;min-width:0;min-height:0; }
+/* Ctrl+K 연속 키 대기 표시: 초점을 받아 다음 키를 읽는다(글자 입력 칸이 아니어서 한글 조합이 시작되지 않는다) */
+.studio-chord { position:absolute;right:12px;bottom:12px;z-index:6;padding:5px 10px;border:1px solid var(--accent);border-radius:6px;background:var(--elevated);color:var(--text);font:600 11px/1.5 var(--mono);box-shadow:var(--shadow);pointer-events:none; }
+.studio-chord:focus { outline:none; }
+.studio-cm-host>.cm-editor { flex:1;min-width:0;height:100%; }
+.studio-cm-host .cm-editor.cm-focused { outline:none; }
+.studio-cm-host .cm-selectionLayer:not(.studio-selection-layer) { display:none; }
+/* 찾기 · 바꾸기 창(cm-search-panel.js): 1줄 찾기 + 도구, 2줄 바꿀 내용 + 바꾸기. DOM 순서(찾기 → 바꿀 내용 → 도구)가 Tab 순서다. */
+.studio-cm-host .cm-panel.studio-find { display:grid;grid-template-columns:22px minmax(100px,1fr) auto 24px;grid-template-areas:"mode find find-tools close" ". replace replace-tools .";align-items:center;gap:6px;padding:7px 6px 7px 6px;font:12px var(--sans); }
+/* 찾기 모드(Ctrl+F): 바꾸기 줄을 숨긴다. 편집기가 480px 이하이면 찾기 도구는 찾기 칸 아래 줄로 내린다(아래 @container). */
+.studio-cm-host .cm-panel.studio-find[data-mode="find"] { grid-template-areas:"mode find find-tools close"; }
+.studio-find[data-mode="find"]>[name=replace],.studio-find[data-mode="find"]>.studio-find-replace-tools { display:none; }
+.studio-cm-host .studio-find .studio-find-button.studio-find-mode { grid-area:mode;width:22px;min-width:22px;min-height:24px;padding:0;border:0;background:transparent;color:var(--muted); }
+.studio-cm-host .studio-find .studio-find-mode::before { transition:transform .12s; }
+.studio-cm-host .studio-find[data-mode="replace"] .studio-find-mode::before { transform:rotate(90deg); }
+@media (prefers-reduced-motion:reduce) {
+ .studio-cm-host .studio-find .studio-find-mode::before { transition:none; }
+}
+.studio-find>[name=search] { grid-area:find; }
+.studio-find>[name=replace] { grid-area:replace; }
+.studio-find-tools { grid-area:find-tools;display:flex;align-items:center;gap:2px; }
+.studio-find-replace-tools { grid-area:replace-tools;display:flex;align-items:center;gap:4px; }
+.studio-cm-host .studio-find .studio-find-field { width:100%;min-width:0;min-height:28px;margin:0;padding:3px 8px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);color:var(--text);font:12px/1.4 var(--mono); }
+.studio-cm-host .studio-find .studio-find-field:focus { border-color:var(--accent);outline:none; }
+.studio-cm-host .studio-find .studio-find-field.is-invalid { border-color:var(--danger); }
+.studio-cm-host .studio-find .studio-find-button { display:inline-flex;align-items:center;justify-content:center;gap:0;min-width:28px;min-height:28px;margin:0;padding:3px 9px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-soft);font:500 11px var(--sans);white-space:nowrap; }
+.studio-cm-host .studio-find .studio-find-button:hover { background:var(--surface-hover);color:var(--text); }
+.studio-cm-host .studio-find .studio-find-button.glyph-icon { width:28px;padding:0; }
+.studio-cm-host .studio-find .studio-find-button.glyph-icon::before { flex-basis:14px;width:14px;height:14px; }
+.studio-cm-host .studio-find .studio-find-toggle { padding:3px 5px;border-color:transparent;background:transparent;color:var(--muted);font:600 11px var(--mono); }
+.studio-cm-host .studio-find .studio-find-toggle[aria-pressed="true"] { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
+.studio-cm-host .studio-find .studio-find-close { grid-area:close;width:24px;min-width:24px;min-height:24px;border:0;background:transparent;color:var(--muted); }
+.studio-find-count { min-width:44px;padding:0 2px;color:var(--muted);font:11px var(--mono);text-align:center;white-space:nowrap; }
+.studio-find.has-no-match .studio-find-count { color:var(--danger); }
+@container dock (max-width:480px) {
+ /* 좁은 편집기: 도구가 입력 칸 아래로 내려간다(Tab 순서는 그대로). */
+ .studio-cm-host .cm-panel.studio-find { grid-template-columns:22px minmax(0,1fr) 24px;grid-template-areas:"mode find close" ". find-tools ." ". replace ." ". replace-tools ."; }
+ .studio-cm-host .cm-panel.studio-find[data-mode="find"] { grid-template-areas:"mode find close" ". find-tools ."; }
+}
+.studio-cm-host .cm-tooltip-autocomplete ul li { font-family:var(--mono); }
+.studio-cm-host .cm-completionDetail { color:var(--muted);font-style:normal;margin-left:10px; }
+.cm-glsl-info { max-width:420px;padding:6px 10px;font:12px/1.5 var(--sans); }
+.cm-glsl-info small { display:block;color:var(--faint); }
+.cm-glsl-info code { display:block;margin:2px 0;color:var(--text);font:12px/1.5 var(--mono);white-space:pre-wrap; }
+.cm-glsl-info p { margin:2px 0 0;color:var(--muted); }
+.cm-glsl-signature { max-width:min(560px,80vw);padding:6px 10px;font:12px/1.55 var(--mono);color:var(--text-soft); }
+.cm-glsl-signature b { color:var(--accent-strong);font-weight:700; }
+.cm-glsl-signature em { color:var(--text);font-style:normal;font-weight:700;text-decoration:underline;text-underline-offset:3px; }
+.cm-glsl-signature small { display:block;margin-top:2px;color:var(--muted);font:11.5px/1.5 var(--sans);white-space:normal; }
+/* vec3/vec4 색 리터럴 앞의 견본(누르면 색상 선택기) */
+.cm-glsl-swatch { display:inline-block;width:.85em;min-width:0;height:.85em;min-height:0;margin:0 4px 0 1px;padding:0;border:1px solid color-mix(in srgb,var(--text) 35%,transparent);border-radius:2px;background:var(--swatch);vertical-align:-.05em;cursor:pointer; }
+.cm-glsl-swatch:hover { border-color:var(--text); }
+.cm-glsl-color-input { position:absolute;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none; }
+/* 들여쓰기 안내선: 줄마다 --guide-levels 단계만큼, 한 단계 = --tab-size 글자 */
+.studio-cm-host .cm-line.cm-indent-guides { background-image:repeating-linear-gradient(to right,var(--guide-line) 0 1px,transparent 1px calc(var(--tab-size,4) * 1ch));background-repeat:no-repeat;background-position:6px 0;background-size:calc(var(--guide-levels) * var(--tab-size,4) * 1ch) 100%; }
+/* 접기 표시: 기본 글자(⌄ ›)는 글꼴에 따라 납작하고 치우쳐 보이므로 글자는 숨기고 같은 모양의 화살표(SVG)를 칸 가운데에 그린다.
+   펼친 블록(title=접기)은 아래, 접힌 블록(title=펴기)은 오른쪽을 가리킨다. */
+.studio-cm-host .cm-foldGutter .cm-gutterElement { display:flex;align-items:center;justify-content:center;width:16px;padding:0; }
+.studio-cm-host .cm-foldGutter span[title] { position:relative;display:block;width:16px;height:100%;min-height:14px;font-size:0;color:var(--faint);cursor:pointer;transition:color .12s; }
+.studio-cm-host .cm-foldGutter span[title]::before { content:"";position:absolute;inset:0;margin:auto;width:10px;height:10px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;transition:transform .12s; }
+.studio-cm-host .cm-foldGutter span[title="펴기"]::before { transform:rotate(-90deg); }
+.studio-cm-host .cm-foldGutter span[title="펴기"] { color:var(--accent); }
+.studio-cm-host .cm-foldGutter span[title]:hover { color:var(--text); }
+/* 컴파일 오류 메시지를 줄 끝에 표시. 편집 후 다음 컴파일 전까지는 흐리게 */
+.cm-error-lens { padding-left:2.5em;color:var(--danger);font:11px/1.6 var(--sans);white-space:pre; }
+.cm-error-lens-text { padding:0 6px;border-radius:3px;background:color-mix(in srgb,var(--danger) 9%,transparent); }
+.cm-error-lens.is-warning { color:var(--warning); }
+.cm-error-lens.is-warning .cm-error-lens-text { background:color-mix(in srgb,var(--warning) 9%,transparent); }
+.cm-error-lens.is-stale { opacity:.45; }
+.studio-cm-host .is-scrubbing .cm-content { cursor:ew-resize; }
+.studio-cm-host .cm-panel.cm-panel-lint ul { max-height:140px;font:12px var(--mono); }
+.studio-cm-host .cm-panel.cm-panel-lint [aria-selected] { background:var(--accent-soft);color:var(--text); }
+.studio-cm-host .cm-tooltip .cm-diagnostic { padding:4px 8px;font:12px var(--sans); }
+/* 편집기 말풍선(시그니처·설명·자동 완성)은 편집기 메뉴(⋯)보다 아래에 깔린다 */
+.studio-cm-host .cm-tooltip { z-index:25; }
+.glsl-function { color:var(--syn-function); }

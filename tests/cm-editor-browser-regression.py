@@ -1,4 +1,4 @@
-from esm_for_browser import load_modules
+from esm_for_browser import load_modules, read_css
 # python tests/cm-editor-browser-regression.py — GLSL 편집기(CodeMirror 6): textarea 창구 · studio 연동 · 편집 기능 · GLSL 도우미 (GPU 불필요)
 import os
 from pathlib import Path
@@ -9,7 +9,7 @@ with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1440,'height':900});errors=[]
     page.on('pageerror',lambda err:errors.append(str(err)))
-    page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
+    page.set_content(html);page.add_style_tag(content=read_css(root))
     load_modules(page,root,['studio'])
     page.evaluate('''() => {
       const src="#version 300 es\\nprecision highp float;\\nout vec4 fragColor;\\nvoid main() {\\n    fragColor = vec4(1.0);\\n}\\n",state={image:src,passes:[],imageChannels:{}};

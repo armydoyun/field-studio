@@ -1,0 +1,32 @@
+/* FIELD Studio — 디자인 토큰. 모든 색 · 크기 · 간격 · 글자 · 층은 여기 이름으로만 쓴다(docs/DESIGN_SYSTEM.md).
+   중성 회색 면 + 단일 파랑 액센트. 그라데이션 · 발광 그림자 없이 선(border)과 면의 명도 차이로만 계층을 나눈다.
+   테마: html[data-theme="light|dark"]가 있으면 그것을, 없으면 시스템 설정(prefers-color-scheme)을 따른다. */
+/* ── 크기 · 글자 · 층(테마와 무관) ── */
+:root {
+  /* 모서리: xs = 견본 · 작은 표시, sm = 조작(버튼 · 입력), 기본 = 면(카드 · 메뉴 · 대화상자), pill = 알약 */
+  --radius-xs:3px;--radius-sm:5px;--radius:6px;--radius-pill:999px;
+  /* 조작 높이: xs = 줄 안 아이콘, sm = 촘촘한 도구 막대, md = 기본, lg = 대화상자 · 큰 실행 버튼 */
+  --control-xs:24px;--control-sm:28px;--control-md:32px;--control-lg:36px;
+  /* 간격: 2px 격자 */
+  --space-1:2px;--space-2:4px;--space-3:6px;--space-4:8px;--space-5:10px;--space-6:12px;--space-8:16px;--space-10:20px;--space-12:24px;
+  /* 글자 크기: 2xs = 고정폭 꼬리표, xs = 보조 설명, sm = 조작, md = 본문, lg · xl · 2xl = 제목 */
+  --text-2xs:10px;--text-xs:11px;--text-sm:12px;--text-md:13px;--text-lg:14px;--text-xl:16px;--text-2xl:20px;
+  --sans:"Pretendard","Inter",system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+  /* 고정폭 글꼴에 없는 한글은 굴림체(비트맵) 대신 맑은 고딕으로 받는다 */
+  --mono:"JetBrains Mono","Cascadia Code",Consolas,"Courier New","D2Coding","Malgun Gothic","Apple SD Gothic Neo",monospace;
+  /* 배치 */
+  --panel-width:300px;--panel-inset:18px;--studio-height:55%;
+  /* 층(z-index): 숫자를 직접 쓰지 않고 이 이름을 쓴다. 한 컴포넌트 안에서의 앞뒤(1~3)만 숫자로 둔다. */
+  --z-hud:3;--z-resizer:4;--z-panel:5;--z-toast:7;--z-cover:20;--z-tooltip:25;--z-popover:40;--z-tour:100;--z-drag:1000;
+  /* 움직임 */
+  --ease:.15s;
+  /* 뜻이 있는 색의 옅은 면 · 선: 색 토큰에서 만든다(테마를 따라 바뀐다) */
+  --accent-line:color-mix(in srgb,var(--accent) 45%,transparent);--accent-fill-hover:color-mix(in srgb,var(--accent-fill) 88%,#000);
+  --danger-line:color-mix(in srgb,var(--danger) 45%,transparent);--danger-soft:color-mix(in srgb,var(--danger) 12%,transparent);--danger-surface:color-mix(in srgb,var(--danger) 6%,var(--panel));
+  --warning-line:color-mix(in srgb,var(--warning) 45%,transparent);--warning-soft:color-mix(in srgb,var(--warning) 12%,transparent);--warning-surface:color-mix(in srgb,var(--warning) 7%,var(--panel));
+  --success-line:color-mix(in srgb,var(--success) 45%,transparent);--success-soft:color-mix(in srgb,var(--success) 12%,transparent);
+}
+/* ── 색(다크 = 기본 · 라이트) ── */
+:root,:root[data-theme="dark"] { color-scheme:dark;--bg:#0f1012;--panel:#151618;--surface:#1b1c1f;--surface-hover:#232428;--elevated:#1d1e21;--sunken:#121315;--stage-bg:#000;--line:#26272b;--line-strong:#34363b;--line-hover:#45474d;--text:#e8e8ea;--text-soft:#c5c6ca;--muted:#8e9097;--faint:#7f8188;--accent:#4d8dff;--accent-strong:#8ab4ff;--accent-fill:#2a66d9;--accent-ink:#fff;--accent-soft:#4d8dff24;--success:#4cc38a;--danger:#f2707c;--warning:#e2b452;--hud-bg:#151618eb;--overlay:#000000a6;--shadow:0 6px 20px #00000059;--code-text:#d4d5d9;--active-line:#ffffff08;--guide-line:#ffffff1c;--syn-comment:#80838b;--syn-directive:#d8b05e;--syn-keyword:#c493e6;--syn-type:#7eadf6;--syn-number:#ee9f7c;--syn-builtin:#6ac4cc;--syn-string:#a2d48b;--syn-function:#e1cd8c;--syn-struct:#ee9fcb; }
+@media (prefers-color-scheme:light) { :root:not([data-theme="dark"]) { color-scheme:light;--bg:#f5f5f6;--panel:#fff;--surface:#fff;--surface-hover:#f0f1f3;--elevated:#fff;--sunken:#f8f8f9;--stage-bg:#e9e9eb;--line:#e5e6e9;--line-strong:#d4d6da;--line-hover:#bcbfc5;--text:#1b1c1f;--text-soft:#3c3f45;--muted:#63666e;--faint:#777a82;--accent:#2563eb;--accent-strong:#1d4fc4;--accent-fill:#2563eb;--accent-ink:#fff;--accent-soft:#2563eb17;--success:#16865a;--danger:#cf3345;--warning:#a86b0c;--hud-bg:#ffffffeb;--overlay:#1b1c1f59;--shadow:0 6px 20px #0000001f;--code-text:#24262b;--active-line:#0000000a;--guide-line:#0000001a;--syn-comment:#747881;--syn-directive:#946200;--syn-keyword:#7c3fd6;--syn-type:#0a5fc2;--syn-number:#b4460f;--syn-builtin:#0d7a83;--syn-string:#3b7a1c;--syn-function:#7a5800;--syn-struct:#b02e77; } }
+:root[data-theme="light"] { color-scheme:light;--bg:#f5f5f6;--panel:#fff;--surface:#fff;--surface-hover:#f0f1f3;--elevated:#fff;--sunken:#f8f8f9;--stage-bg:#e9e9eb;--line:#e5e6e9;--line-strong:#d4d6da;--line-hover:#bcbfc5;--text:#1b1c1f;--text-soft:#3c3f45;--muted:#63666e;--faint:#777a82;--accent:#2563eb;--accent-strong:#1d4fc4;--accent-fill:#2563eb;--accent-ink:#fff;--accent-soft:#2563eb17;--success:#16865a;--danger:#cf3345;--warning:#a86b0c;--hud-bg:#ffffffeb;--overlay:#1b1c1f59;--shadow:0 6px 20px #0000001f;--code-text:#24262b;--active-line:#0000000a;--guide-line:#0000001a;--syn-comment:#747881;--syn-directive:#946200;--syn-keyword:#7c3fd6;--syn-type:#0a5fc2;--syn-number:#b4460f;--syn-builtin:#0d7a83;--syn-string:#3b7a1c;--syn-function:#7a5800;--syn-struct:#b02e77; }

@@ -1,0 +1,45 @@
+/* 프로젝트 메뉴(project-menu.js · studio-projects.js): 머리줄의 프로젝트 버튼 · 저장 버튼 · 펼쳐지는 메뉴(보관함 · 파일 · 이미지).
+   면은 ui-hud · ui-popover, 버튼은 기본 버튼. 여기서는 자리와 이 기능만의 상태 표시를 정한다. */
+/* 프로젝트 버튼이 늘 맨 왼쪽에 온다. 상태 칩("일시정지")은 그 오른쪽에 나타나므로, 재생 중에 칩이 숨어도 버튼이 밀려 보이지 않는다. */
+.project-menu-wrap { position:relative;order:-1;display:flex;flex:0 1 auto;align-items:center;gap:6px;min-width:0;pointer-events:auto; }
+.project-toggle { max-width:260px;color:var(--text-soft);font:500 var(--text-xs)/1.4 var(--sans); }
+.project-toggle span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.project-toggle[data-saved="false"] span { color:var(--muted); }
+.project-toggle[aria-expanded="true"] { border-color:var(--accent);color:var(--text); }
+/* 프로젝트 이름 옆 저장 버튼: 바뀐 내용이 있을 때만 보이고 누르면 바로 저장한다(점 = 저장 안 된 변경). */
+.project-save-state { flex:0 0 auto;padding:0 10px;color:var(--text);font:600 var(--text-xs)/1 var(--sans);white-space:nowrap;pointer-events:auto; }
+.project-save-state[hidden] { display:none; }
+.project-save-state::before { content:"";width:6px;height:6px;border-radius:50%;background:var(--warning); }
+.project-save-state:hover { border-color:var(--accent);color:var(--accent-strong); }
+.project-menu { position:fixed;top:56px;left:12px;display:grid;gap:0;width:min(340px,calc(100vw - 24px));max-height:calc(100vh - 80px);overflow-y:auto; }
+.project-menu[hidden] { display:none; }
+/* 메뉴가 열려 있는 동안 머리줄을 편집기 크기 조절 손잡이·알림보다 위로 올린다. 메뉴는 fixed라 머리줄 안에서만 쌓인다. */
+.stage-header:has(.project-menu:not([hidden])) { z-index:calc(var(--z-toast) + 1); }
+.project-menu-section { display:grid;gap:10px;padding:14px; }
+.project-menu-section+.project-menu-section { border-top:1px solid var(--line); }
+.project-menu-section>h2 { margin:0;color:var(--text);font-size:var(--text-sm);font-weight:650; }
+.project-menu-section>* { min-width:0;margin:0; }
+.project-menu-section>button { width:100%; }
+.studio-file-actions { display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:0; }
+.studio-file-actions button { width:100%; }
+.project-advanced { display:grid;gap:8px; }
+/* 프로젝트 보관함: 지금 작업 이름 · 저장 버튼 · 저장한 프로젝트 목록(열기 · 이름 바꾸기 · 삭제) */
+.studio-projects { display:grid;gap:8px;min-width:0; }
+.studio-project-current { margin:0;color:var(--muted);font-size:var(--text-sm);overflow-wrap:anywhere; }
+.studio-project-current[data-saved="true"] { color:var(--text-soft); }
+.studio-project-list { display:grid;gap:6px;min-width:0;max-height:260px;overflow:auto; }
+.studio-project-list>.ui-hint { margin:0; }
+.studio-project { display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:2px;padding:4px 4px 4px 0; }
+.studio-project[data-current="true"] { border-color:var(--line-strong); }
+.studio-project-open { display:grid;justify-items:start;gap:2px;min-width:0;min-height:40px;padding:6px 10px;border:0;background:transparent;text-align:left; }
+.studio-project-open:hover { background:transparent; }
+.studio-project-open strong { min-width:0;max-width:100%;overflow:hidden;color:var(--text-soft);font-size:var(--text-sm);font-weight:600;text-overflow:ellipsis;white-space:nowrap; }
+.studio-project-open:hover strong,.studio-project[data-current="true"] .studio-project-open strong { color:var(--text); }
+.studio-project-open small { color:var(--muted);font-size:var(--text-2xs);word-break:keep-all; }
+@container preview (max-width:420px) {
+ .project-menu-wrap { flex:1 1 0;min-width:44px; }
+ .project-toggle { max-width:100%; }
+}
+@container preview (max-width:300px) {
+ #projectMenuLabel { display:none; }
+}

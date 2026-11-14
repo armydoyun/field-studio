@@ -14,7 +14,7 @@ const GROUPS = ["studioCodeTools"];
 const HEIGHT = { min: 25, max: 85 },
   WIDTH = { min: 30, max: 75, initial: 46 };
 const clamp = (value, { min, max }) => Math.max(min, Math.min(max, value));
-// 옆 배치에서 편집기와 미리보기가 각각 쓸 수 있어야 하는 최소 폭(px, style.css의 min-width와 같다).
+// 옆 배치에서 편집기와 미리보기가 각각 쓸 수 있어야 하는 최소 폭(px, css/features/editor.css의 min-width와 같다).
 // 미리보기 영역(#stage)이 이 둘을 합친 것보다 좁으면(설정 패널을 넓히거나 창을 줄였을 때) 편집기를 잠시 아래로 내린다.
 // 사용자가 고른 배치는 그대로 두므로, 다시 넓어지면 원래 자리로 돌아간다.
 const SPLIT_MIN = { dock: 340, preview: 240, gap: 20 };

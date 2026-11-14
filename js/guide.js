@@ -9,6 +9,7 @@ import * as Highlight from "./glsl-highlight.js";
 import * as SnippetPreview from "./snippet-preview.js";
 import * as Store from "./storage.js";
 import * as PreviewDOM from "./preview-dom.js";
+import * as UI from "./ui-kit.js";
 // 블록 형식: {p}, {list:[…]}, {steps:[…]}, {table:{head, rows}}, {code, title, insert?:true}, {keys:[[설명, 키]…]},
 //            {note}, {actions:[{label, run:"tour"|"gallery"|"topic:<id>"|"example:<id>"}]}
 const TOPICS = [
@@ -880,12 +881,7 @@ const mount = ({ studio, gallery }) => {
     nav = $("guideNav"),
     content = $("guideContent"),
     search = $("guideSearch");
-  const element = (tag, className = "", text = "") => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
+  const element = UI.el;
   const listen = (target, type, fn, options = {}) => target?.addEventListener(type, fn, { ...options, signal });
   let current = "start";
   // 가이드의 GLSL 예시도 편집기와 같은 규칙으로 강조한다. 내장 함수 이름은 레퍼런스에서 가져온다("sin · cos" → sin, cos).
@@ -934,7 +930,7 @@ const mount = ({ studio, gallery }) => {
   };
   // "복사" 버튼: 누를 때 text()의 결과를 클립보드에 넣는다.
   const copyButton = text => {
-    const copy = element("button", "", "복사");
+    const copy = element("button", "ui-btn--xs", "복사");
     copy.type = "button";
     copy.addEventListener("click", async () => {
       try {
@@ -948,7 +944,7 @@ const mount = ({ studio, gallery }) => {
   };
   // 범주 탭 버튼: 누르면 select(id)로 범주를 바꾼다.
   const categoryChip = (chips, id, label, count, select) => {
-    const button = element("button");
+    const button = element("button", "ui-chip ui-chip--pill ui-chip--lg");
     button.type = "button";
     button.dataset.category = id;
     button.setAttribute("role", "tab");
@@ -1027,7 +1023,7 @@ const mount = ({ studio, gallery }) => {
       const plan = Snippets.plan(item.id, "");
       return [...plan.globals.map(entry => entry.code), plan.mainCode].filter(Boolean).join("\n\n");
     });
-    const insert = element("button", "guide-insert", item.replace ? "패스 교체" : "삽입");
+    const insert = element("button", "ui-btn--primary ui-btn--xs guide-insert", item.replace ? "패스 교체" : "삽입");
     insert.type = "button";
     insert.title = item.replace
       ? "현재 편집 중인 패스 전체를 이 코드로 바꿉니다"
@@ -1200,7 +1196,7 @@ const mount = ({ studio, gallery }) => {
     if (block.library) return renderLibrary();
     if (block.reference) return renderReference();
     if (block.p) return rich("p", block.p);
-    if (block.note) return rich("p", block.note, "guide-note");
+    if (block.note) return rich("p", block.note, "ui-notice ui-notice--accent guide-note");
     if (block.list || block.steps) {
       const list = element(block.steps ? "ol" : "ul", block.steps ? "guide-steps" : "guide-list");
       for (const item of block.list || block.steps) list.append(rich("li", item));
@@ -1229,7 +1225,7 @@ const mount = ({ studio, gallery }) => {
     if (block.actions) {
       const row = element("div", "guide-actions");
       for (const action of block.actions) {
-        const button = element("button", "", action.label);
+        const button = element("button", "ui-btn--tonal", action.label);
         button.type = "button";
         button.addEventListener("click", () => runAction(action.run));
         row.append(button);
@@ -1257,7 +1253,7 @@ const mount = ({ studio, gallery }) => {
       return grid;
     }
     if (block.solution) {
-      const box = element("details", "guide-solution");
+      const box = element("details", "ui-disclosure guide-solution");
       box.append(
         element("summary", "", block.title || "정답 보기 · 예시 풀이"),
         codeFigure({ code: block.solution, title: "예시 풀이", start: true })
@@ -1266,7 +1262,7 @@ const mount = ({ studio, gallery }) => {
     }
     if (block.project) {
       const row = element("div", "guide-actions guide-project"),
-        button = element("button", "primary", block.label || "프로젝트 불러오기");
+        button = element("button", "ui-btn--primary", block.label || "프로젝트 불러오기");
       button.type = "button";
       button.addEventListener("click", () => runAction(`course:${block.project}`));
       row.append(button);
@@ -1284,7 +1280,7 @@ const mount = ({ studio, gallery }) => {
     if (block.insert) {
       const insert = element(
         "button",
-        "guide-insert",
+        "ui-btn--primary ui-btn--xs guide-insert",
         block.insert === "replace" ? "현재 패스를 이 코드로 교체" : "편집기에 삽입"
       );
       insert.type = "button";
@@ -1297,7 +1293,7 @@ const mount = ({ studio, gallery }) => {
       bar.append(insert);
     }
     if (block.start) {
-      const start = element("button", "guide-insert", "이 코드로 시작");
+      const start = element("button", "ui-btn--primary ui-btn--xs guide-insert", "이 코드로 시작");
       start.type = "button";
       start.title = "현재 프로젝트를 이 코드 하나(단일 패스)로 바꿉니다 · 편집기에서 Ctrl+Z로 되돌릴 수 있습니다";
       start.addEventListener("click", () => loadProject({ image: block.code, passes: [], imageChannels: {} }));
@@ -1310,8 +1306,8 @@ const mount = ({ studio, gallery }) => {
     const count = LESSON_IDS.filter(id => done.has(id)).length,
       total = LESSON_IDS.length,
       wrap = element("div", "guide-progress");
-    const bar = element("div", "guide-progress-bar"),
-      fill = element("span");
+    const bar = element("div", "ui-meter ui-meter--lg ui-meter--success guide-progress-bar"),
+      fill = element("span", "ui-meter-fill");
     fill.style.width = `${Math.round((count / total) * 100)}%`;
     bar.append(fill);
     bar.setAttribute("role", "progressbar");
@@ -1329,7 +1325,7 @@ const mount = ({ studio, gallery }) => {
     );
     const next = ALL.find(topic => topic.id === LESSON_IDS.find(id => !done.has(id)));
     if (next && count) {
-      const resume = element("button", "primary", `이어서: ${navTitle(next)} →`);
+      const resume = element("button", "ui-btn--primary ui-btn--sm", `이어서: ${navTitle(next)} →`);
       resume.type = "button";
       resume.addEventListener("click", () => show(next.id));
       wrap.append(resume);
@@ -1350,7 +1346,7 @@ const mount = ({ studio, gallery }) => {
     const titleOfTopic = id => navTitle(ALL.find(item => item.id === id));
     foot.append(
       at > 0
-        ? go(COURSE_ORDER[at - 1], `← ${titleOfTopic(COURSE_ORDER[at - 1])}`, "guide-lesson-prev")
+        ? go(COURSE_ORDER[at - 1], `← ${titleOfTopic(COURSE_ORDER[at - 1])}`, "ui-btn--ghost guide-lesson-prev")
         : element("span")
     );
     if (topic.step) {
@@ -1374,7 +1370,9 @@ const mount = ({ studio, gallery }) => {
       foot.append(mark);
     }
     if (at < COURSE_ORDER.length - 1)
-      foot.append(go(COURSE_ORDER[at + 1], `${titleOfTopic(COURSE_ORDER[at + 1])} →`, "primary guide-lesson-next"));
+      foot.append(
+        go(COURSE_ORDER[at + 1], `${titleOfTopic(COURSE_ORDER[at + 1])} →`, "ui-btn--primary guide-lesson-next")
+      );
     return foot;
   };
   const markNav = () => {
@@ -1390,7 +1388,7 @@ const mount = ({ studio, gallery }) => {
       header.append(
         element(
           "span",
-          "section-index",
+          "ui-dialog-eyebrow",
           `입문 과정 · STEP ${String(topic.step).padStart(2, "0")} / ${LESSON_IDS.length}`
         )
       );
@@ -1543,8 +1541,8 @@ const mount = ({ studio, gallery }) => {
     tools = element("div", "guide-tour-tools");
   title.id = "guideTourTitle";
   const prev = element("button", "", "이전"),
-    next = element("button", "primary", "다음"),
-    skip = element("button", "guide-tour-skip", "닫기");
+    next = element("button", "ui-btn--primary", "다음"),
+    skip = element("button", "ui-btn--ghost guide-tour-skip", "닫기");
   for (const button of [prev, next, skip]) button.type = "button";
   tools.append(skip, prev, next);
   card.append(stepLabel, title, text, tools);

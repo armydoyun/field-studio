@@ -1,0 +1,16 @@
+/* 영상 렌더링 대화상자(video-dialog.js): ui-dialog--md 안의 두 열 설정 격자 · 요약 · 진행률. */
+.video-render-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;min-width:0;margin:0;padding:0;border:0; }
+.video-render-grid label { display:grid;gap:6px;min-width:0;color:var(--text-soft);font-size:var(--text-xs);font-weight:600; }
+.video-render-grid label[hidden] { display:none; }
+.video-label { display:flex;align-items:baseline;justify-content:space-between;gap:8px; }
+.video-render-summary { margin:14px 0 0;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--text-soft);font:var(--text-xs)/1.6 var(--mono);white-space:pre-line; }
+.video-render-summary.is-invalid { border-color:var(--danger);color:var(--danger); }
+.video-render-note { margin:10px 0 0;font-size:var(--text-xs); }
+.video-render-progress { margin-top:14px; }
+.video-render-progress p { margin:8px 0 0;color:var(--text-soft);font:var(--text-xs)/1.6 var(--mono); }
+.video-render-dialog[data-state="running"] #videoRenderStart { opacity:.6; }
+/* 렌더링하는 동안 캔버스는 영상 크기로 그려진다: 비율을 유지해 미리보기가 늘어나지 않게 한다. */
+body:has(#videoRenderDialog[data-state="running"]) #screen { object-fit:contain;background:#000; }
+@media (max-width:480px) {
+ .video-render-grid { grid-template-columns:minmax(0,1fr); }
+}

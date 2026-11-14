@@ -11,6 +11,7 @@
 // 열림 · 높이 · 스냅은 이 브라우저에 기억한다(field.timeline.v1).
 import * as Links from "./links.js";
 import * as Store from "./storage.js";
+import * as UI from "./ui-kit.js";
 
 const KEY = "field.timeline.v1";
 const EPS = 5e-4;
@@ -35,12 +36,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   const controller = new AbortController(),
     signal = controller.signal;
   const on = (node, type, handler, options = {}) => node.addEventListener(type, handler, { ...options, signal });
-  const element = (tag, className = "", text = "") => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
+  const element = UI.el;
   const svg = tag => document.createElementNS("http://www.w3.org/2000/svg", tag);
   const round = (value, digits = 3) => Number(Number(value).toFixed(digits));
   const button = (className, label, text = "", title = label) => {
@@ -73,29 +69,29 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   const remember = () => Store.writeJSON(KEY, { open: !root.hidden, height, snap: snapChoice });
 
   // ---- 뼈대 ----
-  const resize = element("div", "timeline-resize");
+  const resize = element("div", "ui-resizer timeline-resize");
   resize.setAttribute("role", "separator");
   resize.setAttribute("aria-orientation", "horizontal");
   resize.setAttribute("aria-label", "타임라인 높이 조절");
   resize.tabIndex = 0;
   resize.title = "끌어서 높이 조절 · 끝까지 줄여 놓으면 타임라인 숨기기 · ↑↓ · Home/End · 두 번 눌러 기본 높이";
-  const bar = element("header", "timeline-bar"),
-    play = button("timeline-play glyph-icon icon-play", "재생"),
-    start = button("timeline-start glyph-icon icon-reset", "처음으로", "", "재생 위치를 0초로"),
+  const bar = element("header", "ui-dense timeline-bar"),
+    play = button("ui-btn--sm timeline-play glyph-icon icon-play", "재생"),
+    start = button("ui-btn--sm timeline-start glyph-icon icon-reset", "처음으로", "", "재생 위치를 0초로"),
     timeField = element("input", "timeline-time"),
     snapSelect = element("select", "timeline-snap"),
     speedSelect = element("select", "timeline-speed"),
-    zoomOut = button("timeline-zoom", "축소", "−"),
-    zoomIn = button("timeline-zoom", "확대", "+"),
-    fit = button("timeline-fit", "모든 키가 보이게 맞춤", "맞춤"),
+    zoomOut = button("ui-btn--sm timeline-zoom", "축소", "−"),
+    zoomIn = button("ui-btn--sm timeline-zoom", "확대", "+"),
+    fit = button("ui-btn--sm timeline-fit", "모든 키가 보이게 맞춤", "맞춤"),
     addSelect = element("select", "timeline-add"),
     inspector = element("div", "timeline-inspector"),
     selection = element("span", "timeline-selection"),
     keyTime = element("input", "timeline-key-time"),
     keyValue = element("input", "timeline-key-value"),
     keyEase = element("select", "timeline-key-ease"),
-    keyDelete = button("timeline-key-delete", "선택한 키 지우기", "지우기", "선택한 키 지우기 (Delete)"),
-    close = button("timeline-close glyph-icon icon-close", "타임라인 닫기");
+    keyDelete = button("ui-btn--sm timeline-key-delete", "선택한 키 지우기", "지우기", "선택한 키 지우기 (Delete)"),
+    close = button("ui-icon-btn ui-icon-btn--sm timeline-close glyph-icon icon-close", "타임라인 닫기");
   timeField.type = "number";
   timeField.min = "0";
   timeField.step = "0.01";
@@ -150,6 +146,12 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     node.append(...nodes);
     return node;
   };
+  // 붙은 버튼 쌍(▶ ⟲ · − +)
+  const joined = (...nodes) => {
+    const node = element("span", "ui-btn-group");
+    node.append(...nodes);
+    return node;
+  };
   inspector.setAttribute("role", "group");
   inspector.setAttribute("aria-label", "선택한 키");
   inspector.append(
@@ -160,8 +162,8 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     keyDelete
   );
   bar.append(
-    group(play, start, labelled("", timeField, "초"), speedSelect),
-    group(labelled("스냅", snapSelect), zoomOut, zoomIn, fit),
+    group(joined(play, start), labelled("", timeField, "초"), speedSelect),
+    group(labelled("스냅", snapSelect), joined(zoomOut, zoomIn), fit),
     inspector,
     close
   );
@@ -308,7 +310,10 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       head = element("div", "timeline-lane-head"),
       name = element("span", "timeline-lane-name", link.name),
       range = element("span", "timeline-lane-range", `${round(low, 3)} ~ ${round(high, 3)}`),
-      remove = button("timeline-lane-remove glyph-icon icon-close", `${link.name} 키프레임 연결 지우기`),
+      remove = button(
+        "ui-icon-btn ui-icon-btn--xs timeline-lane-remove glyph-icon icon-close",
+        `${link.name} 키프레임 연결 지우기`
+      ),
       area = element("div", "timeline-area"),
       plot = element("div", "timeline-plot"),
       graph = svg("svg"),
@@ -320,7 +325,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     // 시간 기준: '한 번'(키 시간 = 재생 시간, 마지막 키 뒤로는 그 값 유지) · '↻ N초'(N초 길이로 되풀이)
     const mode = element(
       "span",
-      link.loop > 0 ? "timeline-lane-mode is-loop" : "timeline-lane-mode",
+      link.loop > 0 ? "ui-tag timeline-lane-mode is-loop" : "ui-tag timeline-lane-mode",
       link.loop > 0 ? `↻ ${round(link.loop, 2)}초마다 반복` : "한 번 · 끝 값 유지"
     );
     mode.title =

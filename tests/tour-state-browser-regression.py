@@ -1,4 +1,4 @@
-from esm_for_browser import load_modules
+from esm_for_browser import load_modules, read_css
 # python tests/tour-state-browser-regression.py — UI 둘러보기(투어)가 끝나면 시작 전 화면(편집기 · 설정 패널 · 패널 탭)으로 돌아오는지 (GPU 불필요)
 import os
 from pathlib import Path
@@ -24,14 +24,14 @@ with sync_playwright() as p:
     def scenario(width,height,setup):
         page=browser.new_page(viewport={'width':width,'height':height});errors=[]
         page.on('pageerror',lambda e:errors.append(str(e)))
-        page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
+        page.set_content(html);page.add_style_tag(content=read_css(root))
         load_modules(page,root,['guide']);page.evaluate(FAKE);page.evaluate(setup)
         return page,errors
     def run_to_end(page):
         page.evaluate('() => guide.startTour()')
         for _ in range(30):
             if not page.evaluate(STATE)['touring']:break
-            page.evaluate('() => document.querySelector(".guide-tour-card .primary").click()');page.wait_for_timeout(20)
+            page.evaluate('() => document.querySelector(".guide-tour-card .ui-btn--primary").click()');page.wait_for_timeout(20)
 
     # 넓은 화면: 편집기 열림 · 패널 표시 · 렌더링 탭
     page,errors=scenario(1440,900,'''() => {document.getElementById("studioDock").hidden=false;document.body.classList.remove("panel-hidden");document.querySelector('#panelTabs [data-tab="render"]').click();}''')
@@ -39,7 +39,7 @@ with sync_playwright() as p:
     check('close' in page.evaluate('studioCalls'),'the tour itself closes the editor for its viewport steps')
     check(after==before,f'finishing the tour restores editor, panel and tab: {before} -> {after}')
     page.evaluate('() => guide.startTour()');page.wait_for_timeout(20)
-    page.evaluate('() => {for(let i=0;i<6;i++)document.querySelector(".guide-tour-card .primary").click();}');page.wait_for_timeout(20)
+    page.evaluate('() => {for(let i=0;i<6;i++)document.querySelector(".guide-tour-card .ui-btn--primary").click();}');page.wait_for_timeout(20)
     page.keyboard.press('Escape');page.wait_for_timeout(20)
     check(page.evaluate(STATE)==before,'leaving mid-tour with Esc restores the same screen')
     check(errors==[],f'no page exceptions: {errors}');page.close()

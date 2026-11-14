@@ -65,7 +65,7 @@ const create = ({
     bar = $("studioInputs"),
     picker = element("div");
   picker.id = "studioChannelPicker";
-  picker.className = "channel-picker";
+  picker.className = "ui-popover channel-picker";
   picker.hidden = true;
   picker.setAttribute("role", "dialog");
   bar.append(picker);
@@ -173,7 +173,7 @@ const create = ({
     item.type = "button";
     item.value = value;
     item.dataset.value = value;
-    item.className = `channel-option ${className}`.trim();
+    item.className = `ui-btn ui-btn--sm channel-option ${className}`.trim();
     item.disabled = disabled;
     text.textContent = label;
     item.append(text, ...(reason ? [textNode(reason)] : []));
@@ -218,7 +218,7 @@ const create = ({
     const frames = ["current", "previous"].map(name => {
       const toggle = element("button");
       toggle.type = "button";
-      toggle.className = "channel-frame";
+      toggle.className = "ui-btn ui-btn--sm channel-frame";
       toggle.dataset.frame = name;
       const word = element("span");
       word.textContent = name;
