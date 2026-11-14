@@ -4,7 +4,7 @@
 .timeline-dock[hidden] { display:none; }
 .timeline-resize { border-top:0; }
 /* ── 위 막대: [▶ ⟲ 시간 배속] [스냅 − + 맞춤] ………… [선택한 키] [×] ── */
-.timeline-bar { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:4px 46px 6px 10px;border-bottom:1px solid var(--line); }
+.timeline-bar { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:6px 46px 6px 10px;border-bottom:1px solid var(--line); }
 .timeline-group { display:flex;flex-wrap:nowrap;align-items:center;gap:4px; }
 .timeline-field { display:inline-flex;align-items:center;gap:4px;margin:0;color:var(--muted);white-space:nowrap; }
 .timeline-unit { color:var(--muted); }
@@ -18,13 +18,13 @@
 .timeline-bar select { flex-shrink:0;width:auto;min-width:0; }
 /* 선택한 키 칸: 키를 고르든 말든 같은 자리·크기를 차지한다. 고르기 전에는 칸들을 감춰(visibility) 자리만 남기고
    그 위에 안내 문구를 얹는다 — 끌어서 키를 고르는 도중 막대 높이가 바뀌어 레인이 밀려 내려가지 않게. */
-.timeline-inspector { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-left:auto;padding:2px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface); }
+.timeline-inspector { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-left:auto;padding:4px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface); }
 .timeline-inspector.is-empty>:not(.timeline-selection) { visibility:hidden; }
 .timeline-selection { flex:0 0 auto;width:96px;overflow:hidden;color:var(--muted);font-weight:600;text-overflow:ellipsis;white-space:nowrap; }
 /* 안내 문구가 흐름에서 빠진 만큼(이름 칸 96px + 사이 10px) 왼쪽을 비워 둔다 */
 .timeline-inspector.is-empty { padding-left:114px; }
 .timeline-inspector.is-empty .timeline-selection { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;width:auto;padding:0 10px;color:var(--faint);font-weight:400; }
-.timeline-bar .timeline-close { position:absolute;top:4px;right:10px; }
+.timeline-bar .timeline-close { position:absolute;top:6px;right:10px; }
 /* ── 본문: 눈금자 + 레인 ── */
 .timeline-body { position:relative;flex:1 1 auto;min-height:0;overflow:auto;outline:none; }
 .timeline-body:focus-visible { outline:2px solid var(--accent);outline-offset:-2px; }

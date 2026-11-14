@@ -9,6 +9,7 @@ WebGL2 셰이더 스튜디오. 의존성 없는 ES Modules(`js/*.js`) + 여러 C
 - 버튼 · 칸 · 세그먼트 · 메뉴 · 대화상자를 새로 만들 때는 기존 `ui-*` 클래스와 `js/ui-kit.js`(`UI.button` · `UI.segmented` · `UI.menu` …)를 쓴다.
   묻기 · 확인은 `js/studio-dialog.js`. 새 모양이 필요하면 기능 CSS에 예외를 쌓지 말고 컴포넌트에 변형을 추가한다.
 - 색 · 크기 · 간격 · z-index는 `css/tokens.css`의 토큰으로만 쓴다.
+- 간격 규칙(조작과 선 사이 4px/8px 이상, 초점 링이 잘리지 않게 등)은 `docs/DESIGN_SYSTEM.md` 4장. `tests/spacing-browser-regression.js`가 화면에서 잰다 — 새 화면을 만들면 거기에 상태를 추가한다.
 - 어느 파일을 고칠지: 버튼 모양 → `css/components/button.css`, 파라미터 줄 배치 → `css/features/parameters.css`,
   타임라인 → `css/features/timeline.css` … (파일 머리 주석에 담당 범위가 있다)
 - CSS는 한 줄에 규칙 하나. 같은 선택자 · 같은 속성을 두 번 정의하지 않는다(테스트가 막는다).

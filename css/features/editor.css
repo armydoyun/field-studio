@@ -27,7 +27,8 @@
  :is(.studio-layout-right,.studio-layout-left) .studio-top { display:flex;flex-wrap:wrap;gap:6px; }
  :is(.studio-layout-right,.studio-layout-left) .studio-tabs { flex:1 1 auto; }
  /* 좁은 분할 폭에서는 창 도구를 한 줄로 두고 가로로 넘기며, 닫기 버튼은 오른쪽 끝에 고정한다. */
- :is(.studio-layout-right,.studio-layout-left) .studio-window-tools { justify-content:flex-start;overflow-x:auto;scrollbar-width:none; }
+ /* 넘치는 줄은 안쪽 여백 4px을 두고 그만큼 바깥으로 당긴다: 가장자리 버튼의 초점 링이 잘리지 않는다 */
+ :is(.studio-layout-right,.studio-layout-left) .studio-window-tools { justify-content:flex-start;margin:-4px;padding:4px;overflow-x:auto;scrollbar-width:none; }
  :is(.studio-layout-right,.studio-layout-left) .studio-window-tools>* { flex-shrink:0; }
  :is(.studio-layout-right,.studio-layout-left) #studioHide { position:sticky;right:0;margin-left:auto;background:var(--panel); }
  /* 집중 모드: 옆 배치의 고정 폭보다 우선해 편집기가 화면 전체를 쓴다. */
@@ -158,7 +159,7 @@
  .studio-storage { flex:0 0 auto;max-width:none;font-size:0; }
  .studio-storage::before { margin-right:0; }
  .studio-top { padding:4px 6px; }
- .studio-window-tools { flex:1 1 100%;justify-content:flex-end;overflow-x:auto;scrollbar-width:none; }
+ .studio-window-tools { flex:1 1 100%;justify-content:flex-end;margin:-4px;padding:4px;overflow-x:auto;scrollbar-width:none; }
  .studio-window-tools>* { flex-shrink:0;white-space:nowrap; }
  #studioHide { position:sticky;right:0;background:var(--panel); }
  /* 코드 머리줄은 상태와 탐색 도구가 들어가지 않으면 두 줄로 */

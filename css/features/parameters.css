@@ -1,7 +1,8 @@
 /* 파라미터 탭(ui.js): 검색 · 목록(한 줄 = 머리줄 + 조작 위젯) · 추가 폼 · 내장 Uniform 참조.
    버튼 · 칸 · 세그먼트 · 스위치 · 칩의 모양은 컴포넌트가 정한다. 목록은 ui-dense라 안의 칸이 28px · 고정폭 숫자다.
    여기에는 위젯의 배치와, 이 탭에만 있는 조작(방향 패드 · 램프 · 곡선)의 모양만 둔다. */
-.uniform-search-wrap { margin:14px var(--panel-inset) 4px; }
+/* 검색 칸과 목록 구역은 한 덩어리다: 사이에 선을 긋지 않는다(구역에 ui-section--flush) */
+.uniform-search-wrap { margin:var(--space-6) var(--panel-inset) 0; }
 .uniform-section .ui-section-head { margin-bottom:8px; }
 #uiError { margin:0 0 12px; }
 #uiError:empty { display:none; }

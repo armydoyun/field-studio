@@ -90,14 +90,34 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 알림 | `ui-notice` | `--accent · --success · --warning · --danger`, 띠 `--bar` |
 | 빈 상태 | `ui-empty` | |
 | 카드 | `ui-card` (+ `--pad`) | |
-| 패널 구역 | `ui-section` > `ui-section-head` > h2 | |
+| 패널 구역 | `ui-section` > `ui-section-head` > h2 | 첫 구역은 위 선 없음. 앞 요소와 한 덩어리면 `ui-section--flush` |
 | 접이식 | `<details class="ui-disclosure">` | |
 | 크기 조절 막대 | `ui-resizer` + `aria-orientation` | |
 | 화면 위 면 | `ui-hud` | |
 
 각 파일 머리 주석에 그 컴포넌트의 변형이 모두 적혀 있다.
 
-## 4. JS로 만들기 (`js/ui-kit.js`)
+## 4. 간격 규칙
+
+사소한 붙음(선이 조작에 닿음, 초점 링이 잘림)을 눈으로 찾지 않도록 규칙으로 정하고, `tests/spacing-browser-regression.js`가 실제 화면에서 잰다.
+새 화면을 만들면 그 테스트에 상태(탭 · 메뉴 · 대화상자 열기)를 한 줄 추가한다.
+
+| 규칙 | 값 | 이유 · 예 |
+|---|---|---|
+| 조작 ↔ 구역을 나누는 선 | **8px 이상**(패널에서는 12px) | 설정 패널 탭 아래 선, 검색 칸 아래 선, 대화상자 머리 · 바닥 선 |
+| 조작 ↔ 그 밖의 선(한 줄 도구 막대 · 목록 줄 · 상자 안쪽) | **4px 이상** | 편집기 머리줄(44px 안의 32px 버튼), 타임라인 '선택한 키' 상자 |
+| 조작 ↔ 잘리는 가장자리(`overflow`) | **3px 이상** | 초점 링(2px + 간격 2px)이 잘리지 않게. 넘치는 도구 줄은 `padding:4px;margin:-4px` |
+| 트랙 · 메뉴 안의 칸 | 초점 링을 **안쪽**(`outline-offset:-2px`) | `ui-seg` · `ui-tabs` · `ui-menu-item`: 링이 트랙 테두리를 덮지 않는다 |
+| 글자 ↔ 그것을 두른 테두리 | **4px 이상** | 카드 · 알림 · 꼬리표 밖의 글자 |
+| 나란한 조작 사이 | 도구 아이콘 2px · 버튼 6~8px · 붙이려면 `ui-btn-group` | 0~1px로 어정쩡하게 붙이지 않는다 |
+| 같은 줄의 같은 종류 사이 | **같은 간격** | 뷰포트 머리줄의 칩들(프로젝트 · 저장 · 상태)은 모두 8px |
+| 선은 한 번만 | 맞닿은 두 영역 중 한쪽만 선을 그린다 | 탭 아래 선은 스크롤 영역이, 그래서 첫 구역(`ui-section`)은 위 선을 그리지 않는다 |
+| 한 덩어리는 선으로 끊지 않는다 | 검색 칸 + 그 목록, 라벨 + 칸 | 선은 "다른 주제"를 나눌 때만 |
+| 세로 리듬(패널) | 구역 안쪽 18px · 제목 → 내용 16px · 묶음(`ui-field`) 사이 20px · 라벨 → 칸 8px · 칸 → 설명 8px | 컴포넌트가 이미 이렇게 정해 둔다. 기능 CSS에서 다른 값으로 덮지 않는다 |
+
+검사가 일부러 보지 않는 것: 그림에 가까운 조작(타임라인 본문 · 램프 손잡이 · 갤러리 카드), 줄 전체가 버튼인 것(`@group` 머리), 메뉴 항목(메뉴 안쪽 여백 4px이 규칙), 스크롤로 지나가는 사이, 다른 층(팝오버 · 대화상자)과의 겹침.
+
+## 5. JS로 만들기 (`js/ui-kit.js`)
 
 ```js
 import * as UI from "./ui-kit.js";
@@ -120,7 +140,7 @@ UI.iconButtonClass("reset", "xs", "my-hook");
 
 묻기 · 확인은 `js/studio-dialog.js`가 맡는다(`studio.js`가 `ask` · `confirm`으로 쓴다). 브라우저 기본 `prompt()` · `confirm()`은 쓰지 않는다.
 
-## 5. 새 기능을 붙일 때
+## 6. 새 기능을 붙일 때
 
 1. **마크업**: 컴포넌트 클래스로 만든다. 기능 이름 클래스(예: `my-feature-row`)는 배치와 JS · 테스트의 손잡이로만 덧붙인다.
    ```html
@@ -132,7 +152,7 @@ UI.iconButtonClass("reset", "xs", "my-hook");
 2. **CSS**: `css/features/내-기능.css`를 만들고 `index.html`에 링크한다. 여기에는 `display · grid · gap · margin · width`처럼 자리 잡는 속성만 쓴다.
    버튼의 `background · border · min-height · font`를 다시 쓰고 싶어지면 멈추고, 맞는 변형 클래스가 있는지 본다.
 3. **맞는 변형이 없으면** 기능 CSS에 예외를 쌓지 말고 `css/components/`에 변형을 추가하고, 이 문서의 표와 `docs/design-system.html`에 한 줄 넣는다.
-4. **확인**: `npm run sha`(해시 목록) → `npm test`. 화면은 `docs/design-system.html`과 실제 앱에서 다크 · 라이트 둘 다 본다.
+4. **확인**: `npm run sha`(해시 목록) → `npm test`. 간격은 `tests/spacing-browser-regression.js`에 새 화면 상태를 추가해 재게 한다. 화면은 `docs/design-system.html`과 실제 앱에서 다크 · 라이트 둘 다 본다.
 
 ### 하지 말 것
 
