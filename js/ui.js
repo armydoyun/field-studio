@@ -320,7 +320,7 @@ const mount = (renderer, input, settings) => {
       if (hemi && target[1] < 0) continue;
       const chip = element("button");
       chip.type = "button";
-      chip.className = "uniform-dir-chip";
+      chip.className = "ui-chip uniform-dir-chip";
       chip.textContent = text;
       chip.setAttribute("aria-label", angleMode ? `${item.name}을 ${text}로` : `${item.name}을 ${text} 방향으로`);
       chip.addEventListener("click", () => {
@@ -333,7 +333,7 @@ const mount = (renderer, input, settings) => {
     if (sphere) {
       flip = element("button");
       flip.type = "button";
-      flip.className = "uniform-dir-chip uniform-dir-flip";
+      flip.className = "ui-chip uniform-dir-chip uniform-dir-flip";
       flip.textContent = "뒤";
       flip.title = "앞(+Z)/뒤(-Z) 반구 전환 · 패드에서 끌 때 어느 쪽 반구를 쓸지 정한다";
       flip.setAttribute("aria-label", `${item.name} 뒤쪽(-Z) 반구`);
@@ -559,7 +559,7 @@ const mount = (renderer, input, settings) => {
     for (const [text, target] of presets) {
       const chip = element("button");
       chip.type = "button";
-      chip.className = "uniform-dir-chip";
+      chip.className = "ui-chip uniform-dir-chip";
       chip.textContent = text;
       chip.title = `(${target.join(", ")})`;
       chip.setAttribute("aria-label", `${item.name}을 ${text}(${target.join(", ")})로`);
@@ -664,7 +664,7 @@ const mount = (renderer, input, settings) => {
       segmented = labels.length <= 6 && labels.join("").length <= 24;
     const wrap = element("div");
     if (segmented) {
-      wrap.className = "uniform-enum";
+      wrap.className = "ui-seg uniform-enum";
       wrap.setAttribute("role", "group");
       wrap.setAttribute("aria-label", `${item.name} 선택`);
       const buttons = labels.map((label, index) => {
@@ -714,7 +714,7 @@ const mount = (renderer, input, settings) => {
   const rampButton = (text, label, onClick) => {
     const button = element("button");
     button.type = "button";
-    button.className = "uniform-dir-chip";
+    button.className = "ui-chip uniform-dir-chip";
     button.textContent = text;
     button.setAttribute("aria-label", label);
     button.addEventListener("click", onClick);
@@ -1434,7 +1434,7 @@ const mount = (renderer, input, settings) => {
     const preset = settings.getPresets()[index],
       same = !presetChanges(preset, renderer.getUserUniforms()).length,
       node = element("div");
-    node.className = "preset-menu";
+    node.className = "ui-popover ui-menu preset-menu";
     node.setAttribute("role", "menu");
     node.setAttribute("aria-label", `'${preset.name}' 프리셋 관리`);
     const items = [
@@ -1450,7 +1450,7 @@ const mount = (renderer, input, settings) => {
       const item = element("button");
       item.type = "button";
       item.setAttribute("role", "menuitem");
-      item.className = text === "삭제" ? "preset-menu-item is-danger" : "preset-menu-item";
+      item.className = text === "삭제" ? "ui-menu-item preset-menu-item is-danger" : "ui-menu-item preset-menu-item";
       item.textContent = text;
       item.title = title;
       item.disabled = disabled;
@@ -1773,7 +1773,7 @@ const mount = (renderer, input, settings) => {
       [next, "다음 키로", "▶"],
     ]) {
       button.type = "button";
-      button.className = "key-nav-button";
+      button.className = "ui-btn--sm key-nav-button";
       button.textContent = text;
       button.setAttribute("aria-label", `${item.name} ${label}`);
     }
@@ -1822,7 +1822,7 @@ const mount = (renderer, input, settings) => {
     // 시간 기준 표시: '한 번'(키 시간 = 재생 시간) · '↻ N초'(재생 시간을 N초로 잘라 되풀이). 반복이면 바퀴 안 시간을 따로 보인다.
     const mode = element("span"),
       inner = element("span");
-    mode.className = "key-nav-mode";
+    mode.className = "ui-tag key-nav-mode";
     inner.className = "key-nav-local";
     // 한 줄: [한 번 | ↻ N초] ◀ ◆ ▶ [재생 위치] 초 — 둘째 줄(설명): (바퀴 안 X초 ·) 값을 바꾸면 … 키
     const caption = element("div");
@@ -1834,7 +1834,10 @@ const mount = (renderer, input, settings) => {
     timeLabel.title = "재생 위치(uTime, 초)";
     timeLabel.append(time);
     // 첫 줄: ◀ ◆ ▶ · 재생 [초] — 둘째 줄: [한 번 | ↻ N초] (바퀴 안 X초) · 값을 바꾸면 … 키
-    nav.append(prev, key, next, timeLabel, caption);
+    const group = element("span");
+    group.className = "ui-btn-group";
+    group.append(prev, key, next);
+    nav.append(group, timeLabel, caption);
     let shownLoop = null;
     const update = () => {
       const now = renderer.getStats().time ?? 0,
@@ -1984,7 +1987,7 @@ const mount = (renderer, input, settings) => {
         description.textContent = spec.description;
       }
       const remove = element("button");
-      remove.className = "remove-uniform glyph-icon icon-close";
+      remove.className = "ui-icon-btn ui-icon-btn--xs remove-uniform glyph-icon icon-close";
       remove.type = "button";
       remove.title = `${item.name} 삭제 · GLSL에서 참조 중이면 먼저 코드를 수정하세요`;
       remove.setAttribute("aria-label", `${item.name} 삭제`);
@@ -2006,7 +2009,7 @@ const mount = (renderer, input, settings) => {
         // 기본값으로 되돌리기: 버튼 또는 슬라이더 더블클릭. 이미 기본값이면 버튼을 비활성화한다.
         const fallback = Annotations.clampValue(spec.value, item.options || {}, item.type);
         reset = element("button");
-        reset.className = "reset-uniform glyph-icon icon-reset";
+        reset.className = "ui-icon-btn ui-icon-btn--xs reset-uniform glyph-icon icon-reset";
         reset.type = "button";
         reset.title = `기본값(${formatDefault(fallback)})으로 되돌리기 · 슬라이더 더블클릭`;
         reset.setAttribute("aria-label", `${item.name} 기본값으로 되돌리기`);
@@ -2038,7 +2041,7 @@ const mount = (renderer, input, settings) => {
       const extras = [];
       if (item.options?.seed) {
         const dice = element("button");
-        dice.className = "seed-uniform glyph-icon icon-dice";
+        dice.className = "ui-icon-btn ui-icon-btn--xs seed-uniform glyph-icon icon-dice";
         dice.type = "button";
         dice.title = "무작위 값";
         dice.setAttribute("aria-label", `${item.name} 무작위 값`);
@@ -2053,7 +2056,7 @@ const mount = (renderer, input, settings) => {
       }
       if (item.options?.anim) {
         const play = element("button");
-        play.className = `play-uniform glyph-icon ${playing.has(item.name) ? "icon-pause" : "icon-play"}`;
+        play.className = `ui-icon-btn ui-icon-btn--xs play-uniform glyph-icon ${playing.has(item.name) ? "icon-pause" : "icon-play"}`;
         play.type = "button";
         play.title = item.options.angle
           ? `재생: ${displayNumber(item.options.anim)}초에 한 바퀴`
@@ -2075,7 +2078,7 @@ const mount = (renderer, input, settings) => {
         keyed = link?.source === "keys"; // 키프레임 줄: 슬라이더는 살려 두고 바꾸면 자동 키
       if (Links.LINKABLE.has(item.type)) {
         const linkButton = element("button");
-        linkButton.className = "link-uniform glyph-icon icon-link";
+        linkButton.className = "ui-icon-btn ui-icon-btn--xs link-uniform glyph-icon icon-link";
         linkButton.type = "button";
         linkButton.title = link
           ? `연결됨: ${LinkSheet.describe(link)} · 누르면 연결 설정`
@@ -2095,7 +2098,7 @@ const mount = (renderer, input, settings) => {
       if (link) {
         row.classList.add("is-linked");
         const badge = element("span");
-        badge.className = "link-badge";
+        badge.className = "ui-tag ui-tag--dot link-badge";
         badge.textContent = LinkSheet.describe(link);
         badge.title = "연결이 프레임마다 이 값을 정합니다(직접 바꿔도 다음 프레임에 덮어씁니다)";
         title.append(badge);
@@ -2181,7 +2184,7 @@ const mount = (renderer, input, settings) => {
       const widget = (row, item, commit, name) => {
         if (item.type === "bool") {
           const label = element("label");
-          label.className = "uniform-switch";
+          label.className = "ui-switch uniform-switch";
           const input = element("input");
           input.type = "checkbox";
           input.checked = item.value;
@@ -2404,7 +2407,8 @@ const mount = (renderer, input, settings) => {
           if (dim) grid.style.setProperty("--uniform-columns", String(dim));
           item.value.forEach((value, index) => {
             const field = element(kind === "b" ? "label" : "div");
-            field.className = ranged ? "uniform-axis is-ranged" : "uniform-axis";
+            field.className =
+              kind === "b" ? "ui-chip uniform-axis" : ranged ? "uniform-axis is-ranged" : "uniform-axis";
             const label = element(kind === "b" ? "span" : "label");
             label.className = "uniform-axis-label";
             label.textContent = dim ? `${Math.floor(index / dim)},${index % dim}` : ["X", "Y", "Z", "W"][index];
@@ -2655,7 +2659,7 @@ const mount = (renderer, input, settings) => {
         : "";
     if (!count) {
       const hint = element("div");
-      hint.className = "uniform-empty";
+      hint.className = "ui-empty uniform-empty";
       hint.textContent = search
         ? "검색 결과가 없습니다. 이름이나 타입을 확인하세요."
         : hidden.size
@@ -2668,7 +2672,8 @@ const mount = (renderer, input, settings) => {
           add = element("button");
         actions.className = "uniform-empty-actions";
         gallery.type = add.type = "button";
-        gallery.className = "primary";
+        gallery.className = "ui-btn--primary ui-btn--sm";
+        add.className = "ui-btn--sm";
         gallery.textContent = "예제 갤러리 열기";
         gallery.addEventListener("click", () => $("galleryToggle").click());
         add.textContent = "파라미터 추가";

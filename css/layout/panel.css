@@ -1,102 +1,46 @@
-/* 설정 패널 */
-#panel { grid-area:panel;position:relative;z-index:5;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;border-right:1px solid var(--line);container:settings / inline-size;border-right-color:var(--line);background:var(--panel); }
-.panel-header { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;border-bottom:1px solid var(--line);padding:18px 18px 16px;border-bottom-color:var(--line); }
+/* 설정 패널의 틀: 머리(상표 · 손잡이) · 탭 · 스크롤 본문 · 바닥(저장소 상태).
+   좌우 기준선은 --panel-inset. 구역 · 라벨 · 버튼 모양은 컴포넌트(ui-section · ui-field · ui-btn …)가 정한다. */
+#panel { grid-area:panel;position:relative;z-index:var(--z-panel);display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;border-right:1px solid var(--line);background:var(--panel);container:settings / inline-size; }
+.panel-header { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;padding:18px var(--panel-inset) 16px;border-bottom:1px solid var(--line); }
+.panel-header .dock-grip { margin-left:auto; }
 .brand-lockup { display:flex;align-items:center;gap:12px;min-width:0; }
-.brand-mark { display:grid;place-items:center;flex:0 0 40px;flex-basis:28px;width:28px;height:28px;color:var(--text); }
+.brand-mark { display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;color:var(--text); }
+.brand-mark svg { width:28px;height:28px; }
 .brand-text { display:grid;gap:5px;min-width:0; }
-.brand-text strong { font-weight:750;line-height:1.1;font-size:16px;letter-spacing:-.3px; }
-.brand-text strong span { margin-left:3px;font-weight:450;color:var(--muted); }
-.brand-text small { font-size:8px;font-weight:600;white-space:nowrap;color:var(--faint);font:500 10px/1.3 var(--mono);letter-spacing:.4px; }
+.brand-text strong { font-size:var(--text-xl);font-weight:750;line-height:1.1;letter-spacing:-.3px; }
+.brand-text strong span { margin-left:3px;color:var(--muted);font-weight:450; }
+.brand-text small { color:var(--faint);font:500 var(--text-2xs)/1.3 var(--mono);letter-spacing:.4px;white-space:nowrap; }
 .close-panel { display:none; }
-.panel-tabs { display:grid;gap:4px;flex-shrink:0;border:1px solid var(--line);grid-template-columns:repeat(4,minmax(0,1fr));margin:14px 18px 0;padding:3px;border-color:var(--line);border-radius:var(--radius);background:var(--sunken); }
-.panel-tabs button { min-width:0;padding:6px 4px;border-color:transparent;background:transparent;min-height:30px;border-radius:var(--radius-sm);color:var(--muted);font-size:12px; }
-.panel-scroll { flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;scrollbar-gutter:stable; }
-.view-intro h1 { line-height:1.25;margin:6px 0 6px;font-size:19px;font-weight:650;letter-spacing:-.3px; }
-.view-intro p { margin:0; }
-.control-section { border-top:1px solid var(--line);padding:18px;border-top-color:var(--line); }
-.section-heading { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px;min-width:0; }
-.section-heading h2 { min-width:0;margin:0;line-height:1.5;font-size:13px;font-weight:650; }
-.section-note,.count-badge { display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:3px 7px;border:1px solid var(--line-strong);white-space:nowrap;border-color:var(--line);border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:600 10px/1.4 var(--mono); }
-.count-badge { font-size:10px; }
-.field { min-width:0;margin-top:20px; }
-.section-heading+.field,.control-section>.field:first-child { margin-top:0; }
-.field>label,.field>.section-heading>label { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 8px;margin:0 0 8px; }
-.field output { color:var(--accent-strong);font:11px/1.5 var(--mono); }
-.field-hint { font-weight:400;color:var(--faint);font-size:11px; }
-.help { margin:8px 0 0;overflow-wrap:anywhere; }
-.fps-control { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;margin-top:8px; }
-.fps-control input { border-top-right-radius:0;border-bottom-right-radius:0; }
-.input-unit { display:grid;place-items:center;min-width:44px;padding:0 10px;border:1px solid var(--line-strong);border-left:0;border-radius:0 7px 7px 0;font:10px/1 var(--mono);pointer-events:none;border-color:var(--line-strong);background:var(--surface);color:var(--muted); }
-.preset-row { display:flex;flex-wrap:wrap;gap:8px;margin-top:8px; }
-.preset-row>button { flex:1 1 0;min-width:max-content;padding-inline:8px; }
-.fps-presets { gap:6px; }
-.fps-presets>button { padding-inline:6px; }
-.fps-control[hidden] { display:none; }
-.preset-row button { min-width:0;min-height:32px;padding:5px;font-family:var(--mono);color:var(--muted); }
-.range-ends { display:flex;align-items:center;justify-content:space-between;margin-top:4px;font:10px/1.5 var(--mono);color:var(--faint); }
-/* 두 버튼이 한 줄에 들어가지 않으면 단어 중간에서 줄바꿈하지 않고 위아래로 쌓는다. */
-.buffer-actions { display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:12px; }
-.buffer-actions button { min-width:0;min-height:40px;padding:8px;white-space:nowrap; }
-.buffer-actions+.help { margin-top:12px; }
-.studio-launch,.primary { min-height:40px;font-size:12px; }
-.studio-launch { width:100%;margin-top:12px; }
-.search-icon { position:absolute;top:50%;left:12px;display:grid;place-items:center;width:18px;height:18px;transform:translateY(-50%);color:var(--muted);pointer-events:none; }
-.section-description { margin:0 0 16px; }
-.secondary-action,.danger-action { width:100%;min-height:40px;font-size:12px; }
-.danger-action { margin-top:16px;border-color:color-mix(in srgb,var(--danger) 35%,transparent);background:transparent;color:var(--danger); }
-.panel-footer { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;border-top:1px solid var(--line);min-height:44px;padding:10px 18px;border-top-color:var(--line);background:var(--panel); }
+/* 탭 네 칸은 글자 길이와 상관없이 같은 폭 */
+.panel-tabs { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));flex-shrink:0;margin:14px var(--panel-inset) 0; }
+.panel-tabs>button { min-width:0;padding-inline:4px; }
+.panel-scroll { flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;scrollbar-gutter:stable; }
+.panel-footer { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;min-height:44px;padding:10px var(--panel-inset);border-top:1px solid var(--line);background:var(--panel); }
 .storage-indicator { display:flex;align-items:center;gap:8px;min-width:0; }
-.storage-dot,.info-dot,.live-indicator { flex:0 0 6px;width:6px;height:6px;border-radius:50%; }
-#storageStatus { line-height:1.5;color:var(--muted);font-size:11px; }
+#storageStatus { color:var(--muted);font-size:var(--text-xs);line-height:1.5; }
 #storageStatus.unavailable { color:var(--danger); }
-.storage-indicator:has(.unavailable) .storage-dot { background:var(--danger); }
-.studio-hint { margin:8px 0 0;overflow-wrap:anywhere; }
+.storage-indicator:has(.unavailable) .ui-dot { background:var(--danger); }
+/* 렌더링 탭 */
+.fps-control { margin-top:8px; }
+.step-frame { margin-top:8px; }
+.fps-presets>button,.ui-seg>button[data-time-scale] { font-family:var(--mono); }
+/* 작업공간 탭: 버튼 아래 설명 */
+.ui-section>button+.ui-hint { margin-top:12px; }
 @media (max-width:820px) {
  /* 서랍형 패널: 데스크톱에서 저장한 너비(창의 45%까지)를 따르면 휴대폰에서 240px로 좁아져 탭이 두 줄이 된다. 좁은 화면에서는 고정 너비를 쓴다. */
  #panel { position:fixed;inset:0 auto 0 0;width:min(340px,calc(100vw - 48px)); }
- .close-panel { display:inline-flex;flex:0 0 32px;width:32px;min-height:32px;height:32px;padding:0; }
+ .close-panel { display:inline-flex; }
 }
-.primary,.studio-launch,#studioProjectSave,.studio-run-tools .studio-primary,.studio-dialog-actions #studioDialogOK { border-color:transparent;background:var(--accent-fill);color:var(--accent-ink);font-weight:600; } /* 채운 버튼은 --accent-fill: 흰 글자와 4.5:1 이상 */
-.primary:hover,.studio-launch:hover,#studioProjectSave:hover,.studio-run-tools .studio-primary:hover,.studio-dialog-actions #studioDialogOK:hover { border-color:transparent;background:color-mix(in srgb,var(--accent-fill) 88%,#000);color:var(--accent-ink); }
-.brand-mark svg { width:28px;height:28px; }
-.panel-tabs button:hover { background:transparent;color:var(--text); }
-.panel-tabs button.is-active { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
-.view-intro { padding:22px 18px 18px; }
-.section-index { color:var(--faint);font:500 10px/1.4 var(--mono);letter-spacing:.4px; }
-.view-intro p,.help,.studio-hint { color:var(--muted);font-size:12px;line-height:1.65; }
-/* 영어 장식 꼬리표(GPU · THEME · LAYOUT …)는 제목을 한 번 더 말할 뿐이라 숨긴다. 개수 배지(count-badge)는 정보라 남긴다. */
-.section-heading>.section-note { display:none; }
-.field>label,.field>.section-heading>label,.field>.section-heading>.field-legend { color:var(--text-soft);font-size:12px;font-weight:550; }
-.field>.section-heading>.field-legend { display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:0 0 8px; }
-.step-frame { display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:32px;margin-top:8px;font-size:12px; }
-.step-frame kbd { min-width:20px;min-height:20px; }
-.preset-row button.is-selected { border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong); }
-/* 화면 테마 선택: 세 칸 분할 버튼 */
-.theme-choice { display:flex;flex-wrap:wrap;gap:4px;padding:3px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken); }
-.theme-choice button { flex:1 1 0;min-width:max-content;min-height:32px;padding:5px 6px;border-color:transparent;background:transparent;color:var(--muted);white-space:nowrap; }
-.theme-choice button:hover { border-color:transparent;background:transparent;color:var(--text); }
-.theme-choice button.is-selected { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
-.theme-choice+.help { margin-top:10px; }
-@container settings (max-width:290px) {
- /* 좁은 설정 패널: 아이콘과 글자가 한 칸에 들어가지 않으면 글자가 두 줄로 꺾였다. 글자는 한 줄로 두고 아이콘을 뺀다. */
- .theme-choice button { gap:0; }
- .theme-choice button::before { display:none; }
-}
-#openBufferViewer { border-color:var(--line-strong);background:var(--surface);color:var(--text); }
-.storage-dot,.info-dot { background:var(--success); }
-.panel-header .dock-grip { margin-left:auto; }
-.studio-hint .guide-link { margin:0; }
 @container settings (max-width:284px) {
  /* 기본 폭(300px)은 넉넉한 배치 그대로 두고, 그보다 좁힐 때만 여백을 줄인다. 탭은 252px 아래에서만 두 줄. */
- .panel-header { gap:8px;padding-inline:12px; }
+ #panel { --panel-inset:12px; }
+ .panel-header { gap:8px; }
  .brand-lockup { gap:8px; }
- .brand-text strong { font-size:14px; }
+ .brand-text strong { font-size:var(--text-lg); }
  .brand-text small { white-space:normal;text-wrap:balance; }
- .panel-tabs { margin-inline:12px; }
- .panel-tabs button { padding-inline:2px; }
- .view-intro,.control-section { padding-inline:12px; }
- .section-heading { flex-wrap:wrap; }
- .panel-footer { flex-wrap:wrap;gap:4px 12px;padding-inline:12px; }
+ .panel-tabs>button { padding-inline:2px; }
+ .ui-section-head { flex-wrap:wrap; }
+ .panel-footer { flex-wrap:wrap;gap:4px 12px; }
  .storage-indicator { flex-basis:100%; }
  #storageStatus { word-break:keep-all;overflow-wrap:anywhere;text-wrap:balance; }
 }

@@ -130,7 +130,7 @@ const create = ({
       renameButton = element("button"),
       deleteButton = element("button");
     const isCurrent = current?.id === item.id;
-    box.className = "studio-project";
+    box.className = "ui-card studio-project";
     box.dataset.current = String(isCurrent);
     box.setAttribute("role", "listitem");
     openButton.type = "button";
@@ -155,7 +155,7 @@ const create = ({
       [deleteButton, "icon-close", `${item.name} 삭제`, () => deleteItem(item)],
     ]) {
       button.type = "button";
-      button.className = `glyph-icon ${icon}`;
+      button.className = `ui-icon-btn ui-icon-btn--sm glyph-icon ${icon}`;
       button.title = label;
       button.setAttribute("aria-label", label);
       on(button, "click", action);
@@ -187,7 +187,7 @@ const create = ({
     holder.replaceChildren();
     if (!items.length) {
       const hint = element("p");
-      hint.className = "studio-hint";
+      hint.className = "ui-hint";
       hint.textContent = available
         ? "저장한 프로젝트가 없습니다. 저장하면 여기에서 언제든 다시 열 수 있습니다."
         : "이 브라우저에서는 프로젝트 보관함을 쓸 수 없습니다. Pack 파일로 저장하세요.";

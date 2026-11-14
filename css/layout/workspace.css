@@ -1,27 +1,26 @@
-/* 설정 패널: 헤더·검색·본문·푸터의 좌우 기준선은 20px. */
+/* 작업 공간 격자: [설정 패널 | 크기 조절 막대 | 뷰포트] 아래에 타임라인. 패널은 왼쪽(기본) · 오른쪽, 숨길 수 있다.
+   크기 조절 막대의 모양은 ui-resizer(components/surface.css)이고 여기서는 격자 자리만 정한다. */
 #workspace { display:grid;grid-template-columns:var(--panel-width) auto minmax(0,1fr);grid-template-areas:"panel resize stage" "panel resize timeline";grid-template-rows:minmax(0,1fr) auto;width:100%;height:100dvh; }
-.panel-backdrop { display:none; }
-.panel-hidden #panel { display:none; }
-.panel-hidden #workspace { grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "timeline"; }
-@media (max-width:820px) {
- #workspace,.panel-hidden #workspace { display:block; }
- .panel-backdrop { display:block;position:fixed;inset:0;z-index:4;width:100%;height:100%;min-height:0;padding:0;border:0;border-radius:0;background:var(--overlay); }
- .panel-hidden .panel-backdrop { display:none; }
-}
-/* 설정 패널 배치: 왼쪽(기본) · 오른쪽, 너비 조절. 리사이저는 #workspace의 resize 칸에 놓인 6px 막대로,
-   옆 배치 편집기의 리사이저와 같은 모양이다(양옆 경계선 · 가운데 손잡이 선). 경계선은 막대가 그리므로 패널 테두리는 뺀다. */
 .panel-right #workspace { grid-template-columns:minmax(0,1fr) auto var(--panel-width);grid-template-areas:"stage resize panel" "timeline resize panel"; }
-@media (min-width:821px) {
- body:not(.panel-hidden) #panel { border-inline:0; }
-}
-html.panel-right body.panel-hidden #workspace { grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "timeline"; }
-.panel-resizer { grid-area:resize;display:grid;place-items:center;width:6px;z-index:4;border-block:0;border-inline:1px solid var(--line);cursor:col-resize;touch-action:none;outline:none; }
-.panel-resizer span { width:2px;height:44px;border-radius:2px; }
+.panel-hidden #workspace,html.panel-right body.panel-hidden #workspace { grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "timeline"; }
+.panel-hidden #panel { display:none; }
+.panel-backdrop { display:none; }
+/* 경계선은 막대가 그리므로 패널 테두리는 뺀다. */
+.panel-resizer { grid-area:resize; }
 .panel-hidden .panel-resizer { display:none; }
 body.panel-resizing { cursor:col-resize;user-select:none; }
 body.panel-resizing iframe,body.panel-resizing canvas { pointer-events:none; }
-/* 리사이저를 최소 크기의 절반보다 작게 끌면: 놓으면 숨긴다는 표시(패널·편집기 위에 덮개 + 안내, 리사이저는 강조색) */
-body.panel-collapsing #panel::after,.studio-collapsing .studio-dock::after,.timeline-dock.is-collapsing::after { content:"놓으면 숨김";position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--text-soft);font:600 13px/1.4 var(--sans);letter-spacing:.02em;pointer-events:none; }
+/* 리사이저를 최소 크기의 절반보다 작게 끌면: 놓으면 숨긴다는 표시(패널·편집기·타임라인 위에 덮개 + 안내, 리사이저는 강조색) */
+body.panel-collapsing #panel::after,.studio-collapsing .studio-dock::after,.timeline-dock.is-collapsing::after { content:"놓으면 숨김";position:absolute;inset:0;z-index:var(--z-cover);display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--text-soft);font:600 var(--text-md)/1.4 var(--sans);letter-spacing:.02em;pointer-events:none; }
 .studio-collapsing .studio-dock { position:relative; }
 body.panel-collapsing .panel-resizer,.studio-collapsing .studio-resizer,.timeline-dock.is-collapsing .timeline-resize { background:var(--accent-soft); }
-body.panel-collapsing .panel-resizer span,.studio-collapsing .studio-resizer span,.timeline-dock.is-collapsing .timeline-resize::before { background:var(--accent); }
+body.panel-collapsing .panel-resizer::before,.studio-collapsing .studio-resizer::before,.timeline-dock.is-collapsing .timeline-resize::before { background:var(--accent); }
+@media (min-width:821px) {
+ body:not(.panel-hidden) #panel { border-inline:0; }
+}
+@media (max-width:820px) {
+ #workspace,.panel-hidden #workspace { display:block; }
+ .panel-resizer { display:none; }
+ .panel-backdrop { display:block;position:fixed;inset:0;z-index:var(--z-resizer);width:100%;height:100%;min-height:0;padding:0;border:0;border-radius:0;background:var(--overlay); }
+ .panel-hidden .panel-backdrop { display:none; }
+}

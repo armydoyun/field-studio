@@ -4,7 +4,7 @@ const fs=require("fs"),assert=require("assert"),path=require("path");
 const root=path.join(__dirname,".."),css=require("../tools/css-files.cjs").readCss(),html=fs.readFileSync(path.join(root,"index.html"),"utf8");
 const check=(ok,name)=>{assert(ok,name);console.log("PASS",name);};
 for(const id of ["panelTabs","openBufferViewer","studioRun","studioPassTabs","uniformSearch","studioDock","quickHelp","themeToggle"])check(html.includes(`id="${id}"`),id+" 존재");
-check(css.includes("#openBufferViewer")&&css.includes(".buffer-actions button"),"Render 버퍼 뷰어 버튼 스타일");
+check(/id="openBufferViewer"[^>]*class="[^"]*ui-btn--block/.test(html)&&css.includes(".ui-btn--block"),"Render 버퍼 뷰어 버튼은 공통 버튼 컴포넌트를 쓴다");
 // 디자인 v3 계약: 장식용 그라데이션·발광 그림자·블러 없음. 계층은 선과 면의 명도 차이로만 나눈다.
 check(!css.includes("text-shadow"),"글자 번짐 없음");
 const bare=css.replace(/\/\*[\s\S]*?\*\//g,"");
@@ -29,6 +29,6 @@ const missing=[...tokens(darkBlock)].filter(t=>!tokens(lightBlock).has(t));
 check(darkBlock&&lightBlock&&missing.length===0,"라이트 테마가 다크 테마의 모든 색 토큰을 정의: "+missing);
 check(/@media \(prefers-color-scheme:light\)\s*\{\s*:root:not\(\[data-theme="dark"\]\)/.test(bare),"선택이 없으면 시스템 밝기 설정을 따름");
 check(/field\.theme\.v1/.test(html)&&fs.existsSync(path.join(root,"js","theme.js")),"저장된 테마를 첫 그리기 전에 적용");
-check(css.includes(".studio-top button.is-active")&&css.includes(".panel-tabs button.is-active"),"패스/패널 상태 구분");
+check(css.includes('.ui-tabs>button:is([aria-selected="true"],.is-active)')&&/id="panelTabs" class="[^"]*ui-tabs/.test(html)&&/id="studioPassTabs" class="[^"]*ui-tabs/.test(html),"패스/패널 탭은 공통 탭 컴포넌트로 고른 상태를 구분");
 check(css.includes("@media (max-width:600px)")||css.includes("@media (max-width: 600px)"),"모바일 접근성 유지");
 console.log("UI Matte 정적 검사 통과");

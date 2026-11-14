@@ -1,44 +1,41 @@
+/* 프로젝트 메뉴(project-menu.js · studio-projects.js): 머리줄의 프로젝트 버튼 · 저장 버튼 · 펼쳐지는 메뉴(보관함 · 파일 · 이미지).
+   면은 ui-hud · ui-popover, 버튼은 기본 버튼. 여기서는 자리와 이 기능만의 상태 표시를 정한다. */
 /* 프로젝트 버튼이 늘 맨 왼쪽에 온다. 상태 칩("일시정지")은 그 오른쪽에 나타나므로, 재생 중에 칩이 숨어도 버튼이 밀려 보이지 않는다. */
-/* 보관함에 저장한 뒤 바뀜: 이름 뒤 점(편집기 탭의 '저장 안 됨' 표시와 같은 관례) */
-/* 저장 상태는 창 크기와 상관없이 머리줄 버튼에 남긴다: 이름 + "저장 안 됨" 표시(아주 좁으면 점만). */
-/* 프로젝트 이름 옆 저장 버튼: 바뀐 내용이 있을 때만 보이고 누르면 바로 저장한다(점 = 저장 안 된 변경). */
-.project-menu-wrap { position:relative;order:-1;flex:0 1 auto;min-width:0;pointer-events:auto;display:flex;align-items:center;gap:6px; }
-.project-toggle { max-width:260px;min-height:32px;padding:6px 10px;border-color:var(--line);border-radius:var(--radius);background:var(--hud-bg);color:var(--text-soft);font:500 11px/1.4 var(--sans); }
+.project-menu-wrap { position:relative;order:-1;display:flex;flex:0 1 auto;align-items:center;gap:6px;min-width:0;pointer-events:auto; }
+.project-toggle { max-width:260px;color:var(--text-soft);font:500 var(--text-xs)/1.4 var(--sans); }
 .project-toggle span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .project-toggle[data-saved="false"] span { color:var(--muted); }
-.project-save-state { flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--hud-bg);color:var(--text);font:600 11px/1 var(--sans);white-space:nowrap;pointer-events:auto; }
+.project-toggle[aria-expanded="true"] { border-color:var(--accent);color:var(--text); }
+/* 프로젝트 이름 옆 저장 버튼: 바뀐 내용이 있을 때만 보이고 누르면 바로 저장한다(점 = 저장 안 된 변경). */
+.project-save-state { flex:0 0 auto;padding:0 10px;color:var(--text);font:600 var(--text-xs)/1 var(--sans);white-space:nowrap;pointer-events:auto; }
 .project-save-state[hidden] { display:none; }
 .project-save-state::before { content:"";width:6px;height:6px;border-radius:50%;background:var(--warning); }
 .project-save-state:hover { border-color:var(--accent);color:var(--accent-strong); }
-.project-toggle[aria-expanded="true"] { border-color:var(--accent);color:var(--text); }
-.project-menu { position:fixed;top:56px;left:12px;z-index:40;display:grid;gap:0;width:min(340px,calc(100vw - 24px));max-height:calc(100vh - 80px);overflow-y:auto;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);box-shadow:var(--shadow);scrollbar-width:thin; }
+.project-menu { position:fixed;top:56px;left:12px;display:grid;gap:0;width:min(340px,calc(100vw - 24px));max-height:calc(100vh - 80px);overflow-y:auto; }
 .project-menu[hidden] { display:none; }
-/* 메뉴가 열려 있는 동안 머리줄을 편집기 크기 조절 손잡이(z-index:4)·알림(7)보다 위로 올린다. 메뉴는 fixed라 머리줄 안에서만 쌓인다. */
-.stage-header:has(.project-menu:not([hidden])) { z-index:8; }
+/* 메뉴가 열려 있는 동안 머리줄을 편집기 크기 조절 손잡이·알림보다 위로 올린다. 메뉴는 fixed라 머리줄 안에서만 쌓인다. */
+.stage-header:has(.project-menu:not([hidden])) { z-index:calc(var(--z-toast) + 1); }
 .project-menu-section { display:grid;gap:10px;padding:14px; }
 .project-menu-section+.project-menu-section { border-top:1px solid var(--line); }
-.project-menu-section>h2 { margin:0;color:var(--text);font-size:12px;font-weight:650; }
+.project-menu-section>h2 { margin:0;color:var(--text);font-size:var(--text-sm);font-weight:650; }
 .project-menu-section>* { min-width:0;margin:0; }
-.project-menu-section>button { width:100%;min-height:36px; }
-.project-menu .studio-file-actions { display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:0; }
+.project-menu-section>button { width:100%; }
+.studio-file-actions { display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:0; }
+.studio-file-actions button { width:100%; }
 .project-advanced { display:grid;gap:8px; }
-.project-advanced>summary { width:max-content;padding:4px 8px 4px 0;color:var(--muted);font-size:11px;cursor:pointer; }
-.project-advanced>summary:hover { color:var(--text-soft); }
-.project-advanced[open] { padding-bottom:2px; }
-.studio-file-actions button { width:100%;min-height:36px; }
 /* 프로젝트 보관함: 지금 작업 이름 · 저장 버튼 · 저장한 프로젝트 목록(열기 · 이름 바꾸기 · 삭제) */
 .studio-projects { display:grid;gap:8px;min-width:0; }
-.studio-project-current { margin:0;color:var(--muted);font-size:12px;overflow-wrap:anywhere; }
+.studio-project-current { margin:0;color:var(--muted);font-size:var(--text-sm);overflow-wrap:anywhere; }
 .studio-project-current[data-saved="true"] { color:var(--text-soft); }
 .studio-project-list { display:grid;gap:6px;min-width:0;max-height:260px;overflow:auto; }
-.studio-project-list>.studio-hint { margin:0; }
-.studio-project { display:grid;grid-template-columns:minmax(0,1fr) 28px 28px;align-items:center;gap:6px;padding:4px 4px 4px 0;border:1px solid var(--line);border-radius:8px;background:var(--surface); }
+.studio-project-list>.ui-hint { margin:0; }
+.studio-project { display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:2px;padding:4px 4px 4px 0; }
 .studio-project[data-current="true"] { border-color:var(--line-strong); }
-.studio-project-open { display:grid;gap:2px;min-width:0;min-height:40px;padding:6px 10px;border:0;background:transparent;text-align:left;justify-items:start; }
-.studio-project-open strong { min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--text-soft); }
-.studio-project-open small { color:var(--muted);font-size:10px;word-break:keep-all; }
-.studio-project[data-current="true"] .studio-project-open strong { color:var(--text); }
-.studio-project .glyph-icon { width:28px;min-height:28px;height:28px;padding:0; }
+.studio-project-open { display:grid;justify-items:start;gap:2px;min-width:0;min-height:40px;padding:6px 10px;border:0;background:transparent;text-align:left; }
+.studio-project-open:hover { background:transparent; }
+.studio-project-open strong { min-width:0;max-width:100%;overflow:hidden;color:var(--text-soft);font-size:var(--text-sm);font-weight:600;text-overflow:ellipsis;white-space:nowrap; }
+.studio-project-open:hover strong,.studio-project[data-current="true"] .studio-project-open strong { color:var(--text); }
+.studio-project-open small { color:var(--muted);font-size:var(--text-2xs);word-break:keep-all; }
 @container preview (max-width:420px) {
  .project-menu-wrap { flex:1 1 0;min-width:44px; }
  .project-toggle { max-width:100%; }

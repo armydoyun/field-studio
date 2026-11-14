@@ -7,7 +7,7 @@
 // 찾기 모드에서는 바꾸기 줄을 숨기고 바꾸기 단축키도 받지 않는다(보이지 않는 칸의 내용으로 문서가 바뀌지 않게).
 // 모드는 창의 data-mode("find" | "replace")에 두고, 편집기(cm-editor.js의 showFind)는 "studio-find-mode" 이벤트로 바꾼다.
 // DOM 순서는 찾기 → 바꿀 내용 → 찾기 도구 → 바꾸기 도구 → 닫기 → [▸]라서, 바꾸기 모드에서 찾기 칸 다음 Tab은 바로 바꿀 내용으로 간다.
-// 자리는 CSS grid(style.css의 .studio-find)가 잡는다.
+// 자리는 CSS grid(css/features/editor-codemirror.css의 .studio-find)가 잡는다.
 const MATCH_LIMIT = 1000; // 일치 개수는 이만큼까지만 센다(긴 문서·짧은 정규식에서 입력이 느려지지 않게).
 
 const createSearchPanel = CM => view => {

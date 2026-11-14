@@ -1,18 +1,14 @@
 // 성능·디버그 패널. Renderer 공개 API만 읽으며 GPU 리소스를 소유하지 않는다.
 // 패널이 화면에 보일 때만 샘플링·그리기를 하여 셰이더 성능 측정 자체를 방해하지 않는다.
 import * as PreviewDOM from "./preview-dom.js";
+import * as UI from "./ui-kit.js";
 const HISTORY = 180,
   SAMPLE_MS = 100;
 const mount = renderer => {
   const $ = PreviewDOM.createLookup(),
     controller = new AbortController(),
     signal = controller.signal;
-  const element = (tag, className = "", text = "") => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
+  const element = UI.el;
   const series = { frame: new Float32Array(HISTORY), gpu: new Float32Array(HISTORY), cpu: new Float32Array(HISTORY) };
   let head = 0,
     count = 0,
@@ -145,27 +141,27 @@ const mount = renderer => {
       holder.replaceChildren(
         element(
           "p",
-          "help",
+          "ui-hint",
           "이 브라우저/GPU는 EXT_disjoint_timer_query_webgl2를 제공하지 않아 패스별 GPU 시간을 측정할 수 없습니다. 위 FRAME·CPU 지표로 비교하세요."
         )
       );
       return;
     }
     if (!gpu.enabled) {
-      holder.replaceChildren(element("p", "help", "GPU 타이머가 꺼져 있습니다."));
+      holder.replaceChildren(element("p", "ui-hint", "GPU 타이머가 꺼져 있습니다."));
       return;
     }
     const order = [...renderer.getPasses().map(p => p.name), "Image", "Preview"],
       rows = [...gpu.passes].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
     if (!rows.length) {
-      holder.replaceChildren(element("p", "help", "측정 대기 중… 재생 중일 때 수집됩니다."));
+      holder.replaceChildren(element("p", "ui-hint", "측정 대기 중… 재생 중일 때 수집됩니다."));
       return;
     }
     const total = rows.reduce((sum, row) => sum + row.ms, 0) || 1;
     holder.replaceChildren(
       ...rows.map(row => {
         const line = element("div", "profile-pass"),
-          bar = element("span", "profile-bar"),
+          bar = element("span", "ui-meter ui-meter--lg profile-bar"),
           share = row.ms / total;
         bar.style.setProperty("--share", `${Math.max(2, share * 100)}%`);
         bar.dataset.heavy = String(row.ms > 8);
@@ -222,7 +218,7 @@ const mount = renderer => {
     let total = 0;
     for (const [label, report] of programs) {
       if (!report) continue;
-      const group = element("div", "profile-program"),
+      const group = element("div", "ui-card profile-program"),
         head = element("div", "profile-program-head");
       head.append(
         element("strong", "", label),
@@ -250,7 +246,7 @@ const mount = renderer => {
           element("span", "profile-uniform-note", note)
         );
         if (item.source === "unregistered" && item.size === 1 && types.has(item.type)) {
-          const button = element("button", "profile-promote", "등록");
+          const button = element("button", "ui-btn--primary ui-btn--xs profile-promote", "등록");
           button.type = "button";
           button.title = `${item.name}을 파라미터 패널에서 조절할 수 있게 등록`;
           button.addEventListener("click", () => promote(item.name, item.type));
@@ -272,7 +268,7 @@ const mount = renderer => {
     if (!shots.length) {
       thumbs.clear();
       holder.replaceChildren(
-        element("p", "help", "버퍼 패스가 없거나 아직 렌더링되지 않았습니다. 편집기의 + Buffer로 추가하세요.")
+        element("p", "ui-hint", "버퍼 패스가 없거나 아직 렌더링되지 않았습니다. 편집기의 + Buffer로 추가하세요.")
       );
       return;
     }
@@ -371,7 +367,7 @@ const mount = renderer => {
     for (const [key, value] of rows) nodes.push(element("dt", "", key), element("dd", "", String(value)));
     const exts = element("dd", "profile-extensions");
     for (const [name, ok] of Object.entries(caps.extensions)) {
-      const chip = element("span", "profile-ext", name.replace(/^(EXT|OES|KHR|WEBGL)_/, ""));
+      const chip = element("span", "ui-tag ui-tag--pill profile-ext", name.replace(/^(EXT|OES|KHR|WEBGL)_/, ""));
       chip.dataset.ok = String(ok);
       chip.title = `${name}: ${ok ? "지원" : "미지원"}`;
       exts.append(chip);

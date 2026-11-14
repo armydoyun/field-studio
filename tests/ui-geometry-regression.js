@@ -10,17 +10,17 @@ function parse(text,context='base'){let at=0;while(at<text.length){while(/\s/.te
  at=end;}}
 parse(css);
 const base=s=>{const r=rules.get('base|'+s);assert(r,'Missing '+s);return r;};
-assert.equal(base('button').get('align-items'),'center');assert.equal(base('button').get('justify-content'),'center');assert.equal(base('button').get('margin'),'0');
-assert.equal(base('input[type="checkbox"]').get('margin'),'0');
-assert.equal(base('.fps-control').get('display'),'grid');assert.equal(base('.input-unit').get('place-items'),'center');assert(!base('.input-unit').has('top'),'FPS unit must not have a fixed vertical offset');
+const button=base(':where(button,.ui-btn)');assert.equal(button.get('align-items'),'center');assert.equal(button.get('justify-content'),'center');assert.equal(button.get('margin'),'0');
+assert.equal(base(':where(input[type="checkbox"],input[type="radio"])').get('margin'),'0');
+assert.equal(base('.ui-input-group').get('display'),'grid');assert.equal(base('.ui-unit').get('place-items'),'center');assert(!base('.ui-unit').has('top'),'FPS unit must not have a fixed vertical offset');
 // 단축키 표시는 검색 칸 안 오른쪽에 있다: 글자가 있어 기본 지우기(×) 버튼이 나타나거나 칸에 초점이 있으면 숨겨 겹치지 않는다.
-assert.equal(base('.uniform-search-wrap input:not(:placeholder-shown)~kbd').get('display'),'none','Shortcut badge must not overlap native search clear control');
-assert.equal(base('.uniform-search-wrap input:focus~kbd').get('display'),'none','Shortcut badge hides while typing');
-assert.equal(base('.studio-dialog-actions').get('grid-template-columns'),'repeat(2,minmax(0,1fr))');
-assert.equal(base('.studio-dialog-head h2').get('min-height'),'36px');assert.equal(base('#studioDialogClose').get('height'),'36px');
+assert.equal(base('.ui-search>input:not(:placeholder-shown)~kbd').get('display'),'none','Shortcut badge must not overlap native search clear control');
+assert.equal(base('.ui-search>input:focus~kbd').get('display'),'none','Shortcut badge hides while typing');
+assert.equal(base('.ui-dialog-foot').get('grid-template-columns'),'repeat(2,minmax(0,1fr))');
+assert.equal(base('.ui-dialog-head h2').get('min-height'),'36px');assert.equal(base('.ui-icon-btn--lg').get('height'),'var(--control-lg)');assert(/--control-lg:36px/.test(css)&&/id="studioDialogClose"[^>]*ui-icon-btn--lg/.test(html));
 assert.equal(base('.uniform-type').has('margin-left'),false,'Wrapped labels must use their parent gap');
 assert.equal(base('.viewport-footer').get('align-items'),'center');assert(!base('.viewport-info').has('position'));assert(!base('.stage-stats').has('position'));
-assert.equal(base('.studio-top').get('grid-template-columns'),'minmax(0,1fr) auto');assert(html.includes('class="studio-window-tools"'));assert(html.includes('class="viewport-footer"'));
+assert.equal(base('.studio-top').get('grid-template-columns'),'minmax(0,1fr) auto');assert(html.includes('class="ui-toolbar studio-window-tools"'));assert(html.includes('class="viewport-footer"'));
 // 편집기는 CodeMirror가 그린다: 호스트가 프레임을 채우고(flex), 편집 화면이 그 높이를 그대로 쓴다.
 assert.equal(base('.studio-cm-host').get('display'),'flex');assert.equal(base('.studio-cm-host').get('flex'),'1');assert.equal(base('.studio-cm-host>.cm-editor').get('height'),'100%');
 assert.equal(base('.project-menu-section').get('padding'),'14px');assert.equal(base('.project-menu-section').get('gap'),'10px');assert.equal(base('.project-menu[hidden]').get('display'),'none');
@@ -39,7 +39,7 @@ for(const m of html.matchAll(/<button\b([^>]*)class="[^"]*glyph-icon[^"]*"([^>]*
 for(const selector of ['.glyph-icon::before']){
  assert.equal(base(selector).get('width'),'16px');assert.equal(base(selector).get('height'),'16px');assert.equal(base(selector).get('content'),'""');assert.equal(base(selector).get('mask'),'var(--icon) center/contain no-repeat');
 }
-assert.equal(base('.studio-texture .icon-close').get('width'),'28px');
+assert.equal(base('.ui-icon-btn--sm').get('width'),'var(--control-sm)');assert(/--control-sm:28px/.test(css));
 assert(base('#previewPause[aria-pressed="true"]').has('--icon'));assert(base('#studioMaximize[aria-pressed="true"]').has('--icon'));
 console.log('PASS Font-independent icon boxes / accessible icon buttons / state icons / square delete and navigation controls');
 

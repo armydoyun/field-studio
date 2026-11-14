@@ -1,0 +1,30 @@
+/* 세그먼트 · 탭 — 오목한 트랙 안에서 하나를 고른다.
+     ui-seg   값 고르기(테마 · 프레임 제한 · 연결 방식 · @enum …). 고른 칸 = 옅은 액센트 면 + 액센트 글자
+     ui-tabs  화면 바꾸기(설정 패널 탭). 고른 칸 = 떠오른 중성 면
+     ui-tabs--line  문서 탭(편집기 패스 탭): 트랙 없이, 고른 탭 아래 액센트 줄
+   칸은 <button>. 고른 칸은 aria-pressed · aria-checked · aria-selected ="true" 또는 .is-active · .is-selected 로 표시한다.
+   칸은 같은 폭으로 나누되 글자보다 좁아지지 않는다: 모자라면 다음 줄로 넘어가고, 줄마다 남는 폭을 고르게 채운다.
+     크기  ui-seg--sm(칸 20 · 고정폭 꼬리표) · 기본(칸 24, 전체 32) · ui-seg--lg(칸 28, 전체 36) */
+.ui-seg,.ui-tabs { display:flex;flex-wrap:wrap;gap:2px;min-width:0;padding:3px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken); }
+:is(.ui-seg,.ui-tabs)>button { flex:1 1 0;min-width:max-content;min-height:var(--control-xs);padding:0 8px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font-weight:500;white-space:nowrap; }
+:is(.ui-seg,.ui-tabs)>button:hover { border-color:transparent;background:transparent;color:var(--text); }
+.ui-seg>button:is([aria-pressed="true"],[aria-checked="true"],[aria-selected="true"],.is-active,.is-selected) { border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent-strong);font-weight:650; }
+.ui-tabs>button:is([aria-selected="true"],.is-active) { border-color:var(--line-strong);background:var(--surface);color:var(--text);font-weight:550; }
+:is(.ui-seg,.ui-tabs).ui-seg--lg>button { min-height:var(--control-sm); }
+.ui-seg--sm { padding:2px;border-radius:var(--radius-sm); }
+.ui-seg.ui-seg--sm>button { flex:0 0 auto;min-height:20px;padding:0 7px;border-radius:var(--radius-xs);font:600 var(--text-2xs)/1 var(--mono); }
+/* 좁은 칸에서 아이콘과 글자가 함께 들어가지 않으면 아이콘을 뺀다(칸에 glyph-icon을 쓴 경우) */
+@container (max-width:290px) {
+ .ui-seg>button.glyph-icon { gap:0; }
+ .ui-seg>button.glyph-icon::before { display:none; }
+}
+@media (pointer:coarse) {
+ :is(.ui-seg,.ui-tabs)>button { min-height:var(--control-sm); }
+ .ui-seg.ui-seg--sm>button { min-width:36px;min-height:var(--control-sm); }
+}
+/* 문서 탭 */
+.ui-tabs--line { flex-wrap:nowrap;gap:4px;padding:0;border:0;border-radius:0;background:none;overflow-x:auto; }
+.ui-tabs.ui-tabs--line>button { position:relative;flex:0 0 auto;display:block;max-width:180px;min-height:var(--control-md);padding:5px 10px;overflow:hidden;border-radius:var(--radius);font:600 var(--text-sm)/1.4 var(--mono);text-overflow:ellipsis; }
+.ui-tabs.ui-tabs--line>button:hover { background:var(--surface-hover); }
+.ui-tabs.ui-tabs--line>button:is([aria-selected="true"],.is-active) { border-color:var(--line-strong);background:var(--surface-hover);color:var(--text);font-weight:600; }
+.ui-tabs.ui-tabs--line>button:is([aria-selected="true"],.is-active)::after { content:"";position:absolute;inset:auto 8px 0;height:2px;border-radius:2px 2px 0 0;background:var(--accent); }

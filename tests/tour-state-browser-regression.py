@@ -31,7 +31,7 @@ with sync_playwright() as p:
         page.evaluate('() => guide.startTour()')
         for _ in range(30):
             if not page.evaluate(STATE)['touring']:break
-            page.evaluate('() => document.querySelector(".guide-tour-card .primary").click()');page.wait_for_timeout(20)
+            page.evaluate('() => document.querySelector(".guide-tour-card .ui-btn--primary").click()');page.wait_for_timeout(20)
 
     # 넓은 화면: 편집기 열림 · 패널 표시 · 렌더링 탭
     page,errors=scenario(1440,900,'''() => {document.getElementById("studioDock").hidden=false;document.body.classList.remove("panel-hidden");document.querySelector('#panelTabs [data-tab="render"]').click();}''')
@@ -39,7 +39,7 @@ with sync_playwright() as p:
     check('close' in page.evaluate('studioCalls'),'the tour itself closes the editor for its viewport steps')
     check(after==before,f'finishing the tour restores editor, panel and tab: {before} -> {after}')
     page.evaluate('() => guide.startTour()');page.wait_for_timeout(20)
-    page.evaluate('() => {for(let i=0;i<6;i++)document.querySelector(".guide-tour-card .primary").click();}');page.wait_for_timeout(20)
+    page.evaluate('() => {for(let i=0;i<6;i++)document.querySelector(".guide-tour-card .ui-btn--primary").click();}');page.wait_for_timeout(20)
     page.keyboard.press('Escape');page.wait_for_timeout(20)
     check(page.evaluate(STATE)==before,'leaving mid-tour with Esc restores the same screen')
     check(errors==[],f'no page exceptions: {errors}');page.close()

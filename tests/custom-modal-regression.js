@@ -10,7 +10,7 @@ let passed=0;const check=(condition,label)=>{assert.ok(condition,label);console.
 for(const id of ["studioPromptDialog","studioDialogForm","studioDialogTitle","studioDialogMessage","studioDialogField","studioDialogInput","studioDialogOK","studioDialogCancel","studioDialogClose"])
   check((html.match(new RegExp(`\\bid\\s*=\\s*"${id}"`,"g"))||[]).length===1,`모달 요소 고유 ID ${id}`);
 check(has(code("index.html"),'<dialog id="studioPromptDialog"','method="dialog"'),"접근 가능한 네이티브 모달");
-check(css.includes(".studio-prompt-dialog::backdrop")&&has(code("css"),'data-danger="true"'),"매트 테마/위험 확인 스타일");
+check(css.includes("dialog::backdrop")&&has(code("css"),'data-danger="true"'),"매트 테마/위험 확인 스타일");
 check(!/(?:window\.)?(?:prompt|confirm|alert)\s*\(/.test(rawScripts),"기본 입력/확인 대화상자 미사용");
 // 편집기는 studio의 모달 함수 ask를 받아 이름 바꾸기 등에 쓴다(GLSL 도우미까지 전달).
 check(has(studio,'Editor.mount($("studioCode"),ask')&&has(editor,"const mount = (textarea, ask","Features.create({CM, language, options, ask","await ask({title:"),"단일 모달 함수의 편집기 공유");

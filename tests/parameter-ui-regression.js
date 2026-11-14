@@ -14,7 +14,7 @@ async function test(name,fn){const f=fixture();let ui;try{
 (async()=>{
 await test('Parameter deletion uses the shared SVG mask and retains its accessible name',async(f,n,row)=>{
   f.renderer.defineUniform('uAmount','float',1);await n('uniformSearch').dispatchEvent({type:'input'});
-  const remove=row().children[0].children.at(-1);assert.equal(remove.className,'remove-uniform glyph-icon icon-close');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
+  const remove=row().children[0].children.at(-1);assert.equal(remove.className,'ui-icon-btn ui-icon-btn--xs remove-uniform glyph-icon icon-close');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
   await remove.click();assert.equal(f.renderer.getUserUniforms().length,0);
 });
 await test('Empty parameter list explains how to start',async(f,n,row)=>{assert.match(row().textContent,/파라미터가 없습니다/);assert.equal(n('uniformCount').textContent,'0 / 64');});
@@ -71,7 +71,7 @@ await test('Malformed comma vectors are rejected without adding a zero component
 });
 await test('Boolean parameter uses an accessible switch with explicit true/false text',async(f,n,row)=>{
   f.renderer.defineUniform('uEnabled','bool',false);await n('uniformSearch').dispatchEvent({type:'input'});
-  const label=row().children[1],[input,text]=label.children;assert.equal(label.className,'uniform-switch');assert.equal(input.type,'checkbox');assert.equal(input.attrs.role,'switch');assert.equal(input.checked,false);assert.match(text.textContent,/false/);
+  const label=row().children[1],[input,text]=label.children;assert.equal(label.className,'ui-switch uniform-switch');assert.equal(input.type,'checkbox');assert.equal(input.attrs.role,'switch');assert.equal(input.checked,false);assert.match(text.textContent,/false/);
   input.checked=true;await input.dispatchEvent({type:'change'});assert.equal(f.renderer.getUserUniforms()[0].value,true);assert.match(text.textContent,/true/);
   f.renderer.setUniform=()=>{throw Error('forced failure');};input.checked=false;await input.dispatchEvent({type:'change'});assert.equal(input.checked,true);assert.match(text.textContent,/true/);
 });

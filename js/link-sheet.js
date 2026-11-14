@@ -5,6 +5,7 @@
 // 키프레임의 키 자체는 여기서 고치지 않는다(파라미터 줄의 내비게이터 · 타임라인). 시트에는 반복 · 잇기와 타임라인 열기만.
 // 끄는 조작(슬라이더)은 input 동안 미리보기(렌더러에만), change에서 저장한다 — 다시 그려도 끌기가 끊기지 않게.
 import * as Links from "./links.js";
+import * as UI from "./ui-kit.js";
 
 const SOURCE_LABEL = { audio: "소리", midi: "MIDI", lfo: "흔들기", keys: "키프레임" };
 const BAND_LABEL = { bass: "저음", mid: "중음", treble: "고음", volume: "음량" };
@@ -46,18 +47,13 @@ const rangeOf = item =>
         Number.isFinite(item.options?.max) ? item.options.max : 1,
       ];
 
-const element = (tag, className = "", text = "") => {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text) node.textContent = text;
-  return node;
-};
+const element = UI.el;
 const svgNode = tag => document.createElementNS("http://www.w3.org/2000/svg", tag);
 
 // 막대 하나: 0~1 채움. 값 글자는 옆에.
 const bar = (label = "") => {
-  const wrap = element("div", "link-bar"),
-    fill = element("span", "link-bar-fill");
+  const wrap = element("div", "ui-meter link-bar"),
+    fill = element("span", "ui-meter-fill link-bar-fill");
   wrap.setAttribute("role", "meter");
   wrap.setAttribute("aria-valuemin", "0");
   wrap.setAttribute("aria-valuemax", "1");
@@ -110,32 +106,14 @@ const meter = (item, link, active = () => true) => {
 };
 
 // 끄기 · 소리 · MIDI … 같은 한 줄 선택(라디오 그룹). onPick(value)
-const segmented = (label, options, current, onPick, className = "") => {
-  const group = element("div", `link-segmented ${className}`.trim());
-  group.setAttribute("role", "radiogroup");
-  group.setAttribute("aria-label", label);
-  const buttons = options.map(([value, text]) => {
-    const button = element("button", "", text);
-    button.type = "button";
-    button.dataset.value = value;
-    button.setAttribute("role", "radio");
-    button.setAttribute("aria-checked", String(value === current));
-    button.tabIndex = value === current ? 0 : -1;
-    button.addEventListener("click", () => value !== current && onPick(value));
-    button.addEventListener("keydown", event => {
-      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
-      if (!step) return;
-      event.preventDefault();
-      const index = (buttons.indexOf(button) + step + buttons.length) % buttons.length;
-      buttons[index].focus();
-      buttons[index].click();
-    });
-    return button;
-  });
-  if (!buttons.some(b => b.tabIndex === 0)) buttons[0].tabIndex = 0;
-  group.append(...buttons);
-  return group;
-};
+const segmented = (label, options, current, onPick, className = "") =>
+  UI.segmented({
+    label,
+    options: options.map(([value, text]) => ({ value, label: text })),
+    value: current,
+    onChange: onPick,
+    className: `link-segmented ${className}`.trim(),
+  }).element;
 
 const numberField = (label, value, onCommit, { min, max, step = "any", unit = "" } = {}) => {
   const wrap = element("label", "link-number"),
@@ -206,7 +184,9 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     )
   );
   if (!link) {
-    node.append(element("p", "link-hint", "무엇이 이 값을 움직일지 고르세요: 소리 · MIDI 노브 · 흔들기 · 키프레임."));
+    node.append(
+      element("p", "ui-hint link-hint", "무엇이 이 값을 움직일지 고르세요: 소리 · MIDI 노브 · 흔들기 · 키프레임.")
+    );
     return { node, update: () => {} };
   }
 
@@ -227,7 +207,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       );
     // 막힌 곳에서 바로 해결하러 간다: 편집기의 입력 채널 줄을 연다
     if (openInputs) {
-      const go = element("button", "link-go", "입력 채널 열기");
+      const go = element("button", "ui-btn--xs link-go", "입력 채널 열기");
       go.type = "button";
       go.addEventListener("click", openInputs);
       empty.append(" ", go);
@@ -251,10 +231,10 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     });
   }
   if (link.source === "midi") {
-    const learn = element("button", "link-learn", "학습 — 누르고 노브를 움직이기");
+    const learn = element("button", "ui-btn--block link-learn", "학습 — 누르고 노브를 움직이기");
     learn.type = "button";
     learn.title = "누른 뒤 컨트롤러의 노브 · 슬라이더를 움직이면 그 CC로 연결합니다";
-    const status = element("p", "link-note");
+    const status = element("p", "ui-hint link-note");
     learn.addEventListener("click", async () => {
       if (learn.getAttribute("aria-pressed") === "true") {
         renderer.cancelMidiLearn?.();
@@ -377,7 +357,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     row("시간 기준", mode, explain);
     if (looping) {
       const length = element("div", "link-inline"),
-        status = element("p", "link-note link-loop-status"),
+        status = element("p", "ui-hint link-note link-loop-status"),
         outside = link.keys.filter(([t]) => t >= link.loop - 1e-9).length;
       length.append(
         numberField("반복 길이(초)", link.loop, loop => loop > 0 && change({ loop }), {
@@ -399,10 +379,10 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
         status.textContent = `지금 uTime ${t.toFixed(2)}초 → 바퀴 안 ${(t - cycle * link.loop).toFixed(2)}초 · ${cycle + 1}번째 바퀴`;
       });
     }
-    const open = element("button", "link-open-timeline", "타임라인에서 편집");
+    const open = element("button", "ui-btn--block link-open-timeline", "타임라인에서 편집");
     open.type = "button";
     open.addEventListener("click", () => openTimeline(item.name));
-    row("키", element("p", "link-note", `키 ${link.keys.length}개 · 아래 타임라인에서 고칩니다.`), open);
+    row("키", element("p", "ui-hint link-note", `키 ${link.keys.length}개 · 아래 타임라인에서 고칩니다.`), open);
     row(
       "기본 잇기",
       segmented(
@@ -414,7 +394,11 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
         link.ease,
         ease => change({ ease })
       ),
-      element("p", "link-note", "키마다 다르게(계단 · 천천히 시작 등) 하려면 타임라인에서 키를 골라 '잇기'를 바꿉니다.")
+      element(
+        "p",
+        "ui-hint link-note",
+        "키마다 다르게(계단 · 천천히 시작 등) 하려면 타임라인에서 키를 골라 '잇기'를 바꿉니다."
+      )
     );
   }
 
@@ -467,7 +451,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     }
     paint();
     track.append(fill, a, b);
-    const flip = element("button", "link-flip", "⇅ 뒤집기");
+    const flip = element("button", "ui-btn--sm link-flip", "⇅ 뒤집기");
     flip.type = "button";
     flip.setAttribute("aria-pressed", String(inverted));
     flip.title = "소스가 클수록 값이 작아지게(최소 · 최대를 맞바꿈)";

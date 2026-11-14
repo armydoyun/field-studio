@@ -21,7 +21,7 @@ assert(!css.includes('.studio-code-label span:last-child'),'Legacy rule could hi
 assert(!/\.studio-dock\s*\{\s*flex-basis:\d+%/.test(css),'Fixed responsive height overrides user resize');
 assert(!css.includes('studio-patchbay')&&css.includes('grid-template-rows:minmax(0,1fr)'),'Editor main area is a single code track');
 assert(css.includes('pointer-events:auto')&&html.includes('id="uiDismiss"'),'Error dismissal must be reachable');
-assert(css.includes('12px/1.65')&&!css.includes('12px/1.58'),'Gutter and code must use the same line height');
+assert(css.includes('var(--text-sm)/1.65')&&!css.includes('/1.58'),'Code samples share one line height');
 assert(/\.project-menu-section\s*\{[^}]*display:grid;[^}]*gap:10px;[^}]*padding:14px;/.test(css),'Project menu sections share one spacing rule');
 assert(css.includes('.project-menu-section>* { min-width:0;margin:0; }'),'Menu section children must not add conflicting default margins');
 assert(!/\.studio-group-body[^{}]*button\s*\{[^}]*margin-(?:top|bottom):[1-9]/.test(css),'Buttons must use the container gap without double margins');

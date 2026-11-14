@@ -1,3 +1,6 @@
+/* CodeMirror 6 화면(cm-editor.js · cm-search-panel.js · cm-glsl-features.js): 문법 색 · 찾기 창 · 말풍선 · 접기 · 오류 표시.
+   예외 구역: CodeMirror가 자기 스타일을 스크립트로 넣기 때문에, 여기 규칙은 그것을 이기도록 .studio-cm-host 로 우선순위를 올려 쓴다.
+   찾기 창의 칸 · 버튼은 그래서 ui-* 컴포넌트를 쓰지 못하고 같은 토큰(높이 28px · 선 · 면)으로 직접 맞춘다. */
 .glsl-comment { color:var(--syn-comment);font-style:italic; }
 .glsl-directive { color:var(--syn-directive); }
 .glsl-keyword { color:var(--syn-keyword); }

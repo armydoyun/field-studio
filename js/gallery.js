@@ -10,6 +10,7 @@ import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
 import * as Technique from "./technique-examples.js";
 import * as Raymarch from "./raymarch-lessons.js";
+import * as UI from "./ui-kit.js";
 const { COMMUNITY } = Community;
 // 예제의 파라미터(범위·기본값·색상)는 셰이더 소스의 @어노테이션 한곳에만 적는다.
 // 코드를 복사해 다른 곳에 붙여도 슬라이더가 그대로 따라오게 하기 위해서다.
@@ -807,12 +808,7 @@ const mount = ({ studio, Shader, preview = null }) => {
     grid = $("galleryGrid"),
     community = $("galleryCommunity"),
     lessons = $("galleryLessons");
-  const element = (tag, className = "", text = "") => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
+  const element = UI.el;
   // 검색 대상: 제목·태그·설명·원작자·원작 이름·id. 소문자로 한 번 만들어 카드에 둔다.
   const searchText = item =>
     [item.title, item.tag, item.description, item.id, item.credit?.author, item.credit?.work, item.credit?.license]

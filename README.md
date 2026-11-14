@@ -27,7 +27,7 @@ npm install      # 처음 한 번 (esbuild)
 npm run build    # → deploy/index.html
 ```
 
-- `tools/build.mjs`가 esbuild로 `js/main.js`부터 import를 따라 모든 모듈을 묶고 압축한 뒤, `tools/inline-html.mjs`가 `index.html`의 `<link>`·`<script type="module">` 자리에 넣습니다. 모듈 목록을 따로 관리하지 않습니다.
+- `tools/build.mjs`가 esbuild로 `js/main.js`부터 import를 따라 모든 모듈을 묶고, `css/` 아래 스타일시트를 `index.html`의 링크 순서대로 이어 붙여 압축한 뒤, `tools/inline-html.mjs`가 `index.html`의 `<link>`들·`<script type="module">` 자리에 넣습니다. 모듈 목록을 따로 관리하지 않습니다.
 - `deploy/`는 빌드 결과라 git에 올리지 않습니다(`.gitignore`). 받아 쓰는 사람은 직접 빌드하거나 아래 Artifacts에서 받습니다.
 - GitHub Actions는 lint와 테스트가 모두 통과하면 같은 빌드를 만들어 실행 페이지의 **Artifacts → field-studio-deploy-<커밋 SHA>**에 올립니다. 셸이 없는 환경에서도 거기서 받으면 됩니다.
 - `tests/build-regression.js`가 임시 폴더에 빌드해 보고, 만든 파일을 `file://`로 Chromium에서 열어 앱이 오류·네트워크 요청 없이 뜨는지 확인합니다.
@@ -35,8 +35,14 @@ npm run build    # → deploy/index.html
 ## 프로젝트 구조
 
 ```text
-index.html            # 개발용 ESM 진입점
-style.css
+index.html            # 개발용 ESM 진입점 · 스타일시트 링크 순서의 단일 출처
+css/                  # 스타일시트 — 규칙은 docs/DESIGN_SYSTEM.md
+  tokens.css          # 디자인 토큰: 색(다크 · 라이트) · 크기 · 간격 · 글자 · 층
+  base.css            # 초기화 · 문서 기본 · 초점
+  icons.css           # glyph-icon + icon-* (SVG 마스크 아이콘)
+  components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · tag · menu · dialog · notice · surface
+  layout/             # 화면 틀: workspace · panel · stage · dock
+  features/           # 기능별 배치: parameters · presets · links · timeline · project-menu · channels · editor · editor-codemirror · video-dialog · gallery · guide · profiler · popout
 js/
   main.js             # type=module 진입점 · 앱 조립
   # 렌더링 (GPU 자원 소유)
@@ -58,6 +64,7 @@ js/
   channel-picker.js   # 입력 채널 칩(iChannel0–3)과 고르기 팝오버 · 코드 사용 여부 표시
   studio-examples.js  # Studio가 만드는 예제 프로젝트
   studio-dialog.js    # 공용 입력·확인 대화상자
+  ui-kit.js           # 디자인 시스템의 JS 쪽: 컴포넌트 클래스 이름 · 요소 만들기(button · segmented · select · menu …)
   project-model.js    # 프로젝트 데이터 규칙 (순수 함수)
   project-store.js    # 프로젝트 보관함 저장소 (IndexedDB)
   code-insert.js      # 코드 삽입 위치 계산 (순수 함수)
@@ -98,9 +105,12 @@ js/
   package.json        # Node.js 검증을 위한 ESM 지정
 tools/build.mjs       # npm run build: esbuild로 묶어 한 파일짜리 배포본 생성
 tools/inline-html.mjs # index.html에 CSS·JS를 넣는 순수 함수(빌드와 검사가 같이 씀)
+tools/css-files.cjs   # 스타일시트 목록(index.html의 링크 순서)을 읽는 도우미 — 빌드 · 해시 · 테스트 공용
 tools/codemirror/     # js/codemirror.js 생성 도구 (이 파일을 다시 만들 때만 필요)
 tools/update_sha_manifest.py # 실행 소스 SHA-256 목록 갱신 (npm run sha / sha:check)
 tests/run.mjs         # npm test: 모든 테스트 실행기
+docs/DESIGN_SYSTEM.md # 디자인 시스템: 토큰 · 컴포넌트 표 · 새 기능을 붙이는 법
+docs/design-system.html # 컴포넌트 카탈로그(앱과 같은 CSS로 그린 견본) — 로컬 서버로 연다
 docs/history/         # 기능별 작업 기록 (예전 루트의 README_*.md)
 docs/THIRD_PARTY_LICENSES.md # 커뮤니티 셰이더의 원작자·라이선스 전문 · 새 예제를 넣는 기준
 deploy/index.html     # 한 파일짜리 오프라인 배포본 — npm run build가 만든다, git에는 없음
@@ -134,7 +144,7 @@ node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 �
 - GitHub Actions(`.github/workflows/test.yml`)는 push·PR마다 `lint` → `test (node)` · `test (browser)` · `test (py)` 세 작업을 나란히 돌리고(각각 `node tests/run.mjs <묶음> --strict`), 모두 통과하면 `build`가 배포본을 올립니다. 의존성은 `package-lock.json` 기준으로 `npm ci`로 설치하고, npm·pip·Playwright Chromium은 캐시합니다.
 - 개발 도구를 추가·변경할 때는 `npm install -D <패키지>@<버전>`으로 `package-lock.json`도 함께 갱신해 커밋합니다.
 - 새 테스트는 `tests/`에 두기만 하면 위 규칙으로 자동 분류됩니다. 다른 파일이 불러 쓰는 도우미는 `tests/run.mjs`의 `HELPERS`에 추가합니다.
-- `index.html`·`style.css`·`js/*.js`를 고친 뒤에는 `npm run sha`(= `python tools/update_sha_manifest.py`)로 `SOURCE_SHA256_Runtime.txt`를 갱신합니다(해시는 줄바꿈을 LF로 맞춰 계산하므로 Windows·Linux 결과가 같습니다). CI의 lint 작업이 `npm run sha:check`로 갱신 누락을 바로 알려 줍니다.
+- `index.html`·`css/**/*.css`·`js/*.js`를 고친 뒤에는 `npm run sha`(= `python tools/update_sha_manifest.py`)로 `SOURCE_SHA256_Runtime.txt`를 갱신합니다(해시는 줄바꿈을 LF로 맞춰 계산하므로 Windows·Linux 결과가 같습니다). CI의 lint 작업이 `npm run sha:check`로 갱신 누락을 바로 알려 줍니다.
 - 커밋 전에 `npm run lint`(경고도 실패), `npm run format:check`를 돌립니다. 포맷은 `npm run format`으로 맞춥니다.
 - 콘솔용 테스트는 예전처럼 개발자 콘솔에 붙여 넣어 돌릴 수도 있고, `tests/gpu-validation.html`도 브라우저에서 직접 열어 실제 GPU로 검사할 수 있습니다.
 

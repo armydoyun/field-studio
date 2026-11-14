@@ -3,7 +3,7 @@
 deploy/
 node_modules/
 index.html
-style.css
+css/
 tests/
 *.md
 *.py
