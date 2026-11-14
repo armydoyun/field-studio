@@ -1,0 +1,24 @@
+.video-render-dialog { width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto; }
+.video-render-dialog form { margin:0; }
+.video-render-mark { border-radius:var(--radius);background:var(--accent-soft);color:var(--accent-strong); }
+.video-render-mark svg { width:20px;height:20px; }
+.video-render-body { padding:0 20px 16px; }
+.video-render-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;margin:0;padding:0;border:0;min-width:0; }
+.video-render-grid label { display:grid;gap:6px;min-width:0;color:var(--text-soft);font-size:11px;font-weight:600; }
+.video-render-grid label[hidden] { display:none; }
+.video-render-grid input,.video-render-grid select { min-height:36px; }
+.video-render-grid .video-label { display:flex;align-items:baseline;justify-content:space-between;gap:8px; }
+.video-render-grid .field-hint { color:var(--faint);font-weight:500; }
+.video-render-summary { white-space:pre-line;margin:14px 0 0;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--text-soft);font:11px/1.6 var(--mono); }
+.video-render-summary.is-invalid { border-color:var(--danger);color:var(--danger); }
+.video-render-note { margin:10px 0 0;font-size:11px;line-height:1.7; }
+.video-render-note code { font-size:10.5px; }
+.video-render-progress { margin-top:14px; }
+.video-render-progress progress { display:block;width:100%;height:8px;accent-color:var(--accent); }
+.video-render-progress p { margin:8px 0 0;color:var(--text-soft);font:11px/1.6 var(--mono); }
+.video-render-dialog[data-state="running"] #videoRenderStart { opacity:.6; }
+/* 렌더링하는 동안 캔버스는 영상 크기로 그려진다: 비율을 유지해 미리보기가 늘어나지 않게 한다. */
+body:has(#videoRenderDialog[data-state="running"]) #screen { object-fit:contain;background:#000; }
+@media (max-width:480px) {
+ .video-render-grid { grid-template-columns:minmax(0,1fr); }
+}

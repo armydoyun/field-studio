@@ -12,8 +12,8 @@ const squash = text => String(text)
   .replace(/\(([\w$]+)\)=>/g, '$1=>')
   .replace(/,(?=[)\]}])/g, '');
 
-// 원본 그대로 읽기
-const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+// 원본 그대로 읽기. 'css'는 모든 스타일시트를 index.html의 링크 순서대로 이어 붙인 것(tools/css-files.cjs).
+const read = file => file === 'css' ? require('../tools/css-files.cjs').readCss(root) : fs.readFileSync(path.join(root, file), 'utf8');
 // 비교용으로 눌러 둔 소스. 여러 파일이면 이어 붙인다.
 const code = (...files) => files.map(file => squash(read(file))).join('\n');
 // 눌러 둔 소스에 조각이 모두 들어 있는지

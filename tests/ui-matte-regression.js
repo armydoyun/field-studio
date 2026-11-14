@@ -1,7 +1,7 @@
 // node tests/ui-matte-regression.js — 단순(Matte) UI의 정적 계약만 검사한다.
 "use strict";
 const fs=require("fs"),assert=require("assert"),path=require("path");
-const root=path.join(__dirname,".."),css=fs.readFileSync(path.join(root,"style.css"),"utf8"),html=fs.readFileSync(path.join(root,"index.html"),"utf8");
+const root=path.join(__dirname,".."),css=require("../tools/css-files.cjs").readCss(),html=fs.readFileSync(path.join(root,"index.html"),"utf8");
 const check=(ok,name)=>{assert(ok,name);console.log("PASS",name);};
 for(const id of ["panelTabs","openBufferViewer","studioRun","studioPassTabs","uniformSearch","studioDock","quickHelp","themeToggle"])check(html.includes(`id="${id}"`),id+" 존재");
 check(css.includes("#openBufferViewer")&&css.includes(".buffer-actions button"),"Render 버퍼 뷰어 버튼 스타일");

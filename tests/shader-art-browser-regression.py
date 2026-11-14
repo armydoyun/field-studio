@@ -1,4 +1,4 @@
-from esm_for_browser import load_modules
+from esm_for_browser import load_modules, read_css
 # python tests/shader-art-browser-regression.py — Chromium DOM validation without GPU or server.
 import os
 from pathlib import Path
@@ -9,7 +9,7 @@ with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,executable_path=os.environ.get('CHROMIUM_PATH') or None,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1440,'height':900}); errors=[]; count=[0]
     page.on('pageerror',lambda e:errors.append(str(e)))
-    page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
+    page.set_content(html);page.add_style_tag(content=read_css(root))
     load_modules(page,root,['shader','studio'])
     page.evaluate('''() => {
       const Shader=window.TestShader;

@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { inlineHtml } from "./inline-html.mjs";
+import cssList from "./css-files.cjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEPLOY = path.join(ROOT, "deploy");
@@ -34,7 +35,8 @@ export const build = async ({ outFile = path.join(DEPLOY, "index.html") } = {}) 
     logLevel: "silent",
   });
   const js = bundle.outputFiles[0].text;
-  const css = (await transform(fs.readFileSync(path.join(ROOT, "style.css"), "utf8"), CSS_OPTIONS)).code;
+  // 스타일시트는 index.html의 링크 순서대로 이어 붙여 압축한다(tools/css-files.cjs).
+  const css = (await transform(cssList.readCss(ROOT), CSS_OPTIONS)).code;
   const html = inlineHtml({ html: fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), css, js });
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, html, "utf8");

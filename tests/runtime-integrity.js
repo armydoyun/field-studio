@@ -2,7 +2,9 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),jsdir=path.join(root,'js');
-const files=['index.html','style.css',...fs.readdirSync(jsdir).filter(x=>x.endsWith('.js')).map(x=>'js/'+x)].sort();
+const {cssOnDisk,cssFiles}=require('../tools/css-files.cjs');
+assert.deepEqual([...cssFiles()].sort(),cssOnDisk(),'css/ 아래 모든 파일은 index.html에 링크되어 있어야 한다');
+const files=['index.html',...cssOnDisk(),...fs.readdirSync(jsdir).filter(x=>x.endsWith('.js')).map(x=>'js/'+x)].sort();
 // 배포본은 esbuild가 main.js의 import를 따라 묶으므로(tools/build.mjs) 모듈 목록을 따로 관리하지 않는다. 배포본 검사는 tests/build-regression.js.
 assert(!fs.existsSync(path.join(jsdir,'loader.js')),'AMD loader must be absent');
 const manifest=fs.readFileSync(path.join(root,'SOURCE_SHA256_Runtime.txt'),'utf8').trim().split(/\r?\n/);

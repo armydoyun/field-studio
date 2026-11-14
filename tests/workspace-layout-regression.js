@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8'),css=fs.readFileSync(path.join(root,'style.css'),'utf8');
+const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8'),css=require('../tools/css-files.cjs').readCss();
 const stack=[],ids=new Map(),voids=new Set('area base br col embed hr img input link meta param source track wbr'.split(' '));
 for(const m of html.replace(/<!--[\s\S]*?-->/g,'').matchAll(/<(\/?)([A-Za-z][\w-]*)\b([^>]*)>/g)){
  const [,close,name,attrs]=m;if(close){assert.equal(stack.pop(),name,'HTML tag nesting: '+name);continue;}

@@ -50,3 +50,9 @@ class EditorModel:
     def focus(self): self.page.evaluate("document.getElementById('studioCode').focus()")
     def press(self, key): self.focus(); self.page.keyboard.press(key)
     def type(self, text): self.focus(); self.page.keyboard.type(text)
+
+
+# 앱의 스타일시트 전부를 index.html의 링크 순서대로 이어 붙인다(tools/css-files.cjs와 같은 규칙).
+def read_css(root):
+    html=(root/'index.html').read_text(encoding='utf-8')
+    return '\n'.join((root/name).read_text(encoding='utf-8') for name in re.findall(r'<link rel="stylesheet" href="\./(css/[\w./-]+\.css)">',html))

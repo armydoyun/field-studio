@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),css=fs.readFileSync(path.join(root,'style.css'),'utf8').replace(/\/\*[\s\S]*?\*\//g,''),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const root=path.resolve(__dirname,'..'),css=require('../tools/css-files.cjs').readCss().replace(/\/\*[\s\S]*?\*\//g,''),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 function split(text,char){const result=[];let start=0,depth=0,quote='';for(let i=0;i<text.length;i++){const c=text[i];if(quote){if(c==='\\')i++;else if(c===quote)quote='';continue;}if(c==='"'||c==="'")quote=c;else if(c==='('||c==='[')depth++;else if(c===')'||c===']')depth--;else if(!depth&&c===char){result.push(text.slice(start,i).trim());start=i+1;}}result.push(text.slice(start).trim());return result.filter(Boolean);}
 const selectors=new Set(),rules=new Map();let count=0;
 function parse(text,context='base'){let at=0;while(at<text.length){while(/\s/.test(text[at]||'')&&at<text.length)at++;if(at>=text.length)break;const open=text.indexOf('{',at);assert(open>=0,'Missing rule body');const head=text.slice(at,open).trim();let end=open+1,depth=1,quote='';for(;end<text.length&&depth;end++){const c=text[end];if(quote){if(c==='\\')end++;else if(c===quote)quote='';}else if(c==='"'||c==="'")quote=c;else if(c==='{')depth++;else if(c==='}')depth--;}

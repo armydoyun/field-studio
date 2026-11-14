@@ -1,0 +1,71 @@
+.studio-inputs { position:relative;display:flex;flex:0 0 auto;align-self:stretch;align-items:center;gap:8px;min-width:0;padding:6px 12px;border-bottom:1px solid var(--line); }
+.studio-inputs-title { flex:0 0 auto;color:var(--muted);font:600 10px/1.5 var(--mono);white-space:nowrap; }
+.studio-channel-bar { display:flex;flex:1 1 auto;flex-wrap:wrap;gap:6px;min-width:0; }
+.studio-channel { display:flex;align-items:center;gap:3px;min-width:0;margin:0; }
+.studio-channel-help { display:none; }
+.studio-inputs .guide-hint { flex:0 0 auto; }
+/* 입력 채널 줄 접기: 접으면 줄 전체를 숨기고, 코드 머리줄 파일 이름 옆의 "입력 ▾" 버튼(연결 수 · 경고 점)으로 펴고 접는다 */
+.studio-code-label .studio-inputs-toggle { display:inline-flex;flex-shrink:0;align-items:center;gap:5px;min-height:24px;padding:2px 6px 2px 8px;border:1px solid var(--line-strong);border-radius:6px;background:transparent;color:var(--text-soft);font:600 11px/1.5 var(--sans);white-space:nowrap; }
+.studio-code-label .studio-inputs-toggle:hover { border-color:var(--accent);color:var(--text); }
+.studio-code-label .studio-inputs-toggle[aria-expanded="true"] { border-color:var(--accent);background:var(--accent-soft);color:var(--text); }
+.studio-inputs-count { min-width:16px;padding:0 4px;border-radius:8px;background:var(--accent-fill);color:var(--accent-ink);font:600 10px/16px var(--mono);text-align:center; }
+.studio-inputs-chevron { width:11px;height:11px;background:currentColor;-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat;transform:rotate(90deg);transition:transform .12s; }
+.studio-inputs-toggle[aria-expanded="true"] .studio-inputs-chevron { transform:rotate(-90deg); }
+.studio-inputs-toggle[data-warn="true"]::before { content:"";width:6px;height:6px;border-radius:50%;background:var(--warning); }
+.studio-channel label { min-width:8px;color:var(--muted);font:10px/1.5 var(--mono);text-align:right; }
+.studio-channel-chip { position:relative;display:inline-flex;align-items:center;gap:6px;min-width:34px;max-width:150px;min-height:28px;padding:3px 8px;border:1px solid var(--line-strong);border-radius:7px;background:var(--surface);color:var(--text);font:600 11px/1.4 var(--mono); }
+.studio-channel-chip[data-kind="empty"] { justify-content:center;padding:3px 6px;border-style:dashed;color:var(--muted);font-weight:400; }
+.studio-channel-chip[data-used="false"] { opacity:.55; }
+.studio-channel-chip[data-used="false"]:hover,.studio-channel-chip[data-used="false"]:focus-visible,.studio-channel-chip[aria-expanded="true"] { opacity:1; }
+.studio-channel-chip[aria-expanded="true"] { border-color:var(--accent); }
+.studio-channel-chip[data-drop="true"] { border-color:var(--accent);background:var(--accent-soft); }
+.studio-channel-chip .chip-badge { display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:4px;background:var(--accent-soft);color:var(--accent-strong);font-weight:700; }
+.studio-channel-chip[data-kind="empty"] .chip-badge { min-width:0;padding:0;background:transparent;color:inherit; }
+.studio-channel-chip .chip-badge.glyph-icon { padding:0;background:transparent;color:var(--text-soft); }
+.studio-channel-chip .chip-tag { min-width:0;overflow:hidden;color:var(--text-soft);font-weight:400;text-overflow:ellipsis;white-space:nowrap; }
+.studio-channel-chip[data-kind="missing"] .chip-tag { color:var(--danger); }
+/* 미디어 입력: 꺼져 있으면 흐리게, 오류면 빨갛게(칩을 눌러 다시 켠다) */
+.studio-channel-chip[data-kind="media"]:is([data-state="off"],[data-state="starting"]) .chip-tag { color:var(--muted);font-style:italic; }
+.studio-channel-chip[data-kind="media"][data-state="error"] .chip-tag { color:var(--danger); }
+/* 코드가 읽는데 비어 있음(경고) · 연결했는데 코드가 안 읽음(약한 표시) */
+.studio-channel-chip[data-warn="empty"]::after,.studio-channel-chip[data-warn="unused"]::after { content:"";position:absolute;top:-3px;right:-3px;width:7px;height:7px;border:1.5px solid var(--bg);border-radius:50%; }
+.studio-channel-chip[data-warn="empty"]::after { background:var(--warning); }
+.studio-channel-chip[data-warn="unused"]::after { background:var(--faint); }
+.channel-picker { position:absolute;z-index:35;display:grid;gap:10px;width:300px;max-height:min(360px,60vh);overflow-y:auto;padding:12px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);box-shadow:var(--shadow);scrollbar-width:thin; }
+.channel-picker[hidden] { display:none; }
+.channel-picker-head { margin:0;color:var(--text);font:650 11px/1.4 var(--mono); }
+.channel-picker-group { display:grid;gap:6px;margin:0; }
+.channel-picker-title { margin:0;color:var(--muted);font-size:10px;font-weight:600; }
+.channel-picker-items { display:flex;flex-wrap:wrap;gap:6px; }
+.channel-picker-note { margin:0;color:var(--muted);font-size:10px;line-height:1.5; }
+.channel-option,.channel-frame { min-height:28px;padding:4px 9px;border-radius:6px;font:11px/1.3 var(--mono);flex-direction:column;align-items:flex-start;gap:1px; }
+.channel-frame { flex:1 1 0;min-width:0; }
+.channel-frame small { color:var(--muted);font:9px/1.2 var(--sans); }
+.channel-option small { color:var(--muted);font:9px/1.2 var(--sans); }
+.channel-option[aria-pressed="true"],.channel-frame[aria-pressed="true"] { border-color:var(--accent);background:var(--accent-soft);color:var(--text); }
+.channel-option:disabled { opacity:.5;cursor:not-allowed; }
+.channel-image,.channel-load { flex-direction:row;max-width:100%; }
+.channel-image span { min-width:0;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.channel-clear { justify-self:start;color:var(--text-soft); }
+.studio-textures { display:grid;gap:8px;margin:0; }
+.studio-textures>.studio-hint { margin:0; }
+.studio-texture { display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:10px;padding:12px;border:1px solid var(--line-strong);border-radius:8px;border-color:var(--line);background:var(--surface); }
+.studio-texture span { min-width:0;color:var(--text-soft);font-size:11px;overflow-wrap:anywhere; }
+.studio-texture small { color:var(--muted);font-size:10px; }
+.studio-texture[data-usage="unused"] { border-style:dashed; }
+.studio-texture[data-usage="unused"] span { color:var(--muted); }
+.studio-texture-summary { display:flex;align-items:center;flex-wrap:wrap;gap:8px;justify-content:space-between;color:var(--muted);font-size:11px; }
+.studio-texture-summary button { min-height:30px;padding:4px 10px;font-size:11px; }
+.studio-texture .icon-close { grid-column:2;grid-row:1; flex:0 0 28px;width:28px;min-height:28px;height:28px;padding:0; }
+.studio-texture .texture-connect { grid-column:1/-1;grid-row:2;min-width:0;min-height:32px;padding:6px 8px;font-size:10px;white-space:normal;overflow-wrap:anywhere; }
+.studio-sampling { grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
+.studio-sampling label { min-width:0;color:var(--muted);font-size:10px; }
+.studio-sampling select { width:100%;min-height:30px;margin-top:6px;padding:4px;font-size:10px; }
+@media (max-width:600px) {
+ .studio-inputs { padding:6px 8px; }
+ .studio-inputs-title { display:none; }
+ .studio-channel-chip { max-width:110px; }
+}
+@container dock (max-width:560px) {
+ .studio-inputs { padding-inline:8px; }
+}

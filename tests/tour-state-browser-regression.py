@@ -1,4 +1,4 @@
-from esm_for_browser import load_modules
+from esm_for_browser import load_modules, read_css
 # python tests/tour-state-browser-regression.py — UI 둘러보기(투어)가 끝나면 시작 전 화면(편집기 · 설정 패널 · 패널 탭)으로 돌아오는지 (GPU 불필요)
 import os
 from pathlib import Path
@@ -24,7 +24,7 @@ with sync_playwright() as p:
     def scenario(width,height,setup):
         page=browser.new_page(viewport={'width':width,'height':height});errors=[]
         page.on('pageerror',lambda e:errors.append(str(e)))
-        page.set_content(html);page.add_style_tag(content=(root/'style.css').read_text())
+        page.set_content(html);page.add_style_tag(content=read_css(root))
         load_modules(page,root,['guide']);page.evaluate(FAKE);page.evaluate(setup)
         return page,errors
     def run_to_end(page):

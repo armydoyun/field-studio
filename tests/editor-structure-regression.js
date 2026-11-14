@@ -3,7 +3,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {root,read,code,has}=require('./source-check.cjs');
-const html=code('index.html'),css=read('style.css'),studio=code('js/studio.js'),editor=code('js/cm-editor.js'),features=code('js/cm-glsl-features.js'),vendor=read('js/codemirror.js');
+const html=code('index.html'),css=read('css'),studio=code('js/studio.js'),editor=code('js/cm-editor.js'),features=code('js/cm-glsl-features.js'),vendor=read('js/codemirror.js');
 const rawStudio=read('js/studio.js');
 let passed=0;const check=(ok,label)=>{assert(ok,label);passed++;console.log('PASS',label);};
 check(!fs.existsSync(path.join(root,'js/code-editor.js')),'예전 textarea 편집기(code-editor.js) 제거');

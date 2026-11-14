@@ -1,7 +1,9 @@
 // 개발용 index.html에 압축된 CSS·JS를 직접 넣어 한 파일짜리 배포본을 만든다.
 // 노드 의존성이 없는 순수 함수라 tools/build.mjs와 브라우저 검사가 같은 코드를 쓴다.
 
-export const CSS_TAG = '<link rel="stylesheet" href="./style.css">';
+// 개발용 index.html은 css/ 아래 파일을 <link> 여러 개로 건다. 배포본은 첫 링크 자리에 <style> 하나를 넣고 나머지 링크를 지운다.
+export const CSS_LINK = /[ \t]*<link rel="stylesheet" href="\.\/(css\/[\w./-]+\.css)">\r?\n?/g;
+export const cssHrefs = html => [...html.matchAll(CSS_LINK)].map(m => m[1]);
 export const JS_TAG = '<script type="module" src="./js/main.js"></script>';
 export const DEV_COMMENT = "<!-- ES Modules: 개발용 실행은 http://localhost를 사용한다. -->";
 export const BUILD_COMMENT =
@@ -28,9 +30,16 @@ export const styleSafe = css => {
   return css;
 };
 
-// html: 개발용 index.html, css: 압축된 style.css, js: 압축된 IIFE 번들
+// html: 개발용 index.html, css: 링크 순서대로 이어 붙여 압축한 CSS, js: 압축된 IIFE 번들
 export const inlineHtml = ({ html, css, js }) => {
-  let out = replaceOnce(html, CSS_TAG, `<style>${styleSafe(css.trim())}</style>`, "스타일시트 링크");
+  if (!cssHrefs(html).length) throw new Error("index.html에서 스타일시트 링크(./css/….css)를 찾지 못했습니다.");
+  let first = true;
+  // 치환 함수를 쓰므로 CSS 안의 $& 같은 글자는 해석되지 않는다.
+  let out = html.replace(CSS_LINK, () => {
+    if (!first) return "";
+    first = false;
+    return `    <style>${styleSafe(css.trim())}</style>\n`;
+  });
   out = replaceOnce(out, DEV_COMMENT, BUILD_COMMENT, "개발용 스크립트 주석");
   out = replaceOnce(out, JS_TAG, `<script>${scriptSafe(js.trim())}</script>`, "ES Module 진입 스크립트");
   // 바깥 파일을 하나라도 참조하면 한 파일로 옮겼을 때 깨진다. 인라인 코드 속 HTML 문자열은 빼고 마크업만 본다.
