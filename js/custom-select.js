@@ -1,5 +1,5 @@
 // Shared select presentation. Native controls remain the source of form values/events.
-export function mount(root = document) {
+function mount(root = document) {
   const controls = new Map();
   let opened = null,
     serial = 0;
@@ -273,3 +273,5 @@ export function mount(root = document) {
   refresh();
   return { refresh, close };
 }
+
+export { mount };

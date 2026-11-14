@@ -1,4 +1,4 @@
-import { mount as mountCustomSelects } from "./custom-select.js";
+import * as CustomSelect from "./custom-select.js";
 // 앱 조립 진입점. 범용 기본 GLSL과 Ray Marching 프리셋은 shader.js, GPU 렌더링은 renderer.js가 담당한다.
 import * as Renderer from "./renderer.js";
 import Shader from "./shader.js";
@@ -133,4 +133,4 @@ const initialize = async () => {
 };
 initialize();
 
-mountCustomSelects();
+CustomSelect.mount();
