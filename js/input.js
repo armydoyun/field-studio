@@ -27,7 +27,7 @@ const mount = (canvas, renderer) => {
   };
   const stopKeyboard = () => keys.clear();
   // 분리 창(popout.js)의 요소는 그 창의 Element라 instanceof로 가리지 않는다.
-  const isTyping = target => !!target?.closest?.("input, textarea, select, [contenteditable]");
+  const isTyping = target => !!target?.closest?.("input, textarea, select, .custom-select, [contenteditable]");
   // 캔버스가 별도 창으로 분리돼 있으면(popout.js) 그 창에서 캔버스에 초점이 있을 때가 '뷰포트 선택'이다.
   const canvasDocument = () => canvas.ownerDocument || document,
     popped = () => canvasDocument() !== document;
