@@ -2599,13 +2599,13 @@ const mount = (renderer, input, settings) => {
             } catch (error) {
               showError(`${item.name}: ${error.message}`);
               number.setAttribute("aria-invalid", "true");
-              showNumber(number, item.value);
+              showNumber(number, liveValue(item) ?? item.value);
               return;
             }
             if (commit(number, value)) {
               if (range) range.value = String(toSlider(value));
               showNumber(number, value);
-            } else showNumber(number, item.value);
+            } else showNumber(number, liveValue(item) ?? item.value);
           };
           number.addEventListener("change", changeNumber);
           if (ranged) {

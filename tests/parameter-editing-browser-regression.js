@@ -29,6 +29,8 @@
     f.value="-7.123456789012345e-12";fire(f,"input");key(f,"Enter");
     check(get("uPrecise")===-7.123456789012345e-12,"Enter commits precise exponent input");
     f.blur();f.focus();check(f.value===String(get("uPrecise")),"reentering uses exact committed value");f.blur();
+    realSet("uPrecise",0.777777777777777);f.focus();f.value="";fire(f,"input");fire(f,"change");
+    check(Number(f.value)===0.777777777777777&&get("uPrecise")===0.777777777777777,"invalid scalar input restores latest external value rather than stale row value");key(f,"Escape");f.blur();
     const x=input("uVector X");realSet("uVector",[0.9,0.8,0.7]);x.focus();check(x.value==="0.9","vector focus reads current external value");
     x.value="0.812345678901234";fire(x,"input");fire(x,"change");x.blur();x.focus();
     check(x.value==="0.812345678901234"&&get("uVector")[1]===0.8&&get("uVector")[2]===0.7,"vector edit preserves exact component and current neighbors");
