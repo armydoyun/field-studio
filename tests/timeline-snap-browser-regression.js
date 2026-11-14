@@ -54,6 +54,28 @@
     // 3) 자석: 다른 키 값(0.83)이 격자(0.75)보다 가까우면 그 값에 · 끄면 격자에만
     v = await dragFirst(0.18);
     test(near(v, 0.83), `0.82 근처 + 자석: 다른 키 값 0.83에 붙음: ${v}`);
+    // 자석이 붙는 동안 점선(값 = 그 레인의 가로선)이 보이고, 놓으면 사라진다 · 버튼은 글자 없이 아이콘
+    {
+      await reset();
+      const dot = dots()[0], d = dot.getBoundingClientRect(), p = plot().getBoundingClientRect(), x = d.left + d.width / 2;
+      pointer(dot, "pointerdown", { clientX: x, clientY: d.top + d.height / 2 });
+      pointer(document, "pointermove", { clientX: x, clientY: p.top + p.height * 0.18 });
+      const guide = plot().querySelector(".timeline-guide.is-value");
+      test(guide && !guide.hidden, "자석이 붙으면 값 점선이 보임");
+      pointer(document, "pointermove", { clientX: x, clientY: p.top + p.height * 0.42 });
+      test(guide.hidden, "자석에서 벗어나면 점선이 숨음");
+      pointer(document, "pointerup", { clientX: x, clientY: p.top + p.height * 0.42 });
+      await until(() => !plot().querySelector(".timeline-guide.is-value"), "놓으면 값 점선이 없어짐");
+      const m = q(".timeline-magnet");
+      test(!m.textContent.trim() && m.classList.contains("icon-magnet") && m.getAttribute("aria-label").startsWith("자석"), "자석 버튼은 아이콘 + aria-label");
+    }
+    // 값 스냅을 꺼도 자석은 동작한다(예전에는 격자가 없으면 '격자보다 가까운' 자석이 있을 수 없어 붙지 않았다)
+    await reset();
+    set(q(".timeline-value-snap"), "0");
+    v = await dragFirst(0.19);
+    test(near(v, 0.83), `값 스냅 끔 + 자석: 다른 키 값 0.83에 붙음: ${v}`);
+    set(q(".timeline-value-snap"), "d4");
+    await until(() => lane().querySelectorAll(".timeline-gridline").length === 5, "격자선 다시 5줄");
     await reset();
     q(".timeline-magnet").click();
     test(q(".timeline-magnet").getAttribute("aria-pressed") === "false", "자석 끔");

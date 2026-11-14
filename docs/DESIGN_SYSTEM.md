@@ -67,8 +67,9 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 필요한 것 | 클래스 | 비고 |
 |---|---|---|
 | 버튼 | `<button>` (= `ui-btn`) | 변형 `ui-btn--primary · --ghost · --tonal · --danger · --danger-solid · --dashed`, 크기 `--xs · --sm · --lg`, 폭 `--block` |
-| 아이콘 버튼 | `ui-icon-btn glyph-icon icon-이름` | 크기 `ui-icon-btn--xs · --sm · --lg`. `aria-label` 필수 |
+| 아이콘 버튼 | `ui-icon-btn glyph-icon icon-이름` | 크기 `ui-icon-btn--xs · --sm · --lg` · 삭제류 `--danger`. `aria-label` 필수 · `title`에 하는 일 |
 | 켜고 끄는 버튼 | 위 + `aria-pressed="true"` | 켜지면 옅은 액센트 면. `ui-btn` 또는 `ui-icon-btn` 클래스가 있어야 한다 |
+| 글자냐 아이콘이냐 | | 도구 막대의 뜻이 하나뿐인 짧은 행동(지우기 · 복제 · 확대/축소 · 맞춤 · 자석)은 아이콘만. 메뉴 항목 · 대화상자 버튼 · 설명이 필요한 행동(되돌리기 알림, 초기화)은 글자로 |
 | 붙은 버튼 묶음 | `ui-btn-group` > button | ◀ ◆ ▶, − + |
 | 도구 막대 | `ui-toolbar` (+ `ui-sep`) | |
 | 글자 링크 | `ui-link` | |

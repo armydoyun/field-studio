@@ -100,22 +100,28 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     snapSelect = element("select", "timeline-snap"),
     valueSelect = element("select", "timeline-value-snap"),
     magnetToggle = button(
-      "ui-btn ui-btn--sm timeline-magnet",
+      "ui-btn ui-btn--sm timeline-magnet glyph-icon icon-magnet",
       "자석: 재생선 · 다른 키 · 범위 끝에 붙기",
-      "자석",
-      "자석 — 끌 때 가까운 재생선 · 다른 키의 시간, 같은 레인의 다른 키 값 · 범위의 최소/최대에 붙는다(6px 안)"
+      "",
+      "자석 — 키를 끌다 재생선 · 다른 키(시간 · 값) · 범위의 최소/최대 가까이(6px 안) 가면 거기에 붙고 점선으로 알려 준다.\n" +
+        "시간 · 값 스냅(격자)과는 따로 동작한다 · Alt를 누르고 끌면 둘 다 끔"
     ),
     speedSelect = element("select", "timeline-speed"),
-    zoomOut = button("ui-btn--sm timeline-zoom", "축소", "−"),
-    zoomIn = button("ui-btn--sm timeline-zoom", "확대", "+"),
-    fit = button("ui-btn--sm timeline-fit", "모든 키가 보이게 맞춤", "맞춤"),
+    zoomOut = button("ui-btn--sm timeline-zoom glyph-icon icon-zoom-out", "축소"),
+    zoomIn = button("ui-btn--sm timeline-zoom glyph-icon icon-zoom-in", "확대"),
+    fit = button("ui-btn--sm timeline-fit glyph-icon icon-fit", "모든 키가 보이게 맞춤"),
     addSelect = element("select", "timeline-add"),
     inspector = element("div", "timeline-inspector"),
     selection = element("span", "timeline-selection"),
     keyTime = element("input", "timeline-key-time"),
     keyValue = element("input", "timeline-key-value"),
     keyEase = element("select", "timeline-key-ease"),
-    keyDelete = button("ui-btn--sm timeline-key-delete", "선택한 키 지우기", "지우기", "선택한 키 지우기 (Delete)"),
+    keyDelete = button(
+      "ui-btn--sm timeline-key-delete glyph-icon icon-eraser",
+      "선택한 키 지우기",
+      "",
+      "선택한 키 지우기 (Delete)"
+    ),
     close = button("ui-icon-btn ui-icon-btn--sm timeline-close glyph-icon icon-close", "타임라인 닫기");
   timeField.type = "number";
   timeField.min = "0";
@@ -149,7 +155,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   speedSelect.title = "재생 속도(uTime이 흐르는 빠르기) · 설정 패널 렌더링 탭과 같은 값";
   snapSelect.setAttribute("aria-label", "시간 스냅");
   snapSelect.title =
-    "키를 좌우로 끌거나 ←→로 옮길 때 시간을 맞출 간격(Alt를 누르고 끌면 끔 · Shift를 누르면 한 방향으로만)";
+    "키를 좌우로 끌거나 ←→로 옮길 때 시간을 맞출 격자 간격 · 자석과는 따로 동작(Alt를 누르고 끌면 둘 다 끔 · Shift를 누르면 한 방향으로만)";
   addSelect.setAttribute("aria-label", "키프레임 레인 추가");
   keyTime.type = "number";
   keyTime.min = "0";
@@ -223,7 +229,10 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     frames = 0;
   let ruler = null,
     playhead = null,
+    guide = null,
     edge = null;
+  // 자석이 마지막으로 붙인 시간 · 값(안 붙었으면 null). 끄는 동안 점선(guide)으로 보여 준다.
+  const caught = { t: null, v: null };
   const lanes = new Map(); // 이름 → { area, plot, path, low, high, item, link, dots: [] }
 
   const links = () => settings.getLinks?.() || [];
@@ -275,16 +284,19 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   };
   const snapStep = () => (snapChoice === "f30" ? 1 / 30 : snapChoice === "f60" ? 1 / 60 : Number(snapChoice) || 0);
   const nudgeStep = () => snapStep() || 0.1;
-  // 시간 맞추기: 격자 + 재생선 · 다른 키(6px 안). exclude(name, t)가 참인 키는 대상에서 뺀다.
+  // 시간 맞추기: 격자 · 재생선이나 다른 키가 6px 안에 있으면 자석이 격자보다 먼저(가장 가까운 것). exclude(name, t)가 참인 키는 대상에서 뺀다.
   const snapTime = (t, width, exclude = () => false) => {
     const step = snapStep(),
       pixel = span() / Math.max(1, width);
-    let best = step ? Math.round(t / step) * step : t;
+    let best = step ? Math.round(t / step) * step : t,
+      hit = false;
     if (magnet) {
       const magnets = [now()];
       for (const link of keyLinks()) for (const [k] of link.keys) if (!exclude(link.name, k)) magnets.push(k);
-      for (const m of magnets) if (Math.abs(m - t) <= pixel * 6 && Math.abs(m - t) < Math.abs(best - t)) best = m;
+      let reach = pixel * 6;
+      for (const m of magnets) if (Math.abs(m - t) <= reach) [best, hit, reach] = [m, true, Math.abs(m - t)];
     }
+    caught.t = hit ? Math.max(0, round(best)) : null;
     return Math.max(0, round(best));
   };
   // 값 격자: { step, origin } 또는 null(끔 · 간격을 알 수 없음 · bool). 범위가 있는 파라미터는 최소값에서부터 센다.
@@ -298,17 +310,20 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     if (valueChoice.startsWith("d")) return { step: (to - from) / Number(valueChoice.slice(1)), origin: from };
     return { step: Number(valueChoice), origin: 0 };
   };
-  // 값 맞추기: 격자 + 자석(같은 레인의 다른 키 값 · 범위의 최소/최대, 6px 안). exclude(name, t)가 참인 키는 뺀다.
+  // 값 맞추기: 격자 · 자석(같은 레인의 다른 키 값 · 범위의 최소/최대)이 6px 안에 있으면 격자보다 먼저. exclude(name, t)가 참인 키는 뺀다.
   const snapValue = (v, info, exclude = () => false) => {
     const grid = valueGrid(info),
       pixel = (info.high - info.low) / Math.max(1, info.plot.clientHeight);
-    let best = grid ? grid.origin + Math.round((v - grid.origin) / grid.step) * grid.step : v;
+    let best = grid ? grid.origin + Math.round((v - grid.origin) / grid.step) * grid.step : v,
+      hit = false;
     if (magnet) {
       const { min, max } = info.item?.options || {},
         magnets = [min, max].filter(Number.isFinite);
       for (const [k, kv] of info.link.keys) if (!exclude(info.link.name, k)) magnets.push(kv);
-      for (const m of magnets) if (Math.abs(m - v) <= pixel * 6 && Math.abs(m - v) < Math.abs(best - v)) best = m;
+      let reach = pixel * 6;
+      for (const m of magnets) if (Math.abs(m - v) <= reach) [best, hit, reach] = [m, true, Math.abs(m - v)];
     }
+    caught.v = hit ? best : null;
     return best;
   };
   const xOf = t => `${((t - view.start) / span()) * 100}%`;
@@ -547,6 +562,8 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     for (const link of list) track.append(renderLane(link, items.get(link.name)));
     const overlay = element("div", "timeline-overlay");
     playhead = element("div", "timeline-playhead");
+    guide = element("div", "timeline-guide");
+    guide.hidden = true;
     // 재생선이 보이는 범위 밖이면 가장자리에 시간 표시(누르면 그쪽으로 이동)
     edge = button("timeline-edge", "재생선이 있는 곳으로 보기 이동");
     edge.hidden = true;
@@ -557,7 +574,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       viewTouched = true;
       render();
     });
-    overlay.append(playhead, edge);
+    overlay.append(guide, playhead, edge);
     track.append(overlay);
     // + 파라미터: 연결할 수 있는 타입 중 아직 키프레임이 아닌 것
     const linked = new Map(links().map(link => [link.name, link.source]));
@@ -691,6 +708,18 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     const moving = selectedKeys().map(entry => ({ ...entry, info: lanes.get(entry.link.name) })),
       width = info.area.clientWidth;
     drag = { x: event.clientX, y: event.clientY, moved: false, result: null };
+    // 자석 점선: 시간은 모든 레인을 가로지르는 세로선(overlay), 값은 잡은 키 레인의 가로선
+    const valueGuide = element("div", "timeline-guide is-value");
+    valueGuide.hidden = true;
+    info.plot.append(valueGuide);
+    const showGuides = (t, v) => {
+      if (guide) {
+        guide.hidden = t === null;
+        if (t !== null) guide.style.left = xOf(t);
+      }
+      valueGuide.hidden = v === null;
+      if (v !== null) valueGuide.style.top = yOf(v, info);
+    };
     const move = e => {
       let dx = e.clientX - drag.x,
         dy = e.clientY - drag.y;
@@ -704,7 +733,9 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         grabbed = e.altKey
           ? Math.max(0, round(raw))
           : snapTime(raw, width, (n, k) => moving.some(m => m.link.name === n && Math.abs(m.key[0] - k) < EPS)),
-        dt = dx ? grabbed - key[0] : 0;
+        dt = dx ? grabbed - key[0] : 0,
+        timeHit = dx && !e.altKey ? caught.t : null;
+      let valueHit = null;
       const drafts = new Map();
       for (const entry of moving) {
         const lane = entry.info,
@@ -713,11 +744,13 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
           free = entry.key[1] + dv,
           own = (n, k) => moving.some(m => m.link.name === n && Math.abs(m.key[0] - k) < EPS),
           v = dy ? fitValue(lane.item, e.altKey ? free : snapValue(free, lane, own)) : entry.key[1],
+          grabbedKey = lane === info && entry.index === index,
           draft = drafts.get(entry.link.name) || {
             link: entry.link,
             keys: entry.link.keys.map(k => [...k]),
             moved: new Set(),
           };
+        if (grabbedKey && dy && !e.altKey) valueHit = caught.v;
         draft.keys[entry.index] = [t, v, ...entry.key.slice(2)];
         draft.moved.add(entry.index);
         drafts.set(entry.link.name, draft);
@@ -730,6 +763,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         lanes.get(name).path.setAttribute("d", curveOf(next, lanes.get(name)));
         result.set(name, next);
       }
+      showGuides(timeHit, valueHit);
       drag.result = result;
       drag.next = moving.map(entry => ({ name: entry.link.name, t: drafts.get(entry.link.name).keys[entry.index][0] }));
       // 끄는 동안에도 '선택한 키' 칸의 시간 · 값이 따라 바뀐다(놓을 때까지 기다리지 않는다)
@@ -745,6 +779,8 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       document.removeEventListener("pointerup", up);
       const done = drag;
       drag = null;
+      showGuides(null, null);
+      valueGuide.remove();
       if (done?.moved && done.result) {
         selected = done.next;
         save(done.result);
