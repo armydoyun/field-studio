@@ -26,7 +26,7 @@
 /* 넓은 화면에서도 한 줄이 너무 길어지지 않게 읽기 폭을 제한한다. */
 .guide-content>*:not(.snippet-categories) { max-width:720px; }
 .guide-topic-head { margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line); }
-.guide-topic-head h3 { margin:0;color:var(--text);font-size:var(--text-2xl);font-weight:750;letter-spacing:-.3px; }
+.guide-content .guide-topic-head h3 { margin:0;color:var(--text);font-size:var(--text-2xl);font-weight:750;letter-spacing:-.3px; }
 .guide-topic-head p { margin:4px 0 0;color:var(--muted); }
 .guide-content h3 { margin:24px 0 8px;color:var(--accent-strong);font-size:var(--text-sm);font-weight:700; }
 .guide-content h3:first-child { margin-top:0; }

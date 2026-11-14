@@ -101,8 +101,8 @@
 .uniform-ramp-bar { display:block;width:100%;height:22px;border:1px solid var(--line-strong);border-radius:var(--radius-sm); }
 .uniform-ramp-track { position:relative;height:18px;margin:0 6px;cursor:copy;touch-action:none; }
 .uniform-ramp-track::before { content:"";position:absolute;inset:8px 0 auto;height:2px;border-radius:1px;background:var(--line-strong); }
-.uniform-ramp-stop { position:absolute;top:0;width:12px;min-height:0;height:16px;margin:0;padding:0;transform:translateX(-50%);border:1px solid var(--line-hover);border-radius:3px 3px 6px 6px;background:var(--stop-color,#888);outline:2px solid var(--surface);outline-offset:-3px;cursor:ew-resize;touch-action:none; }
-.uniform-ramp-stop:hover { background:var(--stop-color,#888); }
+.uniform-ramp-stop { position:absolute;top:0;width:12px;min-height:0;height:16px;margin:0;padding:0;transform:translateX(-50%);border:1px solid var(--line-hover);border-radius:3px 3px 6px 6px;background:var(--stop-color,var(--muted));outline:2px solid var(--surface);outline-offset:-3px;cursor:ew-resize;touch-action:none; }
+.uniform-ramp-stop:hover { background:var(--stop-color,var(--muted)); }
 .uniform-ramp-stop::after { content:"";position:absolute;inset:-5px -6px; } /* 12×16 손잡이의 잡는 영역만 24×26으로 넓힌다(모양은 그대로) */
 .uniform-ramp-stop.is-active { z-index:1;border:2px solid var(--accent); }
 .uniform-ramp-edit { display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0; }
