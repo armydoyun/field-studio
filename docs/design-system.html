@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="../css/components/tag.css">
     <link rel="stylesheet" href="../css/components/menu.css">
     <link rel="stylesheet" href="../css/components/select.css">
+    <link rel="stylesheet" href="../css/components/matrix.css">
     <link rel="stylesheet" href="../css/components/dialog.css">
     <link rel="stylesheet" href="../css/components/notice.css">
     <link rel="stylesheet" href="../css/components/surface.css">
@@ -125,6 +126,7 @@
             <div class="ds-row"><code>input · select → ui-select</code><div class="ds-demo"><input type="text" placeholder="uStrength" style="width:160px"><select style="width:160px"><option>제한 없음 · Native</option><option>1280 × 720</option></select></div></div>
             <div class="ds-row"><code>ui-input--sm · (기본) · --lg</code><div class="ds-demo"><input class="ui-input--sm" value="sm 28" style="width:100px"><input value="md 32" style="width:100px"><input class="ui-input--lg" value="lg 36" style="width:100px"><select class="ui-input--sm" style="width:100px"><option>1초</option></select></div></div>
             <div class="ds-row"><code>ui-number</code><div class="ds-demo"><input class="ui-number" type="number" value="0.25" step="0.01" style="width:90px"></div></div>
+            <div class="ds-row"><code>ui-matrix</code><div id="matrixDemo" style="max-width:320px;min-width:0"></div></div>
             <div class="ds-row"><code>ui-dense</code><div class="ds-demo ui-dense"><input type="number" value="1.5" style="width:80px"><select style="width:110px"><option>부드럽게</option></select><input type="text" value="#3399ff" style="width:90px"></div></div>
             <div class="ds-row"><code>ui-input-group · ui-unit</code><div class="ds-demo"><div class="ui-input-group" style="width:180px"><input type="number" value="60"><span class="ui-unit">FPS</span></div></div></div>
             <div class="ds-row"><code>ui-search · ui-search-icon</code><div class="ds-demo"><label class="ui-search" style="width:260px"><span class="ui-search-icon glyph-icon icon-search" aria-hidden="true"></span><input type="search" placeholder="이름 또는 타입으로 검색"><kbd>/</kbd></label></div></div>
@@ -231,7 +233,13 @@ rgba 0.250 0.500 0.750 1.000</output></div></div>
 <script type="module">
     import * as UI from "../js/ui-kit.js";
     import * as CustomSelect from "../js/custom-select.js";
+    import * as MatrixControl from "../js/matrix-control.js";
     CustomSelect.mount();
+    let matrixValue = [1.23456789012345, 0, 0, 0, 1, 0, 0, 0, 1];
+    document.getElementById("matrixDemo").append(MatrixControl.create({
+        name: "uTransform", size: 3, read: () => matrixValue,
+        onChange: (_field, value) => { matrixValue = value; return true; },
+    }).node);
     // 테마 고르기(앱과 같은 방식: html[data-theme])
     for (const button of document.querySelectorAll("[data-theme-pick]"))
         button.addEventListener("click", () => {

@@ -64,10 +64,6 @@
 .uniform-axis { display:flex;align-items:center;gap:8px;min-width:0; }
 .uniform-axis-label { flex:0 0 14px;margin:0;color:var(--faint);font:600 var(--text-2xs)/1 var(--mono);text-align:center; }
 .uniform-axis input[type="number"] { flex:1 1 auto;width:100%;min-width:0; }
-.uniform-vector.is-matrix { grid-template-columns:repeat(var(--uniform-columns,2),minmax(0,1fr));gap:4px; }
-.uniform-vector.is-matrix .uniform-axis { display:grid;gap:2px; }
-.uniform-vector.is-matrix .uniform-axis-label { font-weight:500;text-align:left; }
-.uniform-vector.is-matrix input[type="number"] { padding-inline:6px;font-size:var(--text-xs); }
 /* bvec: X·Y… 토글 칩(ui-chip 안에 체크박스) */
 .uniform-vector.is-bool { display:flex;flex-wrap:wrap;gap:6px; }
 .uniform-vector.is-bool .uniform-axis { gap:6px;min-height:var(--control-sm); }
@@ -142,7 +138,6 @@
  .uniform-pair.is-ranged input[type="number"],.uniform-axis.is-ranged input[type="number"] { flex-shrink:1;max-width:100%;margin-left:auto; }
  .uniform-range-ends,.uniform-range-ends.is-axis { gap:8px;padding-right:0;flex-wrap:wrap; }
  .uniform-vector.is-inline { grid-template-columns:minmax(0,1fr); }
- .uniform-vector.is-matrix { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .uniform-color { grid-template-columns:36px minmax(0,1fr); }
  .uniform-color code { grid-column:1/-1;white-space:normal;overflow-wrap:anywhere;text-align:left; }
  /* 짧은 선택지는 한 줄에 두고, 긴 선택지만 다음 줄로 넘긴다. 줄보다 긴 글자는 꺾는다 */
