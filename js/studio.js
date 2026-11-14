@@ -2215,7 +2215,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (event.target?.closest?.(".studio-menu-panel>button")) menu.open = false;
   });
   on(document, "pointerdown", event => {
-    if (menu.open && !menu.contains?.(event.target)) menu.open = false;
+    if (menu.open && !menu.contains?.(event.target) && !event.target?.closest?.(".ui-select-menu")) menu.open = false;
   });
   // 편집기를 아래에 작게 배치하면 메뉴가 #stage(overflow:hidden) 밖으로 나가 잘린다.
   // 열 때 아래·위 여유 공간을 재서 더 넓은 쪽으로 펼치고, 그 공간에 맞게 높이를 제한한다(넘치면 메뉴 안에서 스크롤).
@@ -2308,7 +2308,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   });
   on(document, "keydown", event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
-    if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
+    if (event.target instanceof Element && event.target.closest("input,textarea,select,.ui-select,[contenteditable]"))
+      return;
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       toggle();
@@ -2440,7 +2441,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (event.defaultPrevented || !openState) return;
     const step = passStep(event);
     if (!step) return;
-    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("input, textarea, select, .ui-select, [contenteditable]")
+    )
+      return;
     if (document.querySelector("dialog[open]")) return;
     event.preventDefault();
     stepPass(step);

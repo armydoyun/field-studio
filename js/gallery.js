@@ -1190,7 +1190,8 @@ const mount = ({ studio, Shader, preview = null }) => {
     "keydown",
     event => {
       if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
-      if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
+      if (event.target instanceof Element && event.target.closest("input,textarea,select,.ui-select,[contenteditable]"))
+        return;
       event.preventDefault();
       search.focus();
       search.select();
@@ -1276,7 +1277,8 @@ const mount = ({ studio, Shader, preview = null }) => {
     "keydown",
     event => {
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
-      if (event.target instanceof Element && event.target.closest("input,textarea,select,[contenteditable]")) return;
+      if (event.target instanceof Element && event.target.closest("input,textarea,select,.ui-select,[contenteditable]"))
+        return;
       if (event.key.toLowerCase() === "x" && !document.querySelector("dialog[open]")) {
         event.preventDefault();
         open(false);

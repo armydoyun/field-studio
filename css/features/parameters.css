@@ -113,7 +113,7 @@
 .uniform-curve-pad { display:block;width:100%;height:128px;border:0 solid var(--accent);border-radius:var(--radius-sm);color:var(--faint);cursor:crosshair;touch-action:none; }
 /* ── @enum: 짧은 목록은 세그먼트(ui-seg), 길면 선택 상자 ── */
 .uniform-enum { min-width:0; }
-.uniform-enum.is-select select { width:100%; }
+.uniform-enum.is-select :is(select,.ui-select) { width:100%; }
 /* ── 추가 폼: 목록 아래의 작은 점선 버튼(가끔 쓰는 일이라 목록보다 앞서지 않는다). 열면 폼이 바로 아래에 펼쳐진다. ── */
 #uniformEditor { margin:10px 0 4px; }
 #uniformEditor>summary { list-style:none; }

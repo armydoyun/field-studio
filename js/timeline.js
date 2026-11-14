@@ -754,7 +754,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   // ---- 키보드 ----
   on(root, "keydown", event => {
     const target = event.target;
-    if (target.closest?.("input, select, textarea") || target === resize) return;
+    if (target.closest?.("input, select, .ui-select, textarea") || target === resize) return;
     const ctrl = event.ctrlKey || event.metaKey,
       key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     if (ctrl && (key === "z" || key === "y")) {

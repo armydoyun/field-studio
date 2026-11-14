@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="../css/components/segmented.css">
     <link rel="stylesheet" href="../css/components/tag.css">
     <link rel="stylesheet" href="../css/components/menu.css">
+    <link rel="stylesheet" href="../css/components/select.css">
     <link rel="stylesheet" href="../css/components/dialog.css">
     <link rel="stylesheet" href="../css/components/notice.css">
     <link rel="stylesheet" href="../css/components/surface.css">
@@ -121,7 +122,7 @@
         <h2>입력</h2>
         <p>글자 · 숫자 칸과 선택 상자는 클래스 없이도 같은 모양이다. 촘촘한 영역(목록 · 도구 막대)은 감싸는 요소에 <code>ui-dense</code>를 붙이면 안의 칸이 28px · 고정폭 숫자가 된다.</p>
         <div class="ui-card">
-            <div class="ds-row"><code>input · select</code><div class="ds-demo"><input type="text" placeholder="uStrength" style="width:160px"><select style="width:160px"><option>제한 없음 · Native</option><option>1280 × 720</option></select></div></div>
+            <div class="ds-row"><code>input · select → ui-select</code><div class="ds-demo"><input type="text" placeholder="uStrength" style="width:160px"><select style="width:160px"><option>제한 없음 · Native</option><option>1280 × 720</option></select></div></div>
             <div class="ds-row"><code>ui-input--sm · (기본) · --lg</code><div class="ds-demo"><input class="ui-input--sm" value="sm 28" style="width:100px"><input value="md 32" style="width:100px"><input class="ui-input--lg" value="lg 36" style="width:100px"><select class="ui-input--sm" style="width:100px"><option>1초</option></select></div></div>
             <div class="ds-row"><code>ui-number</code><div class="ds-demo"><input class="ui-number" type="number" value="0.25" step="0.01" style="width:90px"></div></div>
             <div class="ds-row"><code>ui-dense</code><div class="ds-demo ui-dense"><input type="number" value="1.5" style="width:80px"><select style="width:110px"><option>부드럽게</option></select><input type="text" value="#3399ff" style="width:90px"></div></div>
@@ -229,6 +230,8 @@ rgba 0.250 0.500 0.750 1.000</output></div></div>
 </div>
 <script type="module">
     import * as UI from "../js/ui-kit.js";
+    import * as CustomSelect from "../js/custom-select.js";
+    CustomSelect.mount();
     // 테마 고르기(앱과 같은 방식: html[data-theme])
     for (const button of document.querySelectorAll("[data-theme-pick]"))
         button.addEventListener("click", () => {

@@ -2165,7 +2165,7 @@ const mount = (renderer, input, settings) => {
             editing =
               row.contains(active) &&
               !active.closest(".key-nav, .link-editor, .uniform-top") &&
-              active.matches("input, select, textarea, [role=slider], [tabindex]");
+              active.matches("input, select, .ui-select, textarea, [role=slider], [tabindex]");
           if (editing || pendingKeys.has(item.name)) return;
           // 숫자가 아닌 값 · 로그 눈금 · 다이얼 · 선택지 위젯은 위젯 자신의 갱신 함수로
           if (typeof value !== "number" || item.options?.log || item.options?.angle || item.options?.enum)
@@ -3281,7 +3281,11 @@ const mount = (renderer, input, settings) => {
   });
   listen(document, "keydown", event => {
     if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
-    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("input, textarea, select, .ui-select, [contenteditable]")
+    )
+      return;
     const key = event.key.toLowerCase();
     if (event.code === "Space" && (document.activeElement === stage || document.activeElement === $("screen"))) {
       event.preventDefault();

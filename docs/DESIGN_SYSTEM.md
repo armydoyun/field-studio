@@ -18,6 +18,7 @@ css/
   components/           ← 디자인 시스템 본체. 클래스는 모두 ui- 로 시작한다
     button.css          ui-btn · ui-icon-btn · ui-link · ui-btn-group · ui-toolbar · ui-sep
     field.css           input · select · ui-number · ui-dense · ui-field · ui-label · ui-hint · ui-error · ui-input-group · ui-search
+    select.css          ui-select · ui-select-menu · ui-select-option (단일 선택)
     choice.css          checkbox · radio · ui-check · ui-switch · range · ui-range-ends · ui-meter · progress
     segmented.css       ui-seg · ui-tabs
     tag.css             ui-tag · ui-chip · ui-dot · ui-count · kbd
@@ -72,7 +73,7 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 하나 고르기 | `ui-seg` > button | 고른 칸: `aria-pressed/checked/selected="true"` 또는 `.is-active/.is-selected`. 크기 `ui-seg--sm · --lg` |
 | 화면 탭 | `ui-tabs` > button · `ui-tabs--line`(문서 탭) | |
 | 글자 · 숫자 칸 | `<input>` | 크기 `ui-input--sm · --lg`. 숫자 전용 `ui-number` |
-| 선택 상자 | `<select>` | 같은 크기 클래스 |
+| 선택 상자 | `<select>` → `ui-select` | `js/custom-select.js`가 자동 보강. `ui-input--sm · --lg`, `ui-dense` 공유 |
 | 촘촘한 영역 | 감싸는 요소에 `ui-dense` | 안의 칸 28px · 숫자 고정폭 |
 | 라벨 + 칸 + 설명 | `ui-field` > `ui-label`(+`ui-label-hint`) + 칸 + `ui-hint` / `ui-error` | |
 | 칸 + 단위 | `ui-input-group` > input + `ui-unit` | |
@@ -165,3 +166,18 @@ UI.iconButtonClass("reset", "xs", "my-hook");
 
 - `css/features/editor-codemirror.css`: CodeMirror가 자기 스타일을 스크립트로 넣어서, 찾기 창의 칸 · 버튼은 우선순위를 올린 전용 규칙으로 같은 토큰에 맞춘다.
 - 그림에 가까운 조작(타임라인 키 · 반복 손잡이, 램프 손잡이, 방향 패드, 갤러리 카드, 채널 칩)은 기능 파일에 고유 모양을 둔다. 그래도 색 · 크기는 토큰을 쓴다.
+
+## 공통 드롭다운
+
+`js/custom-select.js`의 `mount()`를 문서당 한 번 연결하면 기존 `<select>`와 나중에 추가하는 단일 선택 상자가
+같은 템플릿을 쓴다. 앱은 `js/main.js`, 견본은 `docs/design-system.html`에서 연결한다.
+복수 선택/목록형(`multiple`, `size > 1`)은 보강하지 않는다.
+
+- 트리거는 `ui-input`과 원래 크기 클래스를 공유한다. 목록은 `ui-popover`의 색·테두리·그림자·층 토큰을 쓴다.
+- 선택 항목은 파란 옅은 면과 체크, 탐색 중인 항목은 중성 면과 안쪽 선으로 구분한다.
+- 방향키·Home/End로 탐색, Enter/Space로 확정, Escape로 취소, Tab·바깥 클릭으로 닫는다. 글자 입력으로 항목을 찾는다.
+- 원래 select의 값·폼 제출·input/change 이벤트를 유지한다. 숨김·비활성·옵션 변경과 프로그램의 value/selectedIndex 대입도 반영한다.
+- 목록은 소유 문서/열린 dialog 안에 놓고 화면 경계에 따라 위/아래로 연다. 패널 스크롤·리사이즈·대화상자 닫기에는 목록을 닫는다.
+
+적용 위치: 렌더링 최대 픽셀 수, 프리셋 전환 시간, 파라미터 추가/enum/연결, 버퍼 설정,
+텍스처 샘플링, 편집기 들여쓰기, 타임라인 선택, 영상 내보내기. 기능별 CSS에는 폭·배치만 정의한다.

@@ -23,5 +23,5 @@
 .ui-menu-title:first-child { margin-top:2px; }
 .ui-menu-sep { width:100%;height:1px;margin:4px 0;border:0;background:var(--line); }
 .ui-menu-row { display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:var(--control-md);margin:0;padding:2px 8px;color:var(--text-soft);font:500 var(--text-sm)/1.4 var(--sans); }
-.ui-menu-row select { width:auto; }
+.ui-menu-row :is(select,.ui-select) { width:auto; }
 .ui-menu-note { display:block;padding:2px 8px 4px;color:var(--faint);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere; }
