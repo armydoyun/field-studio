@@ -4,22 +4,22 @@
      묶음  ui-field(라벨 + 칸 + 설명) · ui-label · ui-label-hint · ui-hint · ui-error
      촘촘한 영역  ui-dense: 안의 칸 · 선택 상자가 28px가 되고 숫자 칸은 ui-number처럼 된다(파라미터 목록 · 연결 시트 · 타임라인)
      단위  ui-input-group > input + ui-unit     검색  ui-search > ui-search-icon + input (+ kbd) */
-:where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),select,.ui-input) { width:100%;min-height:var(--control-md);margin:0;padding:4px 10px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);font-size:var(--text-sm);line-height:1.5; }
-:where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),select,.ui-input):hover { border-color:var(--line-hover); }
-input:focus,select:focus { border-color:var(--accent);outline:none; }
+:where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),:is(select,.ui-select),.ui-input) { width:100%;min-height:var(--control-md);margin:0;padding:4px 10px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);font-size:var(--text-sm);line-height:1.5; }
+:where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),:is(select,.ui-select),.ui-input):hover { border-color:var(--line-hover); }
+input:focus,:is(select,.ui-select):focus { border-color:var(--accent);outline:none; }
 input::placeholder { color:var(--faint); }
 input[aria-invalid="true"] { border-color:var(--danger); }
 .ui-input--sm { min-height:var(--control-sm);padding:2px 8px; }
 .ui-input--lg { min-height:var(--control-lg);padding:6px 10px; }
 /* 선택 상자: 운영체제 화살표 대신 같은 갈매기표를 그린다(테마와 무관한 중간 회색) */
-:where(select) { padding-right:26px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%238e9097' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:10px;cursor:pointer; }
-select.ui-input--sm { padding-right:24px; }
+:where(:is(select,.ui-select)) { padding-right:26px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%238e9097' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:10px;cursor:pointer; }
+:is(select,.ui-select).ui-input--sm { padding-right:24px; }
 /* 숫자 칸: 스핀 버튼은 칸 폭을 잡아먹어 숫자를 가린다. 값은 ↑↓ 키 · 슬라이더 · 이름 끌기로 바꾼다. */
 .ui-number { font:var(--text-sm)/1.4 var(--mono);font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield; }
 .ui-number::-webkit-inner-spin-button,.ui-number::-webkit-outer-spin-button { margin:0;-webkit-appearance:none;appearance:none; }
-.ui-dense :where(input[type="number"],input[type="text"],input:not([type]),select) { min-height:var(--control-sm);padding-block:2px;padding-left:8px; }
+.ui-dense :where(input[type="number"],input[type="text"],input:not([type]),:is(select,.ui-select)) { min-height:var(--control-sm);padding-block:2px;padding-left:8px; }
 .ui-dense :where(input[type="number"],input[type="text"],input:not([type])) { padding-right:8px; }
-.ui-dense :where(select) { padding-right:24px; }
+.ui-dense :where(:is(select,.ui-select)) { padding-right:24px; }
 .ui-dense :where(input[type="number"]) { font:var(--text-sm)/1.4 var(--mono);font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield; }
 .ui-dense input[type="number"]::-webkit-inner-spin-button,.ui-dense input[type="number"]::-webkit-outer-spin-button { margin:0;-webkit-appearance:none;appearance:none; }
 /* 라벨 + 칸 + 설명 */

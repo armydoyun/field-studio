@@ -5,7 +5,7 @@
 .preset-head { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
 .preset-title { color:var(--muted);font:600 var(--text-xs)/1 var(--sans); }
 .preset-blend { display:inline-flex;align-items:center;gap:6px;margin-left:auto;color:var(--muted);font-size:var(--text-xs);white-space:nowrap; }
-.preset-blend select { width:auto; }
+.preset-blend :is(select,.ui-select) { width:auto; }
 /* 칩들과 저장 버튼이 한 흐름으로 줄바꿈된다 */
 .preset-items { display:flex;flex-wrap:wrap;align-items:center;gap:6px; }
 .preset-list { display:contents; }

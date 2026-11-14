@@ -19,7 +19,7 @@
 .link-unit { color:var(--muted);font-size:var(--text-xs);white-space:nowrap; }
 .link-number { display:inline-flex;align-items:center;gap:6px;margin:0; }
 .link-number input { width:76px; }
-.link-inline select { width:auto; }
+.link-inline :is(select,.ui-select) { width:auto; }
 /* 값 막대 */
 .link-bar { flex:1 1 80px;min-width:60px; }
 .link-bands { display:grid;gap:7px;padding:2px 0; }

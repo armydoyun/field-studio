@@ -60,7 +60,7 @@
 .studio-texture .texture-connect { grid-column:1/-1;grid-row:2;min-width:0;white-space:normal;overflow-wrap:anywhere; }
 .studio-sampling { grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .studio-sampling label { min-width:0;color:var(--muted);font-size:var(--text-2xs); }
-.studio-sampling select { width:100%;margin-top:6px;padding-left:6px;font-size:var(--text-xs); }
+.studio-sampling :is(select,.ui-select) { width:100%;margin-top:6px;padding-left:6px;font-size:var(--text-xs); }
 @media (max-width:600px) {
  .studio-inputs { padding:6px 8px; }
  .studio-inputs-title { display:none; }

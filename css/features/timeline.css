@@ -15,7 +15,7 @@
 .timeline-bar input[type="number"] { width:calc(8ch + 18px); }
 .timeline-bar input.timeline-key-value { width:calc(10ch + 18px); }
 /* 선택 칸: 폭은 timeline.js(fitSelect)가 가장 긴 이름에 맞춰 재서 정한다. 막대가 좁아도 줄어들어 글자를 자르지 않는다(줄이 넘어간다). */
-.timeline-bar select { flex-shrink:0;width:auto;min-width:0; }
+.timeline-bar :is(select,.ui-select) { flex-shrink:0;width:auto;min-width:0; }
 /* 선택한 키 칸: 키를 고르든 말든 같은 자리·크기를 차지한다. 고르기 전에는 칸들을 감춰(visibility) 자리만 남기고
    그 위에 안내 문구를 얹는다 — 끌어서 키를 고르는 도중 막대 높이가 바뀌어 레인이 밀려 내려가지 않게. */
 .timeline-inspector { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-left:auto;padding:4px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface); }
