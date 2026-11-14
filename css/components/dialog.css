@@ -31,6 +31,8 @@ dialog::backdrop { background:var(--overlay); }
 .ui-dialog-foot>button { min-width:0; }
 /* 세 갈래 확인(저장하고 계속 · 저장하지 않고 계속 · 취소): 좁으면 세로로 쌓는다. */
 .ui-dialog-foot:has(>button:nth-child(3)):not(:has(>[hidden])) { grid-template-columns:repeat(3,minmax(0,1fr)); }
+/* 세 칸일 때는 버튼이 좁아 글자가 두 줄로 꺾인다: 키 이름 표시를 뺀다 */
+.ui-dialog-foot:has(>button:nth-child(3)):not(:has(>[hidden]))>button>kbd { display:none; }
 .ui-dialog[data-danger="true"] .ui-dialog-mark { background:var(--danger-soft);color:var(--danger);--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z'/%3E%3Cpath d='M12 9.5v4M12 17h.01'/%3E%3C/svg%3E"); }
 .ui-dialog[data-danger="true"] .ui-dialog-foot>.ui-btn--primary { background:var(--danger);color:#fff; }
 .ui-dialog[data-danger="true"] .ui-dialog-foot>.ui-btn--primary:hover { background:color-mix(in srgb,var(--danger) 85%,#000);color:#fff; }

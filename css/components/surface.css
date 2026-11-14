@@ -1,6 +1,6 @@
 /* 면과 구조 — 카드 · 구역 · 접이식 · 크기 조절 막대 · HUD.
      ui-card        선으로 두른 면(목록 · 묶음).  --pad: 안쪽 여백
-     ui-section     설정 패널의 구역     ui-section-head > h2 (+ ui-tag)
+     ui-section     설정 패널의 구역(위 선으로 나눈다. 첫 구역은 선 없음).  --flush: 앞 요소와 한 덩어리(선 없이 붙인다)     ui-section-head > h2 (+ ui-tag)
      ui-disclosure  <details>: summary 앞 갈매기표가 열리면 아래를 본다
      ui-resizer     끌어서 크기를 바꾸는 막대. aria-orientation="horizontal"(위아래로 끄는 가로 띠) · "vertical"(좌우로 끄는 세로 띠)
      ui-stack       세로로 쌓기(간격 8px)     ui-readout  고정폭 값 표시 상자
@@ -8,6 +8,8 @@
 .ui-card { border:1px solid var(--line);border-radius:var(--radius);background:var(--surface); }
 .ui-card--pad { padding:10px 12px; }
 .ui-section { padding:18px var(--panel-inset);border-top:1px solid var(--line); }
+.ui-section:first-child { border-top:0; }
+.ui-section--flush { padding-top:var(--space-6);border-top:0; }
 .ui-section-head { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px;min-width:0; }
 .ui-section-head h2 { min-width:0;margin:0;font-size:var(--text-md);font-weight:650;line-height:1.5; }
 .ui-disclosure>summary { display:flex;align-items:center;gap:6px;width:max-content;max-width:100%;min-height:var(--control-sm);padding:4px 8px 4px 0;color:var(--muted);font-size:var(--text-sm);list-style:none; }

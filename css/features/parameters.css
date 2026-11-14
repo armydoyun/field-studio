@@ -1,7 +1,8 @@
 /* 파라미터 탭(ui.js): 검색 · 목록(한 줄 = 머리줄 + 조작 위젯) · 추가 폼 · 내장 Uniform 참조.
    버튼 · 칸 · 세그먼트 · 스위치 · 칩의 모양은 컴포넌트가 정한다. 목록은 ui-dense라 안의 칸이 28px · 고정폭 숫자다.
    여기에는 위젯의 배치와, 이 탭에만 있는 조작(방향 패드 · 램프 · 곡선)의 모양만 둔다. */
-.uniform-search-wrap { margin:14px var(--panel-inset) 4px; }
+/* 검색 칸과 목록 구역은 한 덩어리다: 사이에 선을 긋지 않는다(구역에 ui-section--flush) */
+.uniform-search-wrap { margin:var(--space-6) var(--panel-inset) 0; }
 .uniform-section .ui-section-head { margin-bottom:8px; }
 #uiError { margin:0 0 12px; }
 #uiError:empty { display:none; }
@@ -122,7 +123,7 @@
 #uniformEditor[open] .summary-plus { transform:rotate(45deg); }
 #uniformForm { display:grid;gap:16px;margin:12px 0 0;padding:16px;background:var(--elevated); }
 #uniformForm .ui-field { margin:0; }
-#uniformForm .ui-hint { min-height:18px; }
+#uniformValueHelp { min-height:18px; }
 .range-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .range-grid label { display:block;margin:0 0 6px;color:var(--faint);font-size:var(--text-2xs); }
 .uniform-form-actions { display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px; }
@@ -144,8 +145,8 @@
  .uniform-vector.is-matrix { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .uniform-color { grid-template-columns:36px minmax(0,1fr); }
  .uniform-color code { grid-column:1/-1;white-space:normal;overflow-wrap:anywhere;text-align:left; }
- /* 긴 선택지: 칸이 글자보다 좁아지면 줄을 넘기고 글자도 꺾는다 */
- .uniform-enum>button { flex:1 1 100px;min-width:0;padding-block:4px;white-space:normal;overflow-wrap:anywhere; }
+ /* 짧은 선택지는 한 줄에 두고, 긴 선택지만 다음 줄로 넘긴다. 줄보다 긴 글자는 꺾는다 */
+ .uniform-enum>button { flex:1 1 auto;min-width:min(100%,max-content);padding-block:4px;white-space:normal;overflow-wrap:anywhere; }
 }
 @container settings (max-width:284px) {
  .range-grid,.uniform-form-actions { grid-template-columns:minmax(0,1fr); }

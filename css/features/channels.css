@@ -7,8 +7,8 @@
 .studio-inputs-toggle[data-warn="true"]::before { content:"";width:6px;height:6px;border-radius:50%;background:var(--warning); }
 .studio-inputs { position:relative;display:flex;flex:0 0 auto;align-self:stretch;align-items:center;gap:8px;min-width:0;padding:6px 12px;border-bottom:1px solid var(--line); }
 .studio-inputs-title { flex:0 0 auto;color:var(--muted);font:600 var(--text-2xs)/1.5 var(--mono);white-space:nowrap; }
-.studio-channel-bar { display:flex;flex:1 1 auto;flex-wrap:wrap;gap:6px;min-width:0; }
-.studio-channel { display:flex;align-items:center;gap:3px;min-width:0;margin:0; }
+.studio-channel-bar { display:flex;flex:1 1 auto;flex-wrap:wrap;gap:6px 12px;min-width:0; }
+.studio-channel { display:flex;align-items:center;gap:6px;min-width:0;margin:0; }
 .studio-channel label { min-width:8px;color:var(--muted);font:var(--text-2xs)/1.5 var(--mono);text-align:right; }
 /* 설명 문단은 화면에서 숨기고(title·aria-describedby로 전달) 칩은 줄을 넘기면 다음 줄로 간다 */
 .studio-channel-help { display:none; }

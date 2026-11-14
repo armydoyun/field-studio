@@ -8,6 +8,8 @@
 .ui-seg,.ui-tabs { display:flex;flex-wrap:wrap;gap:2px;min-width:0;padding:3px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken); }
 :is(.ui-seg,.ui-tabs)>button { flex:1 1 0;min-width:max-content;min-height:var(--control-xs);padding:0 8px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font-weight:500;white-space:nowrap; }
 :is(.ui-seg,.ui-tabs)>button:hover { border-color:transparent;background:transparent;color:var(--text); }
+/* 트랙 안의 칸은 초점 링을 안쪽에 그린다: 링이 트랙 테두리를 덮거나 잘리지 않는다 */
+:is(.ui-seg,.ui-tabs)>button:focus-visible { outline-offset:-2px; }
 .ui-seg>button:is([aria-pressed="true"],[aria-checked="true"],[aria-selected="true"],.is-active,.is-selected) { border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent-strong);font-weight:650; }
 .ui-tabs>button:is([aria-selected="true"],.is-active) { border-color:var(--line-strong);background:var(--surface);color:var(--text);font-weight:550; }
 :is(.ui-seg,.ui-tabs).ui-seg--lg>button { min-height:var(--control-sm); }

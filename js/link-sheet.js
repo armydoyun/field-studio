@@ -202,7 +202,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     const meters = element("div", "link-bands"),
       empty = element(
         "p",
-        "link-note",
+        "ui-hint link-note",
         "켜진 오디오가 없습니다. 입력 채널에 오디오 파일이나 마이크를 연결하면 세기가 보입니다."
       );
     // 막힌 곳에서 바로 해결하러 간다: 편집기의 입력 채널 줄을 연다
@@ -349,7 +349,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       ),
       explain = element(
         "p",
-        "link-note",
+        "ui-hint link-note",
         looping
           ? `${seconds(link.loop)}마다 0초로 돌아가 키를 되풀이합니다.`
           : "재생 시간대로 한 번 지나가고, 마지막 키 값을 유지합니다."
@@ -368,7 +368,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       );
       const warn = element(
         "p",
-        "link-note link-warn",
+        "ui-hint link-note link-warn",
         outside ? `반복 길이(${seconds(link.loop)}) 밖의 키 ${outside}개는 쓰이지 않습니다.` : ""
       );
       warn.hidden = !outside;
@@ -494,7 +494,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       line,
       element(
         "p",
-        "link-note",
+        "ui-hint link-note",
         link.source === "keys"
           ? "키프레임 값을 이 시간만큼 늦게 따라갑니다. 보통은 0초."
           : "0초 = 바로 바뀜. 값이 너무 튀면 0.1 ~ 0.3초."

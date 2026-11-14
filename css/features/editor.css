@@ -27,7 +27,8 @@
  :is(.studio-layout-right,.studio-layout-left) .studio-top { display:flex;flex-wrap:wrap;gap:6px; }
  :is(.studio-layout-right,.studio-layout-left) .studio-tabs { flex:1 1 auto; }
  /* 좁은 분할 폭에서는 창 도구를 한 줄로 두고 가로로 넘기며, 닫기 버튼은 오른쪽 끝에 고정한다. */
- :is(.studio-layout-right,.studio-layout-left) .studio-window-tools { justify-content:flex-start;overflow-x:auto;scrollbar-width:none; }
+ /* 넘치는 줄은 안쪽 여백 4px을 두고 그만큼 바깥으로 당긴다: 가장자리 버튼의 초점 링이 잘리지 않는다 */
+ :is(.studio-layout-right,.studio-layout-left) .studio-window-tools { justify-content:flex-start;margin:-4px;padding:4px;overflow-x:auto;scrollbar-width:none; }
  :is(.studio-layout-right,.studio-layout-left) .studio-window-tools>* { flex-shrink:0; }
  :is(.studio-layout-right,.studio-layout-left) #studioHide { position:sticky;right:0;margin-left:auto;background:var(--panel); }
  /* 집중 모드: 옆 배치의 고정 폭보다 우선해 편집기가 화면 전체를 쓴다. */
@@ -100,7 +101,7 @@
 .studio-menu>summary { list-style:none; }
 .studio-menu>summary::-webkit-details-marker { display:none; }
 .studio-menu[open]>summary { background:var(--surface-hover);color:var(--text); }
-.studio-menu-panel { position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:264px;max-height:min(72vh,540px);padding:6px; }
+.studio-menu-panel { position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:292px;max-height:min(72vh,540px);padding:6px; }
 .studio-menu-panel.is-up { top:auto;bottom:calc(100% + 6px); }
 .studio-menu-palette { color:var(--accent-strong);font-weight:600; }
 .studio-stepper { display:inline-flex;align-items:center;gap:4px; }
@@ -158,14 +159,14 @@
  .studio-storage { flex:0 0 auto;max-width:none;font-size:0; }
  .studio-storage::before { margin-right:0; }
  .studio-top { padding:4px 6px; }
- .studio-window-tools { flex:1 1 100%;justify-content:flex-end;overflow-x:auto;scrollbar-width:none; }
+ .studio-window-tools { flex:1 1 100%;justify-content:flex-end;margin:-4px;padding:4px;overflow-x:auto;scrollbar-width:none; }
  .studio-window-tools>* { flex-shrink:0;white-space:nowrap; }
  #studioHide { position:sticky;right:0;background:var(--panel); }
  /* 코드 머리줄은 상태와 탐색 도구가 들어가지 않으면 두 줄로 */
  .studio-code-label { flex-wrap:wrap;min-height:28px;padding-inline:8px; }
  .studio-crumb { max-width:110px; }
  .studio-bottom { padding-inline:8px; }
- .studio-menu-panel { width:min(264px,calc(100vw - 24px)); }
+ .studio-menu-panel { width:min(292px,calc(100vw - 24px)); }
  .studio-pass-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .studio-editor-frame,.studio-main { min-height:200px; }
 }
