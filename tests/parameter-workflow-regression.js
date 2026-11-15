@@ -2,6 +2,13 @@ const assert = require('node:assert/strict');
 (async () => {
   const A = await import('../js/annotations.js');
   const P = await import('../js/parameter-tools.js');
+  assert(!P.equalValue(1e-8,2e-8), 'small HDR edits remain distinct');
+  assert(P.equalValue([1,0.1],[1,0.1+Number.EPSILON*0.1]), 'relative floating-point precision');
+  assert(!P.equalValue(2147483646,2147483647), 'large integers differing by one remain distinct');
+  assert(!P.equalValue([1,2],[1,2,3]), 'array shape is significant');
+  assert(!P.equalValue(false,0), 'boolean and number types differ');
+  assert(P.changedFromDefault({type:'float',value:1}), 'missing defaults need code reflection');
+  assert(!P.changedFromDefault({type:'float',value:1,options:{min:1,max:2}}, {type:'float',value:0}), 'default comparison uses the same range clamping as reset');
   const parse = expression => A.collect([`uniform float uValue; // @if ${expression}`])[0];
   const values = new Map([['uMode', 2], ['uOn', true], ['uOther', false]]);
   const visible = expression => A.visible(parse(expression).when, name => values.get(name));

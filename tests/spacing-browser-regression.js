@@ -48,6 +48,12 @@
         if (line.clip && !line.el.contains(c)) continue;
         if (layer(line.el) !== layer(c)) continue;                         // 다른 층(팝오버 · 대화상자)과는 겹칠 수 있다
         if (box && !box.contains(line.el)) continue;                         // 스크롤로 지나가는 사이
+        // A scrolled viewport edge can pass through any content gap; it is not authored spacing.
+        if (box && line.el === box && line.h) {
+          const bounds = box.getBoundingClientRect();
+          if ((box.scrollTop > 0 && Math.abs(line.at - bounds.top) < 1) ||
+              (box.scrollTop + box.clientHeight < box.scrollHeight - 1 && Math.abs(line.at - bounds.bottom) < 1)) continue;
+        }
         const other = scroller(line.el); if (other && !other.contains(c)) continue;
         const [lo, hi, e1, e2] = line.h ? [r.left, r.right, r.top, r.bottom] : [r.top, r.bottom, r.left, r.right];
         if (Math.min(hi, line.b) - Math.max(lo, line.a) < 4) continue;
@@ -117,6 +123,10 @@
   // ---- 설정 패널 ----
   $("tab-uniforms").click();
   await audit("파라미터 탭");
+  $('compareCapture').click();
+  $('compareA').click();
+  await audit("A 기준 미리보기");
+  $('compareClear').click();
   document.querySelector(".ui-matrix .ui-matrix-tools button").click();
   await audit("행렬 확대 편집");
   document.querySelector('dialog[aria-label="uMatrix 행렬 확대 편집"] .ui-icon-btn').click();

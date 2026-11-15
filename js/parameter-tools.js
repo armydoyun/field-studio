@@ -85,4 +85,15 @@ const varyValue = (item, jitter = false, random = Math.random) => {
   const value = Array.isArray(item.value) ? item.value.map(component) : component(item.value, 0);
   return Annotations.clampValue(value, opts, item.type);
 };
-export { writeDefaults, varyValue, canVary };
+// Relative precision also detects edits to tiny HDR radiance and small-range controls.
+const equalValue = (a, b) =>
+  Array.isArray(a)
+    ? Array.isArray(b) && a.length === b.length && a.every((value, i) => equalValue(value, b[i]))
+    : typeof a === "number" && typeof b === "number"
+      ? a === b || Math.abs(a - b) <= Number.EPSILON * 8 * Math.max(Math.abs(a), Math.abs(b))
+      : a === b;
+const changedFromDefault = (item, spec) =>
+  !spec ||
+  item.type !== spec.type ||
+  !equalValue(item.value, Annotations.clampValue(spec.value, item.options || {}, item.type));
+export { writeDefaults, varyValue, canVary, equalValue, changedFromDefault };

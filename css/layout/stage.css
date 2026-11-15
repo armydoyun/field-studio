@@ -70,8 +70,8 @@
 #stage:fullscreen .stage-header:hover,#stage:fullscreen .stage-header:focus-within { opacity:1; }
 /* HUD 숨기기(G): 위아래의 모든 HUD를 숨기고 셰이더만 남긴다. 포인터를 움직이면 'HUD 다시 보기'만 잠깐 보인다. */
 .hud-reveal { display:none; }
-.hud-hidden .stage-header>:not(.hud-reveal),.hud-hidden .viewport-footer,.hud-hidden .stage-hint,.hud-hidden .preview-notice,.hud-hidden .annotation-lesson,.hud-hidden .perf-suggest,
-.preview-popout-window.hud-hidden>[data-mirror="hud"] { display:none !important; }
+.hud-hidden .stage-header>:not(.hud-reveal),.hud-hidden .viewport-footer,.hud-hidden .stage-hint,.hud-hidden .preview-notice,.hud-hidden .compare-preview-notice,.hud-hidden .annotation-lesson,.hud-hidden .perf-suggest,
+.preview-popout-window.hud-hidden>[data-mirror="hud"],.preview-popout-window.hud-hidden>[data-mirror="comparison"] { display:none !important; }
 .hud-hidden .hud-reveal { display:inline-flex;margin-left:auto;color:var(--text-soft);font-size:var(--text-xs);opacity:0;pointer-events:none;transition:opacity .2s; }
 .hud-hidden .hud-reveal.is-visible,.hud-hidden .hud-reveal:focus-visible { opacity:1;pointer-events:auto; }
 @media (max-width:820px) {
@@ -111,6 +111,7 @@
 }
 
 /* Annotation lesson captions stay above the plotted area and never intercept canvas input. */
+.compare-preview-notice { position:absolute;z-index:var(--z-hud);bottom:64px;left:16px;max-width:calc(100% - 32px);margin:0;padding:10px 14px;font-size:var(--text-sm);pointer-events:none; }
 .annotation-lesson { position:absolute;z-index:var(--z-hud);top:68px;left:16px;max-width:min(440px,calc(100% - 32px));padding:10px 14px;pointer-events:none; }
 .annotation-lesson>strong { font-size:var(--text-md); }
 .annotation-lesson>p { margin:4px 0 0;max-width:52ch;font-size:var(--text-sm);line-height:1.5; }

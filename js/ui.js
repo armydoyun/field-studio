@@ -1328,7 +1328,129 @@ const mount = (renderer, input, settings) => {
         ? Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b))
         : a === b;
   const formatDefault = value =>
-    (Array.isArray(value) ? value : [value]).map(v => (typeof v === "number" ? +v.toFixed(4) : String(v))).join(", ");
+    (Array.isArray(value) ? value : [value])
+      .map(v => (typeof v === "number" ? displayNumber(v) : String(v)))
+      .join(", ");
+  let changedOnly = false,
+    changedSnapshot = "",
+    comparison = null,
+    viewingA = false,
+    varyingParameters = false;
+  const changeSyncs = new Map();
+  const comparisonKey = () =>
+    JSON.stringify([
+      renderer.getFragmentSource(),
+      renderer.getCommon?.(),
+      renderer.getPassDefinitions?.(),
+      renderer.getImageChannels?.(),
+      renderer.getUserUniforms().map(({ name, type, options }) => ({ name, type, options })),
+      settings.getLinks?.() || [],
+    ]);
+  const endComparison = (message = "기준을 잡은 뒤 값을 바꿔 비교하세요.") => {
+    if (renderer.isUniformPreviewActive?.()) renderer.setUniformPreview(null);
+    comparison = null;
+    viewingA = false;
+    setText("compareNotice", message);
+  };
+  const pauseParameterMotion = () => {
+    stopMorph();
+    playing.clear();
+    syncPlayButtons();
+  };
+  const captureComparison = () => {
+    pauseParameterMotion();
+    if (viewingA) renderer.setUniformPreview(null);
+    viewingA = false;
+    const linked = new Set((settings.getLinks?.() || []).map(item => item.name));
+    comparison = { key: comparisonKey(), items: renderer.getUserUniforms().filter(item => !linked.has(item.name)) };
+    if (!comparison.items.length) endComparison("비교할 파라미터가 없습니다. 연결된 값은 비교에서 제외합니다.");
+  };
+  const syncComparison = () => {
+    if (!$("parameterCompare")) return;
+    if (comparison && (comparison.key !== comparisonKey() || (viewingA && !renderer.isUniformPreviewActive?.())))
+      endComparison("코드·파라미터 설정이 바뀌어 비교를 끝냈습니다. 새 기준을 잡으세요.");
+    const users = renderer.getUserUniforms(),
+      difference = comparison
+        ? comparison.items.filter(
+            before => !ParameterTools.equalValue(before.value, users.find(item => item.name === before.name)?.value)
+          ).length
+        : 0;
+    $("compareCapture").disabled = !users.length || viewingA;
+    $("compareCapture").textContent = comparison ? "A 기준 갱신" : "A 기준 잡기";
+    $("compareA").disabled = $("compareB").disabled = !comparison;
+    $("compareA").setAttribute("aria-pressed", String(viewingA));
+    $("compareB").setAttribute("aria-pressed", String(!viewingA));
+    $("compareApply").hidden = !viewingA;
+    $("compareApply").disabled = !difference;
+    $("compareClear").hidden = !comparison;
+    if (comparison)
+      setText(
+        "compareNotice",
+        viewingA
+          ? "A 미리보기 중 · 저장되는 값은 B입니다. A를 쓰려면 'A를 현재 값으로'를 누르세요."
+          : `A와 다른 값 ${difference}개 · B를 편집·저장합니다. 연결된 값·시간·버퍼 이력은 비교에서 제외합니다.`
+      );
+    $("comparePreviewNotice").hidden = !viewingA;
+    for (const id of ["uniformList", "uniformEditor", "presetBar"]) {
+      $(id).inert = viewingA;
+      $(id).setAttribute("aria-disabled", String(viewingA));
+    }
+    for (const id of ["uniformWriteDefaults", "uniformRandomize", "uniformJitter"]) $(id).disabled = viewingA;
+  };
+  const syncChanges = (items = renderer.getUserUniforms(), defaults = annotatedDefaults()) => {
+    const changed = items.filter(item => ParameterTools.changedFromDefault(item, defaults.get(item.name)));
+    setText("uniformChangedCount", String(changed.length));
+    for (const item of items) changeSyncs.get(item.name)?.(item.value);
+    return changed.map(item => item.name).join();
+  };
+  listen($("uniformChangedOnly"), "click", () => {
+    changedOnly = !changedOnly;
+    $("uniformChangedOnly").setAttribute("aria-pressed", String(changedOnly));
+    renderUniforms();
+  });
+  listen($("compareCapture"), "click", () =>
+    attempt(() => {
+      captureComparison();
+      renderUniforms();
+    })
+  );
+  listen($("compareA"), "click", () =>
+    attempt(() => {
+      syncComparison();
+      if (!comparison) return;
+      pauseParameterMotion();
+      closePresetMenu();
+      renderer.setUniformPreview(comparison.items);
+      viewingA = true;
+      syncComparison();
+      syncAnnotationLesson();
+    })
+  );
+  listen($("compareB"), "click", () =>
+    attempt(() => {
+      renderer.setUniformPreview(null);
+      viewingA = false;
+      syncComparison();
+      syncAnnotationLesson();
+    })
+  );
+  listen($("compareClear"), "click", () =>
+    attempt(() => {
+      endComparison("비교를 끝냈습니다. B 현재 값을 유지합니다.");
+      renderUniforms();
+    })
+  );
+  listen($("compareApply"), "click", () =>
+    attempt(() => {
+      syncComparison();
+      if (!comparison || !viewingA) return;
+      const items = comparison.items;
+      endComparison("A 기준을 현재 값으로 적용했습니다 · Ctrl+Z로 되돌리기");
+      window.shaderStudio?.setParameterValues(items);
+      renderUniforms();
+      setText("compareNotice", "A 기준을 현재 값으로 적용했습니다 · Ctrl+Z로 되돌리기");
+    })
+  );
   // @anim 재생: 범위를 코사인으로 왕복(@angle이면 한 바퀴씩 계속 돈다). 지금 값에서 위쪽으로 출발한다.
   // int/uint는 한 칸씩 일정한 속도로 왕복(끝에 오래 머물지 않게 삼각파), @enum은 선택지마다 주기만큼 머물며 다음으로 넘어간다.
   // 값은 렌더러에 바로 쓰고, 화면은 행이 등록한 refresh로 맞춘다. 사용자가 값을 직접 바꾸면 그 파라미터는 멈춘다.
@@ -1380,6 +1502,7 @@ const mount = (renderer, input, settings) => {
       }
       playViews.get(name)?.(value);
       resetSyncs.get(name)?.(value);
+      changeSyncs.get(name)?.(value);
     }
     // 재생으로 바뀐 값 때문에 목록을 다시 그리지 않게 기준을 맞춘다.
     uniformSnapshot = snapshotOf(renderer.getUserUniforms());
@@ -1410,6 +1533,7 @@ const mount = (renderer, input, settings) => {
   signal.addEventListener("abort", () => {
     if (playFrame) cancelAnimationFrame(playFrame);
     playing.clear();
+    renderer.setUniformPreview?.(null);
   });
   // @seed: 범위가 있으면 그 안(step 단위, 로그 눈금이면 배율로), 없으면 int/uint 0~99999 · float 0~1000.
   const randomValue = item => {
@@ -1429,6 +1553,7 @@ const mount = (renderer, input, settings) => {
   // Locks affect exploratory batch changes only; presets and direct edits still work.
   const lockedParameters = new Set();
   const writeDefaults = names => {
+    if (viewingA) return;
     stopMorph();
     const changed = window.shaderStudio?.writeParameterDefaults(names);
     if (changed) {
@@ -1443,12 +1568,13 @@ const mount = (renderer, input, settings) => {
         .getUserUniforms()
         .filter(item => {
           const spec = defaults.get(item.name);
-          return !spec || spec.type !== item.type || !sameValue(item.value, spec.value);
+          return ParameterTools.changedFromDefault(item, spec);
         })
         .map(item => item.name)
     );
   });
   const varyParameters = jitter => {
+    if (viewingA) return;
     stopMorph();
     const hidden = new Set(conditionHidden(renderer.getUserUniforms(), annotatedDefaults())),
       items = renderer
@@ -1463,12 +1589,18 @@ const mount = (renderer, input, settings) => {
     for (const item of items) playing.delete(item.name);
     syncPlayButtons();
     attempt(() => {
-      window.shaderStudio?.setParameterValues(
-        items.map(item => ({
-          ...item,
-          value: ParameterTools.varyValue(item, jitter),
-        }))
-      );
+      if (items.length && !comparison) captureComparison();
+      varyingParameters = true;
+      try {
+        window.shaderStudio?.setParameterValues(
+          items.map(item => ({
+            ...item,
+            value: ParameterTools.varyValue(item, jitter),
+          }))
+        );
+      } finally {
+        varyingParameters = false;
+      }
       renderUniforms();
       $("uniformNotice").textContent =
         `${items.length}개 ${jitter ? "조금씩 바꿈" : "무작위 변경"} · 잠금·숨김·연결·램프 제외 · Ctrl+Z로 되돌리기`;
@@ -2086,7 +2218,8 @@ const mount = (renderer, input, settings) => {
         renderer.getFragmentSource().includes("// FIELD Studio: annotation-lab-v2") &&
         (view === 3 || view === 4) &&
         !renderer.getStats().previewPass &&
-        $("previewNotice").hidden;
+        $("previewNotice").hidden &&
+        !viewingA;
     box.hidden = !active;
     if (!active) return;
     const chapter = view === 3 ? 3 : values.get("uLab"),
@@ -2147,6 +2280,7 @@ const mount = (renderer, input, settings) => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
     syncAnnotationLesson(items);
+    syncComparison();
     const search = $("uniformSearch").value.trim().toLowerCase();
     uniformSnapshot = snapshotOf(items);
     const defaults = annotatedDefaults(),
@@ -2158,6 +2292,7 @@ const mount = (renderer, input, settings) => {
     playViews.clear();
     liveLinks.clear();
     resetSyncs.clear();
+    changeSyncs.clear();
     playButtons.clear();
     for (const view of parameterViews) view.dispose();
     parameterViews.length = 0;
@@ -2175,6 +2310,7 @@ const mount = (renderer, input, settings) => {
     renderPresets();
     $("uniformCreate").disabled = items.length >= 64;
     for (const item of items) {
+      if (changedOnly && !ParameterTools.changedFromDefault(item, defaults.get(item.name))) continue;
       if (search && !`${item.name} ${item.type}`.toLowerCase().includes(search)) continue;
       if (hidden.has(item.name)) continue;
       const row = element("div");
@@ -2194,6 +2330,20 @@ const mount = (renderer, input, settings) => {
       title.append(name, type);
       const spec = defaults.get(item.name),
         annotated = spec && spec.type === item.type;
+      const changedTag = element("span");
+      changedTag.className = "ui-tag ui-tag--accent uniform-changed";
+      changedTag.textContent = annotated ? "변경됨" : "기본값 없음";
+      changedTag.title = annotated
+        ? "코드 기본값과 다른 값입니다."
+        : "비교할 코드 기본값이 없습니다. 현재 값을 코드에 반영해 기본값을 정하세요.";
+      title.append(changedTag);
+      const syncChanged = (value = liveValue(item)) => {
+        const changed = ParameterTools.changedFromDefault({ ...item, value }, spec);
+        changedTag.hidden = !changed;
+        row.dataset.changed = String(changed);
+      };
+      changeSyncs.set(item.name, syncChanged);
+      syncChanged();
       // 설명: 주석에서 첫 태그 앞에 쓴 글.
       let description = null;
       if (annotated && spec.description) {
@@ -2233,12 +2383,12 @@ const mount = (renderer, input, settings) => {
           driven = drivenLink && drivenLink.source !== "keys";
         if (driven) reset.title = "연결이 값을 정하는 동안은 되돌릴 수 없습니다(연결을 끄면 다시 쓸 수 있음)";
         syncReset = (value = liveValue(item)) => {
-          reset.disabled = driven || sameValue(value, fallback);
+          reset.disabled = driven || ParameterTools.equalValue(value, fallback);
         };
         syncReset();
         resetSyncs.set(item.name, syncReset);
         const restore = () => {
-          if (sameValue(liveValue(item), fallback)) return;
+          if (ParameterTools.equalValue(liveValue(item), fallback)) return;
           if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
           renderUniforms();
           $("uniformNotice").textContent = `${item.name} 기본값으로 되돌림`;
@@ -2370,6 +2520,7 @@ const mount = (renderer, input, settings) => {
       top.append(title, ...extras, ...(reset ? [reset] : []), remove);
       if (description) top.append(description);
       const commit = (field, value) => {
+        if (viewingA) return false;
         // 사용자가 직접 바꾸면 그 파라미터의 재생과 프리셋 전환을 멈춘다(전환을 멈췄다고 알린다).
         if (playing.delete(item.name)) syncPlayButtons();
         stopMorph(true);
@@ -2378,6 +2529,8 @@ const mount = (renderer, input, settings) => {
           item.value = value;
           if (keyed) recordKey(item.name, value);
           syncReset?.();
+          syncChanged();
+          syncChanges();
           field.removeAttribute("aria-invalid");
           showError("");
           // 이 값이 다른 파라미터의 @if를 바꾸면 목록을 다시 그리고 초점은 이 파라미터 줄로 돌려 둔다.
@@ -2929,7 +3082,9 @@ const mount = (renderer, input, settings) => {
     // 고를 파라미터가 없으면 검색 칸은 쓸모가 없다(검색 중이면 지울 수 있게 남긴다)
     const searchWrap = $("uniformSearch")?.closest?.(".uniform-search-wrap");
     if (searchWrap) searchWrap.hidden = !items.length && !search;
-    $("uniformResults").textContent = search ? `${items.length}개 중 ${count}개 표시` : "";
+    changedSnapshot = syncChanges(items, defaults);
+    $("uniformResults").textContent =
+      search || changedOnly ? `${items.length}개 중 ${count}개 표시${changedOnly ? " · 변경된 항목" : ""}` : "";
     // Keep the default panel compact. Details are bounded and names double as search shortcuts.
     const hiddenDetails = $("uniformHidden");
     hiddenDetails.hidden = !hidden.size;
@@ -2958,11 +3113,13 @@ const mount = (renderer, input, settings) => {
       hint.className = "ui-empty uniform-empty";
       hint.textContent = search
         ? "검색 결과가 없습니다. 이름이나 타입을 확인하세요."
-        : hidden.size
-          ? "모든 파라미터가 조건(@if)으로 숨겨져 있습니다."
-          : "아직 파라미터가 없습니다.";
+        : changedOnly
+          ? "현재 조건에서 표시할 변경된 파라미터가 없습니다. 필터를 끄거나 이름으로 검색하세요."
+          : hidden.size
+            ? "모든 파라미터가 조건(@if)으로 숨겨져 있습니다."
+            : "아직 파라미터가 없습니다.";
       // 빈 상태에서 할 수 있는 일을 바로 누르게 한다: 예제로 시작 · 직접 추가
-      if (!search && !hidden.size) {
+      if (!search && !hidden.size && !changedOnly) {
         const actions = element("div"),
           gallery = element("button"),
           add = element("button");
@@ -3638,6 +3795,8 @@ const mount = (renderer, input, settings) => {
   });
   syncPanel();
   const updateStats = () => {
+    syncComparison();
+    const changedKey = syncChanges();
     syncAnnotationLesson();
     const s = renderer.getStats();
     const storage = settings.status();
@@ -3686,7 +3845,7 @@ const mount = (renderer, input, settings) => {
       !parameterViews.some(view => view.isOpen) &&
       !$("view-uniforms").hidden &&
       !(active instanceof Element && active.closest("#uniformList")) &&
-      uniformSnapshot !== snapshotOf(renderer.getUserUniforms())
+      (uniformSnapshot !== snapshotOf(renderer.getUserUniforms()) || (changedOnly && changedSnapshot !== changedKey))
     )
       renderUniforms();
     $("statFps").textContent = s.fps.toFixed(1) + (s.fpsLimit ? ` / ${s.fpsLimit}` : "");
@@ -3717,11 +3876,18 @@ const mount = (renderer, input, settings) => {
   // @group·설명·@if·기본값은 Uniform 옵션과 별개다. 컴파일 성공 후 메타데이터만 바뀌어도 반영한다.
   listen(document, "shader-annotations-changed", renderUniforms);
   listen(document, "shader-settings-applied", () => {
+    if (!varyingParameters) endComparison("프로젝트 또는 값 묶음이 바뀌어 비교를 끝냈습니다. 새 기준을 잡으세요.");
     clearDeleted();
     $("uniformSearch").value = "";
     renderUniforms();
     syncPanel();
     updateStats();
+  });
+  listen(document, "shader-links-changed", () => {
+    if (comparison) {
+      endComparison("파라미터 연결이 바뀌어 비교를 끝냈습니다. 새 기준을 잡으세요.");
+      syncComparison();
+    }
   });
   // JS에서 초기 설정이 이미 바뀌어 있더라도 UI 표시와 일치시킨다.
   listen($("resetSettings"), "click", () =>
