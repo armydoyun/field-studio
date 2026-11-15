@@ -197,6 +197,8 @@ const mount = ({ doc = document } = {}) => {
     copyStyles(win);
     d.body.className = "preview-popout-window";
     for (const type of ["pointerdown", "keydown", "focusin"]) d.addEventListener(type, noteInput(d), true);
+    // 분리 창 문서를 알린다(우클릭 메뉴 등 문서마다 거는 기능이 이 창에도 붙도록 — app-menus.js).
+    doc.dispatchEvent(new CustomEvent("preview-popout-window", { detail: { document: d } }));
     target = win;
     syncTheme();
     doc.addEventListener("theme-changed", syncTheme);

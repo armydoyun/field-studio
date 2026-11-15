@@ -13,6 +13,7 @@ import * as Links from "./links.js";
 import * as Timeline from "./timeline.js";
 import * as LinkSheet from "./link-sheet.js";
 import * as Store from "./storage.js";
+import * as ContextMenu from "./context-menu.js";
 const mount = (renderer, input, settings) => {
   const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
@@ -1693,6 +1694,113 @@ const mount = (renderer, input, settings) => {
       ],
     })
   );
+  // ---- 우클릭 메뉴(context-menu.js) ----
+  // 파라미터 줄: 줄에 있는 버튼(되돌리기 · 코드 반영 · 잠금 · 재생 · 연결 · 크게 편집 · 삭제)을 그대로 누르고, 이름 · 값 복사를 더한다.
+  const copyText = text =>
+    navigator.clipboard
+      ?.writeText(text)
+      .catch(() => showError("클립보드에 복사하지 못했습니다. 브라우저 권한을 확인하세요."));
+  const rowButton = (row, selector, label, extra = {}) => {
+    const node = row.querySelector(selector);
+    if (!node || node.closest("[hidden]")) return null;
+    return {
+      label,
+      disabled: node.disabled || viewingA,
+      onSelect: () => node.click(),
+      ...extra,
+    };
+  };
+  ContextMenu.register(
+    "#uniformList .uniform-row[data-name]",
+    row => {
+      const item = renderer.getUserUniforms().find(user => user.name === row.dataset.name);
+      if (!item) return null;
+      const literal = ParameterTools.glslLiteral(item),
+        lock = row.querySelector(".lock-uniform"),
+        play = row.querySelector(".play-uniform"),
+        link = row.querySelector(".link-uniform");
+      return {
+        label: `${item.name} 파라미터`,
+        items: [
+          { title: `${item.name} · ${item.type}` },
+          rowButton(row, ".reset-uniform", "기본값으로 되돌리기", { icon: "reset" }),
+          rowButton(row, ".write-default-uniform", "지금 값을 코드 기본값으로", { icon: "down" }),
+          rowButton(row, ".value-edit-open", "값 크게 편집", { icon: "expand" }),
+          { separator: true },
+          rowButton(row, ".lock-uniform", "잠금(무작위에서 제외)", {
+            pressed: lock?.getAttribute("aria-pressed") === "true",
+          }),
+          rowButton(row, ".seed-uniform", "새 시드", { icon: "dice" }),
+          rowButton(row, ".play-uniform", playing.has(item.name) ? "자동 재생 멈추기" : "자동 재생(@anim)", {
+            icon: playing.has(item.name) ? "pause" : "play",
+            pressed: play ? playing.has(item.name) : undefined,
+          }),
+          rowButton(row, ".link-uniform", "연결 설정…", {
+            icon: "link",
+            pressed: link?.getAttribute("aria-pressed") === "true",
+          }),
+          { separator: true },
+          { label: "이름 복사", icon: "copy", onSelect: () => copyText(item.name) },
+          literal && {
+            label: "값을 GLSL로 복사",
+            title: literal,
+            icon: "copy",
+            onSelect: () => copyText(literal),
+          },
+          { separator: true },
+          rowButton(row, ".remove-uniform", "파라미터 삭제", { icon: "trash", danger: true }),
+        ],
+      };
+    },
+    { signal }
+  );
+  // 파라미터 탭의 빈 곳: 상단 도구막대와 같은 일괄 작업
+  ContextMenu.register(
+    "#view-uniforms",
+    (node, event) => {
+      if (event.target.closest("#presetBar,#uniformEditor form")) return null;
+      const users = renderer.getUserUniforms(),
+        defaults = annotatedDefaults(),
+        changed = users.filter(item => ParameterTools.changedFromDefault(item, defaults.get(item.name))).length;
+      return {
+        label: "파라미터",
+        items: [
+          {
+            label: "파라미터 추가…",
+            icon: "plus",
+            disabled: viewingA,
+            onSelect: () => {
+              $("uniformEditor").open = true;
+              $("uniformEditor").scrollIntoView?.({ block: "nearest" });
+            },
+          },
+          { label: "변경만 보기", pressed: changedOnly, onSelect: () => $("uniformChangedOnly").click() },
+          { separator: true },
+          {
+            label: "전체 무작위",
+            icon: "dice",
+            disabled: viewingA || !users.length,
+            onSelect: () => varyParameters(false),
+          },
+          { label: "조금씩 바꾸기", disabled: viewingA || !users.length, onSelect: () => varyParameters(true) },
+          {
+            label: changed ? `바뀐 값 ${changed}개 코드에 반영` : "바뀐 값 모두 코드에 반영",
+            icon: "down",
+            disabled: viewingA || !changed,
+            onSelect: writeChangedDefaults,
+          },
+          { separator: true },
+          {
+            label: "지금 값을 프리셋으로 저장",
+            icon: "plus",
+            disabled: viewingA || $("presetSave").disabled || !users.length,
+            onSelect: () => $("presetSave").click(),
+          },
+        ],
+      };
+    },
+    { signal }
+  );
   listen($("uniformMore"), "click", () => {
     const defaults = annotatedDefaults(),
       users = renderer.getUserUniforms(),
@@ -2121,6 +2229,33 @@ const mount = (renderer, input, settings) => {
       list.append(chip);
     });
   };
+  // 프리셋 칩 우클릭: 적용 + 칩의 ⋯ 메뉴와 같은 관리 항목
+  ContextMenu.register(
+    "#presetList .preset-chip",
+    chip => {
+      const index = [...$("presetList").querySelectorAll(".preset-chip")].indexOf(chip),
+        preset = settings.getPresets()[index];
+      if (!preset || viewingA) return null;
+      const same = !presetChanges(preset, renderer.getUserUniforms()).length;
+      return {
+        label: `'${preset.name}' 프리셋`,
+        items: [
+          { title: preset.name },
+          { label: "적용", icon: "play", onSelect: () => applyPreset(preset) },
+          { separator: true },
+          {
+            label: "지금 값으로 덮어쓰기…",
+            disabled: same,
+            title: same ? "지금 값과 같습니다" : "바뀌는 값을 확인한 뒤 덮어씁니다",
+            onSelect: () => overwritePreset(index),
+          },
+          { label: "이름 바꾸기…", icon: "edit", onSelect: () => renamePreset(index) },
+          { label: "삭제", icon: "trash", danger: true, onSelect: () => removePreset(index) },
+        ],
+      };
+    },
+    { signal }
+  );
   listen($("presetSave"), "click", async () => {
     stopMorph();
     const presets = settings.getPresets(),

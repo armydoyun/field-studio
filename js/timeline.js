@@ -12,6 +12,7 @@
 import * as Links from "./links.js";
 import * as Store from "./storage.js";
 import * as UI from "./ui-kit.js";
+import * as ContextMenu from "./context-menu.js";
 
 const KEY = "field.timeline.v1";
 const EPS = 5e-4;
@@ -253,6 +254,42 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     renderer.setLinks(links().map(link => updates.get(link.name) || link));
     renderer.redraw?.();
   };
+  // 레인의 시간 기준 선택지(레인 머리 버튼 · 우클릭 메뉴 공용). 처음 반복으로 바꿀 때의 길이는 연결 설정 시트와 같다.
+  const timeModeItems = link => {
+    const last = link.keys.length ? link.keys.at(-1)[0] : 0,
+      loop = link.loop > 0 ? link.loop : Math.max(1, Math.ceil(last + 0.001));
+    const pick = next => {
+      save(new Map([[link.name, { ...link, ...next }]]));
+      // 레인을 다시 그리므로 같은 파라미터의 새 버튼으로 초점을 옮긴다.
+      requestAnimationFrame(() =>
+        [...root.querySelectorAll(".timeline-lane")]
+          .find(node => node.dataset.name === link.name)
+          ?.querySelector(".timeline-lane-mode")
+          ?.focus()
+      );
+    };
+    return [
+      { title: "시간 기준" },
+      {
+        label: "한 번 · 끝 값 유지",
+        title: "키의 시간 = 재생 시간. 마지막 키 뒤로는 그 값을 유지",
+        pressed: !(link.loop > 0),
+        onSelect: () => pick({ loop: 0 }),
+      },
+      {
+        label: `반복 · 끝 값 유지 (${round(loop, 2)}초)`,
+        title: "반복 길이마다 처음부터 되풀이. 마지막 키 뒤로는 그 값을 유지",
+        pressed: link.loop > 0 && !link.wrap,
+        onSelect: () => pick({ loop, wrap: false }),
+      },
+      {
+        label: `반복 · 처음으로 잇기 (${round(loop, 2)}초)`,
+        title: "반복 길이마다 되풀이하며, 마지막 키에서 다음 바퀴의 첫 키로 값을 이어 감",
+        pressed: link.loop > 0 && !!link.wrap,
+        onSelect: () => pick({ loop, wrap: true }),
+      },
+    ];
+  };
   const isSelected = (name, t) => selected.some(s => s.name === name && Math.abs(s.t - t) < EPS);
   const shapeOf = () =>
     users()
@@ -427,45 +464,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다 · 눌러서 반복으로 바꾸기"
     );
     mode.setAttribute("aria-haspopup", "menu");
-    on(mode, "click", () => {
-      const last = link.keys.length ? link.keys.at(-1)[0] : 0,
-        loop = link.loop > 0 ? link.loop : Math.max(1, Math.ceil(last + 0.001));
-      const pick = next => {
-        save(new Map([[link.name, { ...link, ...next }]]));
-        // 레인을 다시 그리므로 같은 파라미터의 새 버튼으로 초점을 옮긴다.
-        requestAnimationFrame(() =>
-          [...root.querySelectorAll(".timeline-lane")]
-            .find(node => node.dataset.name === link.name)
-            ?.querySelector(".timeline-lane-mode")
-            ?.focus()
-        );
-      };
-      UI.menu({
-        anchor: mode,
-        label: `${link.name} 시간 기준`,
-        items: [
-          { title: "시간 기준" },
-          {
-            label: "한 번 · 끝 값 유지",
-            title: "키의 시간 = 재생 시간. 마지막 키 뒤로는 그 값을 유지",
-            pressed: !(link.loop > 0),
-            onSelect: () => pick({ loop: 0 }),
-          },
-          {
-            label: `반복 · 끝 값 유지 (${round(loop, 2)}초)`,
-            title: "반복 길이마다 처음부터 되풀이. 마지막 키 뒤로는 그 값을 유지",
-            pressed: link.loop > 0 && !link.wrap,
-            onSelect: () => pick({ loop, wrap: false }),
-          },
-          {
-            label: `반복 · 처음으로 잇기 (${round(loop, 2)}초)`,
-            title: "반복 길이마다 되풀이하며, 마지막 키에서 다음 바퀴의 첫 키로 값을 이어 감",
-            pressed: link.loop > 0 && !!link.wrap,
-            onSelect: () => pick({ loop, wrap: true }),
-          },
-        ],
-      });
-    });
+    on(mode, "click", () => UI.menu({ anchor: mode, label: `${link.name} 시간 기준`, items: timeModeItems(link) }));
     head.append(name, remove, mode, range);
     graph.setAttribute("viewBox", "0 0 1000 100");
     graph.setAttribute("preserveAspectRatio", "none");
@@ -714,6 +713,35 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     if (updates.size)
       save(new Map([...updates].map(([name, d]) => [name, { ...d.link, keys: settle(d.keys, d.moved) }])));
   };
+  // 복사: 고른 키들의 상대 시간 · 값 · 잇기. 붙여넣기: 첫 키를 time(기본은 재생선)에 맞춰 같은 파라미터에 넣는다.
+  const copySelected = () => {
+    const list = selectedKeys();
+    if (!list.length) return;
+    const first = Math.min(...list.map(entry => entry.key[0]));
+    clipboard = list.map(entry => ({
+      name: entry.link.name,
+      dt: entry.key[0] - first,
+      v: entry.key[1],
+      ease: entry.key[2],
+    }));
+  };
+  const pasteAt = time => {
+    const updates = new Map(),
+      next = [];
+    for (const entry of clipboard) {
+      const link = updates.get(entry.name) || linkOf(entry.name);
+      if (link?.source !== "keys") continue;
+      const t = local(link, round(time + entry.dt)),
+        pasted = entry.ease ? [t, entry.v, entry.ease] : [t, entry.v];
+      updates.set(entry.name, {
+        ...link,
+        keys: sortKeys([...link.keys.filter(([k]) => Math.abs(k - t) >= EPS), pasted]),
+      });
+      next.push({ name: entry.name, t });
+    }
+    selected = next;
+    if (updates.size) save(updates);
+  };
   const removeSelected = () => {
     const updates = new Map();
     for (const entry of selectedKeys()) {
@@ -757,6 +785,8 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     }
     if (!isSelected(name, key[0])) selected = [{ name, t: key[0] }];
     syncInspector();
+    // 오른쪽 · 가운데 버튼은 고르기만 한다(우클릭 메뉴가 이 선택에 대해 열린다).
+    if (event.button !== 0) return;
     const moving = selectedKeys().map(entry => ({ ...entry, info: lanes.get(entry.link.name) })),
       width = info.area.clientWidth;
     drag = { x: event.clientX, y: event.clientY, moved: false, result: null };
@@ -971,36 +1001,15 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       return;
     }
     if (ctrl && key === "c") {
-      const list = selectedKeys();
-      if (!list.length) return;
+      if (!selectedKeys().length) return;
       event.preventDefault();
-      const first = Math.min(...list.map(entry => entry.key[0]));
-      clipboard = list.map(entry => ({
-        name: entry.link.name,
-        dt: entry.key[0] - first,
-        v: entry.key[1],
-        ease: entry.key[2],
-      }));
+      copySelected();
       return;
     }
     if (ctrl && key === "v") {
       if (!clipboard.length) return;
       event.preventDefault();
-      const updates = new Map(),
-        next = [];
-      for (const entry of clipboard) {
-        const link = updates.get(entry.name) || linkOf(entry.name);
-        if (link?.source !== "keys") continue;
-        const t = local(link, round(now() + entry.dt)),
-          pasted = entry.ease ? [t, entry.v, entry.ease] : [t, entry.v];
-        updates.set(entry.name, {
-          ...link,
-          keys: sortKeys([...link.keys.filter(([k]) => Math.abs(k - t) >= EPS), pasted]),
-        });
-        next.push({ name: entry.name, t });
-      }
-      selected = next;
-      if (updates.size) save(updates);
+      pasteAt(now());
       return;
     }
     if (key === "Escape") {
@@ -1287,6 +1296,132 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     tick();
   };
 
+  // ---- 우클릭 메뉴(context-menu.js) ----
+  // 키: 잇기 · 복사 · 붙여넣기 · 지우기(우클릭한 키가 고른 키에 없으면 그 키만 고른다 — startKeyDrag)
+  const EASES = [["", "기본(연결 설정)"], ...Object.entries(EASE_LABEL)];
+  ContextMenu.register(
+    "#timelineDock .timeline-key",
+    dot => {
+      const lane = dot.closest(".timeline-lane"),
+        info = lane && lanes.get(lane.dataset.name),
+        key = info?.link.keys[Number(dot.dataset.index)];
+      if (!key) return null;
+      if (!isSelected(info.link.name, key[0])) {
+        selected = [{ name: info.link.name, t: key[0] }];
+        syncInspector();
+      }
+      const list = selectedKeys(),
+        eases = new Set(list.map(entry => entry.key[2] || ""));
+      return {
+        label: "키프레임",
+        items: [
+          {
+            title:
+              list.length > 1
+                ? `고른 키 ${list.length}개`
+                : `${info.link.name} · ${round(key[0], 3)}초 · ${round(key[1], 4)}`,
+          },
+          { title: "잇기(다음 키까지)" },
+          ...EASES.map(([value, text]) => ({
+            label: text,
+            pressed: eases.size === 1 && eases.has(value),
+            onSelect: () => editSelected(({ key: k }) => (value ? [k[0], k[1], value] : [k[0], k[1]])),
+          })),
+          { separator: true },
+          { label: "복사", icon: "copy", kbd: "Ctrl+C", onSelect: copySelected },
+          {
+            label: "재생선에 붙여넣기",
+            kbd: "Ctrl+V",
+            disabled: !clipboard.length,
+            onSelect: () => pasteAt(now()),
+          },
+          { separator: true },
+          {
+            label: list.length > 1 ? "고른 키 지우기" : "키 지우기",
+            icon: "trash",
+            kbd: "Delete",
+            danger: true,
+            onSelect: removeSelected,
+          },
+        ],
+      };
+    },
+    { signal }
+  );
+  // 레인 머리: 시간 기준 · 연결 지우기
+  ContextMenu.register(
+    "#timelineDock .timeline-lane-head",
+    head => {
+      const link = linkOf(head.closest(".timeline-lane")?.dataset.name);
+      if (!link) return null;
+      return {
+        label: `${link.name} 레인`,
+        items: [
+          { title: link.name },
+          ...timeModeItems(link),
+          { separator: true },
+          {
+            label: "키프레임 연결 지우기",
+            title: "값은 지금 값으로 남습니다",
+            icon: "trash",
+            danger: true,
+            onSelect: () => settings.setLinks(links().filter(l => l.name !== link.name)),
+          },
+        ],
+      };
+    },
+    { signal }
+  );
+  // 레인의 빈 곳: 누른 자리에 키 추가 · 붙여넣기 · 재생선 옮기기 · 보기
+  ContextMenu.register(
+    "#timelineDock .timeline-area",
+    (area, event) => {
+      const name = area.closest(".timeline-lane")?.dataset.name,
+        info = lanes.get(name),
+        item = users().find(user => user.name === name);
+      if (!info || !item) return null;
+      const link = info.link,
+        raw = Math.max(0, timeAt(event.clientX, area)),
+        t = local(link, snapTime(raw, area.clientWidth)),
+        v = fitValue(item, snapValue(valueAt(event.clientY, info), info));
+      return {
+        label: `${name} 레인`,
+        items: [
+          {
+            label: `여기에 키 추가 (${round(t, 2)}초)`,
+            icon: "keyframe",
+            title: "빈 곳을 두 번 눌러도 추가합니다",
+            onSelect: () => {
+              selected = [{ name, t }];
+              save(
+                new Map([
+                  [name, { ...link, keys: sortKeys([...link.keys.filter(([k]) => Math.abs(k - t) > EPS), [t, v]]) }],
+                ])
+              );
+              body.focus({ preventScroll: true });
+            },
+          },
+          { label: "여기에 붙여넣기", disabled: !clipboard.length, onSelect: () => pasteAt(raw) },
+          {
+            label: "재생선을 여기로",
+            icon: "goto",
+            onSelect: () => attempt(() => renderer.setTime(round(raw))),
+          },
+          { separator: true },
+          {
+            label: "모든 키 고르기",
+            kbd: "Ctrl+A",
+            onSelect: () => {
+              selected = keyLinks().flatMap(l => l.keys.map(([k]) => ({ name: l.name, t: k })));
+              syncInspector();
+            },
+          },
+          { label: "모든 키가 보이게", icon: "fit", onSelect: () => fit.click() },
+        ],
+      };
+    },
+    { signal }
+  );
   on(document, "shader-links-changed", () => render());
   on(document, "shader-settings-applied", () => render());
   on(window, "resize", () => !root.hidden && !drag && renderRulerOnly());
