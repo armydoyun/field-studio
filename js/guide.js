@@ -936,15 +936,62 @@ const mount = ({ studio, gallery }) => {
     Reference.ALL.flatMap(item => item.name.split("·").map(name => name.replace(/\(.*\)/, "").trim()))
   );
   const codeBlock = source => highlighter.paint(element("pre"), source);
-  // 탐색 목록: 시작하기 → 입문 과정 → 기능 레퍼런스. group이 바뀌는 곳에 목록 제목을 넣는다.
   const ALL = [
-    ...TOPICS.filter(topic => ["start", "tours"].includes(topic.id)).map(topic => ({ ...topic, group: "" })),
-    ...Course.LESSONS.map(lesson => ({ ...lesson, group: "입문 과정 · C 개발자용" })),
-    ...TOPICS.filter(topic => !["start", "tours"].includes(topic.id)).map(topic => ({
-      ...topic,
-      group: "기능 레퍼런스",
-    })),
+    ...TOPICS.filter(topic => ["start", "tours"].includes(topic.id)),
+    ...Course.LESSONS,
+    ...TOPICS.filter(topic => !["start", "tours"].includes(topic.id)),
   ];
+  // 범주는 문서와 분리된 재귀 구조다. children에 문서 ID 또는 다른 범주를 넣는다.
+  const NAVIGATION = [
+    "start",
+    "tours",
+    { id: "course", title: "입문 과정", children: Course.LESSONS.map(lesson => lesson.id) },
+    {
+      id: "reference",
+      title: "기능 레퍼런스",
+      children: [
+        { id: "workspace", title: "화면과 작업", children: ["screen", "rendering", "workspace", "files", "shortcuts"] },
+        { id: "code", title: "코드와 GLSL", children: ["editor", "builtins", "uniforms", "snippets"] },
+        {
+          id: "parameters",
+          title: "파라미터와 애니메이션",
+          children: ["params", "presets", "connections", "timeline"],
+        },
+        { id: "passes", title: "채널과 렌더링 패스", children: ["inputs", "buffers", "mrt", "debug"] },
+      ],
+    },
+  ];
+  const NAV_KEY = "field.guide.navigation.v1";
+  const savedNavigation = Store.readJSON(NAV_KEY, {});
+  const expanded =
+    savedNavigation && typeof savedNavigation === "object" && !Array.isArray(savedNavigation) ? savedNavigation : {};
+  const topicPaths = new Map();
+  const indexPaths = (items, path = []) => {
+    for (const item of items) {
+      if (typeof item === "string") topicPaths.set(item, path.join(" "));
+      else indexPaths(item.children, [...path, item.title]);
+    }
+  };
+  indexPaths(NAVIGATION);
+  const navToggle = $("guideNavToggle");
+  const narrowNavigation = () => window.matchMedia?.("(max-width:760px)").matches;
+  const setNavOpen = (open, { focus = false } = {}) => {
+    dialog.classList.toggle("is-nav-open", open);
+    navToggle?.setAttribute("aria-expanded", String(open));
+    if (open && focus) {
+      const active = nav.querySelector("button.is-active");
+      (active?.getClientRects().length ? active : nav.querySelector("button,summary"))?.focus();
+    }
+  };
+  listen(navToggle, "click", () => setNavOpen(!dialog.classList.contains("is-nav-open"), { focus: true }));
+  listen(dialog, "cancel", event => {
+    if (narrowNavigation() && dialog.classList.contains("is-nav-open")) {
+      event.preventDefault();
+      setNavOpen(false);
+      navToggle?.focus();
+    }
+  });
+  listen(content, "click", () => setNavOpen(false));
   const LESSON_IDS = Course.LESSONS.filter(lesson => lesson.step).map(lesson => lesson.id),
     COURSE_ORDER = Course.LESSONS.map(lesson => lesson.id);
   const navTitle = topic => (topic.step ? `${topic.step}. ${topic.title}` : topic.title);
@@ -1480,7 +1527,11 @@ const mount = ({ studio, gallery }) => {
       const active = button.dataset.topic === topic.id;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-current", active ? "page" : "false");
-      if (active && dialog.open) button.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      if (active) {
+        for (let branch = button.closest("details"); branch; branch = branch.parentElement.closest("details"))
+          branch.open = true;
+        if (dialog.open) button.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      }
     }
   };
   // 검색: 제목·요약·본문 텍스트에서 모든 단어를 포함하는 주제만 남긴다.
@@ -1488,6 +1539,7 @@ const mount = ({ studio, gallery }) => {
     [
       topic.title,
       topic.summary,
+      topicPaths.get(topic.id),
       ...topic.blocks.flatMap(b => [
         b.p,
         b.note,
@@ -1513,22 +1565,48 @@ const mount = ({ studio, gallery }) => {
   const renderNav = () => {
     const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const visible = ALL.filter(topic => words.every(word => index.get(topic.id).includes(word)));
-    const items = [];
-    let group = "";
-    for (const topic of visible) {
-      // 검색 중에는 결과만 촘촘하게 보이도록 묶음 제목을 생략한다.
-      if (!words.length && topic.group && topic.group !== group)
-        items.push(element("p", "guide-nav-group", topic.group));
-      group = topic.group;
-      const button = element("button", done.has(topic.id) ? "is-done" : "");
+    const matching = new Set(visible.map(topic => topic.id));
+    const searching = words.length > 0;
+    const makeTopic = id => {
+      if (!matching.has(id)) return null;
+      const topic = ALL.find(item => item.id === id);
+      const button = element("button", done.has(id) ? "is-done" : "");
       button.type = "button";
-      button.dataset.topic = topic.id;
+      button.dataset.topic = id;
       button.title = topic.title;
       button.append(element("strong", "", navTitle(topic)), element("span", "", topic.summary));
-      button.addEventListener("click", () => show(topic.id));
-      items.push(button);
-    }
-    nav.replaceChildren(...items);
+      button.addEventListener("click", () => {
+        show(id);
+        if (narrowNavigation()) {
+          setNavOpen(false);
+          content.focus();
+        }
+      });
+      return button;
+    };
+    const makeBranch = item => {
+      if (typeof item === "string") return makeTopic(item);
+      const children = item.children.map(makeBranch).filter(Boolean);
+      if (!children.length) return null;
+      const branch = element("details", "ui-disclosure guide-nav-branch");
+      branch.dataset.category = item.id;
+      const summary = element("summary", "guide-nav-heading");
+      const label = element("span", "guide-nav-label", item.title);
+      const list = element("div", "guide-nav-children");
+      list.append(...children);
+      const count = list.querySelectorAll("button[data-topic]").length;
+      summary.append(label, element("span", "ui-count", String(count)));
+      branch.append(summary, list);
+      branch.open = searching || (expanded[item.id] ?? item.id === "reference");
+      branch.addEventListener("toggle", () => {
+        if (!searching && branch.isConnected) {
+          expanded[item.id] = branch.open;
+          Store.writeJSON(NAV_KEY, expanded);
+        }
+      });
+      return branch;
+    };
+    nav.replaceChildren(...NAVIGATION.map(makeBranch).filter(Boolean));
     if (!visible.length) nav.append(element("p", "guide-empty", "검색 결과가 없습니다."));
     else if (!visible.some(topic => topic.id === current)) show(visible[0].id);
     else show(current);
@@ -1538,17 +1616,21 @@ const mount = ({ studio, gallery }) => {
   if (touchOnly) content.autofocus = true;
   const open = (id = current, { focusSearch = true } = {}) => {
     window.focus?.();
+    setNavOpen(false);
     search.value = "";
     renderNav();
     show(id);
     if (!dialog.open) {
       dialog.showModal();
-      // 닫힌 채로 주제를 고르면 스크롤할 수 없으므로, 연 다음에 고른 주제 탭을 보이는 자리로 옮긴다(좁은 화면의 가로 탭 줄).
+      // 닫힌 채로 주제를 고르면 스크롤할 수 없으므로 열린 뒤 선택 문서를 보이는 자리로 옮긴다.
       nav.querySelector("button.is-active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     }
     if (!touchOnly && focusSearch) setTimeout(() => search.focus(), 0);
   };
-  listen(search, "input", renderNav);
+  listen(search, "input", () => {
+    renderNav();
+    if (narrowNavigation() && search.value.trim()) setNavOpen(true);
+  });
   listen(search, "keydown", event => {
     if (event.key === "Enter") {
       event.preventDefault();
