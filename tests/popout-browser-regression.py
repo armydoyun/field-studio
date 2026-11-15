@@ -89,10 +89,17 @@ try:
             popup.locator("#screen").click(position={"x": 10, "y": 300})
             expect(popup.locator("#captureMenu")).to_be_hidden()
 
+            page.evaluate("shaderPlayground.defineUniform('uCompareTest','float',1); document.getElementById('uniformSearch').dispatchEvent(new Event('input',{bubbles:true})); document.getElementById('compareCapture').click(); document.getElementById('compareA').click()")
+            expect(popup.locator('[data-mirror="comparison"]')).to_be_visible()
             popup.keyboard.press("g")
             expect(popup.locator('[data-mirror="hud"]')).to_be_hidden()
+            expect(popup.locator('[data-mirror="comparison"]')).to_be_hidden()
             popup.keyboard.press("g")
             expect(popup.locator('[data-mirror="hud"]')).to_be_visible()
+            expect(popup.locator('[data-mirror="comparison"]')).to_be_visible()
+            page.evaluate("document.getElementById('compareClear').click()")
+            expect(popup.locator('[data-mirror="comparison"]')).to_be_hidden()
+            page.evaluate("shaderPlayground.removeUniform('uCompareTest')")
 
             popup.click("#projectMenuToggle")
             expect(popup.locator("#projectMenu")).to_be_visible()

@@ -53,22 +53,36 @@ const mount = ({ doc = document } = {}) => {
       return { node, placeholder };
     });
   };
-  const mirrorHud = (copy, d) => () => {
+  const mirrorHud = (copy, d, comparisonCopy) => () => {
     copy.className = footer.className;
     copy.innerHTML = footer.innerHTML;
     for (const node of copy.querySelectorAll("[id]")) node.removeAttribute("id");
     d.body.classList.toggle("hud-hidden", !!stage?.classList.contains("hud-hidden"));
+    if (comparisonCopy) {
+      const source = $("comparePreviewNotice");
+      comparisonCopy.textContent = source.textContent;
+      comparisonCopy.hidden = source.hidden;
+    }
   };
   const attachHud = (win, d) => {
     if (!footer || !win.MutationObserver) return;
     const copy = d.createElement("div");
     copy.dataset.mirror = "hud";
     d.body.append(copy);
-    const mirror = mirrorHud(copy, d);
+    const source = $("comparePreviewNotice"),
+      comparisonCopy = source ? d.createElement("p") : null;
+    if (comparisonCopy) {
+      comparisonCopy.className = source.className;
+      comparisonCopy.dataset.mirror = "comparison";
+      comparisonCopy.setAttribute("role", "status");
+      d.body.append(comparisonCopy);
+    }
+    const mirror = mirrorHud(copy, d, comparisonCopy);
     mirror();
     hudObserver = new win.MutationObserver(mirror);
     hudObserver.observe(footer, { subtree: true, childList: true, characterData: true, attributes: true });
     if (stage) hudObserver.observe(stage, { attributes: true, attributeFilter: ["class"] });
+    if (source) hudObserver.observe(source, { subtree: true, childList: true, characterData: true, attributes: true });
   };
 
   const tell = message => {

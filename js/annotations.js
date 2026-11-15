@@ -19,7 +19,7 @@
 //   @default는 원소 하나 분량(모든 원소에 같은 값)이나 전체 분량(원소를 차례로)으로 쓴다. @seed · @anim · 성분별 @range는 쓸 수 없다.
 const DECLARATION =
   /^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?([A-Za-z_]\w*)(\s*\[\s*\d+\s*\])?\s+([A-Za-z_]\w*(?:\s*\[\s*\d+\s*\])?(?:\s*,\s*[A-Za-z_]\w*(?:\s*\[\s*\d+\s*\])?)*)\s*;\s*\/\/(.*)$/;
-const sizeOf = text => (text ? Number(/\d+/.exec(text)[0]) : 0);
+const sizeOf = text => (text ? Number(/\d+/.exec(text)[0]) : null);
 const CONDITION = /^(!?)\s*([A-Za-z_]\w*)\s*(?:(==|!=|>=|<=|>|<)\s*(\S+))?$/;
 // @if 글 → { not, name, op, value(글 그대로) } · 형식이 틀리면 null
 const parseSingleCondition = text => {
@@ -152,11 +152,25 @@ const parseLine = line => {
   if (!Object.hasOwn(SIZES, type) && type !== "sampler2D") return [];
   return names.split(",").map(part => {
     const [, name, nameSize] = /^\s*([A-Za-z_]\w*)(\s*\[\s*\d+\s*\])?\s*$/.exec(part);
-    return parseOne(type, name, comment, sizeOf(nameSize) || sizeOf(typeSize));
+    return parseOne(type, name, comment, sizeOf(nameSize || typeSize));
   });
 };
 // 배열 파라미터: 원소 하나를 기본 타입으로 읽어 count개로 늘린다. @default가 전체 분량이면 원소마다 따로 읽는다.
 const parseArray = (type, name, comment, tags, count) => {
+  // Reject before allocating: an accidental enormous array must never freeze the editor.
+  if (type === "sampler2D" || !Number.isInteger(count) || count < 2 || count > 64) {
+    const item = parseItem(type, name, comment, tags);
+    return {
+      ...item,
+      name,
+      type: `${type}[${count}]`,
+      value: [],
+      error:
+        type === "sampler2D"
+          ? "램프(@gradient · @curve)는 배열로 쓸 수 없습니다."
+          : "배열 파라미터의 원소는 2~64개여야 합니다.",
+    };
+  }
   const n = SIZES[type],
     full = tags.default && tags.default.length === n * count ? tags.default : null,
     item = parseItem(type, name, comment, full ? { ...tags, default: full.slice(0, n) } : tags);
@@ -177,7 +191,7 @@ const parseArray = (type, name, comment, tags, count) => {
   else if (item.options.ranges) error = "배열 파라미터에는 성분별 @range를 쓸 수 없습니다.";
   return { ...item, type: `${type}[${count}]`, value, error };
 };
-const parseOne = (type, name, comment, count = 0) => {
+const parseOne = (type, name, comment, count = null) => {
   const tags = {},
     raw = {};
   let error = null;
@@ -199,7 +213,7 @@ const parseOne = (type, name, comment, count = 0) => {
     else if (conditionNames(when).includes(name)) error = "@if는 자기 자신을 조건으로 쓸 수 없습니다.";
   }
   const finish = item => (item ? { ...item, when, error: item.error || error } : item);
-  return finish(count ? parseArray(type, name, comment, tags, count) : parseItem(type, name, comment, tags));
+  return finish(count !== null ? parseArray(type, name, comment, tags, count) : parseItem(type, name, comment, tags));
 };
 const parseItem = (type, name, comment, tags) => {
   let error = null;
@@ -233,6 +247,7 @@ const parseItem = (type, name, comment, tags) => {
     options.max = Math.max(...options.ranges.map(r => r[1]));
     options.step = Math.min(...options.ranges.map(r => r[2]));
   } else if (tags.range) {
+    if (tags.range.length < 2 || tags.range.length > 3) error = "@range에는 min max와 선택적인 step을 씁니다.";
     [options.min, options.max] = tags.range.map(num);
     if (tags.range[2] !== undefined) options.step = num(tags.range[2]);
   }
@@ -244,8 +259,20 @@ const parseItem = (type, name, comment, tags) => {
       error = "@range에는 min과 max 숫자가 모두 필요합니다.";
     options.step ??= kind === "f" ? Number(((options.max - options.min) / 1000).toPrecision(2)) || 0.001 : 1;
   }
+  if ([options.min, options.max, options.step].some(value => value !== undefined)) {
+    if (
+      ![options.min, options.max, options.step].every(Number.isFinite) ||
+      !(options.min < options.max && options.step > 0)
+    )
+      error = "범위에는 min < max인 숫자와 0보다 큰 step이 필요합니다.";
+    else if (kind === "b" || kind === "m") error = "범위는 숫자 스칼라·벡터에만 쓸 수 있습니다.";
+    else if ((kind === "i" || kind === "u") && ![options.min, options.max, options.step].every(Number.isInteger))
+      error = "정수 파라미터의 범위와 step은 정수여야 합니다.";
+    else if (kind === "u" && options.min < 0) error = "부호 없는 정수의 범위는 0 이상이어야 합니다.";
+  }
   if (tags.color !== undefined) {
     options.color = true;
+    if (!["vec3", "vec4"].includes(type)) error = "@color는 vec3/vec4에만 쓸 수 있습니다.";
     if (tags.color[0]?.toLowerCase() === "hdr") {
       options.hdr = tags.color[1] === undefined ? 10 : num(tags.color[1]);
       if (!(options.hdr > 0 && options.hdr <= 1000))
@@ -277,7 +304,8 @@ const parseItem = (type, name, comment, tags) => {
     const labels = tags.enum.map(label => label.replace(/_/g, " "));
     options.enum = labels;
     if (type !== "int" && type !== "uint") error = "@enum은 int/uint에만 쓸 수 있습니다.";
-    else if (labels.length < 2 || labels.length > 32) error = "@enum에는 선택지 이름이 2~32개 필요합니다.";
+    else if (labels.length < 2 || labels.length > 32 || labels.some(label => label.length > 40))
+      error = "@enum에는 40자 이하의 선택지 이름이 2~32개 필요합니다.";
     else if (options.min !== undefined) error = "@enum은 @range와 함께 쓸 수 없습니다(선택지 수로 범위가 정해집니다).";
     else Object.assign(options, { min: 0, max: labels.length - 1, step: 1 });
   }
@@ -299,8 +327,19 @@ const parseItem = (type, name, comment, tags) => {
   if (shown.length > 1) error = `표시 방식 태그는 하나만 쓸 수 있습니다: ${shown.map(key => `@${key}`).join(" ")}`;
   let value;
   if (tags.default) {
-    const raw = tags.default.slice(0, n);
+    const raw = tags.default;
     value = kind === "b" ? raw.map(v => v === "true" || v === "1") : raw.map(num);
+    if (kind === "b" && raw.some(v => !["true", "false", "1", "0"].includes(v)))
+      error = "bool 기본값에는 true/false 또는 1/0만 쓸 수 있습니다.";
+    else if (kind !== "b" && !value.every(Number.isFinite)) error = "@default에는 유한한 숫자만 쓸 수 있습니다.";
+    else if (
+      (kind === "i" || kind === "u") &&
+      value.some(
+        v =>
+          !Number.isInteger(v) || v < (kind === "u" ? 0 : -2147483648) || v > (kind === "u" ? 4294967295 : 2147483647)
+      )
+    )
+      error = "정수 기본값은 해당 타입의 32비트 범위 안에 있어야 합니다.";
     if (raw.length === 1 && n > 1) value = Array(n).fill(value[0]); // @default 0.5 → 모든 성분
     if (value.length !== n) error = `@default에는 값 ${n}개가 필요합니다.`;
   } else if (kind === "m") {
@@ -321,16 +360,23 @@ const parseItem = (type, name, comment, tags) => {
 const collect = sources => {
   const found = new Map();
   for (const source of sources)
-    if (typeof source === "string")
-      for (const line of source.split(/\r?\n/)) {
+    if (typeof source === "string") {
+      // Keep trailing annotation comments, but never register declarations inside block comments.
+      const code = source.replace(/\/\/[^\r\n]*|\/\*[\s\S]*?(?:\*\/|$)/g, comment =>
+        comment.startsWith("//") ? comment : comment.replace(/[^\r\n]/g, " ")
+      );
+      for (const line of code.split(/\r?\n/)) {
         for (const item of parseLine(line)) if (item && !found.has(item.name)) found.set(item.name, item);
       }
+    }
   return [...found.values()];
 };
 // 범위가 바뀌었을 때 기존 값을 새 범위 안으로 끌어들인다.
 // type이 배열("vec2[3]")이고 @dir이면 원소마다 길이 1로 맞춘다.
 const clampValue = (value, options, type = "") => {
-  if (options.gradient || options.curve) return value; // 램프의 범위는 편집기 표시용이다
+  // Match renderer ramp normalization so reset/change detection uses the actual stored default.
+  if (options.gradient && Array.isArray(value)) return value.map(v => Math.min(1, Math.max(0, v)));
+  if (options.curve) return value; // 곡선 Y 범위는 편집기 표시용이다
   const array = /^(vec[23])\[\d+\]$/.exec(type);
   if (options.dir && array && Array.isArray(value)) {
     const size = SIZES[array[1]],

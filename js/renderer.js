@@ -111,6 +111,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     maxPixels = 0,
     nextFrameAt = 0;
   const userUniforms = new Map();
+  // Comparison changes GPU inputs only. Persistence, presets and history keep the editable values.
+  let uniformPreview = null;
   // 마우스는 0~1 상대 좌표로 보관하고 Uniform 전송 시 버퍼 픽셀 좌표로 환산한다.
   // uMouse를 vec4로 선언하면 zw에 클릭 위치를 전달한다: z>0 버튼 누름 중, w>0 누른 직후 첫 프레임.
   const mouse = [-1, -1],
@@ -346,7 +348,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const uploadCustomUniforms = target => {
     if (!target.custom) target.custom = new Map();
     let rampUnit = RAMP_FIRST_UNIT;
-    for (const [name, item] of userUniforms) {
+    for (const [name, current] of userUniforms) {
+      const item = uniformPreview?.get(name) || current;
       if (!target.custom.has(name)) target.custom.set(name, gl.getUniformLocation(target.program, name));
       const location = target.custom.get(name);
       const spec = uniformSpec(item.type),
@@ -611,6 +614,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     uniforms = nextUniforms;
     fragmentSource = source;
     imageTypes = types;
+    uniformPreview = null;
     if (previous) gl.deleteProgram(previous);
     pruneRamps();
     // 셰이더가 바뀌면 누적 프레임을 리셋한다. 시간(time)은 이어서 진행한다.
@@ -1496,6 +1500,23 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     checkRampCount([...next.values()]);
     return next;
   };
+  const setUniformPreview = items => {
+    if (items === null) {
+      uniformPreview = null;
+      redraw();
+      return true;
+    }
+    if (disposed || lost) throw new Error("현재 파라미터를 비교할 수 없습니다.");
+    const next = prepareUsers(items);
+    for (const [name, item] of next) {
+      const current = userUniforms.get(name);
+      if (!current || current.type !== item.type || JSON.stringify(current.options) !== JSON.stringify(item.options))
+        throw new Error(`${name}: 비교 기준과 현재 파라미터 설정이 다릅니다.`);
+    }
+    uniformPreview = next;
+    redraw();
+    return true;
+  };
   const swapUsers = next => {
     userUniforms.clear();
     for (const [name, item] of next) userUniforms.set(name, item);
@@ -1601,6 +1622,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         if (imageChanged) error.passName ??= "Image";
         throw error;
       }
+      if (imageChanged || result.changed) uniformPreview = null;
       if (result.structural) frameCount = 0;
       if (!imageChanged) reportMismatches();
       retainMedia();
@@ -1897,6 +1919,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     setFpsLimit,
     defineUniform,
     setUniform,
+    setUniformPreview,
+    isUniformPreviewActive: () => uniformPreview !== null,
     removeUniform,
     getUserUniforms,
     getUniformTypes,

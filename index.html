@@ -119,6 +119,16 @@
                             <button id="uniformRandomize" type="button" class="ui-btn--sm glyph-icon icon-dice" title="잠금·숨김·연결·램프 제외 · Ctrl+Z로 되돌리기">전체 무작위</button>
                             <button id="uniformJitter" type="button" class="ui-btn--sm" title="현재 값의 ±10% 안에서 변경 · 0이면 범위 기준 · 잠금·숨김·연결·램프 제외">조금씩 바꾸기</button>
                         </div>
+                        <div id="parameterCompare" class="ui-card parameter-compare" role="group" aria-label="파라미터 A/B 비교">
+                            <div class="parameter-compare-actions">
+                                <button id="compareCapture" type="button" class="ui-btn--sm" title="지금 값을 비교 기준 A로 기억합니다. 전체 무작위·조금씩 바꾸기는 기준이 없으면 자동으로 기억합니다.">A 기준 잡기</button>
+                                <div id="compareSwitch" class="ui-seg ui-seg--sm" role="group" aria-label="비교할 값" hidden><button id="compareA" type="button" aria-pressed="false" disabled>A 기준</button><button id="compareB" type="button" aria-pressed="true" disabled>B 현재</button></div>
+                                <button id="compareApply" type="button" class="ui-btn--sm" hidden>A를 현재 값으로</button>
+                                <button id="compareClear" type="button" class="ui-btn--ghost ui-btn--sm" hidden>비교 끝내기</button>
+                            </div>
+                            <p id="compareNotice" class="ui-hint" role="status">기준을 잡은 뒤 값을 바꿔 비교하세요.</p>
+                        </div>
+                        <div class="parameter-filter"><button id="uniformChangedOnly" type="button" class="ui-btn ui-btn--sm" aria-pressed="false" title="코드 기본값과 다르거나 기본값이 없는 항목만 표시">변경만 보기 <span id="uniformChangedCount" class="ui-count">0</span></button><span class="ui-hint">코드 기본값 기준</span></div>
                         <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" class="ui-btn--sm" hidden>삭제 되돌리기</button></div>
                         <div id="presetBar" class="ui-card preset-bar" role="group" aria-labelledby="presetTitle">
                             <div class="preset-head"><span id="presetTitle" class="preset-title">프리셋</span><label class="preset-blend" title="프리셋을 고를 때 값이 바뀌는 시간">전환 <select id="presetBlend" class="ui-input--sm"><option value="0">즉시</option><option value="0.5">0.5초</option><option value="1" selected>1초</option><option value="2">2초</option><option value="4">4초</option></select></label></div>
@@ -287,6 +297,7 @@
             <div id="stageHint" class="ui-hud stage-hint" aria-hidden="true">E 편집기 열기 · / 파라미터 찾기</div>
             <p id="keyboardHint" class="keyboard-hint" role="status" hidden>키보드 입력 중 · 키가 셰이더로 갑니다 · <kbd>Esc</kbd>로 나가기</p>
             <p id="previewNotice" class="ui-notice ui-notice--warning preview-notice" role="status" hidden></p>
+            <p id="comparePreviewNotice" class="ui-hud compare-preview-notice" role="status" hidden>A 기준 미리보기 · 저장되는 값은 B 현재 값입니다.</p>
             <aside id="annotationLesson" class="ui-hud annotation-lesson" role="note" aria-live="polite" aria-atomic="true" hidden>
                 <strong id="annotationLessonTitle"></strong>
                 <p id="annotationLessonText"></p>
