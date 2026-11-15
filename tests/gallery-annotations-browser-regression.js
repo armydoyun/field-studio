@@ -25,7 +25,7 @@
   try {
     await load('annotations');
     const users = r.getUserUniforms(), specs=A.collect([studio.getProject().image]);
-    check(users.length===specs.length && users.length===56, '안내 예제의 56개 파라미터를 오류 없이 등록');
+    check(users.length===specs.length && users.length===58, '안내 예제의 58개 파라미터를 오류 없이 등록');
     check(specs.every(s=>!s.error && s.description), '모든 태그가 설명과 함께 파싱됨');
     check(!!row('uGlow') && !row('uPoints'), '결과 보기에서는 장면 항목만 표시');
     row('uGlowEnabled').querySelector('input[type=checkbox]').click();
@@ -34,22 +34,25 @@
     set('uView',3);
     check(!!row('uGlow') && !!row('uToon') && !row('uRadius'), '|| 조건: 번짐을 꺼도 램프 보기에서는 편집 가능');
     set('uView',4);
-    check(!!row('uPoints') && !!row('uMatrix4') && !row('uRadius'), '타입 실험 보기의 배열·행렬 표시');
+    check(!!row('uPoints') && !row('uMatrix4') && !row('uRadius'), '타입 실험은 배열부터 시작하고 다른 실험은 숨김');
     check(user('uSizes').type==='float[3]' && user('uPoints').type==='vec2[3]', '두 배열 선언 문법을 렌더러에서 사용');
     check(JSON.stringify(user('uMatrix2').value)==='[1,0,0,1]' && user('uPulse').value===0, '생략한 기본값은 단위 행렬과 범위 내 0');
     check(user('uLabTint').options.hdr===10 && user('uPulse').options.anim===4, 'HDR 최대 밝기·재생 주기의 생략값');
     check(user('uOffset').options.ranges[1][0]===-0.5, '성분별 범위를 위젯에 적용');
     check(row('uPoints').querySelectorAll('.uniform-array-item').length===3, '배열을 원소별 위젯으로 표시');
+    set('uLab',2);
+    set('uMatrixMode',0);
     set('uMatrix2',[0.7,0,0,0.7]);
     row('uMatrix2').querySelector('.reset-uniform').click();
     check(JSON.stringify(user('uMatrix2').value)==='[1,0,0,1]', '생략한 행렬 기본값으로 리셋');
+    set('uLab',0);
     const points=[-0.6,0.1,0,0.4,0.6,0.1];
     set('uPoints',points);
     row('uPoints').querySelector('.write-default-uniform').click();
     check(JSON.stringify(A.collect([studio.getProject().image]).find(s=>s.name==='uPoints').value)===JSON.stringify(points), '실험 배열의 현재 값을 코드에 반영');
     studio.undo();
     // Render synchronously at a fixed time so pixel differences come from controls.
-    r.beginOffline({width:96,height:96}); offline=true;
+    r.beginOffline({width:384,height:384}); offline=true;
     const shot = () => {
       const canvas=r.renderOfflineFrame({time:0,delta:0,frame:0});
       const copy=document.createElement('canvas'); copy.width=canvas.width; copy.height=canvas.height;
@@ -61,15 +64,22 @@
     r.setUniform('uEnabled',[false,false,false]);
     const off=shot();
     check(pixels.some((value,i)=>Math.abs(value-off[i])>15), 'bool 배열이 실제 점의 표시를 변경');
+    r.setUniform('uLab',2);
+    r.setUniform('uMatrixMode',0);
+    const matrixBefore=shot();
     r.setUniform('uMatrix2',[0.5,0,0,0.5]);
     const transformed=shot();
-    check(off.some((value,i)=>Math.abs(value-transformed[i])>15), '행렬 값이 실제 좌표와 그림을 변경');
+    check(matrixBefore.some((value,i)=>Math.abs(value-transformed[i])>15), '행렬 값이 실제 좌표와 그림을 변경');
+    r.setUniform('uMatrixMode',1);
+    const perspectiveBefore=shot();
     r.setUniform('uMatrix3',[1,0,0.8,0,1,0,0,0,1]);
     const perspective=shot();
-    check(transformed.some((value,i)=>Math.abs(value-perspective[i])>15), 'mat3의 마지막 행도 동차 좌표 나눗셈에 사용');
+    check(perspectiveBefore.some((value,i)=>Math.abs(value-perspective[i])>15), 'mat3의 마지막 행도 동차 좌표 나눗셈에 사용');
+    r.setUniform('uMatrixMode',2);
+    const alphaBefore=shot();
     r.setUniform('uMatrix4',[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0.2]);
     const alpha=shot();
-    check(perspective.some((value,i)=>Math.abs(value-alpha[i])>15), 'mat4의 알파 행도 출력 합성에 사용');
+    check(alphaBefore.some((value,i)=>Math.abs(value-alpha[i])>15), 'mat4의 알파 행도 출력 합성에 사용');
     r.endOffline(); offline=false;
 
     await load('kaleido');
