@@ -8,7 +8,8 @@
 //     여러 출력(MRT): mainImage(out vec4 a, out vec4 b, …, in vec2 fragCoord)처럼 out vec4를 여러 개 받으면
 //     매개변수 순서대로 출력 0, 1, …이 된다(layout(location = N) out vec4를 만들어 연결한다).
 //     같은 수의 출력을 이미 선언해 두었으면 location 순서대로 그 변수들에 쓴다.
-//  3. 사용자 Uniform 선언(파라미터 패널에 등록했지만 코드에 없는 것)을 precision 뒤에 넣는다.
+//  3. 넘겨받은 선언 줄(declarations)을 precision 뒤에 넣는다. 파라미터 선언은 넣지 않는다 — 코드가 직접 선언한다
+//     (렌더러가 넘기는 것은 Common이 쓰는 다른 패스의 Uniform · Shadertoy 이름 · 채널뿐).
 //  4. Shadertoy 이름: 코드가 iTime · iTimeDelta · iFrame · iResolution · iDate · iFrameRate · iChannelTime을 선언 없이 쓰면
 //     FIELD Uniform(uTime · uDeltaTime · uFrame · uResolution · uDate · uFrameRate · uChannelTime)에 #define으로 연결하고,
 //     그 FIELD Uniform이 코드에 없으면 선언도 넣는다. 선언 줄과 같은 자리(3번 뒤)에 들어간다.

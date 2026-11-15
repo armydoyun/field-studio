@@ -482,14 +482,19 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       if (synced) setStatus(synced);
       return true;
     } catch (error) {
-      dirty = true;
-      compileFailed = true;
-      const tab = errorTab(error);
-      if (tab && tab !== selected) select(tab);
-      showError(error);
-      scheduleDraft();
+      reportCompileError(error);
       return false;
     }
+  };
+  // 컴파일 오류를 편집기의 오류 표시(줄 표시 · 상태 줄 · 뷰포트 안내)로 알린다. 코드 적용이 실패했을 때와 같고,
+  // 파라미터를 지워 코드가 선언 없는 이름을 쓰게 됐을 때(ui.js)도 이 길로 보여 준다. 화면은 마지막 성공 결과.
+  const reportCompileError = error => {
+    dirty = true;
+    compileFailed = true;
+    const tab = errorTab(error);
+    if (tab && tab !== selected) select(tab);
+    showError(error);
+    scheduleDraft();
   };
   // 컴파일 성공 후 GLSL 주석 어노테이션(@range/@step/@default/@color)을 파라미터에 반영한다.
   // 미등록 Uniform은 새로 등록하고, 등록된 것은 옵션만 갱신한다(값은 새 범위로 보정). 한 번의 재컴파일로 처리한다.
@@ -1339,33 +1344,71 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (applied) setStatus("현재 값을 @default에 반영했습니다 · Ctrl+Z로 되돌리기");
     return true; // The source edit remains available even if a pending shader edit fails to compile.
   };
-  // 코드가 uniform 선언 없이 쓰는 파라미터: 등록된 파라미터는 앱이 선언을 대신 넣으므로 코드에 선언이 없어도 돌아가지만,
-  // 파라미터를 지우면 그 선언도 사라져 컴파일에 실패한다. 그런 탭 이름을 돌려준다(Common에 선언이 있으면 모든 패스가 본다).
-  const implicitParameterUses = name => {
-    if (!/^[A-Za-z_]\w*$/.test(name)) return [];
-    const word = new RegExp(`\\b${name}\\b`),
-      declared = code => new RegExp(`\\buniform\\s+[^;]*\\b${name}\\b`).test(code),
-      clean = tab => Insert.stripComments(sourceOf(project, tab) || ""),
-      common = hasCommon() && declared(clean(COMMON));
-    return tabNames().filter(tab => {
-      const code = clean(tab);
-      return word.test(code) && !declared(code) && !(common && tab !== COMMON);
-    });
+  // 앱은 파라미터 선언을 셰이더에 대신 넣지 않는다: 코드가 선언을 가지고 있어야 그 이름을 쓸 수 있다.
+  // 예전(자동 선언 시절)에 저장한 작업은 등록된 파라미터를 선언 없이 썼을 수 있으므로, 불러올 때 한 번 선언을 코드에 넣는다.
+  // scene을 고치고 넣은 선언 수를 돌려준다. Common이 쓰면 Common 한 곳에만 넣는다(모든 패스 앞에 붙으므로 겹치지 않게).
+  const declareRegistered = (scene, users = []) => {
+    const tabs = ["Image", ...(typeof scene.common === "string" ? [COMMON] : []), ...scene.passes.map(p => p.name)],
+      clean = tab => Insert.stripComments(sourceOf(scene, tab) || "");
+    let added = 0;
+    for (const item of users) {
+      if (!/^[A-Za-z_]\w*$/.test(item?.name || "")) continue;
+      const word = new RegExp(`\\b${item.name}\\b`),
+        declared = code => new RegExp(`\\buniform\\s+[^;]*\\b${item.name}\\b`).test(code);
+      if (tabs.some(tab => declared(clean(tab)))) continue;
+      const using = tabs.filter(tab => word.test(clean(tab)));
+      if (!using.length) continue;
+      const line = ParameterTools.declarationLine({ name: item.name, type: item.type, value: item.value, options: {} });
+      for (const tab of using.includes(COMMON) ? [COMMON] : using) {
+        setSourceOf(scene, tab, Insert.codeEdit(sourceOf(scene, tab), 0, { global: line }).src);
+        added++;
+      }
+    }
+    return added;
   };
-  // 파라미터를 지우기 전에, 선언 없이 쓰는 탭에 'uniform 타입 이름;'을 넣는다(값은 0이 된다). Ctrl+Z로 되돌릴 수 있다.
-  const declareParameter = (name, type) => {
-    const tabs = implicitParameterUses(name);
-    if (disposed || !tabs.length) return false;
-    const array = /^(\w+)\[(\d+)\]$/.exec(type),
-      line = array ? `uniform ${array[1]} ${name}[${array[2]}];` : `uniform ${type} ${name};`;
+  // '파라미터 추가': 선언 줄(어노테이션 포함)을 지금 편집 중인 탭(편집기가 닫혀 있으면 Image) 맨 위에 넣고 실행한다.
+  // 실행에 성공하면 어노테이션 동기화가 파라미터를 등록한다. Ctrl+Z로 되돌릴 수 있다.
+  const addParameterDeclaration = line => {
+    if (disposed || typeof line !== "string") return false;
+    const name = /\buniform\s+\w+\s+(\w+)/.exec(line)?.[1];
+    // 코드가 이미 그 이름을 선언했으면 다시 넣지 않는다(겹친 선언은 컴파일 오류)
+    if (
+      name &&
+      tabNames().some(tab =>
+        new RegExp(`\\buniform\\s+[^;]*\\b${name}\\b`).test(Insert.stripComments(sourceOf(project, tab) || ""))
+      )
+    )
+      return true;
+    document.dispatchEvent(new Event("shader-before-parameter-change"));
     rememberEditor();
-    // Common은 모든 패스 앞에 붙으므로, Common도 쓰고 있으면 Common 한 곳에만 넣는다(패스마다 넣으면 선언이 겹친다).
-    for (const tab of tabs.includes(COMMON) ? [COMMON] : tabs)
-      setSourceOf(project, tab, Insert.codeEdit(sourceOf(project, tab), 0, { global: line }).src);
+    const tab = openState && tabExists(selected) ? selected : "Image";
+    setSourceOf(project, tab, Insert.codeEdit(sourceOf(project, tab), 0, { global: line }).src);
     renderEditor();
     recordEdit(false, true);
-    apply();
-    return true;
+    const ok = apply();
+    if (ok) setStatus(`${tab}에 선언을 넣었습니다 · ${line.split(";")[0]} · Ctrl+Z로 되돌리기`);
+    return ok;
+  };
+  // 파라미터 삭제: 코드가 선언했으면 그 선언도 지운다(코드가 파라미터의 주인 — 남겨 두면 어노테이션 동기화가 다시 등록한다).
+  // 선언 삭제와 등록 해제를 Undo 한 번으로 되돌린다. 코드가 아직 그 이름을 쓰면 실행이 실패하고 오류는 편집기에 보인다.
+  // 돌려주는 값: 코드에 선언이 없었으면 null(등록만 지운다), 있었으면 { applied: 실행 성공 여부 }
+  const removeParameter = name => {
+    if (disposed) return null;
+    const edits = tabNames()
+      .map(tab => [tab, ParameterTools.removeDeclaration(sourceOf(project, tab) || "", name)])
+      .filter(([, result]) => result.removed);
+    if (!edits.length) return null;
+    document.dispatchEvent(new Event("shader-before-parameter-change"));
+    rememberEditor();
+    for (const [tab, result] of edits) setSourceOf(project, tab, result.source);
+    try {
+      renderer.removeUniform(name, { keepOnError: true });
+    } catch (_) {
+      // 마지막 성공 코드로 다시 만드는 일이 실패해도 아래 실행이 지금 코드로 다시 컴파일하고 오류를 알린다
+    }
+    renderEditor();
+    recordEdit(false, true);
+    return { applied: apply() };
   };
   const setParameterValues = items => {
     if (disposed || !items.length) return false;
@@ -1857,6 +1900,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     check();
     const { data, project: next } = Pack.parse(text);
     const state = data.version === 3 ? settings?.validatePack(data.settings) : null;
+    // 자동 선언 시절의 Pack: 등록된 파라미터를 선언 없이 썼으면 코드에 선언을 넣는다(검사 · 컴파일 전에)
+    if (state) declareRegistered(next, state.user);
     if (data.version === 3 && !state) throw new Error("설정 복원 API를 사용할 수 없습니다.");
     const { ids, decoded } = Pack.decodeTextures(data.textures);
     Pack.checkReferences(next, ids);
@@ -1954,6 +1999,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       if (data.version !== 1) throw new Error("저장된 프로젝트 버전이 다릅니다.");
       const next = validateProject(data.project),
         before = copy(project);
+      const migrated = declareRegistered(next, renderer.getUserUniforms());
       const detached = detachMissing(next);
       project = next;
       selected = "Image";
@@ -1968,6 +2014,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         renderEditor();
         preview(true); // 새 프로젝트: 고정과 상관없이 고른 탭을 보여 준다
         if (detached) setStatus(`${detached}개 이미지 연결이 해제됐습니다. 파일을 다시 불러오세요.`, "is-dirty");
+        else if (migrated)
+          setStatus(
+            `코드에 선언이 없던 파라미터 선언 ${migrated}줄을 코드 맨 위에 넣었습니다(앱이 선언을 대신 넣지 않습니다).`
+          );
       }
     } catch (error) {
       showError(error);
@@ -2654,8 +2704,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     insertSnippet,
     insertCode,
     writeParameterDefaults,
-    implicitParameterUses,
-    declareParameter,
+    reportCompileError,
+    addParameterDeclaration,
+    removeParameter,
     setParameterValues,
     beginParameterChange,
     getEditorSource: () => $("studioCode").value,

@@ -209,19 +209,20 @@
         assert(JSON.stringify(renderer.getPassDefinitions())===old,"채널 오류가 기존 패스 구성을 손상시킴");
         await capture();equalPixel(pixel("A"),[255,0,0,255],"still red");
       });
-      await check("14. Uniform float/int/bool/vec2/vec3/vec4 자동 선언", async () => {
+      await check("14. Uniform float/int/bool/vec2/vec3/vec4 선언·업로드", async () => {
         const uniforms=[ ["uGain","float",.75],["uCount","int",7],["uFlag","bool",true],
           ["uVec2","vec2",[0,.5]],["uVec3","vec3",[.1,.3,.4]],["uVec4","vec4",[.2,.4,.6,.8]] ];
         const names=[];
         try {
           for(const [name,type,value] of uniforms) {renderer.defineUniform(name,type,value);names.push(name);}
-          renderer.setPasses([pass("A",frag("fragColor=uFlag?vec4(uGain,float(uCount)/255.,uVec2.y+uVec3.r+uVec4.r,1.):vec4(0.);"))]);
+          // 파라미터 선언은 코드가 한다(앱이 대신 넣지 않는다)
+          renderer.setPasses([pass("A",frag("fragColor=uFlag?vec4(uGain,float(uCount)/255.,uVec2.y+uVec3.r+uVec4.r,1.):vec4(0.);").replace("void main","uniform float uGain;uniform int uCount;uniform bool uFlag;uniform vec2 uVec2;uniform vec3 uVec3;uniform vec4 uVec4;\nvoid main"))]);
           await capture();equalPixel(pixel("A"),[191,7,204,255],"all types",3);
           renderer.setUniform("uGain",.25);await capture();assert(near(pixel("A")[0],64,2),"setUniform 값 미전송");
         } finally {renderer.setPasses([]);for(const name of names.reverse())renderer.removeUniform(name);}
       });
       await check("15. Pack 검증/적용/실패 롤백 (실제 컴파일)", async () => {
-        const src=frag("fragColor=vec4(uPackTest,0.,0.,1.);");
+        const src=frag("fragColor=vec4(uPackTest,0.,0.,1.);").replace("void main","uniform float uPackTest;\nvoid main");   // 파라미터 선언은 코드가 한다
         const scene={image:copy,passes:[pass("A",src)],imageChannels:{0:{buffer:"A",frame:"current"}}};
         const items=[{name:"uPackTest",type:"float",value:.6,options:{}}];
         assert(renderer.validatePortable(scene,items)===true,"유효한 Pack 검증 실패");
@@ -295,14 +296,14 @@
           await capture();equalPixel(pixel("A"),[0,0,255,255],"restored texture");
         });
       }); else skip("22. Context Loss 이후 Texture 재업로드",!loseExt ? "WEBGL_lose_context 미지원" : !isolated ? "IndexedDB 격리 불가" : "선행 Context 복구 실패로 후속 검사 생략");
-      if(!gl.isContextLost()) await check("23. GPU 컴파일 오류: 자동 Uniform 후 원본 줄 번호", async () => {
-        renderer.defineUniform("uDiagnosticA","float",.2);renderer.defineUniform("uDiagnosticB","float",.4);
-        const bad="#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){fragColor=vec4(UNDEFINED_SYMBOL);}";
+      if(!gl.isContextLost()) await check("23. GPU 컴파일 오류: 자동 선언(Shadertoy 이름) 후 원본 줄 번호", async () => {
+        // 파라미터 선언은 넣지 않지만 Shadertoy 이름(iTime · iFrame)의 선언은 넣는다 — 그 줄만큼 밀린 오류 번호를 되돌린다
+        const bad="#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){fragColor=vec4(iTime+float(iFrame)+UNDEFINED_SYMBOL);}";
         let error;try{renderer.validateFragment(bad);}catch(e){error=e;}
         const line=Number(/ERROR:\s*\d+:(\d+):/.exec(error?.message||"")?.[1]);
-        assert(error?.glslInjected?.after===2&&error.glslInjected.count===2, "자동 Uniform 두 줄의 삽입 위치가 확인되지 않음");
-        assert(line===6&&line-error.glslInjected.count===4, `GPU 오류 위치: 기대 6→4행, 실제 ${line}`);
-      }); else skip("23. GPU 컴파일 오류: 자동 Uniform 후 원본 줄 번호","Context 복구 실패로 후속 검사 생략");
+        assert(error?.glslInjected?.after===2&&error.glslInjected.count>=2, "자동 선언 줄의 삽입 위치가 확인되지 않음");
+        assert(line-error.glslInjected.count===4, `GPU 오류 위치: 기대 원본 4행, 실제 ${line}-${error.glslInjected.count}`);
+      }); else skip("23. GPU 컴파일 오류: 자동 선언 후 원본 줄 번호","Context 복구 실패로 후속 검사 생략");
       if(!gl.isContextLost()) await check("24. Ray Marching Starter: GLSL/Uniform/Heatmap", async () => {
         for(const [name,type,value,options] of Shader.rayUniforms) renderer.defineUniform(name,type,value,options);
         renderer.setFragment(Shader.raymarch);const shot=await inspectPNG(await capture()),x=shot.width>>1,y=shot.height>>1;
@@ -312,11 +313,13 @@
       }); else skip("24. Ray Marching Starter","Context 복구 실패로 후속 검사 생략");
       const frames = (count = 3) => new Promise(resolve => {const step = n => n ? requestAnimationFrame(() => step(n - 1)) : resolve();step(count);});
       const drainErrors = () => {for(let i=0;i<32 && gl.getError()!==gl.NO_ERROR;i++);};
-      if(!gl.isContextLost()) await check("25. Uniform ivec/uint/bvec/mat 자동 선언·업로드", async () => {
+      if(!gl.isContextLost()) await check("25. Uniform ivec/uint/bvec/mat 선언·업로드", async () => {
         const items=[["uI","ivec2",[3,10]],["uU","uint",20],["uB","bvec2",[false,true]],["uM","mat2",[1,0,.5,1]]],names=[];
         try {
           for(const [name,type,value] of items) {renderer.defineUniform(name,type,value);names.push(name);}
-          renderer.setPasses([pass("A",frag("fragColor=vec4(float(uI.y)/255.,float(uU)/255.,uB.y?1.:0.,uM[1][0]);"))]);
+          // 파라미터 선언은 코드가 한다(앱이 대신 넣지 않는다)
+          const declared=frag("fragColor=vec4(float(uI.y)/255.,float(uU)/255.,uB.y?1.:0.,uM[1][0]);").replace("void main","uniform ivec2 uI;uniform uint uU;uniform bvec2 uB;uniform mat2 uM;\nvoid main");
+          renderer.setPasses([pass("A",declared)]);
           await capture();equalPixel(pixel("A"),[10,20,255,128],"extended types",2);
           renderer.setUniform("uB",[false,false]);renderer.setUniform("uM",[1,0,.25,1]);await capture();equalPixel(pixel("A"),[10,20,0,64],"updated values",2);
         } finally {renderer.setPasses([]);for(const name of names.reverse())renderer.removeUniform(name);}

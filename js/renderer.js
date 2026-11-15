@@ -113,6 +113,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const userUniforms = new Map();
   // Comparison changes GPU inputs only. Persistence, presets and history keep the editable values.
   let uniformPreview = null;
+  // 마지막 성공 프로그램이 지금 파라미터 구성과 어긋나 있는지(파라미터를 지웠는데 코드가 아직 그 이름을 써 컴파일 실패)
+  let programsStale = false;
   // 마우스는 0~1 상대 좌표로 보관하고 Uniform 전송 시 버퍼 픽셀 좌표로 환산한다.
   // uMouse를 vec4로 선언하면 zw에 클릭 위치를 전달한다: z>0 버튼 누름 중, w>0 누른 직후 첫 프레임.
   const mouse = [-1, -1],
@@ -437,8 +439,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // channels: 이 패스의 채널 sampler 타입 4개(PassManager.channelTypes) — 선언하지 않은 iChannelN을 그 타입으로 넣는다.
   const buildFragment = (source, context = shared, channels = SAMPLER_2D) => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
+    // 파라미터(사용자 Uniform) 선언은 대신 넣지 않는다: 코드가 선언해야 그 이름을 쓸 수 있다('파라미터 추가'는 선언 줄을 코드에 쓴다).
+    // 여기서는 코드가 선언한 파라미터의 타입이 등록 타입과 같은지만 확인한다.
     const declarations = [],
-      code = Prepare.blankComments(context.common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
+      code = Prepare.blankComments(context.common + "\n" + source);
     // 배열: uniform float uW[4]; · uniform float[4] uW; 둘 다 타입 "float[4]"
     const uniforms = [
       ...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)(\s*\[\s*\d+\s*\])?\s+([^;{}]+);/g),
@@ -452,7 +456,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           declared = size ? `${match[1]}[${size}]` : match[1];
         if (declared !== item.type)
           throw new Error(`${name}: GLSL 선언(${declared})과 등록 타입(${item.type})이 다릅니다.`);
-      } else declarations.push(`uniform ${item.type} ${name};`);
+      }
     }
     return Prepare.prepareFragment(source, declarations, {
       common: context.common,
@@ -613,6 +617,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     program = next;
     uniforms = nextUniforms;
     fragmentSource = source;
+    programsStale = false;
     imageTypes = types;
     uniformPreview = null;
     if (previous) gl.deleteProgram(previous);
@@ -1458,7 +1463,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     writeData(item);
     return true;
   };
-  const removeUniform = name => {
+  // keepOnError: 다시 컴파일이 실패해도(코드가 선언 없이 그 이름을 쓰던 경우) 지운 채로 두고 오류를 던진다.
+  // 화면은 마지막 성공 프로그램을 계속 그리고, 프로그램이 지금 파라미터 구성과 어긋났다고 표시해(programsStale)
+  // 다음 적용 때 코드가 같아도 모든 패스를 다시 컴파일한다 — 그래야 코드를 고치기 전에는 오류가 남는다.
+  const removeUniform = (name, { keepOnError = false } = {}) => {
     if (disposed || lost) throw new Error("현재 Uniform을 제거할 수 없습니다.");
     const item = userUniforms.get(name);
     if (!item) return false;
@@ -1466,7 +1474,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       replacePrograms(fragmentSource, passManager.refreshPrograms);
     } catch (error) {
-      userUniforms.set(name, item);
+      if (keepOnError) programsStale = true;
+      else userUniforms.set(name, item);
       throw error;
     }
     return true;
@@ -1607,13 +1616,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (disposed || lost) throw new Error("현재 프로젝트를 적용할 수 없습니다.");
     assertOnline();
     return withCommon(scene, commonChanged => {
-      const types = typesOf(scene.imageChannels),
-        imageChanged = commonChanged || scene.image !== fragmentSource || types.join() !== imageTypes.join();
+      // 프로그램이 파라미터 구성과 어긋나 있으면(removeUniform keepOnError) 코드가 같아도 모두 다시 만든다.
+      const rebuild = commonChanged || programsStale,
+        types = typesOf(scene.imageChannels),
+        imageChanged = rebuild || scene.image !== fragmentSource || types.join() !== imageTypes.join();
       let result;
       const update = () => {
         result = passManager.updatePasses(scene.passes, scene.imageChannels);
         // 구조가 그대로면 updatePasses는 소스가 바뀐 패스만 다시 만든다. Common이 바뀌었으면 나머지도 다시 만든다.
-        if (commonChanged && !result.structural) passManager.refreshPrograms();
+        if (rebuild && !result.structural) passManager.refreshPrograms();
       };
       try {
         if (imageChanged) replacePrograms(scene.image, update, types);

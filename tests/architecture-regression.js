@@ -115,18 +115,18 @@ async function main(){
   gl2.getUniformLocation=oldGPULocation;gl2.createProgram=createGPUProgram;
   r.setPasses([{name:"A",fragment:src,format:"rgba8",scale:1,channels:{0:{buffer:"A",frame:"previous"}}}],{0:{buffer:"A",frame:"current"}});
   r.defineUniform("uSharedGain","float",.75);
-  check(gl2.compiledSources.some(text=>text.includes("uniform float uSharedGain;")&&text.includes("out vec4 fragColor")),"사용자 Uniform 선언이 Buffer GLSL에도 적용됨");
-  // 삽입된 Uniform 줄이 GPU 오류 번호를 밀어도 원본 위치로 복원할 수 있어야 한다.
-  const invalid=`#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){GLSL_ERROR}`;
+  check(!gl2.compiledSources.some(text=>text.includes("uniform float uSharedGain;")),"파라미터 선언은 어느 패스에도 대신 넣지 않음(코드가 선언한다)");
+  // 삽입된 선언 줄(Shadertoy 이름 iTime → uTime)이 GPU 오류 번호를 밀어도 원본 위치로 복원할 수 있어야 한다.
+  const invalid=`#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){float t = iTime; GLSL_ERROR}`;
   const diagnostic=source=>{try{r.validateFragment(source);}catch(error){return error;}throw new Error("컴파일 오류가 발생하지 않음");};
   const rawLine=error=>Number(/ERROR: 0:(\d+):/.exec(error.message)?.[1]);
   const shifted=diagnostic(invalid), shift=shifted.glslInjected;
-  check(shift?.after===2&&shift.count===1&&rawLine(shifted)===5&&rawLine(shifted)-shift.count===4,"자동 Uniform 컴파일 오류 원본 줄 보정");
-  const explicit=diagnostic(invalid.replace("out vec4 fragColor;","uniform float uSharedGain;\nout vec4 fragColor;"));
+  check(shift?.after===2&&shift.count>=1&&rawLine(shifted)-shift.count===4,"자동 선언 줄이 있어도 컴파일 오류 원본 줄 보정");
+  const explicit=diagnostic(invalid.replace("float t = iTime; ","").replace("out vec4 fragColor;","uniform float uSharedGain;\nout vec4 fragColor;"));
   check(!explicit.glslInjected&&rawLine(explicit)===5,"GLSL에 Uniform 직접 선언 시 번호 보정하지 않음");
   const priorBuffer=r.getPassDefinitions()[0].fragment;let bufferError;
   try{r.setPassFragment("A",invalid);}catch(error){bufferError=error;}
-  check(bufferError?.glslInjected?.count===1&&r.getPassDefinitions()[0].fragment===priorBuffer,"Buffer 진단 정보 전달 및 컴파일 롤백");
+  check(bufferError?.glslInjected?.count===shift.count&&r.getPassDefinitions()[0].fragment===priorBuffer,"Buffer 진단 정보 전달 및 컴파일 롤백");
   r.removeUniform("uSharedGain");
   r.setPassFragment("A",src.replace("out vec4 fragColor;","uniform int uConflict;\nout vec4 fragColor;"));
   assert.throws(()=>r.defineUniform("uConflict","float",.5),/선언/);
