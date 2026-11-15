@@ -1,4 +1,4 @@
-// The annotation lesson teaches one concept at a time, with stable references and scoped captions.
+// The annotation example renders one concept at a time with stable visual references.
 (async () => {
   const r=window.shaderPlayground,studio=window.shaderStudio,$=id=>document.getElementById(id);
   const check=(ok,label)=>{if(!ok)throw new Error(label);console.log(`PASS ${label}`);};
@@ -15,12 +15,9 @@
     document.querySelector('.gallery-card[data-id="annotations"]').click();
     await until(()=>r.getUserUniforms().some(u=>u.name==='uLab'),'새 실험 예제 등록');
     $('tab-uniforms').click();
-    check($('annotationLesson').hidden,'기본 행성 보기에는 실험 안내 없음');
     set('uView',4);
-    check($('annotationLessonTitle').textContent.includes('배열')&&!$('annotationLesson').hidden,'타입 실험은 설명이 있는 배열부터 시작');
     check(!!row('uPoints')&&!row('uMatrix2')&&!row('uGrid')&&!row('uAutoGradient'),'배열에 필요한 조절기만 표시');
     check(r.getUserUniforms().find(u=>u.name==='uRotation').value===0,'기본 회전은 0도');
-    check($('annotationLessonText').textContent.includes('빈 원'),'꺼진 배열 원소의 윤곽과 번호 설명');
     set('uLab',1);
     check(!!row('uGrid')&&!row('uPoints')&&!row('uMatrix4'),'벡터로 전환하면 배열·행렬 항목 숨김');
     set('uPaletteIndex',1);
@@ -29,12 +26,11 @@
     set('uLab',2);set('uMatrixMode',0);
     check(!!row('uMatrix2')&&!row('uMatrix3')&&!row('uMatrix4'),'한 번에 하나의 행렬만 편집');
     set('uMatrixMode',1);
-    check(!!row('uMatrix3')&&!!row('uPad')&&!row('uRotation'),'동차 좌표에 맞는 조절기와 설명');
+    check(!!row('uMatrix3')&&!!row('uPad')&&!row('uRotation'),'동차 좌표에 맞는 조절기');
     set('uMatrixMode',2);
     check(!!row('uMatrix4')&&!!row('uLabTint')&&!row('uMatrix2'),'RGBA 변환에 맞는 조절기');
     set('uLab',3);
     check(!!row('uAutoGradient')&&!!row('uGlow')&&!!row('uLinearCurve')&&!row('uPoints'),'번호가 있는 모든 램프를 함께 편집');
-    check($('annotationLessonText').textContent.includes('색 띠 0~4'),'색 띠와 곡선의 번호 설명');
 
     r.beginOffline({width:400,height:400});offline=true;
     const shot=()=>{const c=r.renderOfflineFrame({time:0,delta:0,frame:0}),copy=document.createElement('canvas');copy.width=c.width;copy.height=c.height;const ctx=copy.getContext('2d');ctx.drawImage(c,0,0);return ctx.getImageData(0,0,c.width,c.height).data;};
@@ -60,13 +56,7 @@
     check(differs(input,output)&&leftSame(input,output),'mat4 알파 변경도 오른쪽 결과만 변경');
     r.endOffline();offline=false;
     set('uView',3);
-    check(!$('annotationLesson').hidden&&$('annotationLessonTitle').textContent.includes('램프'),'기존 램프 보기도 설명이 있는 새 그래프 사용');
-    set('uView',0);check($('annotationLesson').hidden,'실험을 나가면 안내 숨김');
-    set('uView',4);
-    check(studio.setProject({image:'void mainImage(out vec4 c,in vec2 p){c=vec4(0.2);}',passes:[],imageChannels:{}}),'다른 프로젝트 적용');
-    refresh();check($('annotationLesson').hidden,'같은 이름의 파라미터가 남아도 다른 프로젝트에 안내가 누출되지 않음');
-    studio.undo();refresh();
-    check(!$('annotationLesson').hidden,'Undo로 예제를 복구하면 안내도 복구');
+    check(!!row('uAutoGradient')&&!!row('uAutoCurve'),'램프 보기에서도 기존 조절기 유지');
   } finally {
     if(offline)r.endOffline();studio.setProject(before);r.setUserUniforms(users);r.setResolutionScale(scale);clearInterval(timer);
   }

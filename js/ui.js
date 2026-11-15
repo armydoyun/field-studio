@@ -1425,7 +1425,6 @@ const mount = (renderer, input, settings) => {
       renderer.setUniformPreview(comparison.items);
       viewingA = true;
       syncComparison();
-      syncAnnotationLesson();
     })
   );
   listen($("compareB"), "click", () =>
@@ -1433,7 +1432,6 @@ const mount = (renderer, input, settings) => {
       renderer.setUniformPreview(null);
       viewingA = false;
       syncComparison();
-      syncAnnotationLesson();
     })
   );
   listen($("compareClear"), "click", () =>
@@ -2296,79 +2294,9 @@ const mount = (renderer, input, settings) => {
       })
       .map(item => item.name);
   };
-  // This source-owned lesson marker keeps guidance attached to copied/saved examples,
-  // and prevents a gallery caption from leaking into an unrelated project or buffer preview.
-  const syncAnnotationLesson = (items = renderer.getUserUniforms()) => {
-    const box = $("annotationLesson");
-    if (!box) return;
-    const values = new Map(items.map(item => [item.name, item.value])),
-      view = values.get("uView"),
-      active =
-        renderer.getFragmentSource().includes("// FIELD Studio: annotation-lab-v2") &&
-        (view === 3 || view === 4) &&
-        !renderer.getStats().previewPass &&
-        $("previewNotice").hidden &&
-        !viewingA;
-    box.hidden = !active;
-    if (!active) return;
-    const chapter = view === 3 ? 3 : values.get("uLab"),
-      matrix = values.get("uMatrixMode"),
-      vector = values.get("uPaletteIndex"),
-      hints = [
-        [
-          "배열 · 번호 하나가 원소 하나",
-          "0·1·2번 원의 위치, 크기, 색을 각각 바꿔 보세요. 빈 원은 꺼진 원소의 위치입니다.",
-          "uPoints · uSizes · uColors · uEnabled",
-        ],
-        vector === 1
-          ? [
-              "벡터 · RGB 채널",
-              "가로 네 구역에서 채널을 강조하고, 각 색의 주파수와 켜짐 상태를 바꿔 보세요.",
-              "uSlots · uBands · uHash · uChannels",
-            ]
-          : vector === 2
-            ? [
-                "벡터 · 격자와 비트",
-                "위는 정수 XY 격자, 아래는 네 그룹의 4비트 값입니다. 각 값을 바꿔 켜진 칸을 확인하세요.",
-                "uGrid · uShift · uAxes / uCodes · uQuadrants",
-              ]
-            : [
-                "벡터 · 채널, 격자, 비트",
-                "위: RGB 채널 / 가운데: XY 격자 / 아래: 네 그룹의 4비트. uPaletteIndex로 한 종류에 집중할 수 있습니다.",
-                "uChannels · uGrid · uCodes",
-              ],
-        matrix === 2
-          ? [
-              "행렬 · 색과 알파 변환",
-              "왼쪽 0은 입력 색, 오른쪽 1은 mat4를 적용한 색입니다. 알파를 줄이면 체크무늬가 드러납니다.",
-              "uMatrix4 · uLabTint · uGain · uBias",
-            ]
-          : matrix === 1
-            ? [
-                "행렬 · 동차 좌표",
-                "왼쪽 0은 기준, 오른쪽 1은 mat3 변환 결과입니다. 마지막 행은 원근 나눗셈에 쓰입니다.",
-                "uMatrix3 · uPad",
-              ]
-            : [
-                "행렬 · XY 선형 변환",
-                "왼쪽 0은 기준, 오른쪽 1은 mat2 변환 결과입니다. 옅은 윤곽선과 비교하며 확대·기울이기·회전을 해 보세요.",
-                "uMatrix2 · uRotation",
-              ],
-        [
-          "램프 · 색 띠와 곡선",
-          "왼쪽 색 띠 0~4, 오른쪽 곡선 0~2입니다. 파라미터 설명의 번호와 맞춰 색·보간·정지점을 바꿔 보세요.",
-          "체크무늬는 알파 / 곡선 1의 Y 범위는 -1~1",
-        ],
-      ],
-      hint = hints[chapter] || hints[0];
-    setText("annotationLessonTitle", hint[0]);
-    setText("annotationLessonText", hint[1]);
-    setText("annotationLessonHint", hint[2]);
-  };
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
-    syncAnnotationLesson(items);
     syncComparison();
     const search = $("uniformSearch").value.trim().toLowerCase();
     uniformSnapshot = snapshotOf(items);
@@ -3887,7 +3815,6 @@ const mount = (renderer, input, settings) => {
   const updateStats = () => {
     syncComparison();
     const changedKey = syncChanges();
-    syncAnnotationLesson();
     const s = renderer.getStats();
     const storage = settings.status();
     setText("storageStatus", storage.message);
