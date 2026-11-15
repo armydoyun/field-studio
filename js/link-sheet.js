@@ -86,7 +86,7 @@ const meter = (item, link, active = () => true) => {
     gauge = bar(`${item.name} 값(연결이 정함)`),
     value = element("output", "link-meter-value"),
     note = element("span", "link-meter-note", "연결이 정함");
-  node.title = `${describe(link)} — 값은 연결이 프레임마다 정합니다. 연결 버튼(사슬)에서 바꾸거나 끄세요.`;
+  node.title = describe(link);
   node.append(gauge.node, value, note);
   let idle = null;
   const update = current => {
@@ -158,7 +158,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
   const row = (label, ...controls) => {
     const head = element("span", "link-label", label),
       body = element("div", "link-control");
-    body.append(...controls);
+    body.append(...controls.filter(Boolean));
     grid.append(head, body);
     return body;
   };
@@ -183,10 +183,11 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       "link-sources"
     )
   );
+  const help = element("button", "ui-link link-hint", "연결 사용법");
+  help.type = "button";
+  help.dataset.guide = "connections";
   if (!link) {
-    node.append(
-      element("p", "ui-hint link-hint", "무엇이 이 값을 움직일지 고르세요: 소리 · MIDI 노브 · 흔들기 · 키프레임.")
-    );
+    node.append(help);
     return { node, update: () => {} };
   }
 
@@ -200,11 +201,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       return [band, gauge];
     });
     const meters = element("div", "link-bands"),
-      empty = element(
-        "p",
-        "ui-hint link-note",
-        "켜진 오디오가 없습니다. 입력 채널에 오디오 파일이나 마이크를 연결하면 세기가 보입니다."
-      );
+      empty = element("p", "ui-hint link-note", "오디오 입력 없음");
     // 막힌 곳에서 바로 해결하러 간다: 편집기의 입력 채널 줄을 연다
     if (openInputs) {
       const go = element("button", "ui-btn--xs link-go", "입력 채널 열기");
@@ -233,7 +230,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
   if (link.source === "midi") {
     const learn = element("button", "ui-btn--block link-learn", "학습 — 누르고 노브를 움직이기");
     learn.type = "button";
-    learn.title = "누른 뒤 컨트롤러의 노브 · 슬라이더를 움직이면 그 CC로 연결합니다";
+    learn.title = "MIDI 노브 학습";
     const status = element("p", "ui-hint link-note");
     learn.addEventListener("click", async () => {
       if (learn.getAttribute("aria-pressed") === "true") {
@@ -346,15 +343,8 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
         ],
         looping ? "loop" : "once",
         next => change({ loop: next === "loop" ? Math.max(1, Math.ceil(last + 0.001)) : 0 })
-      ),
-      explain = element(
-        "p",
-        "ui-hint link-note",
-        looping
-          ? `${seconds(link.loop)}마다 0초로 돌아가 키를 되풀이합니다.`
-          : "재생 시간대로 한 번 지나가고, 마지막 키 값을 유지합니다."
       );
-    row("시간 기준", mode, explain);
+    row("시간 기준", mode);
     if (looping) {
       const length = element("div", "link-inline"),
         status = element("p", "ui-hint link-note link-loop-status"),
@@ -384,13 +374,6 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
           ],
           link.wrap ? "wrap" : "hold",
           next => change({ wrap: next === "wrap" })
-        ),
-        element(
-          "p",
-          "ui-hint link-note",
-          link.wrap
-            ? "마지막 키에서 다음 바퀴의 첫 키까지 값을 이어 갑니다. 바퀴가 바뀔 때 튀지 않습니다."
-            : "마지막 키 값을 바퀴 끝까지 유지하고, 다음 바퀴에서 첫 키 값으로 바로 바뀝니다."
         )
       );
       live.push(() => {
@@ -402,7 +385,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     const open = element("button", "ui-btn--block link-open-timeline", "타임라인에서 편집");
     open.type = "button";
     open.addEventListener("click", () => openTimeline(item.name));
-    row("키", element("p", "ui-hint link-note", `키 ${link.keys.length}개 · 아래 타임라인에서 고칩니다.`), open);
+    row("키", element("p", "ui-hint link-note", `키 ${link.keys.length}개`), open);
     row(
       "기본 잇기",
       segmented(
@@ -413,11 +396,6 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
         ],
         link.ease,
         ease => change({ ease })
-      ),
-      element(
-        "p",
-        "ui-hint link-note",
-        "키마다 다르게(계단 · 천천히 시작 등) 하려면 타임라인에서 키를 골라 '잇기'를 바꿉니다."
       )
     );
   }
@@ -509,17 +487,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     });
     smooth.addEventListener("change", () => change({ smooth: Number(smooth.value) }));
     line.append(smooth, field);
-    row(
-      "부드럽게 따라가기",
-      line,
-      element(
-        "p",
-        "ui-hint link-note",
-        link.source === "keys"
-          ? "키프레임 값을 이 시간만큼 늦게 따라갑니다. 보통은 0초."
-          : "0초 = 바로 바뀜. 값이 너무 튀면 0.1 ~ 0.3초."
-      )
-    );
+    row("부드럽게 따라가기", line);
   }
 
   // ---- 결과 ----
@@ -529,7 +497,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
   resultLine.append(result.node, resultValue);
   row("결과", resultLine);
   let idle = null;
-  node.append(grid);
+  node.append(grid, help);
   const update = current => {
     for (const draw of live) draw();
     const v = typeof current === "boolean" ? (current ? 1 : 0) : current;

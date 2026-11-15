@@ -50,5 +50,18 @@ with sync_playwright() as p:
     check('open' in page.evaluate('studioCalls'),'the tour opens the editor for its editor steps')
     check(after==before,f'on a phone the editor and drawer panel return to closed: {before} -> {after}')
     check(errors==[],f'no page exceptions: {errors}');page.close()
+    # Every task tour must fit both portrait and short landscape viewports.
+    for width,height in [(390,844),(640,360)]:
+        page,errors=scenario(width,height,'() => {}')
+        tours=page.evaluate('Object.values(__testModules).find(m=>m.TOURS)?.TOURS.map(t=>({id:t.id,count:t.steps.length}))')
+        for tour in tours:
+            page.evaluate('(id) => guide.startTour(id)',tour['id'])
+            for step in range(tour['count']):
+                page.wait_for_timeout(35)
+                fits=page.evaluate("""() => {const r=document.querySelector('.guide-tour-card').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;}""")
+                assert fits,f"{width}x{height} {tour['id']} step {step+1} clipped"
+                page.evaluate('() => document.querySelector(".guide-tour-card .ui-btn--primary").click()')
+        check(not errors,f'{width}x{height}: all task cards fit, no exceptions')
+        page.close()
     print(f'PASS all {n[0]} tour state checks')
     browser.close()

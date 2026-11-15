@@ -326,7 +326,7 @@ const mount = renderer => {
       name = stats.previewPass,
       output = $("profilePixel");
     if (!name) {
-      output.textContent = "버퍼를 선택하면 포인터 위치의 실제 값을 읽습니다. (현재 Image 표시 중)";
+      output.textContent = "Image 표시 중 · 버퍼 미선택";
       return;
     }
     const pass = renderer.getPasses().find(p => p.name === name);

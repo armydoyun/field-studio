@@ -185,7 +185,7 @@ const mount = (renderer, input, settings) => {
   // 걸음 크기: 슬라이더 step → 정수 1 → 실수는 현재 값 크기의 1%(최소 0.01).
   const scrubbable = (handle, { kind, read, write, min, max, step }) => {
     handle.classList.add("is-scrub");
-    handle.title = "좌우로 끌어 값 조절 · Shift 정밀 · Ctrl 크게";
+    handle.title = "끌어서 값 조절 · Shift 정밀";
     handle.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
       const start = read();
@@ -420,7 +420,7 @@ const mount = (renderer, input, settings) => {
       flip.type = "button";
       flip.className = "ui-chip uniform-dir-chip uniform-dir-flip";
       flip.textContent = "뒤";
-      flip.title = "앞(+Z)/뒤(-Z) 반구 전환 · 패드에서 끌 때 어느 쪽 반구를 쓸지 정한다";
+      flip.title = "앞·뒤 반구 전환";
       flip.setAttribute("aria-label", `${item.name} 뒤쪽(-Z) 반구`);
       flip.addEventListener("click", () => {
         const v = current();
@@ -844,7 +844,7 @@ const mount = (renderer, input, settings) => {
     bar.setAttribute("aria-hidden", "true");
     const track = element("div");
     track.className = "uniform-ramp-track";
-    track.title = "빈 곳을 누르면 정지점 추가 · 손잡이를 끌어 옮기기 · Delete로 지우기";
+    track.title = "정지점 추가·이동 · Delete 삭제";
     const edit = element("div");
     edit.className = "uniform-ramp-edit";
     const picker = element("input");
@@ -1028,7 +1028,7 @@ const mount = (renderer, input, settings) => {
       "aria-label",
       `${item.name} 곡선 · 끌어서 점 옮기기 · 빈 곳 클릭으로 점 추가 · 더블클릭·Delete로 삭제 · [ ] 키로 점 고르기 · 화살표로 이동`
     );
-    pad.title = "점을 끌어 모양 만들기 · 빈 곳 클릭: 점 추가 · 더블클릭: 삭제";
+    pad.title = "곡선 점 추가·이동 · 더블클릭 삭제";
     const edit = element("div");
     edit.className = "uniform-ramp-edit";
     const xLabel = element("label"),
@@ -1390,9 +1390,7 @@ const mount = (renderer, input, settings) => {
     if (comparison)
       setText(
         "compareNotice",
-        viewingA
-          ? "A 미리보기 중 · 저장되는 값은 B입니다. A를 쓰려면 'A를 현재 값으로'를 누르세요."
-          : `A와 다른 값 ${difference}개 · B를 편집·저장합니다. 연결된 값·시간·버퍼 이력은 비교에서 제외합니다.`
+        viewingA ? "A 미리보기 · 저장은 B · 별도 버튼으로 A 적용" : `A와 다른 값 ${difference}개 · 편집·저장은 B`
       );
     $("comparePreviewNotice").hidden = !viewingA;
     for (const id of ["uniformList", "uniformEditor", "presetBar"]) {
@@ -1993,7 +1991,7 @@ const mount = (renderer, input, settings) => {
       apply.textContent = preset.name;
       apply.setAttribute("aria-pressed", String(matchesPreset(preset, users)));
       const compatible = Presets.plan(users, preset, settings.getLinks?.() || []);
-      apply.title = `'${preset.name}' · 적용 가능 ${compatible.applied.length}개 · 건너뜀 ${compatible.skipped.length}개${compatible.legacy ? " · 이전 형식(원래 타입 정보 없음)" : ""} · 두 번 누르면 이름 바꾸기`;
+      apply.title = `적용 가능 ${compatible.applied.length}개 · 건너뜀 ${compatible.skipped.length}개`;
       apply.addEventListener("click", () => applyPreset(preset));
       apply.addEventListener("dblclick", () => renamePreset(index));
       more.className = "preset-more glyph-icon icon-more";
@@ -2152,7 +2150,7 @@ const mount = (renderer, input, settings) => {
     time.step = "0.01";
     time.setAttribute("aria-label", "재생 위치(초)");
     time.placeholder = "초";
-    time.title = "재생 위치(uTime) — 숫자로 옮긴 뒤 값을 바꾸면 이 시간에 키가 찍힙니다";
+    time.title = "재생 위치(uTime, 초)";
     hint.className = "key-nav-hint";
     hint.textContent = "값을 바꾸면 이 시간에 키";
     const current = () => linkOf(item.name) || link,
@@ -2226,15 +2224,11 @@ const mount = (renderer, input, settings) => {
         mode.textContent = loop ? `${Number(loop.toFixed(2))}초` : "한 번";
         mode.classList.toggle("glyph-icon", !!loop);
         mode.classList.toggle("icon-loop", !!loop);
-        mode.title = loop
-          ? `재생 시간을 ${Number(loop.toFixed(2))}초 길이로 잘라 키를 되풀이합니다 — 키의 시간은 바퀴 안의 시간`
-          : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다";
+        mode.title = loop ? `${Number(loop.toFixed(2))}초 반복` : "한 번 재생 · 마지막 값 유지";
         mode.classList.toggle("is-loop", !!loop);
         inner.hidden = !loop;
-        hint.textContent = loop ? "· 값을 바꾸면 여기에 키" : "값을 바꾸면 이 시간에 키(자동 키)";
-        hint.title = loop
-          ? "슬라이더 · 숫자로 값을 바꾸면 이 바퀴 안 시간에 키가 찍힙니다(이미 있으면 값만)"
-          : "슬라이더 · 숫자로 값을 바꾸면 지금 재생 시간에 키가 찍힙니다(이미 있으면 값만)";
+        hint.textContent = "자동 키";
+        hint.title = loop ? "반복 안 현재 시간에 기록" : "현재 재생 시간에 기록";
       }
       if (loop) inner.textContent = `바퀴 안 ${t.toFixed(2)}초`;
     };
@@ -2522,7 +2516,7 @@ const mount = (renderer, input, settings) => {
       const write = element("button");
       write.className = "ui-icon-btn ui-icon-btn--xs write-default-uniform glyph-icon icon-down";
       write.type = "button";
-      write.title = "현재 값을 코드의 @default에 반영 · Ctrl+Z로 되돌리기";
+      write.title = "현재 값을 코드 기본값에 반영";
       write.setAttribute("aria-label", `${item.name} 현재 값을 코드에 반영`);
       write.addEventListener("click", () => writeDefaults([item.name]));
       extras.push(lock, write);
@@ -2587,7 +2581,7 @@ const mount = (renderer, input, settings) => {
         const badge = element("span");
         badge.className = "ui-tag ui-tag--dot link-badge";
         badge.textContent = LinkSheet.describe(link);
-        badge.title = "연결이 프레임마다 이 값을 정합니다(직접 바꿔도 다음 프레임에 덮어씁니다)";
+        badge.title = "연결이 값을 제어합니다";
         title.append(badge);
       }
       const valueEditor = (target, change, compact = true) => {
@@ -3056,7 +3050,7 @@ const mount = (renderer, input, settings) => {
             range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
             if (logScale) {
               range.classList.add("is-log");
-              range.title = "로그 눈금 · 같은 거리를 움직이면 같은 배율로 바뀐다";
+              range.title = "로그 눈금";
             }
             range.value = String(toSlider(item.value));
             range.addEventListener("input", () => {
@@ -3253,55 +3247,55 @@ const mount = (renderer, input, settings) => {
       value: "color",
       label: "색상 선택기 (값 0~1)",
       types: ["vec3", "vec4"],
-      help: "견본·HEX로 고릅니다. @color와 같습니다.",
+      help: "RGB·알파: 0~1",
     },
     {
       value: "hdr",
       label: "HDR 색상 (색 + 밝기 배율)",
       types: ["vec3", "vec4"],
-      help: "견본 색에 밝기 배율(0~10)을 곱해 1보다 밝은 발광·조명 색을 만듭니다. @color hdr와 같습니다.",
+      help: "RGB 밝기: 0~10 · 알파: 0~1",
     },
     {
       value: "dir",
       label: "단위 방향 (다이얼·구 패드)",
       types: ["vec2", "vec3"],
-      help: "값은 늘 길이 1로 맞춰집니다. @dir와 같습니다.",
+      help: "0이 아닌 방향 벡터",
     },
     {
       value: "angle",
       label: "각도 다이얼 (라디안)",
       types: ["float"],
-      help: "0~360°로 보여 주며 누적 회전 수를 따로 표시합니다. 셰이더에는 누적 라디안을 넘깁니다. @angle과 같습니다.",
+      help: "입력 단위: 라디안",
     },
     {
       value: "pos",
       label: "2D 패드 (위치)",
       types: ["vec2"],
-      help: "슬라이더 범위를 패드의 가로·세로로 씁니다. 비우면 -1~1. @pos와 같습니다.",
+      help: "기본 범위: -1~1",
     },
     {
       value: "log",
       label: "로그 눈금 슬라이더",
       types: ["float"],
-      help: "0보다 큰 Min·Max가 필요합니다. 0.01~100처럼 넓은 범위에 좋습니다. @log와 같습니다.",
+      help: "0 < Min < Max",
     },
     {
       value: "enum",
       label: "선택지 (이름 붙은 버튼)",
       types: ["int", "uint"],
-      help: "이름 순서대로 0, 1, 2…가 됩니다. 슬라이더 범위는 이름 수로 정해집니다. @enum과 같습니다.",
+      help: "첫 선택지의 값은 0",
     },
     {
       value: "gradient",
       label: "그라데이션 (색 램프)",
       types: ["sampler2D"],
-      help: "셰이더에서 texture(이름, vec2(t, 0.5))로 0~1 위치의 색을 읽습니다. @gradient와 같습니다.",
+      help: "색 정지점",
     },
     {
       value: "curve",
       label: "곡선 (값 램프)",
       types: ["sampler2D"],
-      help: "셰이더에서 texture(이름, vec2(x, 0.5)).r로 곡선의 y를 읽습니다. @curve와 같습니다.",
+      help: "X 위치의 Y 값",
     },
   ];
   const updateDisplayFields = () => {
@@ -3341,16 +3335,16 @@ const mount = (renderer, input, settings) => {
     $("uniformValue").required = !bool && !ramp;
     $("uniformBoolValue").hidden = !bool;
     $("uniformValueHelp").textContent = ramp
-      ? "그라데이션(검정 → 흰색)이나 직선 곡선으로 시작합니다. 만든 뒤 패널에서 정지점·점을 고치세요."
+      ? "기본 램프로 시작합니다."
       : bool
-        ? "선택한 상태가 GLSL의 true/false로 전달됩니다."
+        ? "true / false"
         : kind === "m"
-          ? `${size}개 숫자를 column-major 순서로 입력하세요. 기본값은 단위 행렬입니다.`
+          ? `${size}개 숫자 · 열 우선 순서`
           : kind === "b"
             ? `${size}개의 true/false를 쉼표로 구분하세요.`
             : size > 1
               ? `${size}개 ${kind === "f" ? "숫자" : kind === "u" ? "0 이상 정수" : "정수"}를 쉼표로 구분하세요. 예: ${defaultValue(t)}`
-              : "숫자를 입력하세요. 슬라이더 범위는 선택 사항입니다.";
+              : "숫자 값 · 범위는 선택 사항";
     // 표시 방식: 타입에 맞는 것만 고를 수 있게 목록을 다시 만든다. 고를 것이 없으면(기본뿐) 칸을 숨긴다.
     const select = $("uniformDisplay"),
       previous = select.value,
