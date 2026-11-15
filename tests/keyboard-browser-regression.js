@@ -1,5 +1,5 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
-// 키보드 입력 채널: 갤러리 예제(Keyboard Control)를 열고, 뷰포트에 포커스를 준 채 키를 눌러
+// 키보드 입력 채널: 키보드 기반 장면(tests/helpers/keyboard-project.mjs — 예전 Keyboard Control 예제)을 열고, 뷰포트에 포커스를 준 채 키를 눌러
 // 셰이더가 읽는 키 상태 텍스처·상태 버퍼가 바뀌는지, 앱 단축키가 양보하는지, Esc로 빠져나오는지 본다.
 (async () => {
   const r = window.shaderPlayground, studio = window.shaderStudio, $ = id => document.getElementById(id);
@@ -10,12 +10,9 @@
   const wasRunning = r.getStats().running;
   try {
     if (!wasRunning) studio.togglePlayback();
-    // 갤러리 예제 열기
-    $("galleryToggle").click();
-    await frames(2);
-    const card = [...$("gallery").querySelectorAll("button")].find(b => /Keyboard Control/.test(b.textContent));
-    test(!!card, "갤러리에 Keyboard Control 예제");
-    card.click();
+    // 키보드 기반 장면 열기(테스트 도우미)
+    const { project: keyboardProject } = await import("./tests/helpers/keyboard-project.mjs");
+    test(studio.setProject(keyboardProject), "키보드 기반 장면");
     await frames(4);
     const project = studio.getProject();
     test(project.passes[0]?.channels?.[1]?.keyboard === true && project.imageChannels[1]?.keyboard === true, "예제가 키보드 채널을 연결");

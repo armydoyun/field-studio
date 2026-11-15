@@ -189,9 +189,9 @@ try:
 
             # 키보드 채널 셰이더: 분리 창 캔버스에서 누른 키는 셰이더로 가고, 메인 창 편집기로 돌아오면 Esc 없이 바로 입력된다.
             # (분리 창 안의 초점은 캔버스에 남아 있으므로, 메인 창의 키까지 셰이더가 가로채면 안 된다.)
-            page.keyboard.press("x")
-            page.locator("#gallery").get_by_text("Keyboard Control").first.click()
-            page.wait_for_function("!document.querySelector('dialog[open]')")
+            # 키보드 기반 장면(tests/helpers/keyboard-project.mjs — 예전 Keyboard Control 예제)
+            page.evaluate("async () => { const {project} = await import('./tests/helpers/keyboard-project.mjs'); shaderStudio.setProject(project); }")
+            page.wait_for_function("!document.querySelector('dialog[open]') && shaderPlayground.usesKeyboard()")
             page.evaluate("shaderStudio.open()")
             popup = open_preview()
             popup.evaluate("window.__kd = []; addEventListener('keydown', e => setTimeout(() => __kd.push(e.defaultPrevented)), true)")

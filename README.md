@@ -65,6 +65,8 @@ js/
   studio-examples.js  # Studio가 만드는 예제 프로젝트
   studio-dialog.js    # 공용 입력·확인 대화상자
   ui-kit.js           # 디자인 시스템의 JS 쪽: 컴포넌트 클래스 이름 · 요소 만들기(button · segmented · select · menu …)
+  context-menu.js     # 우클릭 메뉴: 영역(선택자)마다 기능 모듈이 메뉴를 등록 · 글 입력 칸 · 선택한 글자 · Shift+우클릭은 브라우저 기본
+  app-menus.js        # 바탕 · 뷰포트 · 패스 탭의 우클릭 메뉴(툴바 버튼을 그대로 누른다)
   project-model.js    # 프로젝트 데이터 규칙 (순수 함수)
   project-store.js    # 프로젝트 보관함 저장소 (IndexedDB)
   code-insert.js      # 코드 삽입 위치 계산 (순수 함수)
@@ -95,6 +97,7 @@ js/
   community-examples.js # 갤러리 "커뮤니티 셰이더" — 다른 사람의 공개 작품(MIT·CC0 등) 이식본과 출처
   technique-examples.js # 갤러리 "기법 배우기" 중 큰 주제 — PBR 재질 · 볼류메트릭 구름 · 2D 유체(직접 짠 교육용)
   raymarch-lessons.js   # 갤러리 "기법 배우기"의 3D 레이마칭 — 궤도 카메라 · 유리 굴절 · 반사 재질 · 키보드 탐험(상태 버퍼)
+  feature-lessons.js    # 갤러리 "기법 배우기"의 앱 기능 예제 — 연결 · 키프레임 · 프리셋(Motion Links) · 이미지 · 웹캠(Image Filters) · 소리(Audio Spectrum)
   gallery-perf.js     # 갤러리 성능 배지 — 예제마다 지금 미리보기 크기의 한 프레임 시간을 이 컴퓨터에서 재 단계로 표시
   lazy-render.js      # 지연 렌더링 — 보이는 카드만, 비동기 컴파일로, 한 프레임에 하나씩(갤러리 · 코드 조각 미리보기)
   guide.js            # 앱 내장 가이드 · UI 둘러보기 · 문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리

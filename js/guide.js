@@ -463,6 +463,12 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
           "**비교하지 않는 것 · 끝나는 때** — 연결된 값 · 시간 · 버퍼 이력은 비교하지 않습니다. 코드 · 파라미터 설정 · 연결 · 프로젝트가 바뀌거나 Undo하면 비교를 끝냅니다. 기억한 값은 지금 화면에서만 유지됩니다(새로고침하면 사라짐).",
         ],
       },
+      {
+        actions: [
+          { label: "프리셋이 든 예제: Reaction–Diffusion", run: "example:reaction" },
+          { label: "프리셋 · 연결 예제: Motion Links", run: "example:motion" },
+        ],
+      },
     ],
   },
   {
@@ -484,7 +490,13 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
           "연결은 렌더러가 프레임 시간으로 계산하므로 **영상 렌더링**에서도 렌더 시간에 정확히 맞습니다(소리는 렌더에 쓴 오디오 파일 기준). 연결은 프로젝트 · 프로젝트 파일에 함께 저장되고 Undo를 따르며, 파라미터 이름을 바꾸면(F2) 연결도 따라갑니다.",
         ],
       },
-      { actions: [{ label: "타임라인과 스냅", run: "topic:timeline" }] },
+      {
+        actions: [
+          { label: "Motion Links 예제 열기(키프레임 · 흔들기)", run: "example:motion" },
+          { label: "Audio Spectrum 예제 열기(소리 연결)", run: "example:audio" },
+          { label: "타임라인과 스냅", run: "topic:timeline" },
+        ],
+      },
     ],
   },
   {
@@ -576,7 +588,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         list: [
           "Common에서 앱 Uniform(`uTime` · `uResolution` · `uMouse` · `uFrame` · `uDeltaTime` · `uWheel` · `iChannel0~3` · `iChannelResolution`)과 Shadertoy 이름(`iTime` …)을 선언 없이 그대로 씁니다. 패스가 선언하지 않았으면 실행할 때 그 패스에 선언을 넣고, 패스가 선언했으면 그 선언(타입)을 씁니다.",
           "패스가 선언한 Uniform(파라미터 포함)도 Common에서 쓸 수 있습니다. 실행할 때 패스의 `uniform` 선언을 Common 앞으로 옮기고(편집기 코드는 그대로, 오류 줄 번호도 원래 줄), Common이 쓰는데 선언하지 않은 패스에는 **다른 패스의 선언**을 넣습니다. 그래서 파라미터는 Common이나 **어느 한 패스**에 한 번만 선언하면 됩니다(어노테이션은 선언한 곳에서 읽습니다).",
-          "`iChannelN`은 패스마다 그 패스에 연결된 입력을 읽습니다. Common의 함수가 `iChannel1`을 읽으면, 그 함수를 부르는 패스마다 iChannel1에 같은 종류(예: 키보드)를 연결하세요. 예제 갤러리의 **Keyboard Control**이 이렇게 씁니다.",
+          "`iChannelN`은 패스마다 그 패스에 연결된 입력을 읽습니다. Common의 함수가 `iChannel1`을 읽으면, 그 함수를 부르는 패스마다 iChannel1에 같은 종류(예: 키보드)를 연결하세요.",
           "Image · Buffer 탭의 자동 완성 · 마우스 설명 · 시그니처 도움말이 Common의 함수 · 상수 · 구조체 · `#define`도 압니다. `F12`(또는 `Ctrl+클릭`)로 Common에 있는 정의로 바로 갑니다.",
           "Common만 고쳐도 모든 패스가 다시 컴파일됩니다. Common에서 난 오류는 **Common** 탭의 그 줄로 표시됩니다(어느 패스를 컴파일하다 났는지도 함께 적습니다).",
           "Common 탭을 고른 뒤 설정 줄의 **삭제**로 지울 수 있습니다(Undo로 복원). `Common`은 Buffer 이름으로 쓸 수 없습니다.",
@@ -600,7 +612,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
       {
         actions: [
           { label: "반응-확산 시뮬레이션 열기", run: "example:reaction" },
-          { label: "밉맵 블러 예제 열기", run: "example:mipblur" },
+          { label: "밉맵으로 흐리는 블룸 예제 열기", run: "example:bloom" },
           { label: "MRT 주제 보기", run: "topic:mrt" },
         ],
       },
@@ -679,7 +691,7 @@ vec4 texel = texelFetch(iChannel0, ivec2(gl_FragCoord.xy), 0);              // �
         list: [
           "**뷰포트를 클릭해 포커스를 주면** 키가 셰이더로 갑니다. 화면 위쪽에 '키보드 입력 중'이 표시됩니다.",
           "이 동안에는 E·X·H·F·Space 같은 한 글자 단축키가 셰이더에 양보합니다. **Esc**로 빠져나오면 단축키가 돌아옵니다. Ctrl 조합(Ctrl+O 등)은 그대로 동작합니다.",
-          "키를 쌓아 쓰는 상태(위치·점수·카메라)는 버퍼에 저장하세요. 예제 갤러리의 **Keyboard Control**은 점의 위치를, **Ray Marching SDF**는 카메라 시점(방향키·WASD·드래그, R 초기화)을 버퍼에 저장하는 예입니다.",
+          "키를 쌓아 쓰는 상태(위치·점수·카메라)는 버퍼에 저장하세요. 예제 갤러리의 **Keyboard Explorer**는 공의 위치·속도를(WASD · 방향키), **Orbit Camera**는 카메라 시점과 관성(드래그 · 휠)을 버퍼에 저장하는 예입니다.",
           "키보드 연결이 들어간 프로젝트는 이 기능이 없는 예전 버전에서 열리지 않을 수 있습니다.",
         ],
       },
@@ -756,6 +768,12 @@ float spectrum(float x) { return texture(iChannel0, vec2(x, 0.25)).x; }   // 0~1
 float waveform(float x) { return texture(iChannel0, vec2(x, 0.75)).x; }   // 0.5 = 무음`,
         title: "소리 읽기",
         insert: "cursor",
+      },
+      {
+        actions: [
+          { label: "Audio Spectrum 예제 열기(마이크 · 오디오 파일)", run: "example:audio" },
+          { label: "Image Filters 예제 열기(이미지 · 웹캠 · 영상)", run: "example:image-filters" },
+        ],
       },
     ],
   },

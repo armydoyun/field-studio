@@ -1,5 +1,5 @@
 // 입력은 Renderer와 분리한다. 이 모듈은 뷰포트의 포인터/키 상태를 수집하고, 키보드 채널을 쓰는 셰이더에 키를 넘긴다.
-// 카메라처럼 키로 값을 쌓아 가는 조작은 셰이더가 키보드 채널과 상태 버퍼로 직접 한다(갤러리의 Ray Marching SDF 예제).
+// 카메라처럼 키로 값을 쌓아 가는 조작은 셰이더가 키보드 채널과 상태 버퍼로 직접 한다(갤러리의 Orbit Camera · Keyboard Explorer 예제).
 const mount = (canvas, renderer) => {
   const stage = document.getElementById("stage");
   if (!stage) throw new Error("#stage 요소가 없습니다.");

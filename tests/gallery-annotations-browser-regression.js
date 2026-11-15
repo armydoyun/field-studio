@@ -116,7 +116,7 @@
     check(!!row('uDyeFade'), '유체: Image의 선택지로 Buffer F의 항목 표시');
     set('uView',1);
     check(!row('uDyeFade'), '유체: 속도 보기에서 물감 항목 숨김(패스 간 조건)');
-    await load('raymarch');
+    await studio.exampleRaymarch(); $('tab-uniforms').click(); refresh();   // Studio 기본 Ray Marching 장면(갤러리 카드는 정리됨)
     set('uRMHeatmap',true);
     check(!row('uRMNormalEpsilon') && !!row('uRMSurfaceEpsilon'), 'SDF: 걸음 수 보기에서는 법선 간격 숨김');
   } finally {

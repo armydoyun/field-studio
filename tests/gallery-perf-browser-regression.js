@@ -44,7 +44,7 @@
     test(pending() === closed, "닫혀 있는 동안은 재지 않는다");
     // 다시 열고 맨 아래로 스크롤하면 그쪽 카드를 잰다(가벼운 레슨).
     $("galleryToggle").click();
-    const targets = ["annotations", "keyboard", "mrt"];
+    const targets = ["annotations", "reaction", "mrt"];
     card(targets[0]).scrollIntoView({ block: "start" });
     for (const id of targets) {
       card(id).scrollIntoView({ block: "nearest" });

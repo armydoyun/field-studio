@@ -1,4 +1,5 @@
 import * as ParameterTools from "./parameter-tools.js";
+import * as Presets from "./presets.js";
 // 사용자 편집 상태만 소유한다. GPU 자원과 연결 규칙은 Renderer/PassManager가 검증한다.
 // 외부 코드 에디터나 네트워크 요청은 사용하지 않는다. file:// 배포는 deploy/ 번들을 사용한다.
 // 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
@@ -1549,6 +1550,23 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       adoptProject(next);
       // 예제 소스의 @어노테이션도 바로 파라미터로 등록한다(apply 경로를 거치지 않으므로 여기서 동기화).
       syncAnnotations();
+      // 예제가 프리셋 · 연결을 함께 보여 줄 때(next.presets · next.links): 프리셋은 {name, values}만 적으면
+      // 지금 등록된 파라미터의 타입 정보를 붙여 저장한다(적지 않은 값은 기본값 그대로).
+      if (next.presets?.length || next.links?.length) {
+        const users = renderer.getUserUniforms();
+        quietSettings = true;
+        try {
+          settings?.setPresets?.(
+            (next.presets || []).map(({ name, values }) => {
+              const base = Presets.capture(name, users);
+              return { ...base, values: { ...base.values, ...values } };
+            })
+          );
+          settings?.setLinks?.(next.links || []);
+        } finally {
+          quietSettings = false;
+        }
+      }
       const count = renderer.getUserUniforms().length;
       settings?.save();
       document.dispatchEvent(new Event("shader-settings-applied"));
