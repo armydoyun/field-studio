@@ -2661,7 +2661,7 @@ const mount = (renderer, input, settings) => {
       const remove = element("button");
       remove.className = "ui-icon-btn ui-icon-btn--xs ui-icon-btn--danger remove-uniform glyph-icon icon-trash";
       remove.type = "button";
-      remove.title = `${item.name} 삭제 · GLSL에서 참조 중이면 먼저 코드를 수정하세요`;
+      remove.title = `${item.name} 삭제 · 코드의 선언도 함께 지웁니다(삭제 되돌리기 · Ctrl+Z)`;
       remove.setAttribute("aria-label", `${item.name} 삭제`);
       // 지우기: 코드가 uniform 선언 없이 이 이름을 쓰고 있었으면(파라미터가 선언을 대신해 왔다) 다시 컴파일이 실패한다.
       // 그래도 지운 채로 두고, 그 오류는 편집기의 오류 표시(해당 줄 · 상태 줄 · 뷰포트 안내)로 보여 준다 — 화면은 마지막 성공 결과.
@@ -2670,6 +2670,18 @@ const mount = (renderer, input, settings) => {
         attempt(() => {
           const current = renderer.getUserUniforms().find(u => u.name === item.name);
           if (!current) return renderUniforms();
+          // 코드가 선언한 파라미터: 선언 줄도 함께 지운다(Undo 한 번). 코드가 아직 그 이름을 쓰면 오류는 편집기에 보인다.
+          const viaCode = window.shaderStudio?.removeParameter?.(item.name);
+          if (viaCode) {
+            deletedUniform = { ...current, viaCode: true };
+            $("undoUniform").hidden = false;
+            $("uniformNotice").textContent = viaCode.applied
+              ? `${item.name} 삭제됨 · 코드의 선언도 지웠습니다`
+              : `${item.name} 삭제됨 · 코드가 아직 ${item.name}을(를) 써서 컴파일 오류 — 편집기에서 고치거나 삭제 되돌리기`;
+            renderUniforms();
+            $("undoUniform").focus();
+            return;
+          }
           let broke = null;
           try {
             renderer.removeUniform(item.name, { keepOnError: true });
@@ -3471,7 +3483,15 @@ const mount = (renderer, input, settings) => {
   listen($("undoUniform"), "click", () =>
     attempt(() => {
       if (!deletedUniform) return;
-      const { name, type, value, options, broke } = deletedUniform;
+      const { name, type, value, options, broke, viaCode } = deletedUniform;
+      // 선언 줄까지 지웠으면 편집 기록으로 되돌린다(코드 · 파라미터를 함께)
+      if (viaCode) {
+        clearDeleted();
+        window.shaderStudio?.undo?.();
+        renderUniforms();
+        focusSearch();
+        return;
+      }
       renderer.defineUniform(name, type, value, options);
       clearDeleted();
       // 지워서 생긴 컴파일 오류였으면, 되살린 뒤 다시 적용해 편집기의 오류 표시를 거둔다.
@@ -3617,6 +3637,12 @@ const mount = (renderer, input, settings) => {
     showError("");
     $("uniformEditor").querySelector("summary").focus();
   });
+  // 파라미터 추가: 이름 · 타입 · 값을 검사해 등록하고(renderer.defineUniform), 그 선언 줄(어노테이션 포함)을 코드에 직접 넣는다.
+  // 앱은 선언을 셰이더에 대신 넣지 않으므로, 코드에 선언이 있어야 셰이더에서 그 이름을 쓸 수 있다.
+  const addParameter = (name, type, value, options) => {
+    renderer.defineUniform(name, type, value, options);
+    window.shaderStudio?.addParameterDeclaration?.(ParameterTools.declarationLine({ name, type, value, options }));
+  };
   listen($("uniformForm"), "submit", event => {
     event.preventDefault();
     attempt(() => {
@@ -3624,7 +3650,7 @@ const mount = (renderer, input, settings) => {
       if (type === "sampler2D") {
         // 램프는 기본 모양으로 만들고 패널 편집기에서 다듬는다.
         const curve = $("uniformDisplay").value === "curve";
-        renderer.defineUniform(
+        addParameter(
           $("uniformName").value.trim(),
           type,
           curve ? [0, 0, 1, 1] : [0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
@@ -3671,7 +3697,7 @@ const mount = (renderer, input, settings) => {
         if (labels.length < 2) throw new Error("선택지 이름을 2개 이상 입력하세요. 예: 결과 밀도 투과율");
         Object.assign(opts, { min: 0, max: labels.length - 1, step: 1, enum: labels });
       }
-      renderer.defineUniform($("uniformName").value.trim(), type, value, opts);
+      addParameter($("uniformName").value.trim(), type, value, opts);
       clearDeleted();
       $("uniformSearch").value = "";
       renderUniforms();

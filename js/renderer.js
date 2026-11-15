@@ -439,8 +439,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // channels: 이 패스의 채널 sampler 타입 4개(PassManager.channelTypes) — 선언하지 않은 iChannelN을 그 타입으로 넣는다.
   const buildFragment = (source, context = shared, channels = SAMPLER_2D) => {
     if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
+    // 파라미터(사용자 Uniform) 선언은 대신 넣지 않는다: 코드가 선언해야 그 이름을 쓸 수 있다('파라미터 추가'는 선언 줄을 코드에 쓴다).
+    // 여기서는 코드가 선언한 파라미터의 타입이 등록 타입과 같은지만 확인한다.
     const declarations = [],
-      code = Prepare.blankComments(context.common + "\n" + source); // Common에서 선언한 Uniform은 다시 넣지 않는다
+      code = Prepare.blankComments(context.common + "\n" + source);
     // 배열: uniform float uW[4]; · uniform float[4] uW; 둘 다 타입 "float[4]"
     const uniforms = [
       ...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)(\s*\[\s*\d+\s*\])?\s+([^;{}]+);/g),
@@ -454,7 +456,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           declared = size ? `${match[1]}[${size}]` : match[1];
         if (declared !== item.type)
           throw new Error(`${name}: GLSL 선언(${declared})과 등록 타입(${item.type})이 다릅니다.`);
-      } else declarations.push(`uniform ${item.type} ${name};`);
+      }
     }
     return Prepare.prepareFragment(source, declarations, {
       common: context.common,

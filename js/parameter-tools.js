@@ -121,4 +121,71 @@ const glslLiteral = item => {
   return `${base}[${count}](${parts.join(", ")})`;
 };
 
-export { writeDefaults, varyValue, canVary, equalValue, changedFromDefault, glslLiteral };
+// 파라미터 하나의 GLSL 선언 줄(어노테이션 주석 포함). '파라미터 추가'가 코드에 직접 써 넣는다 —
+// 코드가 선언을 가지고 있어야 셰이더가 그 이름을 안다(앱이 선언을 대신 넣지 않는다). 옵션은 annotations.js가 다시 읽는 형식.
+//   declarationLine({ name: "uGain", type: "float", value: 0.5, options: { min: 0, max: 1, step: 0.01 } })
+//   → "uniform float uGain; // @range 0 1 0.01 @default 0.5"
+const declarationLine = ({ name, type, value, options = {} }) => {
+  const array = /^(\w+)\[(\d+)\]$/.exec(type),
+    head = array ? `uniform ${array[1]} ${name}[${array[2]}];` : `uniform ${type} ${name};`,
+    tags = [],
+    number = v => String(Number(Number(v).toPrecision(7)));
+  if (type === "sampler2D") {
+    tags.push(
+      options.curve
+        ? `@curve ${options.curve === true ? "smooth" : options.curve}`
+        : `@gradient ${options.gradient === true ? "linear" : options.gradient || "linear"}`
+    );
+    return `${head} // ${tags.join(" ")}`;
+  }
+  if (options.enum?.length)
+    tags.push(`@enum ${options.enum.map(label => String(label).replace(/\s+/g, "_")).join(" ")}`);
+  else {
+    if (options.color) tags.push(options.hdr ? `@color hdr ${number(options.hdr)}` : "@color");
+    else if (options.dir) tags.push(options.dir === "hemi" ? "@dir hemi" : "@dir");
+    else if (options.angle) tags.push("@angle");
+    else if (options.pos) tags.push("@pos");
+    if (options.log) tags.push("@log");
+    if ([options.min, options.max].every(Number.isFinite))
+      tags.push(
+        `@range ${number(options.min)} ${number(options.max)}${Number.isFinite(options.step) ? ` ${number(options.step)}` : ""}`
+      );
+  }
+  const values = (Array.isArray(value) ? value : [value]).map(v => (typeof v === "boolean" ? String(v) : number(v)));
+  if (values.length && values.every(v => v !== "NaN")) tags.push(`@default ${values.join(" ")}`);
+  return tags.length ? `${head} // ${tags.join(" ")}` : head;
+};
+
+// 소스에서 이름 하나의 uniform 선언을 지운다(파라미터 삭제가 코드의 선언도 함께 지운다).
+// 그 이름만 선언한 줄은 줄째(주석 포함) 지우고, 여러 이름을 함께 선언한 줄(uniform float uA, uB;)에서는 그 이름만 뺀다.
+// 주석 처리된 줄은 건드리지 않는다. → { source, removed: 지운 선언 수 }
+const removeDeclaration = (source, name) => {
+  let removed = 0;
+  const lines = String(source).split("\n"),
+    kept = [];
+  for (const line of lines) {
+    const match = /^(\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?\w+(?:\s*\[\s*\d+\s*\])?\s+)([^;]*);(.*)$/.exec(line);
+    const names = match ? match[2].split(",") : [];
+    const at = names.findIndex(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name);
+    if (at < 0) {
+      kept.push(line);
+      continue;
+    }
+    removed++;
+    if (names.length === 1) continue;
+    names.splice(at, 1);
+    kept.push(`${match[1]}${names.map(part => part.trim()).join(", ")};${match[3]}`);
+  }
+  return { source: kept.join("\n"), removed };
+};
+
+export {
+  writeDefaults,
+  varyValue,
+  canVary,
+  equalValue,
+  changedFromDefault,
+  glslLiteral,
+  declarationLine,
+  removeDeclaration,
+};

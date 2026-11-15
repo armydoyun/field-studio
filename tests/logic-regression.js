@@ -60,19 +60,24 @@ function fixture(_realEditor=false,compact=false,initialStorage={}){
 const src='#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){fragColor=vec4(1.0);}';
 const scene=(image=src)=>({image,passes:[],imageChannels:{}}),pass=(name='A')=>({name,fragment:src,scale:1,format:'rgba8',channels:{}});
 async function main(){
-  for(const precision of ['precision mediump float;','precision  highp float;','precision\nlowp float;'])await test('Uniform injection: '+JSON.stringify(precision),()=>{
-    const f=fixture();try{f.renderer.defineUniform('uGain','float',1);assert(f.renderer.validateFragment(src.replace('precision highp float;',precision)));}finally{f.dispose();}
+  // 파라미터(사용자 Uniform) 선언은 앱이 대신 넣지 않는다 — 코드가 선언한다. 넣는 선언은 Shadertoy 이름 · 채널 · Common 공유뿐.
+  await test('Registered parameters are never declared for the shader',()=>{
+    const f=fixture();try{f.renderer.defineUniform('uGain','float',1);assert(f.renderer.validateFragment(src));assert(!f.gl.compiledSources.at(-1).includes('uniform float uGain;'));}finally{f.dispose();}
+  });
+  const timeSrc=src.replace('fragColor=vec4(1.0);','fragColor=vec4(iTime);');
+  for(const precision of ['precision mediump float;','precision  highp float;','precision\nlowp float;'])await test('Shadertoy name injection: '+JSON.stringify(precision),()=>{
+    const f=fixture();try{assert(f.renderer.validateFragment(timeSrc.replace('precision highp float;',precision)));}finally{f.dispose();}
   });
   await test('Commented precision is not an insertion point',()=>{
-    const f=fixture();try{f.renderer.defineUniform('uGain','float',1);f.renderer.validateFragment(src.replace('precision highp float;','// precision highp float;\nprecision mediump float;'));
-      const text=f.gl.compiledSources.at(-1);assert(text.indexOf('uniform float uGain;')>text.indexOf('precision mediump float;'));}finally{f.dispose();}
+    const f=fixture();try{f.renderer.validateFragment(timeSrc.replace('precision highp float;','// precision highp float;\nprecision mediump float;'));
+      const text=f.gl.compiledSources.at(-1);assert(text.indexOf('uniform float uTime;')>text.indexOf('precision mediump float;'));}finally{f.dispose();}
   });
   await test('Comma-separated uniforms are not duplicated',()=>{
     const f=fixture();try{f.renderer.defineUniform('uGain','float',1);f.renderer.validateFragment(src.replace('out vec4','uniform float uOther, uGain;\nout vec4'));
       assert(!f.gl.compiledSources.at(-1).includes('uniform float uGain;'));}finally{f.dispose();}
   });
   await test('Same-line shader diagnostic maps to source, not generated Uniform',()=>{
-    const f=fixture();try{f.renderer.defineUniform('uGain','float',1);let error;try{f.renderer.validateFragment('#version 300 es\nprecision mediump float; void main(){GLSL_ERROR}');}catch(e){error=e;}
+    const f=fixture();try{let error;try{f.renderer.validateFragment('#version 300 es\nprecision mediump float; void main(){float t = iTime; GLSL_ERROR}');}catch(e){error=e;}
       const n=Number(/ERROR: 0:(\d+):/.exec(error.message)?.[1]),info=error.glslInjected;
       assert(info);assert(n>info.after+(info.generated??info.count));assert.equal(n-info.count,2);}finally{f.dispose();}
   });
