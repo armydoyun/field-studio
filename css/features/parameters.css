@@ -3,7 +3,9 @@
    여기에는 위젯의 배치와, 이 탭에만 있는 조작(방향 패드 · 램프 · 곡선)의 모양만 둔다. */
 /* 검색 칸과 목록 구역은 한 덩어리다: 사이에 선을 긋지 않는다(구역에 ui-section--flush) */
 .uniform-search-wrap { margin:var(--space-6) var(--panel-inset) 0; }
-.parameter-compare { display:grid;gap:var(--space-4);padding:var(--space-6);margin-bottom:var(--space-6); }
+.parameter-compare { display:grid;gap:var(--space-4);margin-bottom:var(--space-3); }
+.parameter-compare.is-active { padding:var(--space-6);margin-bottom:var(--space-6); }
+.uniform-changed.is-unchanged { visibility:hidden; }
 .parameter-compare-actions,.parameter-filter { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4); }
 .parameter-compare>p { margin:0; }
 .parameter-filter { margin-bottom:var(--space-6); }

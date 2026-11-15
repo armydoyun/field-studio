@@ -30,7 +30,7 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uValue/10.0, texture(uRamp,vec2(0.5)
     row('uValue').querySelector('.reset-uniform').click();
     check($('uniformChangedCount').textContent==='0','기본값 복원 직후 변경 표시 해제');
     set('uTiny',[2e-8,0,0]);
-    check(row('uTiny').dataset.changed==='true'&&!row('uTiny').querySelector('.uniform-changed').hidden,'아주 작은 HDR 변경도 표시');
+    check(row('uTiny').dataset.changed==='true'&&getComputedStyle(row('uTiny').querySelector('.uniform-changed')).visibility==='visible','아주 작은 HDR 변경도 표시');
     check(!row('uTiny').querySelector('.reset-uniform').disabled,'작은 HDR 값도 기본값으로 복원 가능');
     set('uHidden',3);set('uPoints',[0,0,0.1,0]);set('uMatrix',[0.5,0,0,1]);
     check($('uniformChangedCount').textContent==='4','배열·행렬·조건 숨김도 변경 개수에 포함');

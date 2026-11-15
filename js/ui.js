@@ -1376,6 +1376,10 @@ const mount = (renderer, input, settings) => {
           ).length
         : 0;
     $("compareCapture").disabled = !users.length || viewingA;
+    $("parameterCompare").classList.toggle("ui-card", !!comparison);
+    $("parameterCompare").classList.toggle("is-active", !!comparison);
+    $("compareSwitch").hidden = !comparison;
+    $("compareNotice").hidden = !comparison;
     $("compareCapture").textContent = comparison ? "A 기준 갱신" : "A 기준 잡기";
     $("compareA").disabled = $("compareB").disabled = !comparison;
     $("compareA").setAttribute("aria-pressed", String(viewingA));
@@ -2339,7 +2343,8 @@ const mount = (renderer, input, settings) => {
       title.append(changedTag);
       const syncChanged = (value = liveValue(item)) => {
         const changed = ParameterTools.changedFromDefault({ ...item, value }, spec);
-        changedTag.hidden = !changed;
+        changedTag.classList.toggle("is-unchanged", !changed);
+        changedTag.setAttribute("aria-hidden", String(!changed));
         row.dataset.changed = String(changed);
       };
       changeSyncs.set(item.name, syncChanged);

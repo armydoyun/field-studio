@@ -510,7 +510,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       }
       const current = next.find(u => u.name === spec.name);
       if (!current) {
-        next.push({ name: spec.name, type: spec.type, value: spec.value, options: spec.options });
+        next.push({
+          name: spec.name,
+          type: spec.type,
+          value: Annotations.clampValue(spec.value, spec.options, spec.type),
+          options: spec.options,
+        });
         added.push(spec.name);
       } else if (current.type === spec.type && !Annotations.sameOptions(current.options, spec.options)) {
         current.options = spec.options;
