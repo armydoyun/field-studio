@@ -10,6 +10,8 @@ import * as SnippetPreview from "./snippet-preview.js";
 import * as Store from "./storage.js";
 import * as PreviewDOM from "./preview-dom.js";
 import * as UI from "./ui-kit.js";
+import * as Tours from "./guide-tours.js";
+const { TOURS } = Tours;
 // 블록 형식: {p}, {list:[…]}, {steps:[…]}, {table:{head, rows}}, {code, title, insert?:true}, {keys:[[설명, 키]…]},
 //            {note}, {actions:[{label, run:"tour"|"gallery"|"topic:<id>"|"example:<id>"}]}
 const TOPICS = [
@@ -24,7 +26,7 @@ const TOPICS = [
       {
         steps: [
           "**예제 고르기** — 뷰포트 툴바의 ⋯ 더보기 › **예제 갤러리**(또는 `X`)로 갤러리를 열고 마음에 드는 예제를 선택합니다. 맨 위 검색창(`/`)에 `SDF`·`유체`·작가 이름 등을 넣어 찾을 수도 있어요.",
-          "**코드 고치기** — `E`로 편집기를 열고 숫자 하나를 바꿔 보세요. 0.9초 뒤 자동으로 적용됩니다(`Alt+Enter`는 즉시 실행, `Ctrl+S`는 프로젝트 저장).",
+          "**코드 고치기** — `E`로 편집기를 열고 숫자 하나를 바꿔 보세요. 자동으로 적용됩니다(`Alt+Enter`는 즉시 실행, `Ctrl+S`는 프로젝트 저장).",
           "**값 조절하기** — 설정 패널의 **파라미터** 탭에서 슬라이더·색상으로 Uniform 값을 실시간으로 바꿉니다.",
           "**확인하기** — **성능** 탭에서 GPU 시간과 버퍼 내용을 들여다봅니다.",
         ],
@@ -386,8 +388,54 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
           "**성능** 탭의 Uniform 진단에서 선언만 하고 등록하지 않은(값이 항상 0인) Uniform을 찾아 **등록** 버튼으로 바로 파라미터로 만들 수 있습니다.",
         ],
       },
-      { actions: [{ label: "어노테이션 예제 열기", run: "example:annotations" }] },
-      { heading: "프리셋 · 값 묶음" },
+      {
+        actions: [
+          { label: "프리셋과 A/B", run: "topic:presets" },
+          { label: "값 연결", run: "topic:connections" },
+          { label: "어노테이션 예제 열기", run: "example:annotations" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "tours",
+    title: "UI 둘러보기",
+    summary: "지금 배우려는 작업을 골라 화면에서 확인하기",
+    blocks: [
+      {
+        p: "원하는 작업을 고르세요. 화면의 실제 조작 위치를 순서대로 강조합니다. 코드·파라미터·연결을 바꾸지 않으며, 완료하거나 Esc로 닫으면 원래 화면으로 돌아갑니다.",
+      },
+      { tours: true },
+    ],
+  },
+  {
+    id: "rendering",
+    title: "화질과 재생",
+    summary: "프레임 제한·배속·한 프레임 진행·해상도",
+    blocks: [
+      {
+        table: {
+          head: ["설정", "용도"],
+          rows: [
+            [
+              "프레임 제한",
+              "Auto 또는 목표 FPS를 고릅니다. 낮추면 CPU/GPU 사용량을 줄이지만 느린 셰이더의 목표 FPS를 보장하지 않습니다.",
+            ],
+            ["재생 속도", "uTime의 진행 배속입니다. 셰이더를 실행하는 FPS와는 별개입니다."],
+            ["한 프레임 진행 (.)", "재생을 멈추고 1/60초를 진행합니다. 시간·프레임 수·피드백 버퍼를 함께 넘깁니다."],
+            ["해상도 배율", "캔버스가 계산하는 픽셀 수를 줄여 성능을 조절합니다."],
+            ["최대 픽셀 수", "화면 비율을 유지하면서 픽셀 수의 상한을 정합니다. 영상 렌더링 크기는 별도입니다."],
+          ],
+        },
+      },
+      { actions: [{ label: "성능 확인", run: "topic:debug" }] },
+    ],
+  },
+  {
+    id: "presets",
+    title: "프리셋·A/B 비교",
+    summary: "값 묶음 저장·호환성·적용 내역·Undo",
+    blocks: [
       {
         p: "파라미터 탭 위쪽의 **프리셋** 막대에서 지금 파라미터 값 전체를 이름 붙여 저장하고(**지금 값 저장**), 칩을 눌러 그 값으로 돌아갑니다. '낮 · 밤', '잔잔 · 격렬'처럼 버전을 비교하거나 공연 중에 장면을 바꿀 때 씁니다.",
       },
@@ -401,7 +449,16 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
           "실제로 적용할 항목의 자동 재생(`@anim`)만 멈춥니다. 전환 중 직접 편집하거나 코드를 적용하면 전환이 멈춥니다. 즉시 적용·부드러운 전환·도중 중단 모두 **Ctrl+Z 한 번**으로 적용한 항목을 복원합니다. 바뀐 값이 없으면 이력을 만들지 않습니다. A 기준이 없으면 적용 직전 값을 자동으로 기억해 **A/B 비교**로 확인할 수 있습니다.",
         ],
       },
-      { heading: "연결 · 소리 · MIDI · 흔들기 · 키프레임" },
+      {
+        p: "A는 기억한 기준, B는 현재 편집 값입니다. A 미리보기는 GPU 입력만 바꾸며 자동 저장·프리셋·프로젝트 저장은 B 값을 유지합니다. A를 쓰려면 **A를 현재 값으로**를 누릅니다. 비교 종료는 B를 유지하며, 연결된 값·시간·버퍼 이력은 비교하지 않습니다.",
+      },
+    ],
+  },
+  {
+    id: "connections",
+    title: "값 연결",
+    summary: "소리·MIDI·흔들기·키프레임",
+    blocks: [
       {
         p: 'float · int · uint · bool 파라미터 줄의 **연결** 버튼(사슬 모양)을 누르면 아래에 **연결 시트**가 열립니다. 맨 위에서 소스(끄기 · 소리 · MIDI · 흔들기 · 키프레임)를 고르고, 아래로 **입력**(소스별 설정과 실시간 미리보기) → **값 범위** → **부드럽게 따라가기** → **결과**(지금 값) 순서로 읽습니다. 연결된 파라미터 줄은 슬라이더 대신 읽기 전용 미터를 보여 주고, 입력이 없으면(오디오가 꺼짐 · MIDI 신호 없음) **"… 없음 · 값 그대로"**라고 알립니다. 연결이 값을 정하는 동안 기본값으로 되돌리기 버튼은 비활성화됩니다.',
       },
@@ -414,6 +471,48 @@ uniform int   uCount;  // @min 1 @max 32 @default 8`,
           "**타임라인** — **⋯ 더보기 → 키프레임 타임라인**(T)을 누르면 화면 아래에 도크가 열립니다(위 가장자리를 끌어 높이 조절). 눈금을 누르거나 끌면 재생 위치가 옮겨지고, 위 막대에서 재생 위치를 숫자로 입력합니다. 키를 누르면 오른쪽 **선택한 키** 칸에서 **시간 · 값 · 잇기**(부드럽게 · 직선 · 계단 · 천천히 시작/끝 — 이 키에서 다음 키까지)를 숫자로 고칩니다. 끌기는 스냅을 따릅니다. **시간 스냅**(0.01 ~ 1초 · 30/60fps 프레임)과 **값 스냅**(슬라이더 간격 · 범위 1/4 ~ 1/20 · 0.01 ~ 1 절대 간격 — 켜면 레인에 격자선이 보이고 ↑/↓가 격자 한 칸씩 옮깁니다)을 따로 고르고, **자석**을 켜 두면 가까운 재생선 · 다른 키의 시간, 같은 레인의 다른 키 값 · 범위의 최소/최대에도 붙습니다. Alt는 스냅 없이, Shift는 한 축만. Shift+클릭 · 빈 곳 끌기(상자)로 여러 키를 골라 함께 옮기고, ←/→(Shift ×10) · ↑/↓ · Delete · Ctrl+A · Ctrl+C/V(재생 위치에 붙여넣기) · Ctrl+Z가 됩니다. Ctrl+휠로 확대, Shift+휠로 이동, **맞춤**으로 전체. 빈 곳 더블클릭 = 키 추가, 키 더블클릭 = 지우기, 점선(반복 끝)은 끌어서 반복 길이를 바꾸고 더블클릭으로 없앱니다.",
           "**값 범위**: 막대의 두 손잡이(또는 숫자)로 소스가 가장 약할 때와 셀 때의 값을 정합니다 — 소리는 조용할 때 ~ 클 때, MIDI는 노브 처음(0) ~ 끝(127), 흔들기는 가장 낮을 때 ~ 높을 때. ** 뒤집기**는 소스가 클수록 값이 작아지게 합니다. **부드럽게 따라가기**(초)는 값이 목표를 따라가는 시간으로 0초면 바로 바뀌고, 소리처럼 튀는 소스는 0.1 ~ 0.3초가 보기 좋습니다(키프레임은 보통 0초라 숨겨 둡니다). 흔들기의 **시작 위치**(0~1)는 한 주기 중 어디서 시작할지입니다.",
           "연결은 렌더러가 프레임 시간으로 계산하므로 **영상 렌더링**에서도 렌더 시간에 정확히 맞습니다(소리는 렌더에 쓴 오디오 파일 기준). 연결은 프로젝트 · 프로젝트 파일에 함께 저장되고 Undo를 따르며, 파라미터 이름을 바꾸면(F2) 연결도 따라갑니다.",
+        ],
+      },
+      { actions: [{ label: "타임라인과 스냅", run: "topic:timeline" }] },
+    ],
+  },
+  {
+    id: "timeline",
+    title: "타임라인·스냅",
+    summary: "키 선택·일괄 편집·반복·잇기·자석",
+    blocks: [
+      {
+        steps: [
+          "파라미터의 연결에서 **키프레임**을 고릅니다. 타임라인이 열리고 해당 레인이 표시됩니다.",
+          "눈금으로 재생 위치를 고르고, 빈 곳 더블클릭으로 키를 추가합니다. 키 클릭이나 상자 드래그로 선택하고 Shift로 선택을 더하거나 뺍니다.",
+          "선택한 키를 끌거나 **시간·값** 입력으로 함께 고칩니다. Delete는 삭제, Ctrl+C/V는 복사·재생 위치에 붙여넣기입니다.",
+          "시간 스냅과 값 스냅은 격자 간격입니다. **자석**은 재생선·다른 키·범위 끝 가까이에 붙이며 점선으로 알려 줍니다. Alt를 누르고 끌면 격자와 자석을 잠시 끕니다.",
+          "**잇기**는 선택한 키에서 다음 키로 가는 방법입니다. 여러 키의 설정이 다르면 **서로 다름**으로 표시합니다. 연결 설정의 **한 번·반복**, **끝 값 유지·처음으로 잇기**로 반복 경계를 정합니다.",
+        ],
+      },
+      {
+        keys: [
+          ["선택한 키 이동", "←/→ · ↑/↓"],
+          ["크게 이동", "Shift+방향키"],
+          ["선택 모두 / 해제", "Ctrl+A / Esc"],
+          ["되돌리기 / 다시 실행", "Ctrl+Z / Ctrl+Shift+Z"],
+          ["시간축 확대 / 이동", "Ctrl+휠 / Shift+휠"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "workspace",
+    title: "화면 배치·테마",
+    summary: "패널·편집기·분리 창·HUD·초기화",
+    blocks: [
+      {
+        list: [
+          "패널은 이동 손잡이로 왼쪽·오른쪽에, 편집기는 넓은 화면에서 네 방향에 배치합니다. 손잡이에 초점을 두고 방향키도 사용할 수 있습니다.",
+          "경계를 끌면 크기가 바뀌고 두 번 클릭하면 기본 크기로 돌아옵니다. 좁은 화면에서는 패널은 서랍, 편집기는 아래에 고정됩니다.",
+          "**화면 배치 초기화**는 위치와 크기만, **렌더링 설정 초기화**는 화질·프레임 제한·패널 표시를 되돌립니다. 코드와 파라미터는 유지합니다.",
+          "더보기의 **미리보기 분리**는 캔버스를 별도 창으로 옮깁니다. 복귀 버튼으로 돌아오며, 새 WebGL 프로젝트를 만드는 기능은 아닙니다.",
+          "**G**는 HUD 전체 숨기기, **H**는 패널, **E**는 편집기입니다. Esc로 HUD를 다시 표시할 수 있습니다. 테마는 시스템·라이트·다크 중 고릅니다.",
         ],
       },
     ],
@@ -818,68 +917,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
   },
 ];
 // UI 둘러보기: target은 CSS 선택자, prepare는 대상이 보이도록 패널·편집기를 연다.
-const TOUR = [
-  {
-    target: "#renderViewport",
-    title: "뷰포트",
-    text: "셰이더 결과가 그려지는 곳입니다. 뷰포트를 클릭하면 키보드 채널을 쓰는 셰이더가 키 입력을 받아요(Esc로 나가기). 3D 예제는 드래그·방향키로 시점을 돌립니다.",
-    prepare: "close-editor",
-  },
-  {
-    target: "#stageToolbar",
-    title: "툴바",
-    text: "재생/일시정지 · 편집기 · 캡처(스크린샷·녹화) · 전체화면, 그리고 ⋯ 더보기(갤러리·가이드·패널·HUD·분리 창·테마)입니다. 버튼 위에 포인터를 올리면 설명이 나와요.",
-    prepare: "stage",
-  },
-  {
-    target: "#stats",
-    title: "HUD",
-    text: "FPS, 실제 렌더 해상도, 시간(uTime), 프레임 수, GPU 시간을 실시간으로 보여줍니다. G 키를 누르면 이 HUD와 위쪽 도구 막대까지 모두 숨겨 셰이더만 볼 수 있어요(다시 G · Esc).",
-    prepare: "stage",
-  },
-  {
-    target: "#panelTabs",
-    title: "설정 패널",
-    text: "렌더링 품질, 파라미터, 성능/디버그, 작업공간 설정이 탭으로 나뉘어 있습니다. H 키로 패널을 열고 닫아요.",
-    prepare: "panel:render",
-  },
-  {
-    target: "#view-uniforms",
-    title: "파라미터",
-    text: "슬라이더·색상·방향·패드로 Uniform 값을 실시간 조절합니다. GLSL 주석에 @range, @color, @dir, @enum 등을 달면 자동으로 여기에 생겨요.",
-    prepare: "panel:uniforms",
-  },
-  {
-    target: "#view-profile",
-    title: "성능 · 디버그",
-    text: "패스별 GPU 시간, 버퍼 썸네일, 픽셀 값, Uniform 진단을 확인합니다. 셰이더가 느리거나 결과가 이상할 때 먼저 보세요.",
-    prepare: "panel:profile",
-  },
-  {
-    target: "#studioPassTabs",
-    title: "패스 탭",
-    text: "Image(화면) · Common(공용 코드) · Buffer 패스를 오갑니다. 옆의 +로 오프스크린 패스를 추가해 여러 단계를 연결하고, + Common으로 모든 패스가 같이 쓰는 함수를 한 곳에 둘 수 있어요.",
-    prepare: "open-editor",
-  },
-  {
-    target: ".studio-editor-frame",
-    title: "코드 편집기",
-    text: "GLSL을 고치면 0.9초 뒤 자동 적용됩니다. 오류가 나면 해당 줄이 빨갛게 표시되고 줄 끝에 이유가 나와요.",
-    prepare: "open-editor",
-  },
-  {
-    target: "#studioRun",
-    title: "실행 · 되돌리기",
-    text: "Alt+Enter로 즉시 실행, Ctrl+S로 프로젝트 저장, Ctrl+Z로 코드·버퍼·파라미터 변경을 되돌립니다.",
-    prepare: "open-editor",
-  },
-  {
-    target: "#moreToggle",
-    title: "가이드는 언제든",
-    text: "⋯ 더보기 메뉴의 가이드나 ? 키로 가이드를 다시 열 수 있어요. 각 패널의 작은 ? 버튼은 해당 주제로 바로 이동합니다.",
-    prepare: "close-editor",
-  },
-];
+
 const mount = ({ studio, gallery }) => {
   const $ = PreviewDOM.createLookup(),
     controller = new AbortController(),
@@ -888,6 +926,8 @@ const mount = ({ studio, gallery }) => {
     nav = $("guideNav"),
     content = $("guideContent"),
     search = $("guideSearch");
+  const blockingDialog = () =>
+    [...document.querySelectorAll("dialog[open]")].find(node => node !== dialog && node.id !== "gallery");
   const element = UI.el;
   const listen = (target, type, fn, options = {}) => target?.addEventListener(type, fn, { ...options, signal });
   let current = "start";
@@ -898,9 +938,12 @@ const mount = ({ studio, gallery }) => {
   const codeBlock = source => highlighter.paint(element("pre"), source);
   // 탐색 목록: 시작하기 → 입문 과정 → 기능 레퍼런스. group이 바뀌는 곳에 목록 제목을 넣는다.
   const ALL = [
-    { ...TOPICS[0], group: "" },
+    ...TOPICS.filter(topic => ["start", "tours"].includes(topic.id)).map(topic => ({ ...topic, group: "" })),
     ...Course.LESSONS.map(lesson => ({ ...lesson, group: "입문 과정 · C 개발자용" })),
-    ...TOPICS.slice(1).map(topic => ({ ...topic, group: "기능 레퍼런스" })),
+    ...TOPICS.filter(topic => !["start", "tours"].includes(topic.id)).map(topic => ({
+      ...topic,
+      group: "기능 레퍼런스",
+    })),
   ];
   const LESSON_IDS = Course.LESSONS.filter(lesson => lesson.step).map(lesson => lesson.id),
     COURSE_ORDER = Course.LESSONS.map(lesson => lesson.id);
@@ -961,8 +1004,10 @@ const mount = ({ studio, gallery }) => {
   };
   const runAction = action => {
     if (action === "tour") {
+      open("tours");
+    } else if (action.startsWith("tour:")) {
       dialog.close();
-      startTour();
+      startTour(action.slice(5));
     } else if (action === "gallery") {
       dialog.close();
       gallery?.open(false);
@@ -1200,6 +1245,26 @@ const mount = ({ studio, gallery }) => {
     return box;
   };
   const renderBlock = block => {
+    if (block.tours) {
+      const list = element("div", "guide-tour-list");
+      if (blockingDialog()) list.append(UI.notice("열려 있는 창을 닫은 뒤 둘러보기를 시작하세요."));
+      for (const tour of TOURS) {
+        const entry = element("section", "ui-card ui-card--pad guide-tour-entry"),
+          button = element("button", "ui-btn--sm", "둘러보기 시작");
+        button.type = "button";
+        button.dataset.tour = tour.id;
+        button.disabled = !!blockingDialog();
+        button.setAttribute("aria-label", `${tour.title} 둘러보기 시작`);
+        entry.append(
+          element("h4", "", tour.title),
+          element("p", "", tour.summary),
+          element("span", "ui-hint guide-tour-count", `${tour.steps.length}단계`),
+          button
+        );
+        list.append(entry);
+      }
+      return list;
+    }
     if (block.library) return renderLibrary();
     if (block.reference) return renderReference();
     if (block.p) return rich("p", block.p);
@@ -1400,6 +1465,15 @@ const mount = ({ studio, gallery }) => {
         )
       );
     header.append(element("h3", "", topic.title), element("p", "", topic.summary));
+    const walkthrough = TOURS.find(tour => tour.topic === topic.id);
+    if (walkthrough) {
+      const button = element("button", "ui-btn--sm", "화면에서 배우기");
+      button.type = "button";
+      button.dataset.tour = walkthrough.id;
+      button.disabled = !!blockingDialog();
+      if (button.disabled) button.title = "다른 창을 닫은 뒤 시작";
+      header.append(button);
+    }
     content.replaceChildren(header, ...topic.blocks.map(renderBlock), ...(topic.course ? [lessonFoot(topic)] : []));
     content.scrollTop = 0;
     for (const button of nav.querySelectorAll("button")) {
@@ -1429,6 +1503,7 @@ const mount = ({ studio, gallery }) => {
         ...(b.keycode ? ["키 코드 확인 keyCode 키 번호"] : []),
         ...(b.library ? Snippets.ALL.flatMap(item => [item.title, item.desc, item.code]) : []),
         ...(b.reference ? Reference.ALL.flatMap(item => [item.name, item.sig, item.desc, item.c, item.ex]) : []),
+        ...(b.tours ? TOURS.flatMap(tour => [tour.title, tour.summary, ...tour.steps.map(step => step.text)]) : []),
       ]),
     ]
       .filter(Boolean)
@@ -1448,7 +1523,7 @@ const mount = ({ studio, gallery }) => {
       const button = element("button", done.has(topic.id) ? "is-done" : "");
       button.type = "button";
       button.dataset.topic = topic.id;
-      button.title = `${topic.title} — ${topic.summary}`;
+      button.title = topic.title;
       button.append(element("strong", "", navTitle(topic)), element("span", "", topic.summary));
       button.addEventListener("click", () => show(topic.id));
       items.push(button);
@@ -1461,7 +1536,8 @@ const mount = ({ studio, gallery }) => {
   // 터치 기기에서는 검색창에 자동 포커스하면 가상 키보드가 본문을 가리므로 본문에 포커스한다.
   const touchOnly = window.matchMedia?.("(hover:none) and (pointer:coarse)").matches === true;
   if (touchOnly) content.autofocus = true;
-  const open = (id = current) => {
+  const open = (id = current, { focusSearch = true } = {}) => {
+    window.focus?.();
     search.value = "";
     renderNav();
     show(id);
@@ -1470,7 +1546,7 @@ const mount = ({ studio, gallery }) => {
       // 닫힌 채로 주제를 고르면 스크롤할 수 없으므로, 연 다음에 고른 주제 탭을 보이는 자리로 옮긴다(좁은 화면의 가로 탭 줄).
       nav.querySelector("button.is-active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     }
-    if (!touchOnly) setTimeout(() => search.focus(), 0);
+    if (!touchOnly && focusSearch) setTimeout(() => search.focus(), 0);
   };
   listen(search, "input", renderNav);
   listen(search, "keydown", event => {
@@ -1481,8 +1557,7 @@ const mount = ({ studio, gallery }) => {
     }
   });
   listen($("guideTour"), "click", () => {
-    dialog.close();
-    startTour();
+    open("tours");
   });
   // ui.js가 dialog를 직접 여는 경우(? 키·툴바)에도 내용이 채워져 있도록 열릴 때마다 동기화한다.
   // ? 키·툴바 버튼(ui.js)은 이 요청 이벤트로 가이드를 연다. 처리했음을 preventDefault로 알린다.
@@ -1504,14 +1579,22 @@ const mount = ({ studio, gallery }) => {
     document,
     "click",
     event => {
-      const trigger = event.target instanceof Element ? event.target.closest("[data-guide]") : null;
+      const trigger = event.target instanceof Element ? event.target.closest("[data-guide],[data-tour]") : null;
       if (!trigger) return;
       event.preventDefault();
       event.stopPropagation();
-      open(trigger.dataset.guide);
+      if (trigger.dataset.tour) startTour(trigger.dataset.tour);
+      else open(trigger.dataset.guide);
     },
     { capture: true }
   );
+  // Static controls may move to the preview window; keep their help entry attached to the node.
+  for (const trigger of document.querySelectorAll("[data-guide]"))
+    listen(trigger, "click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      open(trigger.dataset.guide);
+    });
   // ---- UI 둘러보기 ----
   const openPanel = tab => {
     if (document.body.classList.contains("panel-hidden")) $("panelToggle").click();
@@ -1524,11 +1607,25 @@ const mount = ({ studio, gallery }) => {
   };
   const prepareStep = action => {
     if (!action) return;
+    if (
+      action !== "project" &&
+      $("projectMenu") &&
+      !$("projectMenu").hidden &&
+      $("projectMenu").ownerDocument === document
+    )
+      $("projectMenuToggle")?.click();
     if (action.startsWith("panel:")) openPanel(action.slice(6));
-    else if (action === "open-editor") {
+    else if (action === "open-editor" || action === "channels") {
       // 편집기를 열어도 패널은 그대로이므로, 좁은 화면에서 편집기를 덮는 서랍은 투어가 직접 닫는다(끝나면 되돌린다).
       closeOverlayPanel();
       studio.open();
+      if (action === "channels" && $("studioInputs")?.hidden) $("studioInputsToggle")?.click();
+    } else if (action === "timeline") {
+      closeOverlayPanel();
+      if ($("timelineDock")?.hidden) $("timelineToggle")?.click();
+    } else if (action === "project") {
+      closeOverlayPanel();
+      if ($("projectMenu")?.hidden && $("projectMenu").ownerDocument === document) $("projectMenuToggle")?.click();
     } else if (action === "stage") closeOverlayPanel();
     else if (action === "close-editor") {
       if (!$("studioDock").hidden) studio.close();
@@ -1547,20 +1644,34 @@ const mount = ({ studio, gallery }) => {
     text = element("p"),
     tools = element("div", "guide-tour-tools");
   title.id = "guideTourTitle";
+  text.id = "guideTourText";
+  overlay.setAttribute("aria-describedby", text.id);
   const prev = element("button", "", "이전"),
     next = element("button", "ui-btn--primary", "다음"),
+    help = element("button", "ui-btn--ghost", "자세히"),
     skip = element("button", "ui-btn--ghost guide-tour-skip", "닫기");
-  for (const button of [prev, next, skip]) button.type = "button";
-  tools.append(skip, prev, next);
-  card.append(stepLabel, title, text, tools);
+  for (const button of [prev, next, skip, help]) button.type = "button";
+  tools.append(skip, help, prev, next);
+  const copy = element("div", "guide-tour-copy");
+  copy.setAttribute("aria-live", "polite");
+  copy.setAttribute("aria-atomic", "true");
+  copy.append(stepLabel, title, text);
+  spot.setAttribute("aria-hidden", "true");
+  card.append(copy, tools);
   overlay.append(spot, card);
   document.body.append(overlay);
   let step = 0,
-    tourActive = false;
+    tourActive = false,
+    tourFrame = 0,
+    activeTour = TOURS[0];
+  const targetOf = item => {
+    const node = document.querySelector(item.target);
+    return node?.getBoundingClientRect().height ? node : node?.closest(".ui-section") || node;
+  };
   const place = () => {
     if (!tourActive) return;
-    const item = TOUR[step],
-      target = document.querySelector(item.target),
+    const item = activeTour.steps[step],
+      target = targetOf(item),
       rect = target?.getBoundingClientRect();
     const visible = rect && rect.width > 0 && rect.height > 0,
       pad = 6,
@@ -1568,19 +1679,22 @@ const mount = ({ studio, gallery }) => {
       vh = window.innerHeight;
     // 화면보다 긴 패널은 보이는 부분만 강조한다.
     if (visible) {
-      const top = Math.max(rect.top - pad, 4),
+      const left = Math.max(rect.left - pad, 4),
+        right = Math.min(rect.right + pad, vw - 4),
+        top = Math.max(rect.top - pad, 4),
         bottom = Math.min(rect.bottom + pad, vh - 4);
       Object.assign(spot.style, {
-        left: `${rect.left - pad}px`,
+        left: `${left}px`,
         top: `${top}px`,
-        width: `${rect.width + pad * 2}px`,
+        width: `${Math.max(0, right - left)}px`,
         height: `${Math.max(0, bottom - top)}px`,
       });
       spot.hidden = false;
     } else spot.hidden = true;
     // 카드: 대상 아래 → 위 → 오른쪽 → 화면 중앙 순으로 들어갈 자리를 찾는다.
-    const cw = Math.min(340, vw - 24),
-      ch = card.offsetHeight || 180;
+    const cw = Math.min(340, vw - 24);
+    card.style.width = `${cw}px`;
+    const ch = card.offsetHeight || 180;
     let left = (vw - cw) / 2,
       top = (vh - ch) / 2;
     if (visible) {
@@ -1603,57 +1717,132 @@ const mount = ({ studio, gallery }) => {
     Object.assign(card.style, { left: `${left}px`, top: `${top}px`, width: `${cw}px` });
   };
   const showStep = index => {
-    step = Math.max(0, Math.min(TOUR.length - 1, index));
-    const item = TOUR[step];
+    step = Math.max(0, Math.min(activeTour.steps.length - 1, index));
+    const item = activeTour.steps[step];
     prepareStep(item.prepare);
-    stepLabel.textContent = `${step + 1} / ${TOUR.length}`;
+    stepLabel.textContent = `${activeTour.title} · ${step + 1} / ${activeTour.steps.length}`;
     title.textContent = item.title;
     text.textContent = item.text;
     prev.disabled = step === 0;
-    next.textContent = step === TOUR.length - 1 ? "완료" : "다음";
-    document.querySelector(item.target)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    next.textContent = step === activeTour.steps.length - 1 ? "완료" : "다음";
+    targetOf(item)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     // 패널·편집기가 열리며 레이아웃이 바뀌므로 다음 프레임에 위치를 계산한다.
     requestAnimationFrame(() => requestAnimationFrame(place));
-    next.focus();
+    next.focus({ preventScroll: true });
+    card.scrollTop = 0;
+  };
+  const trackTour = () => {
+    if (!tourActive) return;
+    place();
+    tourFrame = requestAnimationFrame(trackTour);
   };
   // 투어는 설명을 위해 편집기·설정 패널을 열고 닫으므로, 시작 전 화면(편집기 열림·패널 표시·패널 탭)을 기억했다가 끝나면 되돌린다.
   let beforeTour = null;
   const uiState = () => ({
     editor: !$("studioDock").hidden,
+    expanded: $("studioMaximize")?.getAttribute("aria-pressed") === "true",
     panelHidden: document.body.classList.contains("panel-hidden"),
     tab: document.querySelector('#panelTabs [aria-selected="true"]')?.dataset.tab,
+    timeline: !$("timelineDock")?.hidden,
+    inputs: !$("studioInputs")?.hidden,
+    project: !!$("projectMenu") && !$("projectMenu").hidden,
+    hud: $("stage")?.classList.contains("hud-hidden"),
+    guide: dialog.open,
+    topic: current,
+    query: search.value,
+    guideScroll: content.scrollTop,
+    focus: document.activeElement,
+    focusTour: document.activeElement?.dataset?.tour,
+    details: [...document.querySelectorAll("#panel details,#studioDock details,#projectMenu details")].map(node => [
+      node,
+      node.open,
+    ]),
+    scrolls: [...document.querySelectorAll("#panel .panel-scroll,#studioDock .cm-scroller,.timeline-body")].map(
+      node => [node, node.scrollTop, node.scrollLeft]
+    ),
+    inert: [...document.body.children].filter(node => node !== overlay).map(node => [node, node.inert]),
   });
   const restoreUi = state => {
     if (!state) return;
     if (state.editor && $("studioDock").hidden) studio.open();
     else if (!state.editor && !$("studioDock").hidden) studio.close();
+    if (state.editor && state.expanded !== ($("studioMaximize")?.getAttribute("aria-pressed") === "true"))
+      $("studioMaximize")?.click();
     if (state.panelHidden !== document.body.classList.contains("panel-hidden")) $("panelToggle").click();
     if (state.tab) document.querySelector(`#panelTabs [data-tab="${state.tab}"]`)?.click();
+    if ($("timelineDock") && state.timeline !== !$("timelineDock").hidden) $("timelineToggle")?.click();
+    if ($("studioInputs") && state.inputs !== !$("studioInputs").hidden) $("studioInputsToggle")?.click();
+    if ($("projectMenu") && state.project !== !$("projectMenu").hidden) $("projectMenuToggle")?.click();
+    if (state.hud !== $("stage")?.classList.contains("hud-hidden")) $("hudToggle")?.click();
+    for (const [node, open] of state.details) if (node.isConnected) node.open = open;
+    for (const [node, top, left] of state.scrolls)
+      if (node.isConnected) {
+        node.scrollTop = top;
+        node.scrollLeft = left;
+      }
   };
   const endTour = () => {
     if (!tourActive) return;
     tourActive = false;
+    if (tourFrame) cancelAnimationFrame(tourFrame);
+    tourFrame = 0;
     overlay.hidden = true;
     const state = beforeTour;
     beforeTour = null;
+    for (const [node, inert] of state.inert) if (node.isConnected) node.inert = inert;
     restoreUi(state);
-    $("moreToggle")?.focus(); // 가이드 버튼은 ⋯ 메뉴 안에 있어 닫힌 상태에서는 초점을 받지 못한다.
+    if (state.guide) {
+      open(state.topic, { focusSearch: false });
+      search.value = state.query;
+      renderNav();
+      show(state.topic);
+      content.scrollTop = state.guideScroll;
+    }
+    if (state.guide && state.focusTour)
+      [...content.querySelectorAll("[data-tour]")]
+        .find(node => node.dataset.tour === state.focusTour)
+        ?.focus({ preventScroll: true });
+    else if (state.focus?.isConnected && state.focus.getClientRects().length)
+      state.focus.focus({ preventScroll: true });
+    else $("moreToggle")?.focus({ preventScroll: true });
   };
-  const startTour = () => {
-    if (dialog.open) dialog.close();
+  const startTour = (id = "overview") => {
+    if (blockingDialog()) return false;
     if (!tourActive) beforeTour = uiState();
+    if (dialog.open) dialog.close();
+    activeTour = TOURS.find(tour => tour.id === id) || TOURS[0];
+    if ($("stage")?.classList.contains("hud-hidden")) $("hudToggle")?.click();
+    for (const [node] of beforeTour.inert) node.inert = true;
     tourActive = true;
     overlay.hidden = false;
     showStep(0);
+    if (!tourFrame) tourFrame = requestAnimationFrame(trackTour);
+    return true;
   };
   listen(prev, "click", () => showStep(step - 1));
-  listen(next, "click", () => (step === TOUR.length - 1 ? endTour() : showStep(step + 1)));
+  listen(next, "click", () => (step === activeTour.steps.length - 1 ? endTour() : showStep(step + 1)));
   listen(skip, "click", endTour);
+  listen(help, "click", () => {
+    const topic = activeTour.topic;
+    endTour();
+    open(topic);
+  });
   listen(overlay, "keydown", event => {
     event.stopPropagation(); // 투어 중에는 E/H/F 같은 전역 단축키가 화면을 바꾸지 않게 한다.
     if (event.key === "Escape") {
       event.preventDefault();
       endTour();
+    } else if (event.key === "Tab") {
+      const buttons = [skip, help, prev, next].filter(button => !button.disabled),
+        at = buttons.indexOf(document.activeElement);
+      event.preventDefault();
+      buttons[
+        at < 0
+          ? event.shiftKey
+            ? buttons.length - 1
+            : 0
+          : (at + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length
+      ].focus();
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
       next.click();
@@ -1665,13 +1854,14 @@ const mount = ({ studio, gallery }) => {
   listen(window, "resize", place);
   listen($("galleryTour"), "click", () => {
     $("gallery")?.close();
-    startTour();
+    open("tours");
   });
   return {
     open,
     show,
     startTour,
     dispose: () => {
+      if (tourActive) endTour();
       controller.abort();
       overlay.remove();
       previews.dispose();

@@ -130,11 +130,16 @@
 /* 스포트라이트: 대상 밖을 덮는 거대한 그림자는 장식이 아니라 가림막 역할이다. */
 .guide-tour-spot { position:fixed;border-radius:var(--radius);box-shadow:0 0 0 2px var(--accent),0 0 0 9999px var(--overlay);transition:left .25s,top .25s,width .25s,height .25s;pointer-events:none; }
 .guide-tour-spot[hidden] + .guide-tour-card { box-shadow:0 0 0 9999px var(--overlay),var(--shadow); }
-.guide-tour-card { position:fixed;display:grid;gap:8px;padding:16px 18px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow);transition:left .25s,top .25s; }
+.guide-tour-card { position:fixed;display:grid;gap:8px;max-height:calc(100vh - 24px);overflow:auto;padding:16px 18px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow); }
 .guide-tour-step { color:var(--accent-strong);font:600 var(--text-2xs)/1.4 var(--mono);letter-spacing:.8px; }
 .guide-tour-card h3 { margin:0;color:var(--text);font-size:var(--text-xl);font-weight:700; }
 .guide-tour-card p { margin:0;color:var(--text-soft);font-size:var(--text-md);line-height:1.65; }
-.guide-tour-tools { display:flex;justify-content:flex-end;gap:6px;margin-top:6px; }
+.guide-tour-tools { display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:6px; }
+.guide-tour-list { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:var(--space-6); }
+.guide-tour-entry { display:grid;gap:var(--space-4); }
+.guide-tour-entry>h4,.guide-tour-entry>p,.guide-tour-count { margin:0; }
+.guide-tour-copy { display:grid;gap:var(--space-4); }
+.guide-tour-entry>button { justify-self:start; }
 .guide-tour-skip { margin-right:auto; }
 @media (max-width:760px) {
  .guide-head { position:relative;flex-wrap:wrap;gap:12px;padding:14px 16px; }
