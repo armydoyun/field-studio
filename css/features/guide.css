@@ -6,6 +6,8 @@
 .guide-search { width:min(300px,40vw); }
 #guideTour { white-space:nowrap; }
 .guide-body { position:relative;display:grid;grid-template-columns:240px minmax(0,1fr);flex:1;min-height:0; }
+/* 스크롤 유무와 관계없이 목차·본문의 가로 폭을 유지한다. */
+.guide-nav,.guide-content { scrollbar-gutter:stable; }
 /* ── 주제 목록 ── */
 .guide-nav { display:grid;grid-auto-rows:max-content;align-content:start;gap:2px;padding:12px;overflow-y:auto;border-right:1px solid var(--line);background:var(--panel); }
 .guide-nav-toggle { display:none;flex-shrink:0; }
