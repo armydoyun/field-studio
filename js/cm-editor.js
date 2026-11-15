@@ -32,7 +32,7 @@ const lineAlignedSelection = CM => {
       class: "cm-selectionLayer", // 포커스·테마 규칙이 이 이름을 본다. 원래 레이어와 구분하는 이름은 mount에서 붙인다.
       mount: dom => dom.classList.add("studio-selection-layer"),
       markers(view) {
-        // 레이어 좌표(스크롤 영역 기준) ↔ 문서 좌표. CodeMirror 레이어와 같은 기준점을 쓴다.
+        // 레이어 좌표(스크롤 영역 기준)와 문서 좌표 사이의 변환. CodeMirror 레이어와 같은 기준점을 쓴다.
         const rect = view.scrollDOM.getBoundingClientRect(),
           offset = view.documentTop - (rect.top - view.scrollDOM.scrollTop),
           out = [];
@@ -977,7 +977,33 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
         CM.closeBrackets(),
         glsl,
         CM.syntaxHighlighting(glslStyle),
-        CM.autocompletion({ override: [completionSource], icons: true, activateOnTyping: true }),
+        CM.autocompletion({
+          override: [completionSource],
+          icons: false,
+          activateOnTyping: true,
+          addToOptions: [
+            {
+              position: 20,
+              render: completion => {
+                const icon = document.createElement("span"),
+                  names = {
+                    function: "code",
+                    method: "code",
+                    variable: "complete",
+                    property: "complete",
+                    constant: "goto",
+                    type: "snippet",
+                    keyword: "code",
+                    text: "snippet",
+                  },
+                  name = names[completion.type?.split(" ")[0]] || "code";
+                icon.className = `cm-glsl-completion-icon glyph-icon icon-${name}`;
+                icon.setAttribute("aria-hidden", "true");
+                return icon;
+              },
+            },
+          ],
+        }),
         hover,
         CM.lintGutter(),
         CM.search({ top: true, createPanel: SearchPanel.createSearchPanel(CM) }), // 두 줄 찾기·바꾸기 창(cm-search-panel.js)
@@ -1235,7 +1261,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "글자 크게", key: "Ctrl+=", run: zoom(1) },
     { label: "글자 작게", key: "Ctrl+-", run: zoom(-1) },
     {
-      label: "들여쓰기 크기 2 ↔ 4 바꾸기",
+      label: "들여쓰기 크기 2 또는 4로 바꾸기",
       run: () => {
         tabSize = tabSize === 4 ? 2 : 4;
         applyPresentation();

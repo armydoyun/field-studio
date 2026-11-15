@@ -227,7 +227,7 @@ const runners = {node:runNode, browser:runBrowser, py:runPy};
 const started = Date.now();
 for(const suite of suites) {
   if(!plan[suite].length) continue;
-  console.log(`\n▶ ${suite} (${plan[suite].length})`);
+  console.log(`\n[${suite}] (${plan[suite].length})`);
   await runners[suite]();
 }
 

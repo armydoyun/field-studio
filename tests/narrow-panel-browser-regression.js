@@ -46,7 +46,7 @@
   try {
     setCode(`#version 300 es
 precision highp float;
-uniform float uSpin; // 위성 돌리기(▶: 한 바퀴씩), 긴 설명도 온전히 표시합니다 · @angle @default 30deg @anim 12
+uniform float uSpin; // 위성 돌리기(재생: 한 바퀴씩), 긴 설명도 온전히 표시합니다 · @angle @default 30deg @anim 12
 uniform vec2 uCenter; // 화면 중심(xy 패드도 같다) · @pos
 uniform vec3 uLight; // 조명 방향 · @dir
 uniform vec4 uTint; // 밝기와 투명도 · @color hdr @default 2 1 0.5 1

@@ -22,10 +22,10 @@
 /* 설정 패널 버튼은 패널이 열려 있는 것이 보통 상태라 면은 칠하지 않고 글자색만 바꾼다 */
 #panelToggle[aria-pressed="true"] { background:transparent; }
 #panelToggle[aria-pressed="true"]:hover { background:var(--surface-hover); }
-/* 캡처: 카메라는 바로 저장, 옆 ▾는 메뉴(카메라에 붙은 좁은 칸) */
+/* 캡처: 카메라는 바로 저장, 옆 펼치기는 메뉴(카메라에 붙은 좁은 칸) */
 #stageToolbar #captureToggle { width:24px;min-width:24px;margin-left:-4px; }
 #stageToolbar #captureToggle svg { width:14px;height:14px; }
-/* 툴바 드롭다운(캡처 ▾ · ⋯ 더보기, stage-menu.js). 미리보기 영역에 잘리지 않게 창 기준(fixed)으로 띄운다. */
+/* 툴바 드롭다운(캡처 펼치기 · ⋯ 더보기, stage-menu.js). 미리보기 영역에 잘리지 않게 창 기준(fixed)으로 띄운다. */
 .stage-menu { position:fixed;width:max-content;min-width:200px;max-width:calc(100vw - 16px);pointer-events:auto; }
 .stage-menu[hidden] { display:none; }
 /* 녹화: 빨간 점 · 녹화 중에는 툴바에 경과 시간 버튼이 나온다 */

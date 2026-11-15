@@ -25,7 +25,7 @@
 python tests/function-navigation-browser-regression.py
 ```
 
-테스트에서는 오버로드, 여러 줄 서명, 주석/전처리문/프로토타입 제외, 구조체 내부 제외, 정확한 커서 이동, 중복 선택, Undo 변경 없음, Image ↔ Buffer 전환, 소스 편집, Undo/Redo, 비활성 드롭다운, Chromium 예외 없음 등을 확인합니다.
+테스트에서는 오버로드, 여러 줄 서명, 주석/전처리문/프로토타입 제외, 구조체 내부 제외, 정확한 커서 이동, 중복 선택, Undo 변경 없음, Image / Buffer 전환, 소스 편집, Undo/Redo, 비활성 드롭다운, Chromium 예외 없음 등을 확인합니다.
 
 기존 자동 검증: `node tests/architecture-regression.js`, `node tests/runtime-integrity.js`, 다른 `tests/*-regression.js` (Node 전용), `python tests/undo-browser-regression.py`, `python tests/compiler-lines-browser-regression.py`.
 

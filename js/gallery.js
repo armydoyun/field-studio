@@ -304,8 +304,8 @@ uniform float uTime;
 // 1. uView = 결과: 행성·위성·별을 조절한다. 꺼진 기능의 세부 항목은 조건에 따라 숨는다.
 // 2. uView = 타입_실험: 배열·성분별 범위·정수/불리언 벡터·행렬을 화면의 점·격자·색으로 확인한다.
 // 3. uView = 램프: 색 램프와 곡선을 읽는 법을 본다. 실험 보기에도 추가 램프가 있다.
-// 값이 마음에 들면 이름 옆 ↓ 또는 '바뀐 값 모두 코드에 반영'으로 기본값에 쓴다(Ctrl+Z로 복원).
-// 🔒로 고정한 뒤 전체 무작위/조금씩 바꾸기 → 프리셋 저장도 해 보자. 이 버튼들은 태그가 아니라 패널 기능이다.
+// 값이 마음에 들면 이름 옆 코드 반영 버튼 또는 '바뀐 값 모두 코드에 반영'으로 기본값에 쓴다(Ctrl+Z로 복원).
+// 잠금 버튼으로 고정한 뒤 전체 무작위/조금씩 바꾸기 → 프리셋 저장도 해 보자. 이 버튼들은 태그가 아니라 패널 기능이다.
 //
 // 선언 줄 끝의 첫 태그 앞 글 = 설명. 태그 순서는 자유이며 숫자/선택지는 빈칸 또는 쉼표로 나눈다.
 // 범위: range min max [step] 또는 min/max/step. 벡터는 성분마다 min max 쌍을 줄 수도 있다.
@@ -319,10 +319,10 @@ uniform float uTime;
 // 배열에는 seed·anim·성분별 range를 쓸 수 없다. 램프는 sampler2D에 gradient 또는 curve를 쓴다(최대 8개).
 // gradient의 #RRGGBBAA 끝 두 자리는 알파다. uMoons는 이 표현을, uNumericGradient는 숫자 RGBA를 보여 준다.
 // ── 기본 장면: 스칼라·위젯·단일/복합 조건 ──
-uniform int   uView;     // 보기(▶: 차례로, 타입 실험은 마지막) · @enum 결과 명암만 거리장 램프 타입_실험 @default 0 @anim 2 @group 보기
+uniform int   uView;     // 보기(재생: 차례로, 타입 실험은 마지막) · @enum 결과 명암만 거리장 램프 타입_실험 @default 0 @anim 2 @group 보기
 uniform bool  uMoonEnabled; // 위성 켜기(세부 조절기도 함께 표시) · @default true @group 모양
 uniform float uRadius;   // 행성 크기(range의 세 번째 숫자는 step) · @range 0.1 0.4 0.005 @default 0.24 @group 모양 @if uView < 3
-uniform int   uCount;    // 위성 수(▶: int는 한 칸씩 왕복) · @min 0 @max 9 @default 5 @anim 6 @group 모양 @if uMoonEnabled == true && uView < 3
+uniform int   uCount;    // 위성 수(재생: int는 한 칸씩 왕복) · @min 0 @max 9 @default 5 @anim 6 @group 모양 @if uMoonEnabled == true && uView < 3
 uniform float uOrbit;    // 궤도 반지름(위성이 있을 때) · @range 0.3 0.8 @step 0.01 @default 0.5 @group 모양 @if uCount > 0 && uMoonEnabled && uView < 3
 uniform float uSpin;     // 위성 돌리기(30deg를 라디안으로 읽음) · @angle @default 30deg @anim 12 @group 모양 @if uCount >= 1 && uMoonEnabled && uView < 3
 uniform vec2  uCenter;   // 화면 중심(값 하나로 XY 모두 초기화) · @pos @range -1 1 @default 0 @group 모양 @if uView != 램프
@@ -480,7 +480,7 @@ uniform vec2 uResolution;
 // 해시와 큰 좌표: 같은 칸 번호를 두 해시에 넣어 비교한다. 왼쪽 = 실수 해시(예전 방식), 오른쪽 = 정수 해시.
 // 해시 값이 상위 4%인 칸만 점으로 찍으면 규칙성이 눈에 잘 띈다. 무작위라면 점이 어디에도 줄지어 서지 않는다.
 // uOffset을 0부터 올려 보세요. 실수 해시는 수십만부터 점이 행·열로 줄을 서고, 천만 근처에서는 격자가 됩니다.
-uniform float uOffset;  // 칸 번호에 더할 값(▶로 0 ↔ 1천만을 오간다) · @range 0 10000000 @step 1000 @default 10000000 @anim 20
+uniform float uOffset;  // 칸 번호에 더할 값(재생로 0 ~ 1천만을 오간다) · @range 0 10000000 @step 1000 @default 10000000 @anim 20
 uniform float uCell;    // 칸 크기(px) · @range 1 8 @step 1 @default 2
 uniform int   uShowRaw; // 보기 · @enum 상위_4%만_점으로 해시_값_그대로 @default 0
 // 예전 방식: fract로 소수부만 남겨 섞는다(Hoskins "Hash without Sine"). float의 유효숫자 24비트에 묶인다.
@@ -613,7 +613,7 @@ precision highp float;
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 uniform float uBlur;  // 가장 흐린 곳의 밉 레벨 · @range 0 8 @step 0.1 @default 5 @group 초점
-uniform float uFocus; // 또렷한 줄의 높이(▶로 위아래로 훑는다) · @range 0 1 @step 0.01 @default 0.5 @anim 8 @group 초점 @if uBlur > 0
+uniform float uFocus; // 또렷한 줄의 높이(재생로 위아래로 훑는다) · @range 0 1 @step 0.01 @default 0.5 @anim 8 @group 초점 @if uBlur > 0
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / uResolution;
     float lod = uBlur * smoothstep(0.05, 0.45, abs(uv.y - uFocus));
@@ -684,7 +684,7 @@ uniform sampler2D iChannel1;
 uniform float uIntensity; // 블룸 세기 · @range 0 3 @step 0.01 @default 0.8 @group 합성
 uniform float uRadius;    // 겹칠 밉 레벨 수(클수록 넓게 번짐) · @range 1 7 @step 0.1 @default 6 @group 합성 @if uIntensity > 0
 uniform float uExposure;  // 노출(배율) · @log @range 0.05 8 @default 1 @group 화면에 담기
-uniform int uToneMap;     // 톤 매핑(▶로 차례로 비교) · @enum 자르기 Reinhard ACES @default 2 @anim 2 @group 화면에 담기
+uniform int uToneMap;     // 톤 매핑(재생로 차례로 비교) · @enum 자르기 Reinhard ACES @default 2 @anim 2 @group 화면에 담기
 uniform bool uCompare;    // 왼쪽 절반은 블룸 없이 보여 준다 · @default false @group 화면에 담기
 vec3 blurLevel(vec2 uv, int lod) {
     vec2 texel = 1.0 / vec2(textureSize(iChannel1, lod));

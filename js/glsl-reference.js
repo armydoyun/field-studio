@@ -139,7 +139,7 @@ const CATEGORIES = [
       {
         name: "radians · degrees",
         sig: "T radians(T deg) · T degrees(T rad)",
-        desc: "도 ↔ 라디안 변환.",
+        desc: "도와 라디안 사이의 변환.",
         c: "deg * M_PI / 180",
         ex: "float a = radians(45.0);   // 0.785…\nfloat deg = degrees(atan(p.y, p.x));",
       },
@@ -463,7 +463,7 @@ const CATEGORIES = [
   {
     id: "bits",
     title: "비트 · 정수 · 패킹",
-    desc: "정수 연산과 실수↔비트 변환입니다. 정수에는 +, −, *, /, %, <<, >>, &, |, ^, ~ 연산자를 그대로 쓸 수 있어요(C와 동일).",
+    desc: "정수 연산과 실수와 비트 사이의 변환입니다. 정수에는 +, −, *, /, %, <<, >>, &, |, ^, ~ 연산자를 그대로 쓸 수 있어요(C와 동일).",
     items: [
       {
         name: "정수 연산자",

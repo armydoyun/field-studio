@@ -284,14 +284,16 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 작업이 통째로 바뀔 때(예제·새 프로젝트·파일·보관함 열기)마다 1씩 오른다. 저장 도중 작업이 바뀌었는지 확인하는 데 쓴다.
   let workEpoch = 0;
   // 브라우저 탭 제목: 보관함 프로젝트 이름(없으면 "저장 안 한 작업")과 상태 표시.
-  //   ● 보관함과 다름 — 저장한 뒤 바뀜, 또는 이름 없는 작업이 시작한 뒤 바뀜(저장하면 사라짐)
-  //   ✎ 코드 편집이 아직 실행에 반영되지 않음 · ⚠ 마지막 적용이 컴파일 오류
+  //   저장 안 됨 보관함과 다름 — 저장한 뒤 바뀜, 또는 이름 없는 작업이 시작한 뒤 바뀜(저장하면 사라짐)
+  //   실행 대기 코드 편집이 아직 실행에 반영되지 않음 · 컴파일 오류 마지막 적용이 컴파일 오류
   let titleName = "저장 안 한 작업",
     titleState = "applied",
     isModified = () => false; // 보관함(studio-projects.js)을 만든 뒤 연결한다
   const syncTitle = () => {
     const modified = isModified(),
-      mark = (titleState === "error" ? "⚠ " : titleState === "dirty" ? "✎ " : "") + (modified ? "● " : "");
+      mark =
+        (titleState === "error" ? "[컴파일 오류] " : titleState === "dirty" ? "[실행 대기] " : "") +
+        (modified ? "[저장 안 됨] " : "");
     const title = `${mark}${titleName} — FIELD Studio`;
     if (document.title !== title) document.title = title;
     projectMenu.setModified(modified);
@@ -408,7 +410,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   //  · 탭을 바꾸면 그 패스를 따라간다(처음 쓰는 사람이 "내가 고치는 버퍼"를 바로 보게). 단, 고정(previewPinned)을 켜면 그대로 둔다.
   //  · 코드를 적용할 때(자동 적용 포함)는 미리보기를 바꾸지 않는다 — Buffer A를 고치면서 최종 Image를 보고 있을 수 있다.
   //    지금 보던 버퍼가 사라졌을 때만 Image로 돌아간다.
-  //  · 편집기 머리줄의 미리보기 버튼(눈 아이콘 + Image / Buffer A)은 Image ↔ 편집 중인 패스를 오간다.
+  //  · 편집기 머리줄의 미리보기 버튼(눈 아이콘 + Image / Buffer A)은 Image ~ 편집 중인 패스를 오간다.
   const PIN_KEY = "field.previewPinned.v1";
   let previewPinned = Store.read(PIN_KEY) === "1";
   const passExists = name => renderer.getPasses().some(p => p.name === name);
@@ -617,7 +619,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           : media.state === "error"
             ? `오류 · ${media.error}`
             : (kind === "audio" || kind === "video") && media.savedName
-              ? `꺼짐 · 보관한 파일 ${media.savedName} — 칩을 눌러 '▶ ${media.savedName}'으로 다시 켜세요`
+              ? `꺼짐 · 보관한 파일 ${media.savedName} — 칩을 눌러 '재생 ${media.savedName}'으로 다시 켜세요`
               : kind === "audio" || kind === "video"
                 ? "꺼짐 · 칩을 눌러 파일을 고르세요"
                 : "꺼짐 · 칩을 눌러 다시 고르면 켭니다(권한 필요)";
@@ -1559,7 +1561,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioToggle").setAttribute("aria-expanded", "true");
     $("studioCode").focus({ preventScroll: true });
     workspace.saveWorkspace();
-  }; // 재생 버튼은 아이콘(정지 중이면 ▶)과 접근 가능한 이름으로 상태를 알린다. 집중 모드에서는 복귀 후 재생 여부를 고른다.
+  }; // 재생 버튼은 아이콘(정지 중이면 재생)과 접근 가능한 이름으로 상태를 알린다. 집중 모드에서는 복귀 후 재생 여부를 고른다.
   // 집중 모드는 미리보기가 가려지므로 재생을 붙잡아 둔다(held). 미리보기를 별도 창으로 뺐으면(popout.js) 계속 보이므로 붙잡지 않는다.
   const previewPopped = () => document.body.classList.contains("preview-popped"),
     previewHeld = () => expanded && !previewPopped();
@@ -2298,7 +2300,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (toggle) toggle.setAttribute("aria-pressed", String(runs));
     $("studioRun").title = `현재 GLSL/채널 설정을 적용 (${runs ? "Ctrl+S · " : ""}Alt+Enter)`;
     const hint = $("studioRun").querySelector("span");
-    if (hint) hint.textContent = runs ? "Ctrl+S" : "Alt+↵";
+    if (hint) hint.textContent = runs ? "Ctrl+S" : "Alt+Enter";
   };
   const setCtrlSRuns = runs => {
     Store.write(CTRL_S_KEY, runs ? "1" : "0");
@@ -2404,7 +2406,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   isModified = () => projects.modified();
   renderEditor();
   restore();
-  // 파라미터·설정·이미지 샘플링은 여러 곳에서 바뀌므로 저장 후 변경 여부(●)는 1초마다 확인한다.
+  // 파라미터·설정·이미지 샘플링은 여러 곳에서 바뀌므로 저장 후 변경 여부(저장 안 됨)는 1초마다 확인한다.
   const titleTimer = setInterval(syncTitle, 1000);
   // 이름 없는 작업의 기준점: 지난번에 기억해 둔 것이 없으면 지금(복원 직후)을 '바뀌지 않은 작업'으로 삼는다.
   projects.markClean({ ifUnknown: true });
@@ -2514,7 +2516,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     press("되돌리기", "studioUndo", "Ctrl+Z"),
     press("다시 실행", "studioRedo", "Ctrl+Y"),
     { label: "자동 적용 켜기/끄기", run: () => $("studioLive").click() },
-    { label: "미리보기: Image ↔ 편집 중인 패스", run: togglePreview },
+    { label: "미리보기: Image ~ 편집 중인 패스", run: togglePreview },
     { label: "미리보기 고정 켜기/끄기", run: () => setPreviewPinned(!previewPinned) },
     press("버퍼 패스 추가", "studioAdd"),
     { label: "다음 패스로", key: "Alt+PageDown · Alt+.", run: () => stepPass(1) },
@@ -2529,7 +2531,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       bind: ["Mod-k p", "Mod-k P"],
       run: () => splitEdit(),
     },
-    press("편집기 배치 바꾸기 (옆 ↔ 위아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
+    press("편집기 배치 바꾸기 (옆 ~ 위아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
     press("편집기 닫기", "studioHide", "E"),
     press("코드 조각 모음 열기", "studioSnippets"),
     press("파라미터 패널 열기", "studioParameters"),

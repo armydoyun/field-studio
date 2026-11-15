@@ -1,4 +1,4 @@
-/* 자리 옮기기: 손잡이(⠿)를 끌어 설정 패널 · 편집기를 화면의 다른 쪽으로 옮긴다(dock-drag.js). */
+/* 자리 옮기기: 이동 손잡이를 끌어 설정 패널 · 편집기를 화면의 다른 쪽으로 옮긴다(dock-drag.js). */
 .dock-grip { display:inline-grid;place-items:center;flex:0 0 28px;width:28px;height:var(--control-md);padding:0;border:0;background:transparent;color:var(--faint);cursor:grab;touch-action:none; }
 .dock-grip svg { width:16px;height:16px; }
 .dock-grip:hover,.dock-grip:focus-visible,.dock-grip.is-dragging { background:transparent;color:var(--accent); }

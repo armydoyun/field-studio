@@ -23,7 +23,7 @@ uniform float uTime;
 uniform vec2 uMouse;
 uniform float uSpeed;      // 날아가는 속도(원본 speed) · @range 0 0.05 @step 0.0005 @default 0.01 @group 비행
 uniform float uZoom;       // 시야(원본 zoom, 클수록 넓게) · @log @range 0.2 3 @default 0.8 @group 비행
-uniform float uFormula;    // 무늬를 정하는 상수(원본 formuparam, ▶로 훑기) · @range 0.4 0.6 @step 0.001 @default 0.53 @anim 30 @group 성운 @seed
+uniform float uFormula;    // 무늬를 정하는 상수(원본 formuparam, 재생로 훑기) · @range 0.4 0.6 @step 0.001 @default 0.53 @anim 30 @group 성운 @seed
 uniform float uTile;       // 공간을 접는 크기(원본 tile) · @range 0.5 1.2 @step 0.005 @default 0.85 @group 성운
 uniform float uDarkMatter; // 암흑 물질(원본 darkmatter) · @range 0 1 @step 0.01 @default 0.3 @group 성운
 uniform float uFade;       // 멀수록 흐려지는 정도(원본 distfading) · @range 0.5 0.9 @step 0.005 @default 0.73 @group 빛
@@ -2659,7 +2659,7 @@ vec3 RayTrace(in vec2 fragCoord )
             texColor = vec3(Hash11(distAndMat.y)*1.0, Hash11(distAndMat.y*8.765), Hash11(distAndMat.y*17.731))*0.1;
             texColor = pow(abs(texColor), vec3(0.2));  // bias toward white
             texColor = max(vec3(0.25), texColor);  // not too saturated color.
-            texColor.z = min(texColor.y, texColor.z);  // no purple cars. just not realistic. :)
+            texColor.z = min(texColor.y, texColor.z);  // no purple cars. just not realistic.
             texColor *= Hash11(distAndMat.y*0.789) * 0.15;
             windowMask = saturate( max(0.0, abs(pos.y - 0.0175)*3800.0)-10.0);
             vec2 dirNorm = abs(normalize(normal.xz));
@@ -2990,7 +2990,7 @@ uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @de
 //  I made some previous attempts but thought I make another attempt it
 
 // Reducing the alias effects on the inner reflections turned out to be a bit tricky. 
-//  Simplest solution is just to run run fullscreen on a 4K screen ;)
+//  Simplest solution is just to run run fullscreen on a 4K screen.
 
 // Function to generate the solid found here: https://www.shadertoy.com/view/MsKGzw
 
@@ -4057,7 +4057,7 @@ uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @de
 // Date:   26-May-2025
 // Desc:   Heavily inspired by https://www.shadertoy.com/view/WfS3Dd
 // 
-// I put this together after poking at it for a few hours, to make sure I actually learned something from it. :D
+// I put this together after poking at it for a few hours, to make sure I actually learned something from it.
 
 // Shader by Nemerix, 2025-05-26.
 // Code made available under the MIT license.
@@ -4141,7 +4141,7 @@ uniform float uSpeed;  // 시간 배속(1 = 원본) · @range 0 3 @step 0.01 @de
 
     -4 from FabriceNeyret2
     
-    Thanks :D !
+    Thanks!
 
 */
 
@@ -4414,7 +4414,7 @@ const READING = {
     },
     {
       at: "p=abs(p)/dot(p,p)-formuparam",
-      text: "핵심: kaliset 반복. 17번 되풀이하며 값이 요동친 양(a)을 모으면 그 자리가 별·성운처럼 밝아진다. 파라미터 패널의 uFormula(formuparam, 0.4~0.6)를 움직이거나 ▶로 훑어 보자.",
+      text: "핵심: kaliset 반복. 17번 되풀이하며 값이 요동친 양(a)을 모으면 그 자리가 별·성운처럼 밝아진다. 파라미터 패널의 uFormula(formuparam, 0.4~0.6)를 움직이거나 재생로 훑어 보자.",
     },
     {
       at: "v+=vec3(s,s*s,s*s*s*s)*a*uBrightness*fade",

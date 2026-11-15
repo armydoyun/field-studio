@@ -93,7 +93,7 @@
         <p><code>&lt;button&gt;</code>은 클래스 없이도 기본 버튼이다. 변형 · 크기 클래스만 덧붙인다. 한 화면에 채운 버튼(primary)은 하나만.</p>
         <div class="ui-card">
             <div class="ds-row"><code>(클래스 없음) · ui-btn</code><div class="ds-demo"><button type="button">기본</button><button type="button" class="glyph-icon icon-image">아이콘 + 글자</button><button type="button" disabled>끔</button></div></div>
-            <div class="ds-row"><code>ui-btn--primary</code><div class="ds-demo"><button type="button" class="ui-btn--primary">추가하고 적용</button><button type="button" class="ui-btn--primary glyph-icon icon-play">실행 <kbd>Alt+↵</kbd></button></div></div>
+            <div class="ds-row"><code>ui-btn--primary</code><div class="ds-demo"><button type="button" class="ui-btn--primary">추가하고 적용</button><button type="button" class="ui-btn--primary glyph-icon icon-play">실행 <kbd>Alt+Enter</kbd></button></div></div>
             <div class="ds-row"><code>ui-btn--ghost</code><div class="ds-demo"><button type="button" class="ui-btn--ghost">취소</button><button type="button" class="ui-btn--ghost glyph-icon icon-plus">Common</button></div></div>
             <div class="ds-row"><code>ui-btn--tonal</code><div class="ds-demo"><button type="button" class="ui-btn--tonal">편집기에서 열기</button></div></div>
             <div class="ds-row"><code>ui-btn--danger<br>ui-btn--danger-solid</code><div class="ds-demo"><button type="button" class="ui-btn--danger">렌더링 설정 초기화</button><button type="button" class="ui-btn--danger-solid">삭제</button></div></div>
@@ -102,7 +102,7 @@
             <div class="ds-row"><code>ui-btn--block</code><div class="ds-demo" style="display:grid"><button type="button" class="ui-btn--lg ui-btn--block">화면 배치 초기화</button></div></div>
             <div class="ds-row"><code>ui-icon-btn (+ --xs · --sm · --lg)<br>glyph-icon icon-*</code><div class="ds-demo"><button type="button" class="ui-icon-btn ui-icon-btn--xs glyph-icon icon-reset" aria-label="되돌리기"></button><button type="button" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-search" aria-label="찾기"></button><button type="button" class="ui-icon-btn glyph-icon icon-code" aria-label="편집기"></button><button type="button" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close" aria-label="닫기"></button></div></div>
             <div class="ds-row"><code>aria-pressed="true" · .is-active</code><div class="ds-demo"><button type="button" class="ui-btn" aria-pressed="true">켜짐</button><button type="button" class="ui-icon-btn glyph-icon icon-pin" aria-pressed="true" aria-label="고정"></button><button type="button" class="ui-btn--ghost" aria-pressed="true">켜짐(ghost)</button></div></div>
-            <div class="ds-row"><code>ui-btn-group</code><div class="ds-demo"><span class="ui-btn-group"><button type="button" class="ui-btn--sm">◀</button><button type="button" class="ui-btn--sm">◆</button><button type="button" class="ui-btn--sm">▶</button></span><span class="ui-btn-group"><button type="button" class="ui-btn--sm">−</button><button type="button" class="ui-btn--sm">+</button></span></div></div>
+            <div class="ds-row"><code>ui-btn-group</code><div class="ds-demo"><span class="ui-btn-group"><button type="button" class="ui-btn--sm glyph-icon icon-previous-key" aria-label="이전 키"></button><button type="button" class="ui-btn--sm glyph-icon icon-keyframe" aria-label="키 설정"></button><button type="button" class="ui-btn--sm glyph-icon icon-next-key" aria-label="다음 키"></button></span><span class="ui-btn-group"><button type="button" class="ui-btn--sm glyph-icon icon-zoom-out" aria-label="축소"></button><button type="button" class="ui-btn--sm glyph-icon icon-zoom-in" aria-label="확대"></button></span></div></div>
             <div class="ds-row"><code>ui-toolbar · ui-sep</code><div class="ds-demo"><div class="ui-toolbar ui-hud" style="padding:3px"><button type="button" class="ui-icon-btn glyph-icon icon-undo" aria-label="되돌리기"></button><button type="button" class="ui-icon-btn glyph-icon icon-redo" aria-label="다시 실행"></button><span class="ui-sep"></span><button type="button" class="ui-icon-btn glyph-icon icon-expand" aria-label="확대"></button></div></div></div>
             <div class="ds-row"><code>ui-link</code><div class="ds-demo"><button type="button" class="ui-link">설정 설명 →</button></div></div>
         </div>
@@ -151,7 +151,7 @@
         <p><code>ui-tag</code>는 읽기 전용, <code>ui-chip</code>은 누르는 것.</p>
         <div class="ui-card">
             <div class="ds-row"><code>ui-tag (+ --plain · --pill · --dot)</code><div class="ds-demo"><span class="ui-tag">한 번</span><span class="ui-tag ui-tag--plain">3 / 64</span><span class="ui-tag ui-tag--pill">EXT</span><span class="ui-tag ui-tag--dot">소리 · 저음</span></div></div>
-            <div class="ds-row"><code>ui-tag--accent · --success · --warning · --danger</code><div class="ds-demo"><span class="ui-tag ui-tag--accent">↻ 4초</span><span class="ui-tag ui-tag--success">반영됨</span><span class="ui-tag ui-tag--warning">적용 대기</span><span class="ui-tag ui-tag--danger">오류</span></div></div>
+            <div class="ds-row"><code>ui-tag--accent · --success · --warning · --danger</code><div class="ds-demo"><span class="ui-tag ui-tag--accent glyph-icon icon-loop">4초 반복</span><span class="ui-tag ui-tag--success">반영됨</span><span class="ui-tag ui-tag--warning">적용 대기</span><span class="ui-tag ui-tag--danger">오류</span></div></div>
             <div class="ds-row"><code>ui-chip (+ --pill · --lg)</code><div class="ds-demo"><button type="button" class="ui-chip">+X</button><button type="button" class="ui-chip" aria-pressed="true">+Y</button><label class="ui-chip"><input type="checkbox" checked> Z</label><button type="button" class="ui-chip ui-chip--pill ui-chip--lg is-active">노이즈</button><button type="button" class="ui-chip ui-chip--pill ui-chip--lg">SDF</button></div></div>
             <div class="ds-row"><code>ui-dot · ui-count · kbd</code><div class="ds-demo"><span class="ui-dot"></span><span class="ui-dot ui-dot--success"></span><span class="ui-dot ui-dot--warning"></span><span class="ui-dot ui-dot--danger"></span><span class="ui-count">3</span><kbd>Ctrl+S</kbd><kbd>/</kbd></div></div>
         </div>
@@ -236,7 +236,7 @@ rgba 0.250 0.500 0.750 1.000</output></div></div>
 
     <section class="ds-group">
         <h2>아이콘</h2>
-        <p><code>glyph-icon icon-*</code> — 24px 격자 · 1.8 획의 SVG 마스크(<code>css/icons.css</code>). 글자 기호(▶ ✓ ↺)로 아이콘을 그리지 않는다.</p>
+        <p><code>glyph-icon icon-*</code> — 24px 격자 · 1.8 획의 SVG 마스크(<code>css/icons.css</code>). 이모지·이모티콘·문자 기호로 아이콘을 그리지 않는다. 모양은 인라인 SVG 또는 SVG 마스크로만 표현한다.</p>
         <div id="icons" class="ui-card ds-demo" style="padding:12px"></div>
     </section>
 </div>
@@ -284,7 +284,7 @@ rgba 0.250 0.500 0.750 1.000</output></div></div>
     };
     paintSwatches();
     // 아이콘 목록
-    const ICONS = ["close", "up", "down", "chevron", "pin", "eye", "plus", "pause", "play", "image", "help", "code", "expand", "sun", "moon", "monitor", "edit", "popout", "undo", "redo", "reset", "search", "goto", "complete", "snippet", "more", "timeline", "link", "dice"];
+    const ICONS = ["close", "up", "down", "chevron", "pin", "eye", "plus", "pause", "play", "image", "help", "code", "expand", "sun", "moon", "monitor", "edit", "popout", "undo", "redo", "reset", "search", "goto", "complete", "snippet", "more", "timeline", "link", "dice", "lock", "unlock", "previous-key", "next-key", "keyframe", "keyframe-filled", "loop", "swap", "keyboard", "audio", "mic", "video", "camera"];
     document.getElementById("icons").append(...ICONS.map(icon => UI.iconButton({ icon, label: `icon-${icon}` })));
     // UI.menu() 시연
     const demo = document.getElementById("menuDemo");

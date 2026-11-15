@@ -43,4 +43,4 @@ uniform int   uCount;  // @min 1 @max 32 @default 8
 ## 검증
 
 - Live Server(개발 ESM 버전)에서 확인: 어노테이션 자동 등록·범위 갱신, 컬러 피커·벡터 슬라이더, 256² 고정 + 출력 2개 + repeat + mipmap 패스(출력별 픽셀 값·메모리 계산·썸네일 2개·출력 1 미리보기)가 정상 동작.
-- `tests/gpu-validation.html`에 30~34번 추가: MRT, 고정 해상도/iChannelResolution, wrap clamp↔repeat, 밉맵 평균, 썸네일 + 채널/노출 옵션.
+- `tests/gpu-validation.html`에 30~34번 추가: MRT, 고정 해상도/iChannelResolution, wrap clamp/repeat, 밉맵 평균, 썸네일 + 채널/노출 옵션.

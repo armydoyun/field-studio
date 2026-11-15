@@ -1,6 +1,6 @@
 /* 입력 채널(channel-picker.js) · 이미지 목록(studio.js).
    채널 칩은 이 기능만의 모양(번호 배지 + 소스 이름 + 경고 점)이다. 고르기 팝오버는 ui-popover, 그 안의 선택지는 ui-btn--sm(켜짐 = aria-pressed). */
-/* 입력 채널 줄 접기: 접으면 줄 전체를 숨기고, 코드 머리줄의 "입력 ▾" 버튼(연결 수 · 경고 점)으로 펴고 접는다 */
+/* 입력 채널 줄 접기: 접으면 줄 전체를 숨기고, 코드 머리줄의 "입력" 버튼(연결 수 · 경고 점)으로 펴고 접는다 */
 .studio-inputs-toggle { flex-shrink:0;gap:5px;padding:2px 6px 2px 8px;font-weight:600;white-space:nowrap; }
 .studio-inputs-chevron { width:11px;height:11px;background:currentColor;-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat;transform:rotate(90deg);transition:transform .12s; }
 .studio-inputs-toggle[aria-expanded="true"] .studio-inputs-chevron { transform:rotate(-90deg); }

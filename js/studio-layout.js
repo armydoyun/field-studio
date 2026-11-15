@@ -21,7 +21,7 @@ const SPLIT_MIN = { dock: 340, preview: 240, gap: 20 };
 const SPLIT_FITS = SPLIT_MIN.dock + SPLIT_MIN.preview + SPLIT_MIN.gap;
 const SIDES = ["right", "left", "bottom", "top"];
 const HORIZONTAL = new Set(["right", "left"]);
-// 메뉴 버튼·Ctrl+\: 옆 ↔ 위아래를 오간다(오른쪽 ↔ 아래, 왼쪽 ↔ 위).
+// 메뉴 버튼·Ctrl+\: 옆 ~ 위아래를 오간다(오른쪽과 아래, 왼쪽과 위).
 const SWAP = { right: "bottom", bottom: "right", left: "top", top: "left" };
 
 // 좁거나 낮은 창은 편집기를 더 높게 연다.

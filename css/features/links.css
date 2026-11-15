@@ -59,7 +59,7 @@
 .link-meter-note { grid-column:1 / -1;color:var(--faint);font-size:var(--text-xs);white-space:nowrap; }
 .link-meter.is-idle .link-meter-note { color:var(--warning); }
 .link-meter.is-idle .link-bar-fill,.link-result.is-idle .link-bar-fill { opacity:.35; }
-/* 키프레임 줄: ◀ ◆ ▶(ui-btn-group) 재생 [초] · 아래 줄에 [한 번 | ↻ N초] 설명 */
+/* 키프레임 줄: 이전 키·키 설정·다음 키(ui-btn-group) 재생 [초] · 아래 줄에 [한 번 | 반복 N초] 설명 */
 .key-nav { display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px; }
 /* 연결 시트 안의 키프레임 내비게이터: 방식 버튼 바로 아래 */
 .link-editor>.key-nav { margin:12px 0 4px;padding-bottom:12px;border-bottom:1px solid var(--line); }
