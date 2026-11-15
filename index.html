@@ -126,6 +126,11 @@
                             <p id="presetNotice" class="ui-hint preset-notice" role="status"><span id="presetNoticeText"></span><button id="presetFinish" type="button" class="ui-btn--xs" hidden>바로 끝내기</button><button id="presetUndo" type="button" class="ui-btn--xs" hidden>되돌리기</button></p>
                         </div>
                         <p id="uniformResults" class="ui-hint" role="status"></p>
+                        <details id="uniformHidden" class="ui-disclosure uniform-hidden-params" hidden>
+                            <summary title="조건으로 숨긴 파라미터 목록">조건으로 숨김 <span id="uniformHiddenCount" class="ui-tag ui-tag--plain">0개</span></summary>
+                            <p class="ui-hint uniform-hidden-help">이름을 누르면 검색으로 확인할 수 있습니다.</p>
+                            <div id="uniformHiddenList" class="uniform-hidden-list" role="group" aria-label="조건으로 숨긴 파라미터"></div>
+                        </details>
                         <div id="uniformList" class="ui-card ui-dense uniform-list"></div>
                         <details id="uniformEditor">
                             <summary class="ui-btn ui-btn--dashed ui-btn--sm"><span class="summary-plus glyph-icon icon-plus" aria-hidden="true"></span> 파라미터 추가</summary>

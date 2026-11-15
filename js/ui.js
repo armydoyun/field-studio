@@ -2062,7 +2062,8 @@ const mount = (renderer, input, settings) => {
     keepAnchor(target);
   });
   // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
-  let hiddenKey = "";
+  let hiddenKey = "",
+    hiddenDisclosureKey = "";
   const conditionHidden = (items, defaults) => {
     const values = new Map(items.map(item => [item.name, item.value]));
     return items
@@ -2855,11 +2856,30 @@ const mount = (renderer, input, settings) => {
     // 고를 파라미터가 없으면 검색 칸은 쓸모가 없다(검색 중이면 지울 수 있게 남긴다)
     const searchWrap = $("uniformSearch")?.closest?.(".uniform-search-wrap");
     if (searchWrap) searchWrap.hidden = !items.length && !search;
-    $("uniformResults").textContent = search
-      ? `${items.length}개 중 ${count}개 표시`
-      : hidden.size
-        ? `조건(@if)으로 숨긴 파라미터 ${hidden.size}개: ${[...hidden].join(", ")}`
-        : "";
+    $("uniformResults").textContent = search ? `${items.length}개 중 ${count}개 표시` : "";
+    // Keep the default panel compact. Details are bounded and names double as search shortcuts.
+    const hiddenDetails = $("uniformHidden");
+    hiddenDetails.hidden = !hidden.size;
+    if (!hidden.size || hiddenDisclosureKey !== hiddenKey) hiddenDetails.open = false;
+    if (hiddenDisclosureKey !== hiddenKey) {
+      hiddenDisclosureKey = hiddenKey;
+      $("uniformHiddenCount").textContent = `${hidden.size}개`;
+      $("uniformHiddenList").replaceChildren(
+        ...[...hidden].map(name => {
+          const button = element("button");
+          button.type = "button";
+          button.className = "ui-chip ui-chip--pill uniform-hidden-name";
+          button.textContent = name;
+          button.title = `${name} 검색해서 보기`;
+          button.addEventListener("click", () => {
+            $("uniformSearch").value = name;
+            renderUniforms();
+            $("uniformSearch").focus();
+          });
+          return button;
+        })
+      );
+    }
     if (!count) {
       const hint = element("div");
       hint.className = "ui-empty uniform-empty";

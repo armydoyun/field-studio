@@ -153,3 +153,8 @@
 .uniform-array-item>.value-edit-open { justify-self:end; }
 
 .parameter-actions { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+
+.uniform-hidden-params { min-width:0;margin:0 0 12px; }
+.uniform-hidden-help { margin:4px 0 8px; }
+.uniform-hidden-list { display:flex;flex-wrap:wrap;gap:6px;max-height:144px;overflow-y:auto;overscroll-behavior:contain;padding:4px;margin:0 -4px; }
+.uniform-hidden-name { min-width:0;max-width:100%;font-family:var(--mono);white-space:normal;overflow-wrap:anywhere;text-align:left; }
