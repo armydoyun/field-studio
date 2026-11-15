@@ -1432,31 +1432,28 @@ const mount = (renderer, input, settings) => {
           const current = renderer.getUserUniforms().find(u => u.name === item.name);
           if (!current) return renderUniforms();
           // 코드가 선언한 파라미터: 선언 줄도 함께 지운다(Undo 한 번). 코드가 아직 그 이름을 쓰면 오류는 편집기에 보인다.
-          const viaCode = window.shaderStudio?.removeParameter?.(item.name);
+          // 컴파일을 기다리는 동안은 '적용 중'으로 두고, 끝나면 결과로 바꾼다(확장이 없으면 바로 결과).
+          let settled = false;
+          const viaCode = window.shaderStudio?.removeParameter?.(item.name, applied => {
+            settled = true;
+            $("uniformNotice").textContent = applied
+              ? `${item.name} 삭제됨 · 코드의 선언도 지웠습니다`
+              : `${item.name} 삭제됨 · 코드가 아직 ${item.name}을(를) 써서 컴파일 오류 — 편집기에서 고치거나 삭제 되돌리기`;
+          });
           if (viaCode) {
             deletedUniform = { ...current, viaCode: true };
             $("undoUniform").hidden = false;
-            $("uniformNotice").textContent = viaCode.applied
-              ? `${item.name} 삭제됨 · 코드의 선언도 지웠습니다`
-              : `${item.name} 삭제됨 · 코드가 아직 ${item.name}을(를) 써서 컴파일 오류 — 편집기에서 고치거나 삭제 되돌리기`;
+            if (!settled) $("uniformNotice").textContent = `${item.name} 삭제됨 · 코드 적용 중…`;
             renderUniforms();
             $("undoUniform").focus();
             return;
           }
-          let broke = null;
-          try {
-            renderer.removeUniform(item.name, { keepOnError: true });
-          } catch (error) {
-            if (renderer.getUserUniforms().some(u => u.name === item.name)) throw error; // 지우지 못했다(컨텍스트 등)
-            broke = error;
-          }
-          deletedUniform = { ...current, broke: !!broke };
+          // 코드에 선언이 없는 파라미터: 셰이더가 쓰지 않으니 등록만 지운다(다시 컴파일하지 않는다)
+          renderer.removeUniform(item.name);
+          deletedUniform = { ...current };
           $("undoUniform").hidden = false;
-          $("uniformNotice").textContent = broke
-            ? `${item.name} 삭제됨 · 코드가 아직 ${item.name}을(를) 써서 컴파일 오류 — 편집기에서 고치거나 삭제 되돌리기`
-            : `${item.name} 삭제됨`;
+          $("uniformNotice").textContent = `${item.name} 삭제됨`;
           renderUniforms();
-          if (broke) window.shaderStudio?.reportCompileError?.(broke);
           $("undoUniform").focus();
         })
       );

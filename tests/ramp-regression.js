@@ -67,7 +67,7 @@ await run('렌더러: 굽고 4번 유닛부터 묶고, 바뀐 것만 다시 올�
     assert.equal(uploads.length,2);assert.equal(uploads[0][2],gl.RGBA8);assert.equal(uploads[1][2],'R16F');assert.equal(uploads[1][7],gl.FLOAT);
     await draw();assert.equal(uploads.length,2,'값이 그대로면 다시 올리지 않는다');
     f.renderer.setUniform('uC',[0,1,1,0]);await draw();assert.equal(uploads.length,3);assert.equal(uploads[2][2],'R16F');
-    const deleted=gl.deleted.length;f.renderer.removeUniform('uR');assert.equal(gl.deleted.length-deleted>=2,true,'텍스처와 이전 프로그램을 지운다');
+    const deleted=gl.deleted.length;f.renderer.removeUniform('uR');assert.equal(gl.deleted.length-deleted>=1,true,'텍스처를 지운다(등록 해제는 다시 컴파일하지 않는다)');
     assert(gl.deleted.slice(deleted).some(x=>x?.type==='tex'));
     for(const [v,opts,re] of [[[0,0,0,0,1],{gradient:'linear'},/2~16/],[[0,0,1,1],{gradient:'wavy'},/gradient/],[[0,0,1,1],{curve:'smooth',color:true},/gradient/],
       [[0,0,1,1],{},/gradient/],[[0,0,0,0,1,1,1,1,1,1],{gradient:'linear',min:0,max:1,step:0.1},/gradient/],[[0,0,1,1],{curve:'smooth',min:1,max:0,step:0.1},/범위/]])
