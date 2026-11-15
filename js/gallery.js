@@ -298,7 +298,6 @@ const ART = [
 const annotated = `#version 300 es
 precision highp float;
 precision highp int;
-// FIELD Studio: annotation-lab-v2
 uniform vec2 uResolution;
 uniform float uTime;
 // ── 주석 어노테이션 실습 ─────────────────────────────────────────────────────────────
