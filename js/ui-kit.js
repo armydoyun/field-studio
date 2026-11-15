@@ -260,7 +260,24 @@ const menu = ({ anchor, items = [], label = "", align = "start", onClose } = {})
   return { element, close };
 };
 
+// 검색 칸(ui-search)의 지우기 버튼(ui-search-clear): 브라우저 기본 ×는 칸마다 자리 · 모양이 달라 감추고 이 버튼을 쓴다.
+// 버튼은 마크업에 두고(글자가 있을 때만 CSS로 보인다), 누르면 칸을 비우고 input 이벤트로 각 기능의 검색을 다시 돌린다.
+const bindSearchClear = (doc = document) => {
+  const onClick = event => {
+    const clear = event.target instanceof Element ? event.target.closest(".ui-search-clear") : null,
+      input = clear?.closest(".ui-search")?.querySelector("input");
+    if (!input) return;
+    event.preventDefault();
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  };
+  doc.addEventListener("click", onClick);
+  return () => doc.removeEventListener("click", onClick);
+};
+
 export {
+  bindSearchClear,
   cx,
   el,
   buttonClass,

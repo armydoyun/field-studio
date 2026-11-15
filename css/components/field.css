@@ -4,7 +4,7 @@
      묶음  ui-field(라벨 + 칸 + 설명) · ui-label · ui-label-hint · ui-hint · ui-error
      촘촘한 영역  ui-dense: 안의 칸 · 선택 상자가 28px가 되고 숫자 칸은 ui-number처럼 된다(파라미터 목록 · 연결 시트 · 타임라인)
      성분  ui-input-group--prefix > ui-unit + input (X/Y/Z/W)
-     단위  ui-input-group > input + ui-unit     검색  ui-search > ui-search-icon + input (+ kbd) */
+     단위  ui-input-group > input + ui-unit     검색  ui-search > ui-search-icon + input (+ ui-search-clear) (+ kbd) */
 :where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),:is(select,.ui-select),.ui-input) { width:100%;min-height:var(--control-md);margin:0;padding:4px 10px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--sunken);font-size:var(--text-sm);line-height:1.5; }
 :where(input[type="number"],input[type="text"],input[type="search"],input:not([type]),:is(select,.ui-select),.ui-input):hover { border-color:var(--line-hover); }
 input:focus,:is(select,.ui-select):focus { border-color:var(--accent);outline:none; }
@@ -44,6 +44,11 @@ select.ui-input--sm { padding-right:24px; }
 .ui-search-icon { position:absolute;top:50%;left:10px;display:grid;place-items:center;width:18px;height:18px;transform:translateY(-50%);color:var(--muted);pointer-events:none; }
 .ui-search>kbd { position:absolute;top:50%;right:8px;transform:translateY(-50%);pointer-events:none; }
 .ui-search>input:focus~kbd,.ui-search>input:not(:placeholder-shown)~kbd { display:none; }
+/* 지우기(ui-search-clear · ui-kit.js bindSearchClear): 글자가 있을 때만 칸 안 오른쪽 끝(kbd 자리)에 보인다. 브라우저 기본 ×는 감춘다 */
+.ui-search>input::-webkit-search-cancel-button { display:none;-webkit-appearance:none; }
+.ui-search>.ui-search-clear { position:absolute;top:50%;right:var(--space-2);transform:translateY(-50%); }
+.ui-search>input:placeholder-shown~.ui-search-clear { display:none; }
+.ui-search:has(>.ui-search-clear)>input { padding-right:calc(var(--control-xs) + var(--space-4)); }
 .ui-search:has(>kbd)>input { padding-right:42px; }
 @media (hover:none) and (pointer:coarse) {
  .ui-search>kbd { display:none; }

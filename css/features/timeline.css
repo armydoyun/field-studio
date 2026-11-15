@@ -4,7 +4,8 @@
 .timeline-dock[hidden] { display:none; }
 .timeline-resize { border-top:0; }
 /* ── 위 막대: [재생 ⟲ 시간 배속] [스냅 − + 맞춤] ………… [선택한 키] [×] ── */
-.timeline-bar { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:6px 46px 6px 10px;border-bottom:1px solid var(--line); }
+/* 오른쪽 위 [?][×]는 흐름에서 빼 막대 끝에 고정한다(줄이 넘어가도 따로 한 줄을 차지하지 않게). 그 자리만큼 오른쪽을 비운다 */
+.timeline-bar { --timeline-bar-end:calc(var(--control-sm) * 2 + var(--space-2) + 18px);--timeline-bar-pin:11px;position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:6px var(--timeline-bar-end) 6px 10px;border-bottom:1px solid var(--line); }
 .timeline-group { display:flex;flex-wrap:nowrap;align-items:center;gap:4px; }
 .timeline-field { display:inline-flex;align-items:center;gap:4px;margin:0;color:var(--muted);white-space:nowrap; }
 .timeline-unit { color:var(--muted); }
@@ -23,7 +24,9 @@
 /* 안내 문구가 흐름에서 빠진 만큼(이름 칸 96px + 사이 10px) 왼쪽을 비워 둔다 */
 .timeline-inspector.is-empty { padding-left:114px; }
 .timeline-inspector.is-empty .timeline-selection { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;width:auto;padding:0 10px;color:var(--faint);font-weight:400; }
-.timeline-bar .timeline-close { position:absolute;top:6px;right:10px; }
+/* [?][×]의 세로 자리: 넓으면 첫 줄에 키 칸(위아래 4px + 테두리 = 버튼 + 10px)이 함께 있어 그 줄 가운데, 좁으면(키 칸이 아래 줄) 버튼 줄 가운데 */
+.timeline-bar .timeline-close { position:absolute;top:var(--timeline-bar-pin);right:10px; }
+.timeline-bar .timeline-help { position:absolute;top:var(--timeline-bar-pin);right:calc(10px + var(--control-sm) + var(--space-2)); }
 /* ── 본문: 눈금자 + 레인 ── */
 .timeline-body { position:relative;flex:1 1 auto;min-height:0;overflow:auto;outline:none; }
 .timeline-body:focus-visible { outline:2px solid var(--accent);outline-offset:-2px; }
@@ -81,12 +84,13 @@
  .timeline-open #stage { height:calc(100% - var(--timeline-height,220px)); }
  .timeline-dock { position:fixed;left:0;right:0;bottom:0;z-index:3;max-height:60dvh; }
 }
-/* 좁은 타임라인(설정 패널을 넓히거나 창을 줄였을 때): 칸을 줄이고, 키 칸은 (고르기 전에도) 한 줄을 통째로 쓴다. */
+/* 좁은 타임라인(설정 패널을 넓히거나 창을 줄였을 때): 칸을 줄이고, 키 칸은 (고르기 전에도) 한 줄을 통째로 쓴다.
+   키 칸은 첫 줄 아래에 오므로 [?][×] 자리까지 넓혀 막대 오른쪽 끝(10px)까지 채운다. */
 @container timeline (max-width:760px) {
- .timeline-bar { gap:6px 10px; }
+ .timeline-bar { --timeline-bar-pin:6px;gap:6px 10px; }
  .timeline-bar input[type="number"] { width:calc(7ch + 16px); }
  .timeline-bar input.timeline-key-value { width:calc(9ch + 16px); }
- .timeline-inspector { flex:1 1 100%;justify-content:flex-start;margin-left:0; }
+ .timeline-inspector { flex:1 1 100%;justify-content:flex-start;margin-right:calc(10px - var(--timeline-bar-end));margin-left:0; }
 }
 @container timeline (max-width:520px) {
  /* 휴대폰 폭: 키를 고르기 전의 빈 안내 칸이 레인 자리를 차지하지 않게 감춘다 */

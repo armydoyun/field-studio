@@ -99,7 +99,7 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 성분 + 칸 | `ui-input-group ui-input-group--prefix` > `ui-unit` + input | X/Y/Z/W 라벨을 왼쪽에 붙임 |
 | 값 편집 | `ui-value-editor` · `ui-value-fields` | `js/value-editor.js`의 create(). 스칼라·벡터 초안 편집 |
 | 칸 + 단위 | `ui-input-group` > input + `ui-unit` | |
-| 검색 칸 | `ui-search` > `ui-search-icon` + input (+ kbd) | |
+| 검색 칸 | `ui-search` > `ui-search-icon` + input (+ `ui-search-clear`) (+ kbd) | 지우기는 `ui-icon-btn--xs glyph-icon icon-close ui-search-clear` 버튼. 글자가 있을 때만 보이고 `UI.bindSearchClear`가 처리(브라우저 기본 ×는 감춤) |
 | 체크 · 라디오 | `ui-check` > input + 글자 | |
 | 스위치 | `ui-switch` > input[type=checkbox] + span | `ui-switch--field`: 입력칸 면·높이·테두리를 공유하는 상태 필드 |
 | 슬라이더 | `<input type="range">` (+ `ui-range-ends`) | 브라우저 기본 그리기 + 액센트 색 |

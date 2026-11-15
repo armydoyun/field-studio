@@ -33,7 +33,9 @@
 /* 줄 아이콘(ui-icon-btn--xs): 무작위 재생 연결 기본값 복원 ×. 삭제(×)는 되돌리기(기본값 복원)와 떨어뜨리고, 포인터를 올린 줄에서만 보인다
    (자리는 그대로 — 줄이 흔들리지 않게). 되돌릴 것이 없으면 기본값 복원도 감춘다. 터치 기기에서는 늘 보인다. */
 .uniform-top .ui-icon-btn { color:var(--faint); }
-.uniform-top .ui-icon-btn[aria-pressed="true"] { background:transparent;color:var(--accent-strong); }
+/* 켜짐(연결 적용 등)은 글자색만 바꾸고 면은 두지 않는다. 설정이 열린 상태(aria-expanded)는 켜져 있어도 컴포넌트의 면을 그대로 쓴다 */
+.uniform-top .ui-icon-btn:is([aria-pressed="true"],[aria-expanded="true"]) { color:var(--accent-strong); }
+.uniform-top .ui-icon-btn[aria-pressed="true"]:not([aria-expanded="true"]) { background:transparent; }
 .reset-uniform { margin-left:auto; }
 .reset-uniform:disabled { visibility:hidden; }
 .remove-uniform { margin:0 -4px 0 4px;opacity:0; }

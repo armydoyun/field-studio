@@ -36,7 +36,7 @@ console.log(`PASS ui-* 클래스 ${used.size}개 사용: 모두 컴포넌트에 
 //    자리 예외는 허용한다: 부모 맥락 안에서의 배치(.guide-progress-bar>.ui-meter-fill 같은 조합)는 아래 목록에 적는다.
 const PLACEMENT=new Set([
   '.storage-indicator:has(.unavailable) .ui-dot','.ui-section>button+.ui-hint','.uniform-section .ui-section-head','.uniform-top .ui-icon-btn',
-  '.uniform-top .ui-icon-btn[aria-pressed="true"]','.uniform-ramp-edit .ui-chip:disabled','#uniformForm .ui-field','#uniformForm .ui-hint',
+  '.uniform-top .ui-icon-btn:is([aria-pressed="true"],[aria-expanded="true"])','.uniform-top .ui-icon-btn[aria-pressed="true"]:not([aria-expanded="true"])','.uniform-ramp-edit .ui-chip:disabled','#uniformForm .ui-field','#uniformForm .ui-hint',
   '#stageToolbar .ui-icon-btn','#stageToolbar .ui-icon-btn:is([aria-pressed="true"],[aria-expanded="true"])','.studio-project-list>.ui-hint','.studio-textures>.ui-hint',
   '.studio-pass-actions .ui-link','.preset-chip>.preset-menu>.ui-menu-item','.preset-menu>.ui-menu-item::after','.profile-buffers>.ui-hint',
   '.gallery-head .ui-dialog-eyebrow','.guide-progress-bar>.ui-meter-fill','.ui-section-head',
