@@ -234,7 +234,7 @@ const TOURS = [
         "timeline"
       ),
       step(
-        ".timeline-snap",
+        ".timeline-group:has(.timeline-magnet)",
         "격자와 자석",
         "시간·값 스냅은 이동 간격입니다. 자석은 재생선·다른 키·범위 끝에 붙이며 별도로 켤 수 있습니다. Alt를 누르고 끌면 둘 다 잠시 해제합니다.",
         "timeline"

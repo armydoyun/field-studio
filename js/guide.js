@@ -1746,9 +1746,18 @@ const mount = ({ studio, gallery }) => {
     tourActive = false,
     tourFrame = 0,
     activeTour = TOURS[0];
+  const shown = node => {
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
+  // 대상이 화면에 그려지지 않으면(꾸민 선택 상자의 숨은 원본 select, 좁은 화면·빈 상태에서 숨는 요소) 강조 테두리가 사라지므로,
+  // 실제로 보이는 대신 요소 → 가장 가까운 보이는 조상 순으로 강조할 자리를 찾는다.
   const targetOf = item => {
     const node = document.querySelector(item.target);
-    return node?.getBoundingClientRect().height ? node : node?.closest(".ui-section") || node;
+    if (!node) return null;
+    const start = node.matches(".ui-select-source") && node.nextElementSibling ? node.nextElementSibling : node;
+    for (let at = start; at && at !== document.body; at = at.parentElement) if (shown(at)) return at;
+    return node;
   };
   const place = () => {
     if (!tourActive) return;
@@ -1863,7 +1872,8 @@ const mount = ({ studio, gallery }) => {
         node.scrollLeft = left;
       }
   };
-  const endTour = () => {
+  // handoff: 둘러보기 중 사용자가 가이드·갤러리 같은 다른 창을 열었다. 화면 배치는 되돌리되, 이전 가이드를 다시 열거나 초점을 옮기지 않고 새 창에 맡긴다.
+  const endTour = ({ handoff = false } = {}) => {
     if (!tourActive) return;
     tourActive = false;
     if (tourFrame) cancelAnimationFrame(tourFrame);
@@ -1873,6 +1883,7 @@ const mount = ({ studio, gallery }) => {
     beforeTour = null;
     for (const [node, inert] of state.inert) if (node.isConnected) node.inert = inert;
     restoreUi(state);
+    if (handoff) return;
     if (state.guide) {
       open(state.topic, { focusSearch: false });
       search.value = state.query;
@@ -1903,14 +1914,37 @@ const mount = ({ studio, gallery }) => {
   };
   listen(prev, "click", () => showStep(step - 1));
   listen(next, "click", () => (step === activeTour.steps.length - 1 ? endTour() : showStep(step + 1)));
-  listen(skip, "click", endTour);
+  listen(skip, "click", () => endTour());
   listen(help, "click", () => {
     const topic = activeTour.topic;
     endTour();
     open(topic);
   });
-  listen(overlay, "keydown", event => {
-    event.stopPropagation(); // 투어 중에는 E/H/F 같은 전역 단축키가 화면을 바꾸지 않게 한다.
+  // 다른 창을 여는 단축키(? 가이드 · X 갤러리)는 둘러보기를 끝내고 원래 동작을 그대로 실행한다.
+  // 둘러보기는 배경을 inert로 막으므로, 끝내지 않고 창만 열리면 그 창도 누를 수 없다.
+  const HANDOFF_KEYS = new Set(["?", "x"]);
+  listen(
+    document,
+    "keydown",
+    event => {
+      if (!tourActive) return;
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && HANDOFF_KEYS.has(event.key.toLowerCase())) {
+        endTour({ handoff: true });
+        return;
+      }
+      tourKeydown(event);
+    },
+    { capture: true }
+  );
+  // 다른 경로(메뉴 · 저장 묻기 등)로 대화상자가 열려도 같은 이유로 둘러보기를 끝낸다.
+  const dialogWatch = new MutationObserver(records => {
+    if (tourActive && records.some(record => record.target.tagName === "DIALOG" && record.target.open))
+      endTour({ handoff: true });
+  });
+  dialogWatch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+  const tourKeydown = event => {
+    // 초점이 카드 밖(어두운 배경)에 있어도 E/H/F 같은 전역 단축키가 화면을 바꾸지 않게 한다.
+    event.stopPropagation();
     if (event.key === "Escape") {
       event.preventDefault();
       endTour();
@@ -1932,7 +1966,7 @@ const mount = ({ studio, gallery }) => {
       event.preventDefault();
       if (step) showStep(step - 1);
     }
-  });
+  };
   listen(window, "resize", place);
   listen($("galleryTour"), "click", () => {
     $("gallery")?.close();
@@ -1944,6 +1978,7 @@ const mount = ({ studio, gallery }) => {
     startTour,
     dispose: () => {
       if (tourActive) endTour();
+      dialogWatch.disconnect();
       controller.abort();
       overlay.remove();
       previews.dispose();
