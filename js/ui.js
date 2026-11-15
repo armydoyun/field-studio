@@ -1627,6 +1627,34 @@ const mount = (renderer, input, settings) => {
     presetRestore = undo;
     $("presetUndo").hidden = !undo;
   };
+  const clearPresetReport = () => {
+    $("presetReport").hidden = true;
+    $("presetReport").open = false;
+  };
+  const showPresetReport = (preset, result, from, interrupted = false) => {
+    const report = $("presetReport");
+    report.hidden = false;
+    report.open = false;
+    setText(
+      "presetReportSummary",
+      `${preset.name} · ${interrupted ? "전환 중단 · " : ""}적용 ${result.applied.length}개 · 건너뜀 ${result.skipped.length}개${result.legacy ? " · 이전 형식" : ""}`
+    );
+    $("presetReportHint").hidden = !result.legacy;
+    const current = new Map(renderer.getUserUniforms().map(item => [item.name, item.value]));
+    $("presetReportList").replaceChildren(
+      ...[
+        ...result.skipped.map(item => `건너뜀 · ${item.name}: ${item.reason}`),
+        ...result.applied.map(
+          item =>
+            `적용 · ${item.name}: ${formatPresetValue(from[item.name], true)} → ${formatPresetValue(current.get(item.name), true)}`
+        ),
+      ].map(text => {
+        const row = element("li");
+        row.textContent = text;
+        return row;
+      })
+    );
+  };
   const closePresetMenu = (focusButton = false) => {
     if (!presetMenu) return;
     const { node, button } = presetMenu;
@@ -1641,17 +1669,22 @@ const mount = (renderer, input, settings) => {
   // 덮어쓰면 바뀌는 파라미터: [이름, 프리셋 값, 지금 값]
   const presetChanges = (preset, users) =>
     users
-      .filter(item => !Object.hasOwn(preset.values, item.name) || !sameValue(item.value, preset.values[item.name]))
+      .filter(
+        item =>
+          !Object.hasOwn(preset.values, item.name) ||
+          !sameValue(item.value, preset.values[item.name]) ||
+          JSON.stringify(preset.schema?.[item.name]) !== JSON.stringify(Presets.capture("", [item]).schema[item.name])
+      )
       .map(item => [item.name, preset.values[item.name], item.value]);
-  const formatPresetValue = value =>
+  const formatPresetValue = (value, detailed = false) =>
     value === undefined
       ? "(없음)"
       : Array.isArray(value)
-        ? value.length > 4
+        ? value.length > 4 && !detailed
           ? `[${value.length}개]`
-          : `(${value.map(v => (typeof v === "number" ? displayNumber(Number(v.toFixed(4))) : String(v))).join(", ")})`
+          : `(${value.map(v => (typeof v === "number" ? displayNumber(v) : String(v))).join(", ")})`
         : typeof value === "number"
-          ? displayNumber(Number(value.toFixed(4)))
+          ? displayNumber(value)
           : String(value);
   const overwritePreset = async index => {
     stopMorph();
@@ -1661,9 +1694,20 @@ const mount = (renderer, input, settings) => {
       changes = presetChanges(preset, users);
     if (!preset || !changes.length) return;
     const ask = window.shaderStudio?.ask,
-      lines = changes
-        .slice(0, 6)
-        .map(([name, from, to]) => `${name}: ${formatPresetValue(from)} → ${formatPresetValue(to)}`),
+      lines = changes.slice(0, 6).map(
+        ([name, from, to]) =>
+          `${name}: ${formatPresetValue(from)} → ${formatPresetValue(to)}${
+            JSON.stringify(preset.schema?.[name]) !==
+            JSON.stringify(
+              Presets.capture(
+                "",
+                users.filter(item => item.name === name)
+              ).schema[name]
+            )
+              ? " · 타입·선택지 정보 갱신"
+              : ""
+          }`
+      ),
       more = changes.length > 6 ? `\n… 외 ${changes.length - 6}개` : "";
     const ok = ask
       ? await ask({
@@ -1695,6 +1739,7 @@ const mount = (renderer, input, settings) => {
     });
   };
   const removePreset = index => {
+    stopMorph();
     const presets = settings.getPresets(),
       preset = presets[index];
     attempt(() => {
@@ -1784,9 +1829,16 @@ const mount = (renderer, input, settings) => {
     if (morph) cancelAnimationFrame(morph);
     const wasMorphing = !!morph && morphState;
     morph = 0;
-    if (wasMorphing && byUser) presetNotice(`'${morphState.name}' 전환을 멈췄습니다 · 직접 바꾼 값을 그대로 둡니다`);
+    if (wasMorphing) {
+      const recorded = morphState.commit?.();
+      morphState.report?.(true);
+      presetNotice(
+        `'${morphState.name}' 전환을 멈췄습니다${byUser ? " · 지금 값 유지" : ""}${recorded ? " · Ctrl+Z로 적용 전 복원" : ""}`
+      );
+    }
     if (morphState) endMorphUi();
   };
+  signal.addEventListener("abort", () => stopMorph());
   const askName = async (title, value, others) => {
     const ask = window.shaderStudio?.ask;
     if (!ask) return value;
@@ -1804,16 +1856,35 @@ const mount = (renderer, input, settings) => {
     });
     return name === null || name === undefined ? null : name.trim();
   };
-  const matchesPreset = (preset, users) =>
-    users.some(item => Object.hasOwn(preset.values, item.name)) &&
-    users.every(item => !Object.hasOwn(preset.values, item.name) || sameValue(item.value, preset.values[item.name]));
+  const matchesPreset = (preset, users) => {
+    const result = Presets.plan(users, preset, settings.getLinks?.() || []);
+    return (
+      result.applied.length > 0 &&
+      !result.skipped.length &&
+      result.applied.every(item =>
+        ParameterTools.equalValue(item.value, users.find(user => user.name === item.name)?.value)
+      )
+    );
+  };
   const applyPreset = preset => {
+    if (viewingA) return;
     stopMorph();
     const users = renderer.getUserUniforms(),
       from = Object.fromEntries(users.map(item => [item.name, item.value])),
-      names = Object.keys(preset.values),
-      used = users.filter(item => names.includes(item.name)).length,
-      skipped = names.length - used;
+      result = Presets.plan(users, preset, settings.getLinks?.() || []),
+      names = result.applied.map(item => item.name),
+      target = { values: Object.fromEntries(result.applied.map(item => [item.name, item.value])) },
+      summary = `'${preset.name}' · ${names.length}개 적용 · ${result.skipped.length}개 건너뜀${result.legacy ? " · 이전 형식" : ""}`;
+    clearPresetReport();
+    if (!names.length || result.applied.every(item => ParameterTools.equalValue(item.value, from[item.name]))) {
+      presetNotice(summary);
+      showPresetReport(preset, result, from);
+      return;
+    }
+    if (!comparison && result.applied.some(item => !ParameterTools.equalValue(item.value, from[item.name])))
+      captureComparison();
+    const commit = window.shaderStudio?.beginParameterChange?.(names) || (() => {}),
+      key = comparisonKey();
     // 프리셋이 바꾸는 파라미터의 자동 재생(@anim)은 멈춘다(재생이 값을 덮어쓰지 않게).
     let stopped = false;
     for (const item of users) if (names.includes(item.name) && playing.delete(item.name)) stopped = true;
@@ -1832,20 +1903,21 @@ const mount = (renderer, input, settings) => {
       return Array.isArray(value) ? value.map(round) : round(value);
     };
     const write = t => {
-      for (const [name, value] of Presets.blend(users, from, preset, Presets.ease(t)))
+      for (const [name, value] of Presets.blend(result.applied, from, target, Presets.ease(t)))
         try {
           renderer.setUniform(name, tidy(name, value, t));
         } catch (error) {
           console.warn(`프리셋 값 무시 (${name}):`, error.message);
         }
     };
-    const summary = `'${preset.name}' · 파라미터 ${used}개${skipped ? ` · 이 프로젝트에 없는 ${skipped}개는 건너뜀` : ""}`;
     const finish = () => {
+      commit();
       morph = 0;
       endMorphUi();
       presetNotice(summary);
       settings.save();
       renderUniforms();
+      showPresetReport(preset, result, from);
     };
     const seconds = Number($("presetBlend").value) || 0;
     if (!seconds) {
@@ -1857,6 +1929,8 @@ const mount = (renderer, input, settings) => {
     $("presetNoticeText").title = "값을 직접 만지면 전환이 그 자리에서 멈춥니다";
     morphState = {
       name: preset.name,
+      commit,
+      report: interrupted => showPresetReport(preset, result, from, interrupted),
       finish: () => {
         if (morph) cancelAnimationFrame(morph);
         write(1);
@@ -1868,6 +1942,11 @@ const mount = (renderer, input, settings) => {
     paintMorph(0);
     const start = performance.now();
     const tick = now => {
+      if (key !== comparisonKey()) {
+        stopMorph(true);
+        renderUniforms();
+        return;
+      }
       const t = Math.min(1, (now - start) / (seconds * 1000));
       write(t);
       paintMorph(t);
@@ -1913,7 +1992,8 @@ const mount = (renderer, input, settings) => {
       apply.className = "preset-apply";
       apply.textContent = preset.name;
       apply.setAttribute("aria-pressed", String(matchesPreset(preset, users)));
-      apply.title = `'${preset.name}' 값으로 바꾸기 · 두 번 누르면 이름 바꾸기`;
+      const compatible = Presets.plan(users, preset, settings.getLinks?.() || []);
+      apply.title = `'${preset.name}' · 적용 가능 ${compatible.applied.length}개 · 건너뜀 ${compatible.skipped.length}개${compatible.legacy ? " · 이전 형식(원래 타입 정보 없음)" : ""} · 두 번 누르면 이름 바꾸기`;
       apply.addEventListener("click", () => applyPreset(preset));
       apply.addEventListener("dblclick", () => renamePreset(index));
       more.className = "preset-more glyph-icon icon-more";
@@ -1927,6 +2007,7 @@ const mount = (renderer, input, settings) => {
     });
   };
   listen($("presetSave"), "click", async () => {
+    stopMorph();
     const presets = settings.getPresets(),
       names = presets.map(item => item.name);
     let n = presets.length + 1;
@@ -1947,7 +2028,17 @@ const mount = (renderer, input, settings) => {
       presetNotice("프리셋을 바로 전으로 되돌렸습니다");
     });
   });
-  listen(document, "shader-presets-changed", () => renderPresets(true));
+  listen(document, "shader-presets-changed", () => {
+    stopMorph();
+    clearPresetReport();
+    renderPresets(true);
+  });
+  listen(document, "shader-before-history", () => stopMorph());
+  listen(document, "shader-before-parameter-change", () => stopMorph());
+  listen(document, "shader-before-apply", () => {
+    stopMorph();
+    clearPresetReport();
+  });
   // ---- 파라미터 연결(links.js · renderer.setLinks · settings.getLinks/setLinks) ----
   // 파라미터 줄의 연결 버튼이 아래에 편집 칸을 연다. 바꾸면 settings.setLinks로 저장하고 렌더러가 프레임마다 적용한다.
   let openLink = null; // 연결 시트를 연 파라미터 이름
@@ -3881,6 +3972,8 @@ const mount = (renderer, input, settings) => {
   // @group·설명·@if·기본값은 Uniform 옵션과 별개다. 컴파일 성공 후 메타데이터만 바뀌어도 반영한다.
   listen(document, "shader-annotations-changed", renderUniforms);
   listen(document, "shader-settings-applied", () => {
+    stopMorph();
+    clearPresetReport();
     if (!varyingParameters) endComparison("프로젝트 또는 값 묶음이 바뀌어 비교를 끝냈습니다. 새 기준을 잡으세요.");
     clearDeleted();
     $("uniformSearch").value = "";
