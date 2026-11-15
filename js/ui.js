@@ -2663,38 +2663,30 @@ const mount = (renderer, input, settings) => {
       remove.type = "button";
       remove.title = `${item.name} 삭제 · GLSL에서 참조 중이면 먼저 코드를 수정하세요`;
       remove.setAttribute("aria-label", `${item.name} 삭제`);
-      remove.addEventListener("click", async () => {
-        // 코드가 uniform 선언 없이 이 파라미터를 쓰면(앱이 선언을 대신 넣어 왔다) 그냥 지우면 컴파일에 실패한다.
-        // 이유를 알리고, 코드에 선언을 남긴 채 지울지(값은 0) 묻는다.
-        const studio = window.shaderStudio,
-          uses = studio?.implicitParameterUses?.(item.name) || [];
-        if (uses.length) {
-          const ok = await studio.ask?.({
-            title: `${item.name}을(를) 코드에서 쓰고 있습니다`,
-            message: `${uses.join(" · ")} 코드가 ${item.name}을(를) uniform 선언 없이 씁니다(파라미터가 선언을 대신해 왔습니다). 그대로 지우면 셰이더가 ${item.name}을(를) 찾지 못해 컴파일에 실패합니다. 코드에 'uniform ${item.type.replace(/^(\w+)\[(\d+)\]$/, `$1 ${item.name}[$2]`).replace(/^(\w+)$/, `$1 ${item.name}`)};' 선언을 남기고 지울까요? 값은 0이 됩니다(Ctrl+Z로 코드 되돌리기).`,
-            ok: "선언 남기고 삭제",
-          });
-          if (!ok) return;
-          studio.declareParameter(item.name, item.type);
-        }
+      // 지우기: 코드가 uniform 선언 없이 이 이름을 쓰고 있었으면(파라미터가 선언을 대신해 왔다) 다시 컴파일이 실패한다.
+      // 그래도 지운 채로 두고, 그 오류는 편집기의 오류 표시(해당 줄 · 상태 줄 · 뷰포트 안내)로 보여 준다 — 화면은 마지막 성공 결과.
+      // 코드를 고치거나 '삭제 되돌리기'를 누르면 풀린다.
+      remove.addEventListener("click", () =>
         attempt(() => {
           const current = renderer.getUserUniforms().find(u => u.name === item.name);
           if (!current) return renderUniforms();
+          let broke = null;
           try {
-            renderer.removeUniform(item.name);
+            renderer.removeUniform(item.name, { keepOnError: true });
           } catch (error) {
-            // 렌더러는 실패하면 파라미터를 되살린다. 컴파일 오류 원문 대신 무엇을 하면 되는지 알린다.
-            throw new Error(
-              `${item.name}을(를) 지우면 코드가 컴파일되지 않습니다 — 코드에서 ${item.name}을(를) 먼저 지우거나 선언하세요. (${String(error.message).split("\n")[0]})`
-            );
+            if (renderer.getUserUniforms().some(u => u.name === item.name)) throw error; // 지우지 못했다(컨텍스트 등)
+            broke = error;
           }
-          deletedUniform = current;
+          deletedUniform = { ...current, broke: !!broke };
           $("undoUniform").hidden = false;
-          $("uniformNotice").textContent = `${item.name} 삭제됨`;
+          $("uniformNotice").textContent = broke
+            ? `${item.name} 삭제됨 · 코드가 아직 ${item.name}을(를) 써서 컴파일 오류 — 편집기에서 고치거나 삭제 되돌리기`
+            : `${item.name} 삭제됨`;
           renderUniforms();
+          if (broke) window.shaderStudio?.reportCompileError?.(broke);
           $("undoUniform").focus();
-        });
-      });
+        })
+      );
       let reset = null,
         syncReset = null;
       if (annotated) {
@@ -3479,9 +3471,11 @@ const mount = (renderer, input, settings) => {
   listen($("undoUniform"), "click", () =>
     attempt(() => {
       if (!deletedUniform) return;
-      const { name, type, value, options } = deletedUniform;
+      const { name, type, value, options, broke } = deletedUniform;
       renderer.defineUniform(name, type, value, options);
       clearDeleted();
+      // 지워서 생긴 컴파일 오류였으면, 되살린 뒤 다시 적용해 편집기의 오류 표시를 거둔다.
+      if (broke) window.shaderStudio?.apply?.();
       $("uniformSearch").value = "";
       renderUniforms();
       focusSearch();

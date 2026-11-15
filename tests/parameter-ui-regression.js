@@ -49,9 +49,10 @@ await test('Delete can restore the last parameter including value and slider opt
   await row().children[0].children.at(-1).click();assert.equal(f.renderer.getUserUniforms().length,0);assert.equal(n('undoUniform').hidden,false);
   await n('undoUniform').click();assert.equal(f.renderer.getUserUniforms()[0].value,.7);assert.equal(f.renderer.getUserUniforms()[0].options.step,.1);assert.equal(n('undoUniform').hidden,true);
 });
-await test('Failed deletion retains parameter and offers no false undo',async(f,n,row)=>{
+// 다시 컴파일이 실패하는 삭제(코드가 선언 없이 그 이름을 씀): 지운 채로 두고 되돌리기를 내밀며, 오류는 패널 토스트가 아니라 편집기 오류 표시로 보낸다.
+await test('Deletion that breaks compilation stays deleted, offers undo and reports the error in the editor',async(f,n,row)=>{
   f.renderer.defineUniform('uGain','float',.7);await n('uniformSearch').dispatchEvent({type:'input'});f.gl.getProgramParameter=()=>false;
-  await row().children[0].children.at(-1).click();assert.equal(f.renderer.getUserUniforms().length,1);assert.notEqual(n('undoUniform').hidden,false);assert(n('uiError').textContent);
+  await row().children[0].children.at(-1).click();assert.equal(f.renderer.getUserUniforms().length,0);assert.equal(n('undoUniform').hidden,false);assert(!n('uiError').textContent);   // 편집기 오류 표시는 parameter-remove-browser-regression.js가 실제 앱에서 확인한다
 });
 await test('Project switch clears search and previous-project deletion undo',async(f,n,row)=>{
   f.renderer.defineUniform('uGain','float',.7);await n('uniformSearch').dispatchEvent({type:'input'});await row().children[0].children.at(-1).click();
