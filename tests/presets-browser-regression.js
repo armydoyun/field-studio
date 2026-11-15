@@ -141,6 +141,7 @@
     await studio.exportPack();
     const pack = JSON.parse(await downloads.at(-1).text());
     test(pack.settings.presets.length === 2 && pack.settings.presets[1].values.uGain === 0.5, "프로젝트 파일(Pack)에 프리셋");
+    test(pack.settings.presets[0].schema.uTint.type==='vec3' && pack.settings.presets[0].schema.uMode.enum.join()==='하나,둘,셋', 'Pack에 타입과 선택지 정보도 보존');
 
     // 6) 새 프로젝트는 프리셋 없이 · Undo로 돌아옴 · Pack을 다시 열면 복원
     test(await studio.loadExample({ image: "void mainImage(out vec4 c, in vec2 p) { c = vec4(1.0); }", passes: [], imageChannels: {} }, []), "새 프로젝트");

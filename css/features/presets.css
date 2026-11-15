@@ -1,6 +1,6 @@
 /* 파라미터 프리셋(ui.js): 막대(ui-card) 안에 칩 = 이름(누르면 전환) + ⋯(덮어쓰기 · 이름 바꾸기 · 삭제 메뉴 = ui-menu).
    지금 값과 같은 프리셋은 액센트로 강조한다. 저장은 목록 끝의 점선 버튼(ui-btn--dashed). */
-.preset-bar { display:grid;gap:10px;margin:4px 0 12px;padding:10px 12px 12px; }
+.preset-bar { display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin:4px 0 12px;padding:10px 12px 12px; }
 .preset-bar[hidden] { display:none; }
 .preset-head { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
 .preset-title { color:var(--muted);font:600 var(--text-xs)/1 var(--sans); }
@@ -35,5 +35,9 @@
 .preset-chip.is-morphing { overflow:hidden; }
 .preset-chip.is-morphing::after { content:"";position:absolute;left:0;bottom:0;width:calc(var(--morph,0) * 100%);height:2px;background:var(--accent);pointer-events:none; }
 .preset-bar.is-morphing .preset-notice { color:var(--accent-strong); }
-.preset-notice { display:flex;align-items:center;gap:8px;min-height:0;margin:0;font-size:var(--text-xs); }
+.preset-notice { display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0;min-height:0;margin:0;font-size:var(--text-xs); }
+.preset-notice>span { flex:1 1 auto;min-width:0;max-width:100%;overflow-wrap:anywhere; }
 .preset-notice:empty,.preset-notice:has(#presetNoticeText:empty) { display:none; }
+.preset-report-list { display:grid;gap:var(--space-4);max-height:220px;overflow:auto;margin:var(--space-4) 0 0;padding:var(--space-2) var(--space-4) var(--space-2) var(--space-10);overflow-wrap:anywhere; }
+.preset-report-hint { margin:var(--space-4) 0 0; }
+.preset-report>summary { overflow-wrap:anywhere; }

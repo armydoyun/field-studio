@@ -458,6 +458,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 구조 변경은 전체 Pass 교체. 소스·채널만 바뀌면 해당 패스만 갱신하여 이전 Texture를 보존한다.
   const apply = (users = null) => {
     if (disposed) return false;
+    document.dispatchEvent(new Event("shader-before-apply"));
     if (timer) {
       clearTimeout(timer);
       timer = null;
@@ -1292,6 +1293,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   };
   const historyMove = backwards => {
+    document.dispatchEvent(new Event("shader-before-history"));
     const from = backwards ? undoStack : redoStack,
       to = backwards ? redoStack : undoStack;
     if (!from.length) return false;
@@ -1327,6 +1329,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // Panel batches are one Studio history entry, including all passes and values.
   const writeParameterDefaults = (names = null) => {
     if (disposed) return false;
+    document.dispatchEvent(new Event("shader-before-parameter-change"));
     rememberEditor();
     const users = renderer.getUserUniforms().filter(item => !names || names.includes(item.name)),
       before = copy(project);
@@ -1342,6 +1345,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   const setParameterValues = items => {
     if (disposed || !items.length) return false;
+    document.dispatchEvent(new Event("shader-before-parameter-change"));
     checkpoint.users = renderer.getUserUniforms();
     const updates = new Map(items.map(item => [item.name, item.value]));
     renderer.setUserUniforms(
@@ -1353,6 +1357,38 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     saveLocal();
     document.dispatchEvent(new Event("shader-settings-applied"));
     return true;
+  };
+  // A live preset transition writes values without compiling. Commit its whole interval once.
+  const beginParameterChange = (names = null) => {
+    const before = historyState();
+    let finished = false;
+    return () => {
+      if (finished || disposed) return false;
+      finished = true;
+      const current = historyState();
+      const schema = list => list.map(({ name, type, options }) => ({ name, type, options }));
+      if (
+        !same(before.project, current.project) ||
+        !same(before.presets, current.presets) ||
+        !same(before.links, current.links) ||
+        !same(schema(before.users), schema(current.users))
+      )
+        return false;
+      const targets = new Set(names || before.users.map(item => item.name)),
+        originals = new Map(before.users.map(item => [item.name, item.value])),
+        previous = current.users.map(item =>
+          targets.has(item.name) ? { ...item, value: originals.get(item.name) } : item
+        );
+      if (same(previous, current.users)) return false;
+      undoStack.push({ ...current, users: previous });
+      if (undoStack.length > 25) undoStack.shift();
+      redoStack.length = 0;
+      checkpoint = current;
+      editTime = 0;
+      syncHistory();
+      saveLocal();
+      return true;
+    };
   };
   // Uniform 이름 바꾸기(편집기 F2가 부른다): 지금 패스(spots), 같은 Uniform을 선언한 다른 패스, 등록된 파라미터 값을
   // 한 번에 바꾸고 Undo 한 번으로 되돌린다. 실행에 실패해도(컴파일 오류) 코드 변경은 남기고 오류를 보인다.
@@ -2578,6 +2614,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     insertCode,
     writeParameterDefaults,
     setParameterValues,
+    beginParameterChange,
     getEditorSource: () => $("studioCode").value,
     undo: () => historyMove(true),
     redo: () => historyMove(false),
