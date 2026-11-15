@@ -48,22 +48,13 @@ const create = ({
   const info = describe(type);
   let dialog = null,
     context = null;
-  const button = compact
-    ? UI.iconButton({
-        icon: "expand",
-        label: `${name} 값 편집`,
-        size: "xs",
-        className: "value-edit-open",
-        onClick: open,
-      })
-    : UI.button({
-        icon: "expand",
-        label: "값 편집",
-        variant: "ghost",
-        size: "sm",
-        className: "value-edit-open",
-        onClick: open,
-      });
+  const button = UI.iconButton({
+    icon: "expand",
+    label: `${name} 값 편집`,
+    size: compact ? "xs" : "sm",
+    className: "value-edit-open",
+    onClick: open,
+  });
   button.dataset.name = name;
   const close = (restore = true) => {
     if (!dialog) return;

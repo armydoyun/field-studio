@@ -1,3 +1,4 @@
+import * as UI from "./ui-kit.js";
 import * as ParameterTools from "./parameter-tools.js";
 import * as ValueEditor from "./value-editor.js";
 import * as MatrixControl from "./matrix-control.js";
@@ -387,27 +388,32 @@ const mount = (renderer, input, settings) => {
     chips.className = "uniform-dir-chips";
     const axes = sphere
       ? [
-          ["+X", [1, 0, 0]],
-          ["−X", [-1, 0, 0]],
-          ["+Y", [0, 1, 0]],
-          ["−Y", [0, -1, 0]],
-          ["+Z", [0, 0, 1]],
-          ["−Z", [0, 0, -1]],
+          ["+X", [1, 0, 0], "right"],
+          ["−X", [-1, 0, 0], "left"],
+          ["+Y", [0, 1, 0], "up"],
+          ["−Y", [0, -1, 0], "down"],
+          ["+Z", [0, 0, 1], "toward"],
+          ["−Z", [0, 0, -1], "away"],
         ]
       : [
-          ["+X", [1, 0]],
-          ["−X", [-1, 0]],
-          ["+Y", [0, 1]],
-          ["−Y", [0, -1]],
+          ["+X", [1, 0], "right"],
+          ["−X", [-1, 0], "left"],
+          ["+Y", [0, 1], "up"],
+          ["−Y", [0, -1], "down"],
         ];
-    const presets = angleMode ? [0, 90, 180, 270].map(deg => [`${deg}°`, deg]) : axes;
-    for (const [text, target] of presets) {
+    const presets = angleMode
+      ? [0, 90, 180, 270].map((deg, index) => [`${deg}°`, deg, ["right", "up", "left", "down"][index]])
+      : axes;
+    for (const [text, target, icon] of presets) {
       if (hemi && target[1] < 0) continue;
-      const chip = element("button");
-      chip.type = "button";
-      chip.className = "ui-chip uniform-dir-chip";
-      chip.textContent = text;
-      chip.setAttribute("aria-label", angleMode ? `${item.name}을 ${text}로` : `${item.name}을 ${text} 방향으로`);
+      const chip = UI.iconButton({
+        icon,
+        size: "sm",
+        className: "uniform-dir-chip",
+        label: angleMode ? `${item.name}을 ${text}로` : `${item.name}을 ${text} 방향으로`,
+        title: angleMode ? `${text}로 맞추기` : `${text} 방향으로 맞추기`,
+      });
+      chip.dataset.preset = text;
       chip.addEventListener("click", () => {
         if (angleMode) state.angle = nearestAngle(target);
         apply(chip, angleMode ? toVector() : target);
@@ -416,12 +422,13 @@ const mount = (renderer, input, settings) => {
     }
     let flip = null;
     if (sphere) {
-      flip = element("button");
-      flip.type = "button";
-      flip.className = "ui-chip uniform-dir-chip uniform-dir-flip";
-      flip.textContent = "뒤";
-      flip.title = "앞·뒤 반구 전환";
-      flip.setAttribute("aria-label", `${item.name} 뒤쪽(-Z) 반구`);
+      flip = UI.iconButton({
+        icon: "hemisphere",
+        size: "sm",
+        className: "uniform-dir-chip uniform-dir-flip",
+        label: `${item.name} 뒤쪽(-Z) 반구`,
+        title: "앞·뒤 반구 전환",
+      });
       flip.addEventListener("click", () => {
         const v = current();
         state.back = !state.back;
@@ -642,12 +649,14 @@ const mount = (renderer, input, settings) => {
     const middle = Number(((min + max) / 2).toFixed(decimals));
     const presets = [["가운데", [middle, middle]], ...(min < 0 && max > 0 && middle !== 0 ? [["원점", [0, 0]]] : [])];
     for (const [text, target] of presets) {
-      const chip = element("button");
-      chip.type = "button";
-      chip.className = "ui-chip uniform-dir-chip";
-      chip.textContent = text;
-      chip.title = `(${target.join(", ")})`;
-      chip.setAttribute("aria-label", `${item.name}을 ${text}(${target.join(", ")})로`);
+      const chip = UI.iconButton({
+        icon: text === "가운데" ? "center" : "origin",
+        size: "sm",
+        className: "uniform-dir-chip",
+        label: `${item.name}을 ${text}(${target.join(", ")})로`,
+        title: `${text} (${target.join(", ")})`,
+      });
+      chip.dataset.preset = text;
       chip.addEventListener("click", () => apply(chip, target));
       chips.append(chip);
     }
@@ -796,15 +805,14 @@ const mount = (renderer, input, settings) => {
   // 램프 편집기(uniform sampler2D · @gradient/@curve). 값은 렌더러가 위치 순으로 정렬해 256×1 텍스처로 굽는다.
   // 편집기는 점 객체 배열을 들고 있어 끄는 동안 순서가 바뀌어도 선택한 점을 놓치지 않는다.
   const RAMP_LIMIT = 16;
-  const rampButton = (text, label, onClick) => {
-    const button = element("button");
-    button.type = "button";
-    button.className = "ui-chip uniform-dir-chip";
-    button.textContent = text;
-    button.setAttribute("aria-label", label);
-    button.addEventListener("click", onClick);
-    return button;
-  };
+  const rampButton = (icon, label, onClick) =>
+    UI.iconButton({
+      icon,
+      label,
+      size: "sm",
+      className: `uniform-dir-chip${icon === "trash" ? " ui-icon-btn--danger" : ""}`,
+      onClick,
+    });
   const rampNumber = (label, min, max, step) => {
     const input = element("input");
     input.type = "number";
@@ -859,14 +867,17 @@ const mount = (renderer, input, settings) => {
     positionLabel.title = "위치";
     alphaLabel.textContent = "A";
     alphaLabel.title = "알파";
-    const remove = rampButton("삭제", `${item.name} 선택한 정지점 삭제`, () => removeStop());
-    const reverse = rampButton("뒤집기", `${item.name} 그라데이션 좌우 뒤집기`, () => {
+    const remove = rampButton("trash", `${item.name} 선택한 정지점 삭제`, () => removeStop());
+    const reverse = rampButton("flip-horizontal", `${item.name} 그라데이션 좌우 뒤집기`, () => {
       for (const stop of stops) stop.t = 1 - stop.t;
       apply(reverse);
     });
     const info = element("code");
     info.className = "uniform-dir-value";
-    edit.append(picker, positionLabel, position, alphaLabel, alpha, remove, reverse);
+    const actions = element("div");
+    actions.className = "uniform-ramp-actions";
+    actions.append(remove, reverse);
+    edit.append(picker, positionLabel, position, alphaLabel, alpha, actions);
     wrap.append(bar, track, edit, info);
     const apply = field => {
       stops.sort((a, b) => a.t - b.t);
@@ -1038,11 +1049,12 @@ const mount = (renderer, input, settings) => {
     yLabel.textContent = "Y";
     const xField = rampNumber(`${item.name} 선택한 점 X(0~1)`, 0, 1, 0.01),
       yField = rampNumber(`${item.name} 선택한 점 Y`, low, high, "any");
-    const remove = rampButton("삭제", `${item.name} 선택한 점 삭제`, () => removePoint(remove));
+    const remove = rampButton("trash", `${item.name} 선택한 점 삭제`, () => removePoint(remove));
     const presets = [
-      ["직선", () => [low, high].map((y, i) => ({ x: i, y }))],
+      ["직선", "curve-linear", () => [low, high].map((y, i) => ({ x: i, y }))],
       [
         "S자",
+        "curve-smooth",
         () =>
           [
             [0, 0],
@@ -1051,9 +1063,9 @@ const mount = (renderer, input, settings) => {
             [1, 1],
           ].map(([x, y]) => ({ x, y: low + y * span })),
       ],
-      ["뒤집기", () => points.map(p => ({ x: p.x, y: high + low - p.y }))],
-    ].map(([text, make]) =>
-      rampButton(text, `${item.name} 곡선 ${text}`, event => {
+      ["뒤집기", "swap", () => points.map(p => ({ x: p.x, y: high + low - p.y }))],
+    ].map(([text, icon, make]) =>
+      rampButton(icon, `${item.name} 곡선 ${text}`, event => {
         points = make();
         selected = Math.min(selected, points.length - 1);
         apply(event.currentTarget || pad);
@@ -1061,7 +1073,10 @@ const mount = (renderer, input, settings) => {
     );
     const info = element("code");
     info.className = "uniform-dir-value";
-    edit.append(xLabel, xField, yLabel, yField, remove, ...presets);
+    const actions = element("div");
+    actions.className = "uniform-ramp-actions";
+    actions.append(remove, ...presets);
+    edit.append(xLabel, xField, yLabel, yField, actions);
     wrap.append(pad, edit, info);
     const decimals = Math.min(6, Math.max(2, Math.ceil(-Math.log10(span / 1000))));
     const apply = field => {
@@ -2370,7 +2385,7 @@ const mount = (renderer, input, settings) => {
         description.textContent = spec.description;
       }
       const remove = element("button");
-      remove.className = "ui-icon-btn ui-icon-btn--xs remove-uniform glyph-icon icon-close";
+      remove.className = "ui-icon-btn ui-icon-btn--xs ui-icon-btn--danger remove-uniform glyph-icon icon-trash";
       remove.type = "button";
       remove.title = `${item.name} 삭제 · GLSL에서 참조 중이면 먼저 코드를 수정하세요`;
       remove.setAttribute("aria-label", `${item.name} 삭제`);

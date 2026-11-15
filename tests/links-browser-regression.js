@@ -96,7 +96,7 @@
     top.dispatchEvent(new Event("change", { bubbles: true }));
     await wait(30);
     test(settings.getLinks()[0].max === 1, "놓으면 저장");
-    [...editor("uWave").querySelectorAll("button")].find(b => b.textContent.includes("뒤집기")).click();
+    editor("uWave").querySelector(".link-flip").click();
     await wait(30);
     test(settings.getLinks()[0].min === 1 && settings.getLinks()[0].max === -2, "뒤집기 = 최소 · 최대 맞바꿈");
     test(editor("uWave").querySelector(".link-flip").getAttribute("aria-pressed") === "true", "뒤집기 눌린 상태");

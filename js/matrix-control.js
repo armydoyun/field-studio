@@ -214,10 +214,10 @@ const create = ({ name, size, read, onChange, getContext = () => null, expanded 
     if (restore && expandButton?.isConnected) expandButton.focus();
   };
   if (!expanded) {
-    expandButton = UI.button({
-      label: "확대 편집",
+    expandButton = UI.iconButton({
+      label: `${name} 행렬 확대 편집`,
+      title: "행렬 확대 편집",
       icon: "expand",
-      variant: "ghost",
       size: "sm",
       onClick: () => {
         if (dialog) return;
