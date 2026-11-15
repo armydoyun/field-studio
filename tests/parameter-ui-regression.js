@@ -14,7 +14,7 @@ async function test(name,fn){const f=fixture();let ui;try{
 (async()=>{
 await test('Parameter deletion uses the shared SVG mask and retains its accessible name',async(f,n,row)=>{
   f.renderer.defineUniform('uAmount','float',1);await n('uniformSearch').dispatchEvent({type:'input'});
-  const remove=row().children[0].children.at(-1);assert.equal(remove.className,'ui-icon-btn ui-icon-btn--xs remove-uniform glyph-icon icon-close');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
+  const remove=row().children[0].children.at(-1);assert.equal(remove.className,'ui-icon-btn ui-icon-btn--xs ui-icon-btn--danger remove-uniform glyph-icon icon-trash');assert(!remove.textContent);assert.equal(remove.attrs['aria-label'],'uAmount 삭제');
   await remove.click();assert.equal(f.renderer.getUserUniforms().length,0);
 });
 await test('Empty parameter list explains how to start',async(f,n,row)=>{assert.match(row().textContent,/파라미터가 없습니다/);assert.equal(n('uniformCount').textContent,'0 / 64');});

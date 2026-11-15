@@ -22,7 +22,7 @@ const parse=line=>Annotations.collect([line])[0];
 const value=(f,i=0)=>{const v=f.renderer.getUserUniforms()[i].value;return Array.isArray(v)?[...v]:v;};
 const show=async n=>n('uniformSearch').dispatchEvent({type:'input'});
 const side=row=>row.children[1].children[1];
-const chip=(chips,text)=>chips.children.find(c=>c.textContent===text);
+const chip=(chips,text)=>chips.children.find(c=>c.dataset.preset===text);
 (async()=>{
 await run('파서: @angle · @pos/@xy · @log · @enum',()=>{
   const a=parse('uniform float uSpin; // @angle @default 90deg');assert.equal(a.error,null);assert.equal(a.options.angle,true);close(a.value,Math.PI/2);
@@ -71,7 +71,7 @@ await ui('@angle 다이얼: 도로 보여 주고 라디안으로 넘기며 바�
   const [line,chips,code,turns]=side(row()).children,[,slider,number]=line.children;
   assert.equal(number.value,'30');assert.equal(code.textContent,'0.5236 rad');
   assert.equal(slider.min,'0');assert.equal(slider.max,'360');assert.equal(turns.textContent,'누적 0회전');
-  assert.deepEqual(chips.children.map(c=>c.textContent),['0°','90°','180°','270°']);
+  assert.deepEqual(chips.children.map(c=>c.dataset.preset),['0°','90°','180°','270°']);
   await chip(chips,'90°').click();close(value(f),Math.PI/2);
   number.value='720';await number.dispatchEvent({type:'change'});close(value(f),4*Math.PI);assert.equal(slider.value,'0');assert.equal(number.value,'0');
   assert.equal(turns.textContent,'누적 2회전');assert.equal(code.textContent,'0.0000 rad');assert.match(code.title,/12\.566371/);

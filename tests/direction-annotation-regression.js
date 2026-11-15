@@ -23,7 +23,7 @@ const parse=line=>Annotations.collect([line])[0];
 const value=f=>[...f.renderer.getUserUniforms()[0].value];
 // 행 구조: [머리, .uniform-dir[패드, 옆칸[각도 줄…, 축 버튼, 값]]]
 const parts=row=>{const dir=row.children[1],side=dir.children[1],k=side.children.length;return {dir,pad:dir.children[0],lines:side.children.slice(0,k-2),chips:side.children[k-2],code:side.children[k-1]};};
-const chip=(p,text)=>p.chips.children.find(c=>c.textContent===text);
+const chip=(p,text)=>p.chips.children.find(c=>(text==='뒤'?c.className.includes('uniform-dir-flip'):c.dataset.preset===text));
 (async()=>{
 await run('@dir는 vec2/vec3 방향을 길이 1로 읽는다',()=>{
   const a=parse('uniform vec3 uSun; // @dir @default 0 3 4');assert.equal(a.error,null);assert.equal(a.options.dir,'full');near(a.value,[0,.6,.8]);
@@ -58,7 +58,7 @@ await ui('vec2 다이얼: 각도 줄 · 키보드 회전 · 축 버튼',async(f,
   await p.pad.dispatchEvent({type:'keydown',key:'ArrowUp',shiftKey:true});near(value(f),[Math.cos(Math.PI/12),Math.sin(Math.PI/12)]);
   const number=p.lines[0].children[2];number.value='90';await number.dispatchEvent({type:'change'});near(value(f),[0,1]);
   await chip(p,'−X').click();near(value(f),[-1,0]);assert.equal(number.value,'180');
-  assert.deepEqual(p.chips.children.map(c=>c.textContent),['+X','−X','+Y','−Y']);
+  assert.deepEqual(p.chips.children.map(c=>c.dataset.preset),['+X','−X','+Y','−Y']);
 });
 await ui('vec3 구 패드: 방위각·고도 · 앞뒤 전환 · hemi는 아래쪽을 막는다',async(f,n,row)=>{
   f.renderer.defineUniform('uSun','vec3',[0,0,1],{dir:'hemi'});await n('uniformSearch').dispatchEvent({type:'input'});

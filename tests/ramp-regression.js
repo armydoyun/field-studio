@@ -79,7 +79,7 @@ await run('렌더러: 굽고 4번 유닛부터 묶고, 바뀐 것만 다시 올�
 await ui('그라데이션 편집기: 손잡이 · 키보드 이동 · 삭제 · 위치·알파 · 뒤집기 · 빈 곳 추가',`uniform sampler2D uR; // @gradient @default 0 #000000 0.5 #ff0000 1 #ffffff`,async(f,n,rows)=>{
   const [bar,track,edit,info]=rows()[0].children[1].children;assert.equal(bar.tagName,'CANVAS');
   assert.equal(track.children.length,3);assert.equal(info.textContent,'선형 · 정지점 3개');
-  const [picker,,position,,alpha,remove,reverse]=edit.children;
+  const [picker,,position,,alpha,actions]=edit.children,[remove,reverse]=actions.children;
   assert.equal(picker.value,'#000000');assert.equal(track.children[0].attrs['aria-pressed'],'true');
   const mid=track.children[1];await mid.dispatchEvent({type:'focus'});assert.equal(picker.value,'#ff0000');
   await key(mid,'ArrowRight',{shiftKey:true});close(value(f,'uR')[5],0.6);
@@ -94,7 +94,7 @@ await ui('그라데이션 편집기: 손잡이 · 키보드 이동 · 삭제 · 
   const v=value(f,'uR');assert.equal(v.length,15);close(v[5],0.5);close(v[6],0.5,0.01);assert.equal(track.children.length,3);
 });
 await ui('곡선 편집기: [ ] 선택 · 화살표 이동(이웃 사이) · Delete · X·Y 칸 · 프리셋',`uniform sampler2D uC; // @curve linear @range 0 2 @default 0 0 0.5 1 1 2`,async(f,n,rows)=>{
-  const [pad,edit,info]=rows()[0].children[1].children,[,xField,,yField,remove,line,sCurve,flip]=edit.children;
+  const [pad,edit,info]=rows()[0].children[1].children,[,xField,,yField,actions]=edit.children,[remove,line,sCurve,flip]=actions.children;
   assert.equal(info.textContent,'직선 잇기 · 점 3개 · 1번 (0, 0)');
   await key(pad,']');assert.equal(xField.value,'0.5');
   await key(pad,'ArrowUp',{shiftKey:true});close(value(f,'uC')[3],1.2);

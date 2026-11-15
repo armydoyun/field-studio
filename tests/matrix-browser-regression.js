@@ -62,7 +62,7 @@
     check(document.activeElement===cell(m,3),"Right arrow moves right, not down storage order");
     const a=matrix("uArray[1]"), all=value("uArray"); cell(a,5).click(); edit(a,"0.987654321098765");
     check(value("uArray")[14]===0.987654321098765&&value("uArray").every((v,i)=>i===14||v===all[i]),"matrix array edit preserves other elements");
-    const expand=()=>[...m.querySelectorAll("button")].find(b=>b.textContent.includes("확대 편집")).click();
+    const expand=()=>m.querySelector('[aria-label="uM3 행렬 확대 편집"]').click();
     const modal=()=>document.querySelector('dialog[aria-label="uM3 행렬 확대 편집"]');
     const foot=(d,text)=>[...d.querySelectorAll("footer button")].find(b=>b.textContent===text);
     const saved=value("uM3"); expand(); let d=modal(); check(d?.open,"expanded editor is a native modal with shared dialog classes");

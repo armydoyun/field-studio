@@ -98,7 +98,6 @@
 :is(.uniform-dir-pad,.uniform-curve-pad,.uniform-ramp-stop)[data-pointer]:is(:focus,:focus-visible) { outline:none; }
 .uniform-dir-side { display:grid;gap:6px;min-width:0; }
 .uniform-dir-chips { display:flex;flex-wrap:wrap;gap:4px; }
-.uniform-dir-chip { font-family:var(--mono); }
 .uniform-dir-value { min-width:0;overflow:hidden;color:var(--faint);font:var(--text-xs)/1.4 var(--mono);text-overflow:ellipsis;white-space:nowrap; }
 /* ── 램프(@gradient · @curve): 미리보기 막대·곡선 캔버스는 행 폭을 다 쓴다 ── */
 .uniform-ramp { display:grid;gap:6px;min-width:0; }
@@ -110,9 +109,9 @@
 .uniform-ramp-stop::after { content:"";position:absolute;inset:-5px -6px; } /* 12×16 손잡이의 잡는 영역만 24×26으로 넓힌다(모양은 그대로) */
 .uniform-ramp-stop.is-active { z-index:1;border:2px solid var(--accent); }
 .uniform-ramp-edit { display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0; }
+.uniform-ramp-actions { display:flex;flex:0 0 auto;gap:var(--space-2); }
 .uniform-ramp-edit input[type="number"] { flex:0 0 calc(5ch + 20px);width:calc(5ch + 20px); }
 .uniform-ramp-edit .uniform-axis-label { flex:0 0 auto;width:auto; }
-.uniform-ramp-edit .ui-chip:disabled { opacity:.4;cursor:default; }
 .uniform-curve-pad { display:block;width:100%;height:128px;border:0 solid var(--accent);border-radius:var(--radius-sm);color:var(--faint);cursor:crosshair;touch-action:none; }
 /* ── @enum: 짧은 목록은 세그먼트(ui-seg), 길면 선택 상자 ── */
 .uniform-enum { min-width:0; }

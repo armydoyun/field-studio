@@ -449,10 +449,14 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     }
     paint();
     track.append(fill, a, b);
-    const flip = element("button", "ui-btn--sm link-flip glyph-icon icon-swap", "뒤집기");
-    flip.type = "button";
+    const flip = UI.iconButton({
+      icon: "swap",
+      label: `${item.name} 값 범위 뒤집기`,
+      title: "최소·최대 뒤집기",
+      size: "sm",
+      className: "link-flip",
+    });
     flip.setAttribute("aria-pressed", String(inverted));
-    flip.title = "소스가 클수록 값이 작아지게(최소 · 최대를 맞바꿈)";
     flip.addEventListener("click", () => change({ min: link.max, max: link.min }));
     // 양 끝 칸 위에 '소스가 어떨 때의 값'인지 적는다(소스마다 말이 다르다)
     const [weak, strong] = END_LABEL[link.source] || ["약할 때", "셀 때"],
