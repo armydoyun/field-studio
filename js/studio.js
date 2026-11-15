@@ -231,7 +231,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const node = $("studioStorageState");
     node.dataset.state = state;
     node.textContent = text;
-    node.title = `${detail ? detail + " · " : ""}자동 복구본은 이 브라우저 탭의 코드·채널 구성입니다. 파라미터·이미지까지 이름을 붙여 보관하려면 프로젝트 저장(Ctrl+S)을 쓰세요.`;
+    node.title = `${detail ? detail + " · " : ""}자동 복구본: 코드·채널`;
     node.setAttribute("aria-label", node.title);
   };
   const references = name => Model.references(project, name);
@@ -458,6 +458,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 구조 변경은 전체 Pass 교체. 소스·채널만 바뀌면 해당 패스만 갱신하여 이전 Texture를 보존한다.
   const apply = (users = null) => {
     if (disposed) return false;
+    document.dispatchEvent(new Event("shader-before-apply"));
     if (timer) {
       clearTimeout(timer);
       timer = null;
@@ -579,12 +580,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const validCurrent = (target, buffer) => Model.validCurrent(project, target, buffer);
   const inputInfo = (ref, assets) =>
     !ref
-      ? { source: "연결 안 함", frame: "입력 없음", help: "사용할 이미지나 버퍼를 선택하세요." }
+      ? { source: "연결 안 함", frame: "입력 없음", help: "" }
       : ref.keyboard
         ? {
             source: "키보드",
             frame: "입력",
-            help: "키 상태 텍스처(256×3). x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글. 뷰포트를 클릭하면 키가 셰이더로 갑니다.",
+            help: "256×3 키 상태",
           }
         : ref.media
           ? mediaInfo(ref.media)
@@ -592,30 +593,25 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
             ? {
                 source: assets.find(asset => asset.id === ref.cubemap)?.name || "사용할 수 없는 이미지",
                 frame: "큐브맵",
-                help: "samplerCube로 읽습니다: texture(iChannelN, 방향). 4:3 · 3:4 십자, 6:1 · 1:6 띠, 2:1 파노라마 이미지를 6면으로 바꿉니다. 코드에서 선언하지 않으면 samplerCube로 자동 선언됩니다.",
+                help: "samplerCube",
               }
             : ref.texture
               ? {
                   source: assets.find(asset => asset.id === ref.texture)?.name || "사용할 수 없는 이미지",
                   frame: "이미지",
-                  help: "이미지 원본을 읽습니다. Filter와 Wrap은 이미지 설정을 따릅니다.",
+                  help: "이미지 원본",
                 }
               : {
                   source: `Buffer ${ref.buffer}${ref.attachment ? `[${ref.attachment}]` : ""}`,
                   frame: ref.frame === "current" ? "current · 이번 프레임" : "previous · 지난 프레임",
-                  help:
-                    ref.frame === "current"
-                      ? "이번 프레임에 앞서 실행된 버퍼의 결과를 읽습니다."
-                      : "지난 프레임에 저장된 버퍼 결과를 읽습니다. 자기 자신을 연결하면 피드백을 만들 수 있습니다.",
+                  help: ref.frame === "current" ? "이번 프레임 출력" : "직전 프레임 출력",
                 };
   // 미디어 채널 설명: 켜짐이면 이름(파일 이름) · 크기, 아니면 켜는 방법.
   const mediaInfo = kind => {
     const media = renderer.mediaState(kind),
       audio = kind === "mic" || kind === "audio",
       label = Media.LABELS[kind];
-    const shape = audio
-      ? "512×2 텍스처: y = 0.25 주파수 크기(왼쪽 = 낮은 음) · y = 0.75 파형(0.5 = 무음)"
-      : "영상 텍스처: 이미지처럼 위쪽이 v = 1";
+    const shape = audio ? "512×2 소리 데이터" : "영상 텍스처";
     const status =
       media.state === "on"
         ? `켜짐${media.name !== label ? ` · ${media.name}` : ""}${!audio && media.width ? ` · ${media.width}×${media.height}` : ""}`
@@ -749,8 +745,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("studioInputsTitle").textContent = `${selected} · 입력`;
     $("studioChannelRules").textContent =
       selected === "Image"
-        ? "Image는 버퍼 실행이 끝난 뒤 그려집니다. 모든 버퍼의 current 또는 previous를 읽을 수 있습니다."
-        : `current는 앞서 실행되는 버퍼만 선택할 수 있습니다.${blocked.length ? ` ${blocked.map(pass => pass.name).join(", ")}는 자기 자신 또는 뒤에서 실행되는 버퍼이므로 previous로 연결하세요.` : ""}`;
+        ? "모든 버퍼 입력 사용 가능"
+        : `previous 필요: ${blocked.map(pass => pass.name).join(", ") || "없음"}`;
     channelPicker.render({
       target: selected,
       channels,
@@ -1292,6 +1288,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   };
   const historyMove = backwards => {
+    document.dispatchEvent(new Event("shader-before-history"));
     const from = backwards ? undoStack : redoStack,
       to = backwards ? redoStack : undoStack;
     if (!from.length) return false;
@@ -1327,6 +1324,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // Panel batches are one Studio history entry, including all passes and values.
   const writeParameterDefaults = (names = null) => {
     if (disposed) return false;
+    document.dispatchEvent(new Event("shader-before-parameter-change"));
     rememberEditor();
     const users = renderer.getUserUniforms().filter(item => !names || names.includes(item.name)),
       before = copy(project);
@@ -1342,6 +1340,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   const setParameterValues = items => {
     if (disposed || !items.length) return false;
+    document.dispatchEvent(new Event("shader-before-parameter-change"));
     checkpoint.users = renderer.getUserUniforms();
     const updates = new Map(items.map(item => [item.name, item.value]));
     renderer.setUserUniforms(
@@ -1353,6 +1352,38 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     saveLocal();
     document.dispatchEvent(new Event("shader-settings-applied"));
     return true;
+  };
+  // A live preset transition writes values without compiling. Commit its whole interval once.
+  const beginParameterChange = (names = null) => {
+    const before = historyState();
+    let finished = false;
+    return () => {
+      if (finished || disposed) return false;
+      finished = true;
+      const current = historyState();
+      const schema = list => list.map(({ name, type, options }) => ({ name, type, options }));
+      if (
+        !same(before.project, current.project) ||
+        !same(before.presets, current.presets) ||
+        !same(before.links, current.links) ||
+        !same(schema(before.users), schema(current.users))
+      )
+        return false;
+      const targets = new Set(names || before.users.map(item => item.name)),
+        originals = new Map(before.users.map(item => [item.name, item.value])),
+        previous = current.users.map(item =>
+          targets.has(item.name) ? { ...item, value: originals.get(item.name) } : item
+        );
+      if (same(previous, current.users)) return false;
+      undoStack.push({ ...current, users: previous });
+      if (undoStack.length > 25) undoStack.shift();
+      redoStack.length = 0;
+      checkpoint = current;
+      editTime = 0;
+      syncHistory();
+      saveLocal();
+      return true;
+    };
   };
   // Uniform 이름 바꾸기(편집기 F2가 부른다): 지금 패스(spots), 같은 Uniform을 선언한 다른 패스, 등록된 파라미터 값을
   // 한 번에 바꾸고 Undo 한 번으로 되돌린다. 실행에 실패해도(컴파일 오류) 코드 변경은 남기고 오류를 보인다.
@@ -2578,6 +2609,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     insertCode,
     writeParameterDefaults,
     setParameterValues,
+    beginParameterChange,
     getEditorSource: () => $("studioCode").value,
     undo: () => historyMove(true),
     redo: () => historyMove(false),

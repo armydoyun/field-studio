@@ -18,7 +18,7 @@ const mount = renderer => {
   // 파라미터 프리셋(presets.js): 이 프로젝트의 파라미터 값 묶음. 설정과 함께 저장소 · 보관함 · Pack에 담긴다.
   let presets = [];
   const changed = () => document.dispatchEvent(new Event("shader-presets-changed"));
-  const getPresets = () => presets.map(preset => ({ name: preset.name, values: { ...preset.values } }));
+  const getPresets = () => Presets.validate(presets);
   const setPresets = list => {
     presets = Presets.validate(list);
     changed();
@@ -39,6 +39,13 @@ const mount = renderer => {
       setPresets(
         presets.map(preset => ({
           name: preset.name,
+          ...(preset.schema
+            ? {
+                schema: Object.fromEntries(
+                  Object.entries(preset.schema).map(([key, value]) => [key === from ? to : key, value])
+                ),
+              }
+            : {}),
           values: Object.fromEntries(
             Object.entries(preset.values).map(([key, value]) => [key === from ? to : key, value])
           ),

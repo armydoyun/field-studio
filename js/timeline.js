@@ -92,7 +92,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   resize.setAttribute("aria-orientation", "horizontal");
   resize.setAttribute("aria-label", "타임라인 높이 조절");
   resize.tabIndex = 0;
-  resize.title = "끌어서 높이 조절 · 끝까지 줄여 놓으면 타임라인 숨기기 · ↑↓ · Home/End · 두 번 눌러 기본 높이";
+  resize.title = "타임라인 높이 조절 · ↑↓";
   const bar = element("header", "ui-dense timeline-bar"),
     play = button("ui-btn--sm timeline-play glyph-icon icon-play", "재생"),
     start = button("ui-btn--sm timeline-start glyph-icon icon-reset", "처음으로", "", "재생 위치를 0초로"),
@@ -103,8 +103,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       "ui-btn ui-btn--sm timeline-magnet glyph-icon icon-magnet",
       "자석: 재생선 · 다른 키 · 범위 끝에 붙기",
       "",
-      "자석 — 키를 끌다 재생선 · 다른 키(시간 · 값) · 범위의 최소/최대 가까이(6px 안) 가면 거기에 붙고 점선으로 알려 준다.\n" +
-        "시간 · 값 스냅(격자)과는 따로 동작한다 · Alt를 누르고 끌면 둘 다 끔"
+      "자석 켜기·끄기 · Alt로 잠시 해제"
     ),
     speedSelect = element("select", "timeline-speed"),
     zoomOut = button("ui-btn--sm timeline-zoom glyph-icon icon-zoom-out", "축소"),
@@ -122,7 +121,9 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       "",
       "선택한 키 지우기 (Delete)"
     ),
-    close = button("ui-icon-btn ui-icon-btn--sm timeline-close glyph-icon icon-close", "타임라인 닫기");
+    close = button("ui-icon-btn ui-icon-btn--sm timeline-close glyph-icon icon-close", "타임라인 닫기"),
+    help = button("ui-icon-btn ui-icon-btn--sm glyph-icon icon-help", "타임라인 도움말");
+  help.dataset.guide = "timeline";
   timeField.type = "number";
   timeField.min = "0";
   timeField.step = "0.01";
@@ -142,8 +143,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   }
   valueSelect.value = valueChoice;
   valueSelect.setAttribute("aria-label", "값 스냅");
-  valueSelect.title =
-    "키를 위아래로 끌거나 ↑↓로 옮길 때 값을 맞출 간격 · 슬라이더 간격 = 파라미터의 @range 간격 · 범위 1/N = 레인 범위를 N칸으로(격자선 표시) · Alt를 누르고 끌면 끔";
+  valueSelect.title = "값 스냅 간격";
   magnetToggle.setAttribute("aria-pressed", String(magnet));
   // 재생 속도: 타임라인을 재생 조작의 한 곳으로 모은다(설정 패널 렌더링 탭의 배속 버튼과 같은 값 · 같은 저장).
   for (const value of ["0.25", "0.5", "1", "2"]) {
@@ -152,10 +152,9 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     speedSelect.append(option);
   }
   speedSelect.setAttribute("aria-label", "재생 속도");
-  speedSelect.title = "재생 속도(uTime이 흐르는 빠르기) · 설정 패널 렌더링 탭과 같은 값";
+  speedSelect.title = "재생 속도";
   snapSelect.setAttribute("aria-label", "시간 스냅");
-  snapSelect.title =
-    "키를 좌우로 끌거나 ←→로 옮길 때 시간을 맞출 격자 간격 · 자석과는 따로 동작(Alt를 누르고 끌면 둘 다 끔 · Shift를 누르면 한 방향으로만)";
+  snapSelect.title = "시간 스냅 간격";
   addSelect.setAttribute("aria-label", "키프레임 레인 추가");
   keyTime.type = "number";
   keyTime.min = "0";
@@ -208,6 +207,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     group(labelled("시간 스냅", snapSelect), labelled("값 스냅", valueSelect), magnetToggle),
     group(joined(zoomOut, zoomIn), fit),
     inspector,
+    help,
     close
   );
   const body = element("div", "timeline-body"),

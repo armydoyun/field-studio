@@ -11,7 +11,7 @@ const near=(a,b)=>Math.abs(a-b)<1e-9;
 test("capture: 지금 값을 복사해 둔다(배열은 새 배열)",()=>{
   const users=[{name:"uGain",type:"float",value:0.5},{name:"uTint",type:"vec3",value:[1,0,0]}];
   const preset=P.capture("밤",users);
-  assert.deepEqual({...preset,values:{...preset.values}},{name:"밤",values:{uGain:0.5,uTint:[1,0,0]}});
+  assert.deepEqual(JSON.parse(JSON.stringify(preset)),{name:"밤",values:{uGain:0.5,uTint:[1,0,0]},schema:{uGain:{type:'float'},uTint:{type:'vec3'}}});
   users[1].value[0]=9;
   assert.equal(preset.values.uTint[0],1,"원래 배열과 따로");
 });
