@@ -1434,15 +1434,15 @@ const mount = (renderer, input, settings) => {
     $("compareA").disabled = !comparison || (!difference && !viewingA);
     $("compareA").setAttribute("aria-pressed", String(viewingA));
     $("compareApply").disabled = !difference || viewingA;
-    if (comparison)
-      setText(
-        "compareNotice",
-        viewingA
-          ? "이전 값을 보는 중"
-          : difference
-            ? `${difference}개 다름`
-            : "아직 같음 · 값을 바꾸면 비교할 수 있습니다"
-      );
+    // 문구는 짧게 한 줄로(CSS가 넘치면 말줄임): 길이가 바뀌어 줄이 늘면 아래 목록이 통째로 밀린다. 자세한 설명은 툴팁.
+    if (comparison) {
+      setText("compareNotice", viewingA ? "이전 값 보는 중" : difference ? `${difference}개 다름` : "아직 같음");
+      $("compareNotice").title = viewingA
+        ? "바꾸기 전 값으로 그리는 중 · 손을 떼면 지금 값"
+        : difference
+          ? `지금 값과 바꾸기 전 값이 ${difference}개 다릅니다`
+          : "아직 바꾸기 전과 같습니다 · 값을 바꾸면 비교할 수 있습니다";
+    }
     $("comparePreviewNotice").hidden = !viewingA;
     for (const id of ["uniformList", "uniformEditor", "presetBar"]) {
       $(id).inert = viewingA;
@@ -1847,6 +1847,7 @@ const mount = (renderer, input, settings) => {
   // undo: 되돌릴 때 다시 쓸 프리셋 목록(없으면 되돌리기 버튼을 숨긴다)
   const presetNotice = (text, undo = null) => {
     $("presetNoticeText").textContent = text;
+    $("presetNoticeText").title = text; // 좁으면 한 줄에서 말줄임(presets.css) — 전체 문구는 툴팁
     presetRestore = undo;
     $("presetUndo").hidden = !undo;
   };

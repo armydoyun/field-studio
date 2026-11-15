@@ -29,11 +29,12 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
     check(!$('presetReport').hidden&&!$('presetReport').open,'내역은 기본적으로 접어서 표시');
     const notice=$('presetNoticeText'),noticeText=notice.textContent;
     notice.textContent='LongPresetName'.repeat(12);notice.style.fontSize='18px';
-    const range=document.createRange();range.selectNodeContents(notice);
-    check(range.getBoundingClientRect().right<=$('presetBar').getBoundingClientRect().right-4,'긴 이름과 큰 글꼴에서도 적용 결과가 카드 안에서 줄바꿈');
+    // 알림 줄은 한 줄로 고정(문구가 바뀌어도 막대가 밀리지 않게): 넘치는 문구는 카드 안에서 말줄임, 전체 문구는 툴팁
+    check(notice.getBoundingClientRect().right<=$('presetBar').getBoundingClientRect().right-4&&getComputedStyle(notice).textOverflow==='ellipsis','긴 이름과 큰 글꼴에서도 적용 결과가 카드 안에서 말줄임');
+    check(notice.title===noticeText,'알림 전체 문구는 툴팁으로');
     notice.textContent=noticeText;notice.style.removeProperty('font-size');
     const summary=$('presetReportSummary'),summaryText=summary.textContent;
-    summary.textContent='LongPresetName'.repeat(4);range.selectNodeContents(summary);
+    const range=document.createRange();summary.textContent='LongPresetName'.repeat(4);range.selectNodeContents(summary);
     check(range.getBoundingClientRect().right<=$('presetBar').getBoundingClientRect().right-4,'띄어쓰기 없는 긴 프리셋 이름도 내역 제목 안에서 줄바꿈');
     summary.textContent=summaryText;
     for(const word of ['vec3 → vec4','선택지','종류','없는 파라미터','범위','연결'])check($('presetReportList').textContent.includes(word),`건너뛴 이유: ${word}`);

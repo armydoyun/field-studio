@@ -7,13 +7,15 @@
 .studio-inputs-toggle[data-warn="true"]::before { content:"";width:6px;height:6px;border-radius:50%;background:var(--warning); }
 .studio-inputs { position:relative;display:flex;flex:0 0 auto;align-self:stretch;align-items:center;gap:8px;min-width:0;padding:6px 12px;border-bottom:1px solid var(--line); }
 .studio-inputs-title { flex:0 0 auto;color:var(--muted);font:600 var(--text-2xs)/1.5 var(--mono);white-space:nowrap; }
-.studio-channel-bar { display:flex;flex:1 1 auto;flex-wrap:wrap;gap:6px 12px;min-width:0; }
+/* 칩 칸의 너비는 내용이 아니라 칸이 정한다(자동 채우기 격자): 미디어를 켜 칩 글자가 "꺼짐" → 장치 이름으로 길어져도
+   줄 수가 편집기 폭으로만 정해져 코드 영역이 밀리지 않는다. 긴 이름은 칩 안에서 말줄임. */
+.studio-channel-bar { display:grid;grid-template-columns:repeat(auto-fill,minmax(min(168px,calc(50% - 6px)),1fr));flex:1 1 auto;gap:6px 12px;min-width:0; }
 .studio-channel { display:flex;align-items:center;gap:6px;min-width:0;margin:0; }
-.studio-channel label { min-width:8px;color:var(--muted);font:var(--text-2xs)/1.5 var(--mono);text-align:right; }
+.studio-channel label { flex:0 0 auto;min-width:8px;color:var(--muted);font:var(--text-2xs)/1.5 var(--mono);text-align:right;white-space:nowrap; }
 /* 설명 문단은 화면에서 숨기고(title·aria-describedby로 전달) 칩은 줄을 넘기면 다음 줄로 간다 */
 .studio-channel-help { display:none; }
 /* 채널 칩: [번호 배지] 소스 이름 */
-.studio-channel-chip { position:relative;gap:6px;min-width:34px;max-width:150px;min-height:var(--control-sm);padding:3px 8px;color:var(--text);font:600 var(--text-xs)/1.4 var(--mono); }
+.studio-channel-chip { position:relative;flex:0 1 auto;gap:6px;min-width:34px;max-width:min(150px,100%);min-height:var(--control-sm);padding:3px 8px;color:var(--text);font:600 var(--text-xs)/1.4 var(--mono); }
 .studio-channel-chip[data-kind="empty"] { padding:3px 6px;border-style:dashed;color:var(--muted);font-weight:400; }
 .studio-channel-chip[data-used="false"] { opacity:.55; }
 .studio-channel-chip[data-used="false"]:hover,.studio-channel-chip[data-used="false"]:focus-visible,.studio-channel-chip[aria-expanded="true"] { opacity:1; }

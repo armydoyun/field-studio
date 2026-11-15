@@ -43,8 +43,9 @@ assert.equal(base('.ui-icon-btn--sm').get('width'),'var(--control-sm)');assert(/
 assert(base('#previewPause[aria-pressed="true"]').has('--icon'));assert(base('#studioMaximize[aria-pressed="true"]').has('--icon'));
 console.log('PASS Font-independent icon boxes / accessible icon buttons / state icons / square delete and navigation controls');
 
-// 입력 채널은 한 줄짜리 칩이라 설명 문단은 화면에서 숨기고(title·aria-describedby로 전달) 칩은 줄을 넘기면 다음 줄로 간다.
-assert.equal(base('.studio-channel-help').get('display'),'none');assert.equal(base('.studio-channel-bar').get('flex-wrap'),'wrap');
+// 입력 채널은 한 줄짜리 칩이라 설명 문단은 화면에서 숨기고(title·aria-describedby로 전달) 칩은 자동 채우기 격자 칸에 놓인다
+// (칸 너비가 내용이 아니라 편집기 폭으로 정해져, 칩 글자가 길어져도 줄 수가 바뀌지 않는다).
+assert.equal(base('.studio-channel-help').get('display'),'none');assert.equal(base('.studio-channel-bar').get('display'),'grid');assert(/repeat\(auto-fill,/.test(base('.studio-channel-bar').get('grid-template-columns')));
 assert.equal(base('.studio-graph-input').get('grid-template-columns'),'54px minmax(0,1fr)');
 assert.equal(base('.studio-texture').get('grid-template-columns'),'minmax(0,1fr) 28px');assert.equal(base('.studio-texture .texture-connect').get('grid-column'),'1/-1');
 console.log('PASS Channel chips / source and frame columns / full-width image connection action');
