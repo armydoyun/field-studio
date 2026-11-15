@@ -33,7 +33,7 @@
     studio.redo();
     renderer.setUniform('uOn', false);
     renderer.setUniform('uA', 4);
-    $('uniformWriteDefaults').click();
+    $('uniformMore').click();$('uniformWriteDefaults').click();
     check(studio.getProject().common.includes('@default false'), '일괄 반영은 Common 선언도 갱신');
     check(studio.getProject().image.includes('@default 4'), '바뀐 값을 모두 코드에 반영');
     row('uA').querySelector('.lock-uniform').click();
@@ -42,7 +42,7 @@
     const originalRandom = Math.random;
     try {
       Math.random = () => 0.8;
-      $('uniformRandomize').click();
+      $('uniformVary').click();$('uniformRandomize').click();
     } finally { Math.random = originalRandom; }
     check(user('uA').value===4, '전체 무작위는 잠긴 파라미터를 유지');
     check(user('uB').value===8, '전체 무작위는 나머지를 범위 안에서 변경');
@@ -50,7 +50,7 @@
     check(JSON.stringify(renderer.getUserUniforms())===JSON.stringify(before), '전체 무작위는 Undo 한 번으로 복원');
     try {
       Math.random = () => 1;
-      $('uniformJitter').click();
+      $('uniformVary').click();$('uniformJitter').click();
     } finally { Math.random = originalRandom; }
     check(user('uA').value===4 && Math.abs(user('uB').value-1.1)<1e-9, '조금씩 바꾸기는 잠금 유지·현재 값 주변 변경');
     studio.undo();

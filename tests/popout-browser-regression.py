@@ -89,7 +89,7 @@ try:
             popup.locator("#screen").click(position={"x": 10, "y": 300})
             expect(popup.locator("#captureMenu")).to_be_hidden()
 
-            page.evaluate("shaderPlayground.defineUniform('uCompareTest','float',1); document.getElementById('uniformSearch').dispatchEvent(new Event('input',{bubbles:true})); document.getElementById('compareCapture').click(); document.getElementById('compareA').click()")
+            page.evaluate("shaderPlayground.defineUniform('uCompareTest','float',1); document.getElementById('uniformSearch').dispatchEvent(new Event('input',{bubbles:true})); document.getElementById('uniformMore').click(); document.getElementById('compareCapture').click(); shaderPlayground.setUniform('uCompareTest',2); document.getElementById('uniformSearch').dispatchEvent(new Event('input',{bubbles:true})); Element.prototype.setPointerCapture=()=>{}; document.getElementById('compareA').dispatchEvent(new PointerEvent('pointerdown',{button:0,buttons:1,pointerId:5,bubbles:true,cancelable:true}))")
             expect(popup.locator('[data-mirror="comparison"]')).to_be_visible()
             popup.keyboard.press("g")
             expect(popup.locator('[data-mirror="hud"]')).to_be_hidden()
@@ -97,7 +97,7 @@ try:
             popup.keyboard.press("g")
             expect(popup.locator('[data-mirror="hud"]')).to_be_visible()
             expect(popup.locator('[data-mirror="comparison"]')).to_be_visible()
-            page.evaluate("document.getElementById('compareClear').click()")
+            page.evaluate("document.getElementById('compareA').dispatchEvent(new PointerEvent('pointerup',{button:0,pointerId:5,bubbles:true,cancelable:true})); document.getElementById('compareClear').click()")
             expect(popup.locator('[data-mirror="comparison"]')).to_be_hidden()
             page.evaluate("shaderPlayground.removeUniform('uCompareTest')")
 

@@ -1,14 +1,19 @@
-/* 파라미터 탭(ui.js): 검색 · 목록(한 줄 = 머리줄 + 조작 위젯) · 추가 폼 · 내장 Uniform 참조.
+/* 파라미터 탭(ui.js): 검색 · 목록(한 줄 = 머리줄 + 조작 위젯) · 추가 폼 · 내장 Uniform 가이드 버튼.
    버튼 · 칸 · 세그먼트 · 스위치 · 칩의 모양은 컴포넌트가 정한다. 목록은 ui-dense라 안의 칸이 28px · 고정폭 숫자다.
    여기에는 위젯의 배치와, 이 탭에만 있는 조작(방향 패드 · 램프 · 곡선)의 모양만 둔다. */
 /* 검색 칸과 목록 구역은 한 덩어리다: 사이에 선을 긋지 않는다(구역에 ui-section--flush) */
 .uniform-search-wrap { margin:var(--space-6) var(--panel-inset) 0; }
-.parameter-compare { display:grid;gap:var(--space-4);margin-bottom:var(--space-3); }
-.parameter-compare.is-active { padding:var(--space-6);margin-bottom:var(--space-6); }
+/* 상단 도구막대 한 줄: [변경만 보기] …… [무작위 ▾][⋯]. 무작위 · 코드 반영 · 비교 기준은 메뉴(ui.js)로 접는다 */
+.parameter-toolbar { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4);margin-bottom:var(--space-6); }
+.parameter-toolbar-end { display:flex;align-items:center;gap:var(--space-2);margin-left:auto; }
+/* 바꾸기 전과 비교: 무작위 · 프리셋 직후(또는 ⋯로 기억했을 때)만 나타나는 얇은 바 */
+.parameter-compare { display:grid;gap:var(--space-4);margin-bottom:var(--space-6);padding:var(--space-4) var(--space-4) var(--space-4) var(--space-6); }
+.parameter-compare[hidden] { display:none; }
+.parameter-compare-head { display:flex;align-items:center;gap:var(--space-4);min-width:0; }
+.parameter-compare-head>strong { font-size:var(--text-sm);font-weight:650; }
+#compareClear { margin-left:auto; }
+.parameter-compare-actions { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4);padding-bottom:var(--space-2); }
 .uniform-changed.is-unchanged { visibility:hidden; }
-.parameter-compare-actions,.parameter-filter { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4); }
-.parameter-compare>p { margin:0; }
-.parameter-filter { margin-bottom:var(--space-6); }
 .uniform-section .ui-section-head { margin-bottom:8px; }
 #uiError { margin:0 0 12px; }
 #uiError:empty { display:none; }
@@ -33,7 +38,9 @@
 /* 줄 아이콘(ui-icon-btn--xs): 무작위 재생 연결 기본값 복원 ×. 삭제(×)는 되돌리기(기본값 복원)와 떨어뜨리고, 포인터를 올린 줄에서만 보인다
    (자리는 그대로 — 줄이 흔들리지 않게). 되돌릴 것이 없으면 기본값 복원도 감춘다. 터치 기기에서는 늘 보인다. */
 .uniform-top .ui-icon-btn { color:var(--faint); }
-.uniform-top .ui-icon-btn[aria-pressed="true"] { background:transparent;color:var(--accent-strong); }
+/* 켜짐(연결 적용 등)은 글자색만 바꾸고 면은 두지 않는다. 설정이 열린 상태(aria-expanded)는 켜져 있어도 컴포넌트의 면을 그대로 쓴다 */
+.uniform-top .ui-icon-btn:is([aria-pressed="true"],[aria-expanded="true"]) { color:var(--accent-strong); }
+.uniform-top .ui-icon-btn[aria-pressed="true"]:not([aria-expanded="true"]) { background:transparent; }
 .reset-uniform { margin-left:auto; }
 .reset-uniform:disabled { visibility:hidden; }
 .remove-uniform { margin:0 -4px 0 4px;opacity:0; }
@@ -129,11 +136,7 @@
 .range-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .range-grid label { display:block;margin:0 0 6px;color:var(--faint);font-size:var(--text-2xs); }
 .uniform-form-actions { display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px; }
-.builtin-reference { margin-top:20px;padding-top:12px;border-top:1px solid var(--line); }
-.builtin-reference dl { display:grid;gap:4px;margin:12px 0 0;font-size:var(--text-xs);line-height:1.6; }
-.builtin-reference dt { color:var(--accent-strong);font-family:var(--mono);overflow-wrap:anywhere; }
-.builtin-reference dd { margin:0 0 8px;color:var(--muted); }
-.builtin-reference .ui-link { margin-top:8px; }
+.builtin-reference { margin-top:var(--space-10);padding-top:var(--space-6);border-top:1px solid var(--line); }
 /* 창이 넓어도 설정 패널만 좁힐 수 있으므로 실제 줄의 너비에 맞춰 배치한다. */
 @container uniform (max-width:260px) {
  /* Keep name/type/link status above the actions so badges do not shift the controls. */
@@ -156,8 +159,6 @@
 }
 
 .uniform-array-item>.value-edit-open { justify-self:end; }
-
-.parameter-actions { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
 
 .uniform-hidden-params { min-width:0;margin:0 0 12px; }
 .uniform-hidden-help { margin:4px 0 8px; }

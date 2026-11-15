@@ -804,7 +804,8 @@ const mount = (renderer, input, settings) => {
   };
   // 램프 편집기(uniform sampler2D · @gradient/@curve). 값은 렌더러가 위치 순으로 정렬해 256×1 텍스처로 굽는다.
   // 편집기는 점 객체 배열을 들고 있어 끄는 동안 순서가 바뀌어도 선택한 점을 놓치지 않는다.
-  const RAMP_LIMIT = 16;
+  const RAMP_LIMIT = 16,
+    RAMP_DRAG_SLOP = 3; // 정지점 손잡이: 이만큼(px) 끌어야 움직인다(타임라인 키와 같은 값)
   const rampButton = (icon, label, onClick) =>
     UI.iconButton({
       icon,
@@ -934,13 +935,37 @@ const mount = (renderer, input, settings) => {
             handle.type = "button";
             handle.className = "uniform-ramp-stop";
             handles.set(stop, handle);
-            padDrag(handle, event => {
-              selected = stop;
-              const box = track.getBoundingClientRect();
-              stop.t = Number(clamp01((event.clientX - box.left) / box.width).toFixed(3));
-              apply(handle);
+            // 누르기만 하면 선택만 한다(손잡이가 포인터 쪽으로 튀지 않게). 3px 넘게 끌어야 움직이고,
+            // 움직임은 누른 지점 기준 상대 거리라 손잡이 가운데를 정확히 누르지 않아도 위치가 바뀌지 않는다.
+            handle.addEventListener("pointerdown", event => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              handle.dataset.pointer = "";
+              handle.focus({ preventScroll: true });
+              handle.setPointerCapture?.(event.pointerId);
+              const width = track.getBoundingClientRect().width || 1,
+                startX = event.clientX,
+                startT = stop.t;
+              let moving = false;
+              const move = next => {
+                const dx = next.clientX - startX;
+                if (!moving && Math.abs(dx) < RAMP_DRAG_SLOP) return;
+                if (!moving) handle.classList.add("is-dragging");
+                moving = true;
+                selected = stop;
+                stop.t = Number(clamp01(startT + dx / width).toFixed(3));
+                apply(handle);
+              };
+              const end = () => {
+                handle.removeEventListener("pointermove", move);
+                handle.classList.remove("is-dragging");
+              };
+              handle.addEventListener("pointermove", move);
+              handle.addEventListener("pointerup", end, { once: true });
+              handle.addEventListener("pointercancel", end, { once: true });
             });
             handle.addEventListener("keydown", event => {
+              delete handle.dataset.pointer;
               const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -1, ArrowUp: 1 };
               selected = stop;
               if (event.key === "Delete" || event.key === "Backspace") {
@@ -983,13 +1008,17 @@ const mount = (renderer, input, settings) => {
     // 빈 곳을 누르면 그 위치의 지금 색으로 정지점을 더한다.
     track.addEventListener("pointerdown", event => {
       if (event.target !== track || event.button !== 0 || stops.length >= RAMP_LIMIT) return;
+      // 기본 동작(누른 곳으로 초점 이동)이 새 손잡이의 초점을 빼앗으면, 목록 밖 초점으로 보고 목록을 다시 그려 선택이 첫 정지점으로 돌아간다.
+      event.preventDefault();
       const box = track.getBoundingClientRect(),
         t = Number(clamp01((event.clientX - box.left) / box.width).toFixed(3)),
         samples = renderer.sampleRamp(item.options, current(), 256);
       selected = { t, c: samples[Math.round(t * 255)].map(v => Number(v.toFixed(4))) };
       stops.push(selected);
       apply(track);
-      handles.get(selected)?.focus?.();
+      const added = handles.get(selected);
+      if (added) added.dataset.pointer = "";
+      added?.focus?.({ preventScroll: true });
     });
     picker.addEventListener("input", () => {
       const rgb = picker.value.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16) / 255);
@@ -1202,7 +1231,8 @@ const mount = (renderer, input, settings) => {
             d: Math.hypot((p.x - x) * (box.width - INSET * 2), ((p.y - y) / span) * (box.height - INSET * 2)),
           }))
           .sort((a, b) => a.d - b.d)[0];
-      if (hit && hit.d <= 10) selected = hit.i;
+      const grabbed = hit && hit.d <= 10;
+      if (grabbed) selected = hit.i;
       else if (points.length < RAMP_LIMIT) {
         const at = points.findIndex(p => p.x > x);
         selected = at < 0 ? points.length : at;
@@ -1213,9 +1243,17 @@ const mount = (renderer, input, settings) => {
       sync(false);
       pad.setPointerCapture?.(event.pointerId);
       pad.classList.add("is-dragging");
+      // 기존 점을 잡았으면 누르기만으로는 움직이지 않고(3px 넘게 끌어야), 누른 지점 기준으로 옮겨 점이 포인터로 튀지 않는다.
+      const startX = event.clientX,
+        startY = event.clientY,
+        origin = { ...points[selected] };
+      let moving = !grabbed;
       const move = moveEvent => {
+        if (!moving && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < RAMP_DRAG_SLOP) return;
+        moving = true;
         const next = pointerToValue(moveEvent);
-        place(selected, next.x, next.y);
+        if (grabbed) place(selected, origin.x + next.x - x, origin.y + next.y - y);
+        else place(selected, next.x, next.y);
         apply(pad);
       };
       const end = () => {
@@ -1361,11 +1399,12 @@ const mount = (renderer, input, settings) => {
       renderer.getUserUniforms().map(({ name, type, options }) => ({ name, type, options })),
       settings.getLinks?.() || [],
     ]);
-  const endComparison = (message = "기준을 잡은 뒤 값을 바꿔 비교하세요.") => {
+  // 바꾸기 전과 비교(A/B): 무작위 · 조금씩 · 프리셋 적용 직전 값(또는 ⋯ 메뉴로 기억한 값)을 '이전'으로 들고 있다가,
+  // 비교 바의 버튼을 누르고 있는 동안만 이전 값으로 화면을 그린다(저장 · 편집되는 값은 언제나 지금 값).
+  const endComparison = () => {
     if (renderer.isUniformPreviewActive?.()) renderer.setUniformPreview(null);
     comparison = null;
     viewingA = false;
-    setText("compareNotice", message);
   };
   const pauseParameterMotion = () => {
     stopMorph();
@@ -1378,41 +1417,37 @@ const mount = (renderer, input, settings) => {
     viewingA = false;
     const linked = new Set((settings.getLinks?.() || []).map(item => item.name));
     comparison = { key: comparisonKey(), items: renderer.getUserUniforms().filter(item => !linked.has(item.name)) };
-    if (!comparison.items.length) endComparison("비교할 파라미터가 없습니다. 연결된 값은 비교에서 제외합니다.");
+    if (!comparison.items.length) endComparison();
   };
   const syncComparison = () => {
     if (!$("parameterCompare")) return;
     if (comparison && (comparison.key !== comparisonKey() || (viewingA && !renderer.isUniformPreviewActive?.())))
-      endComparison("코드·파라미터 설정이 바뀌어 비교를 끝냈습니다. 새 기준을 잡으세요.");
+      endComparison();
     const users = renderer.getUserUniforms(),
       difference = comparison
         ? comparison.items.filter(
             before => !ParameterTools.equalValue(before.value, users.find(item => item.name === before.name)?.value)
           ).length
         : 0;
-    $("compareCapture").disabled = !users.length || viewingA;
-    $("parameterCompare").classList.toggle("ui-card", !!comparison);
-    $("parameterCompare").classList.toggle("is-active", !!comparison);
-    $("compareSwitch").hidden = !comparison;
-    $("compareNotice").hidden = !comparison;
-    $("compareCapture").textContent = comparison ? "A 기준 갱신" : "A 기준 잡기";
-    $("compareA").disabled = $("compareB").disabled = !comparison;
+    $("parameterCompare").hidden = !comparison;
+    $("compareA").disabled = !comparison || (!difference && !viewingA);
     $("compareA").setAttribute("aria-pressed", String(viewingA));
-    $("compareB").setAttribute("aria-pressed", String(!viewingA));
-    $("compareApply").hidden = !viewingA;
-    $("compareApply").disabled = !difference;
-    $("compareClear").hidden = !comparison;
+    $("compareApply").disabled = !difference || viewingA;
     if (comparison)
       setText(
         "compareNotice",
-        viewingA ? "A 미리보기 · 저장은 B · 별도 버튼으로 A 적용" : `A와 다른 값 ${difference}개 · 편집·저장은 B`
+        viewingA
+          ? "이전 값을 보는 중"
+          : difference
+            ? `${difference}개 다름`
+            : "아직 같음 · 값을 바꾸면 비교할 수 있습니다"
       );
     $("comparePreviewNotice").hidden = !viewingA;
     for (const id of ["uniformList", "uniformEditor", "presetBar"]) {
       $(id).inert = viewingA;
       $(id).setAttribute("aria-disabled", String(viewingA));
     }
-    for (const id of ["uniformWriteDefaults", "uniformRandomize", "uniformJitter"]) $(id).disabled = viewingA;
+    for (const id of ["uniformVary", "uniformMore"]) $(id).disabled = viewingA;
   };
   const syncChanges = (items = renderer.getUserUniforms(), defaults = annotatedDefaults()) => {
     const changed = items.filter(item => ParameterTools.changedFromDefault(item, defaults.get(item.name)));
@@ -1425,45 +1460,59 @@ const mount = (renderer, input, settings) => {
     $("uniformChangedOnly").setAttribute("aria-pressed", String(changedOnly));
     renderUniforms();
   });
-  listen($("compareCapture"), "click", () =>
-    attempt(() => {
-      captureComparison();
-      renderUniforms();
-    })
-  );
-  listen($("compareA"), "click", () =>
+  // 누르고 있는 동안만 이전 값(A)을 보여 준다: 포인터는 누르기 ~ 떼기, 키보드는 Space · Enter를 누르고 있는 동안.
+  const showBefore = () =>
     attempt(() => {
       syncComparison();
-      if (!comparison) return;
+      if (!comparison || viewingA || $("compareA").disabled) return;
       pauseParameterMotion();
       closePresetMenu();
       renderer.setUniformPreview(comparison.items);
       viewingA = true;
       syncComparison();
-    })
-  );
-  listen($("compareB"), "click", () =>
+    });
+  const showCurrent = () => {
+    if (!viewingA) return;
     attempt(() => {
       renderer.setUniformPreview(null);
       viewingA = false;
       syncComparison();
-    })
-  );
+    });
+  };
+  listen($("compareA"), "pointerdown", event => {
+    if (event.button !== 0) return;
+    event.preventDefault(); // 누르는 동안 글자 선택 · 초점 테두리가 생기지 않게
+    $("compareA").setPointerCapture?.(event.pointerId);
+    showBefore();
+  });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture", "blur"])
+    listen($("compareA"), type, showCurrent);
+  listen($("compareA"), "contextmenu", event => event.preventDefault());
+  listen($("compareA"), "keydown", event => {
+    if (event.key !== " " && event.key !== "Enter") return;
+    event.preventDefault();
+    if (!event.repeat) showBefore();
+  });
+  listen($("compareA"), "keyup", event => {
+    if (event.key === " " || event.key === "Enter") showCurrent();
+  });
   listen($("compareClear"), "click", () =>
     attempt(() => {
-      endComparison("비교를 끝냈습니다. B 현재 값을 유지합니다.");
+      endComparison();
       renderUniforms();
+      $("uniformChangedOnly").focus({ preventScroll: true });
     })
   );
   listen($("compareApply"), "click", () =>
     attempt(() => {
       syncComparison();
-      if (!comparison || !viewingA) return;
+      if (!comparison || viewingA) return;
       const items = comparison.items;
-      endComparison("A 기준을 현재 값으로 적용했습니다 · Ctrl+Z로 되돌리기");
+      endComparison();
       window.shaderStudio?.setParameterValues(items);
       renderUniforms();
-      setText("compareNotice", "A 기준을 현재 값으로 적용했습니다 · Ctrl+Z로 되돌리기");
+      $("uniformNotice").textContent = "바꾸기 전 값으로 되돌렸습니다 · Ctrl+Z로 다시 지금 값";
+      $("uniformVary").focus({ preventScroll: true });
     })
   );
   // @anim 재생: 범위를 코사인으로 왕복(@angle이면 한 바퀴씩 계속 돈다). 지금 값에서 위쪽으로 출발한다.
@@ -1576,7 +1625,7 @@ const mount = (renderer, input, settings) => {
       $("uniformNotice").textContent = "현재 값을 코드의 @default에 반영했습니다 · Ctrl+Z로 되돌리기";
     } else $("uniformNotice").textContent = "반영할 변경이 없습니다. GLSL 선언을 확인하세요.";
   };
-  listen($("uniformWriteDefaults"), "click", () => {
+  const writeChangedDefaults = () => {
     const defaults = annotatedDefaults();
     writeDefaults(
       renderer
@@ -1587,7 +1636,7 @@ const mount = (renderer, input, settings) => {
         })
         .map(item => item.name)
     );
-  });
+  };
   const varyParameters = jitter => {
     if (viewingA) return;
     stopMorph();
@@ -1621,8 +1670,63 @@ const mount = (renderer, input, settings) => {
         `${items.length}개 ${jitter ? "조금씩 바꿈" : "무작위 변경"} · 잠금·숨김·연결·램프 제외 · Ctrl+Z로 되돌리기`;
     });
   };
-  listen($("uniformRandomize"), "click", () => varyParameters(false));
-  listen($("uniformJitter"), "click", () => varyParameters(true));
+  // 상단 도구막대: [변경만 보기] …… [무작위 ▾] [⋯]. 자주 쓰지 않는 일괄 작업은 메뉴로 접어 둔다.
+  listen($("uniformVary"), "click", () =>
+    UI.menu({
+      anchor: $("uniformVary"),
+      label: "값 바꿔 보기",
+      align: "end",
+      items: [
+        {
+          id: "uniformRandomize",
+          icon: "dice",
+          label: "전체 무작위",
+          title: "잠기지 않은 값을 범위 안에서 무작위로 · 잠금 · 숨김 · 연결 · 램프 제외",
+          onSelect: () => varyParameters(false),
+        },
+        {
+          id: "uniformJitter",
+          label: "조금씩 바꾸기",
+          title: "지금 값 주변으로 조금씩 바꾸기",
+          onSelect: () => varyParameters(true),
+        },
+      ],
+    })
+  );
+  listen($("uniformMore"), "click", () => {
+    const defaults = annotatedDefaults(),
+      users = renderer.getUserUniforms(),
+      changed = users.filter(item => ParameterTools.changedFromDefault(item, defaults.get(item.name))).length,
+      linked = new Set((settings.getLinks?.() || []).map(link => link.name));
+    UI.menu({
+      anchor: $("uniformMore"),
+      label: "파라미터 작업",
+      align: "end",
+      items: [
+        {
+          id: "uniformWriteDefaults",
+          icon: "down",
+          label: changed ? `바뀐 값 ${changed}개 코드에 반영` : "바뀐 값 모두 코드에 반영",
+          title: "지금 값을 코드의 @default에 써서 기본값으로 삼기 · Ctrl+Z로 되돌리기",
+          disabled: !changed,
+          onSelect: writeChangedDefaults,
+        },
+        {
+          id: "compareCapture",
+          icon: "pin",
+          label: comparison ? "지금 값을 비교 기준으로 다시 기억" : "지금 값을 비교 기준으로 기억",
+          title:
+            "지금 값을 기억해 두고, 값을 바꾼 뒤 '누르는 동안 이전 보기'로 비교하기(무작위 · 프리셋은 자동으로 기억)",
+          disabled: !users.some(item => !linked.has(item.name)),
+          onSelect: () =>
+            attempt(() => {
+              captureComparison();
+              renderUniforms();
+            }),
+        },
+      ],
+    });
+  });
   // @group 접힘 상태(이 화면에서만 기억).
   const collapsedGroups = new Set();
   // ---- 파라미터 프리셋(presets.js · settings.getPresets/setPresets) ----
@@ -2298,6 +2402,20 @@ const mount = (renderer, input, settings) => {
   // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
   let hiddenKey = "",
     hiddenDisclosureKey = "";
+  // 목록 안에서 포인터를 누르고 있는 동안(슬라이더 · 패드 끌기)에는 @if로 인한 다시 그리기를 미뤘다가 놓을 때 한다.
+  // 놓은 직후의 change(되돌리기 기록 등)가 먼저 끝나도록 다음 작업으로 넘긴다.
+  let listPointer = false,
+    conditionRedraw = null;
+  listen($("uniformList"), "pointerdown", () => (listPointer = true));
+  const releaseListPointer = () => {
+    if (!listPointer) return;
+    listPointer = false;
+    const redraw = conditionRedraw;
+    conditionRedraw = null;
+    if (redraw) setTimeout(redraw);
+  };
+  listen(window, "pointerup", releaseListPointer);
+  listen(window, "pointercancel", releaseListPointer);
   const conditionHidden = (items, defaults) => {
     const values = new Map(items.map(item => [item.name, item.value]));
     return items
@@ -2567,16 +2685,25 @@ const mount = (renderer, input, settings) => {
           field.removeAttribute("aria-invalid");
           showError("");
           // 이 값이 다른 파라미터의 @if를 바꾸면 목록을 다시 그리고 초점은 이 파라미터 줄로 돌려 둔다.
+          // 슬라이더 · 패드를 끄는 중이면 다시 그리는 순간 끌던 조작이 사라져 끌기가 끊기므로, 손을 뗄 때까지 미룬다.
           if (!$("uniformSearch").value.trim()) {
             const users = renderer.getUserUniforms();
-            if (conditionHidden(users, annotatedDefaults()).join() !== hiddenKey)
-              queueMicrotask(() => {
+            if (conditionHidden(users, annotatedDefaults()).join() !== hiddenKey) {
+              const redraw = () => {
+                if (
+                  $("uniformSearch").value.trim() ||
+                  conditionHidden(renderer.getUserUniforms(), annotatedDefaults()).join() === hiddenKey
+                )
+                  return;
                 renderUniforms();
                 [...$("uniformList").querySelectorAll(".uniform-row")]
                   .find(node => node.dataset.name === item.name)
                   ?.querySelector("input,button,select")
                   ?.focus();
-              });
+              };
+              if (listPointer) conditionRedraw = redraw;
+              else queueMicrotask(redraw);
+            }
           }
           return true;
         } catch (error) {

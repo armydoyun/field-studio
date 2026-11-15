@@ -224,6 +224,8 @@ with sync_playwright() as p:
     page.keyboard.type(' ');wait()
     check(js("document.querySelectorAll('.cm-error-lens.is-stale').length")==1,'editing marks the error message as stale until the next compile')
     js("document.getElementById('studioLintPanel').click()");wait();check(page.is_visible('.cm-panel-lint'),'the error list panel opens from the menu')
+    close=js("(()=>{const b=document.querySelector('.cm-panel-lint>button[name=close]'),l=document.querySelector('.cm-panel-lint li').getBoundingClientRect(),r=b.getBoundingClientRect();return {cls:b.className,text:b.textContent.trim(),label:b.getAttribute('aria-label'),d:Math.abs(r.top+r.height/2-(l.top+l.height/2))}})()")
+    check('glyph-icon icon-close' in close['cls'] and 'ui-icon-btn' in close['cls'] and not close['text'] and close['label']=='오류 목록 닫기' and close['d']<=1.5,f'the error list close button uses the shared icon button, centred on the first row: {close}')
     page.keyboard.press('Escape');load(SRC2)
     js("document.getElementById('studioFoldAll').click()");wait();check(js("document.querySelectorAll('.cm-foldPlaceholder').length")==2,'fold all collapses both functions')
     js("document.getElementById('studioUnfoldAll').click()");wait();check(js("document.querySelectorAll('.cm-foldPlaceholder').length")==0,'unfold all expands them')

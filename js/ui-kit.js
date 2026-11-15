@@ -173,7 +173,7 @@ const notice = (text, { tone = "", bar = false, className = "" } = {}) =>
   el("p", cx("ui-notice", tone && `ui-notice--${tone}`, bar && "ui-notice--bar", className), text);
 
 // 떠 있는 메뉴. anchor(버튼) 아래에 붙여 열고, 바깥을 누르거나 Esc · 항목 선택으로 닫는다. ↑↓ Home End로 항목을 옮긴다.
-// items: [{ label, icon, kbd, danger, disabled, pressed, title, onSelect } | { separator: true } | { title: "묶음 제목" }]
+// items: [{ id, label, icon, kbd, danger, disabled, pressed, title, onSelect } | { separator: true } | { title: "묶음 제목" }]
 // 반환: { element, close() }. 닫히면 anchor로 초점이 돌아가고 onClose가 불린다.
 const menu = ({ anchor, items = [], label = "", align = "start", onClose } = {}) => {
   const doc = anchor?.ownerDocument || document;
@@ -226,6 +226,7 @@ const menu = ({ anchor, items = [], label = "", align = "start", onClose } = {})
       cx("ui-menu-item", item.icon && `glyph-icon icon-${item.icon}`, item.danger && "is-danger")
     );
     node.type = "button";
+    if (item.id) node.id = item.id;
     node.setAttribute("role", "menuitem");
     node.append(el("span", "", item.label));
     if (item.kbd) node.append(el("kbd", "", item.kbd));
@@ -260,7 +261,24 @@ const menu = ({ anchor, items = [], label = "", align = "start", onClose } = {})
   return { element, close };
 };
 
+// 검색 칸(ui-search)의 지우기 버튼(ui-search-clear): 브라우저 기본 ×는 칸마다 자리 · 모양이 달라 감추고 이 버튼을 쓴다.
+// 버튼은 마크업에 두고(글자가 있을 때만 CSS로 보인다), 누르면 칸을 비우고 input 이벤트로 각 기능의 검색을 다시 돌린다.
+const bindSearchClear = (doc = document) => {
+  const onClick = event => {
+    const clear = event.target instanceof Element ? event.target.closest(".ui-search-clear") : null,
+      input = clear?.closest(".ui-search")?.querySelector("input");
+    if (!input) return;
+    event.preventDefault();
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  };
+  doc.addEventListener("click", onClick);
+  return () => doc.removeEventListener("click", onClick);
+};
+
 export {
+  bindSearchClear,
   cx,
   el,
   buttonClass,

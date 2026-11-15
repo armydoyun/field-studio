@@ -79,7 +79,10 @@
 .cm-error-lens.is-warning .cm-error-lens-text { background:color-mix(in srgb,var(--warning) 9%,transparent); }
 .cm-error-lens.is-stale { opacity:.45; }
 .studio-cm-host .is-scrubbing .cm-content { cursor:ew-resize; }
-.studio-cm-host .cm-panel.cm-panel-lint ul { max-height:140px;font:12px var(--mono); }
+.studio-cm-host .cm-panel.cm-panel-lint ul { max-height:140px;padding-right:calc(var(--control-xs) + var(--space-4));font:12px var(--mono); }
+/* 오류 목록 닫기(cm-editor.js가 공용 아이콘 버튼으로 바꾼다): 첫 줄과 세로 중심을 맞춘다. CodeMirror 기본 테마(글자 ×)보다 우선하도록 [name=close]까지 쓴다 */
+.studio-cm-host .cm-panel.cm-panel-lint>button[name=close].studio-lint-close { top:0;right:var(--space-2);background:transparent; }
+.studio-cm-host .cm-panel.cm-panel-lint>button[name=close].studio-lint-close:hover { background:var(--surface-hover); }
 .studio-cm-host .cm-panel.cm-panel-lint [aria-selected] { background:var(--accent-soft);color:var(--text); }
 .studio-cm-host .cm-tooltip .cm-diagnostic { padding:4px 8px;font:12px var(--sans); }
 /* 편집기 말풍선(시그니처·설명·자동 완성)은 편집기 메뉴(⋯)보다 아래에 깔린다 */

@@ -22,7 +22,10 @@
     check(lock.classList.contains('icon-lock')&&lock.getAttribute('aria-pressed')==='true','잠금 상태를 SVG로 전환');
     lock.click();
     check(lock.classList.contains('icon-unlock')&&lock.getAttribute('aria-pressed')==='false','해제 상태를 SVG로 복원');
+    check(hasSvg($('uniformVary'))&&$('uniformVary').textContent.trim()==='무작위'&&hasSvg($('uniformMore')),'무작위 메뉴 · 더보기 버튼은 SVG 아이콘');
+    $('uniformVary').click();
     check(hasSvg($('uniformRandomize'))&&$('uniformRandomize').textContent.trim()==='전체 무작위','전체 무작위는 SVG 주사위와 글자 조합');
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
     check(hasSvg(row().querySelector('.write-default-uniform'))&&row().querySelector('.write-default-uniform').textContent==='','코드 반영은 SVG 아이콘');
     for(const value of ['dark','light']){
       document.documentElement.setAttribute('data-theme',value);

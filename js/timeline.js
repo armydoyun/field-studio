@@ -122,7 +122,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       "선택한 키 지우기 (Delete)"
     ),
     close = button("ui-icon-btn ui-icon-btn--sm timeline-close glyph-icon icon-close", "타임라인 닫기"),
-    help = button("ui-icon-btn ui-icon-btn--sm glyph-icon icon-help", "타임라인 도움말");
+    help = button("ui-icon-btn ui-icon-btn--sm timeline-help glyph-icon icon-help", "타임라인 도움말");
   help.dataset.guide = "timeline";
   timeField.type = "number";
   timeField.min = "0";
@@ -408,20 +408,64 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     lane.dataset.name = link.name;
     remove.title = "이 파라미터의 키프레임 연결 지우기(값은 지금 값으로 남는다)";
     on(remove, "click", () => settings.setLinks(links().filter(l => l.name !== link.name)));
-    // 시간 기준: '한 번'(키 시간 = 재생 시간, 마지막 키 뒤로는 그 값 유지) · '반복 N초'(N초 길이로 되풀이)
-    const mode = element(
-      "span",
-      link.loop > 0 ? "ui-tag timeline-lane-mode is-loop glyph-icon icon-loop" : "ui-tag timeline-lane-mode",
+    // 시간 기준: '한 번'(키 시간 = 재생 시간, 마지막 키 뒤로는 그 값 유지) · '반복 N초'(N초 길이로 되풀이).
+    // 누르면 메뉴에서 바꾼다(연결 설정 시트와 같은 선택지 · 같은 기본 반복 길이).
+    const modeText =
       link.loop > 0
         ? link.wrap
           ? `${round(link.loop, 2)}초 이어 반복`
           : `${round(link.loop, 2)}초마다 반복`
-        : "한 번 · 끝 값 유지"
-    );
-    mode.title =
+        : "한 번 · 끝 값 유지";
+    const mode = button(
       link.loop > 0
-        ? `재생 시간을 ${round(link.loop, 2)}초 길이로 잘라 0 ~ ${round(link.loop, 2)}초의 키를 되풀이합니다. 흐린 키는 되풀이되는 모습(고칠 때는 첫 바퀴의 진한 키를)${link.wrap ? " · 마지막 키에서 다음 바퀴의 첫 키로 값을 이어 갑니다" : ""}`
-        : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다";
+        ? "ui-btn ui-btn--xs timeline-lane-mode is-loop glyph-icon icon-loop"
+        : "ui-btn ui-btn--xs timeline-lane-mode",
+      `${link.name} 시간 기준: ${modeText} · 바꾸기`,
+      modeText,
+      link.loop > 0
+        ? `재생 시간을 ${round(link.loop, 2)}초 길이로 잘라 0 ~ ${round(link.loop, 2)}초의 키를 되풀이합니다. 흐린 키는 되풀이되는 모습(고칠 때는 첫 바퀴의 진한 키를)${link.wrap ? " · 마지막 키에서 다음 바퀴의 첫 키로 값을 이어 갑니다" : ""} · 눌러서 바꾸기`
+        : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다 · 눌러서 반복으로 바꾸기"
+    );
+    mode.setAttribute("aria-haspopup", "menu");
+    on(mode, "click", () => {
+      const last = link.keys.length ? link.keys.at(-1)[0] : 0,
+        loop = link.loop > 0 ? link.loop : Math.max(1, Math.ceil(last + 0.001));
+      const pick = next => {
+        save(new Map([[link.name, { ...link, ...next }]]));
+        // 레인을 다시 그리므로 같은 파라미터의 새 버튼으로 초점을 옮긴다.
+        requestAnimationFrame(() =>
+          [...root.querySelectorAll(".timeline-lane")]
+            .find(node => node.dataset.name === link.name)
+            ?.querySelector(".timeline-lane-mode")
+            ?.focus()
+        );
+      };
+      UI.menu({
+        anchor: mode,
+        label: `${link.name} 시간 기준`,
+        items: [
+          { title: "시간 기준" },
+          {
+            label: "한 번 · 끝 값 유지",
+            title: "키의 시간 = 재생 시간. 마지막 키 뒤로는 그 값을 유지",
+            pressed: !(link.loop > 0),
+            onSelect: () => pick({ loop: 0 }),
+          },
+          {
+            label: `반복 · 끝 값 유지 (${round(loop, 2)}초)`,
+            title: "반복 길이마다 처음부터 되풀이. 마지막 키 뒤로는 그 값을 유지",
+            pressed: link.loop > 0 && !link.wrap,
+            onSelect: () => pick({ loop, wrap: false }),
+          },
+          {
+            label: `반복 · 처음으로 잇기 (${round(loop, 2)}초)`,
+            title: "반복 길이마다 되풀이하며, 마지막 키에서 다음 바퀴의 첫 키로 값을 이어 감",
+            pressed: link.loop > 0 && !!link.wrap,
+            onSelect: () => pick({ loop, wrap: true }),
+          },
+        ],
+      });
+    });
     head.append(name, remove, mode, range);
     graph.setAttribute("viewBox", "0 0 1000 100");
     graph.setAttribute("preserveAspectRatio", "none");

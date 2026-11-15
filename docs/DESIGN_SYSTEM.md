@@ -95,11 +95,11 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 선택 상자 | `<select>` → `ui-select` | `js/custom-select.js`가 자동 보강. `ui-input--sm · --lg`, `ui-dense` 공유 |
 | 행렬 | `ui-matrix` | `js/matrix-control.js`의 create(). N×N 고정, 선택 셀 전체 값·확대 편집 |
 | 촘촘한 영역 | 감싸는 요소에 `ui-dense` | 안의 칸 28px · 숫자 고정폭 |
-| 라벨 + 칸 + 설명 | `ui-field` > `ui-label`(+`ui-label-hint`) + 칸 + `ui-hint` / `ui-error` | |
+| 라벨 + 칸 + 설명 | `ui-field` > `ui-label`(+`ui-label-hint`) + 칸 + `ui-hint` / `ui-error` | 구역 첫 설명은 `ui-hint--lead`, 버튼 옆 한 줄 설명은 `ui-hint--inline`(위 여백 없음 → 가운데 정렬 유지) |
 | 성분 + 칸 | `ui-input-group ui-input-group--prefix` > `ui-unit` + input | X/Y/Z/W 라벨을 왼쪽에 붙임 |
 | 값 편집 | `ui-value-editor` · `ui-value-fields` | `js/value-editor.js`의 create(). 스칼라·벡터 초안 편집 |
 | 칸 + 단위 | `ui-input-group` > input + `ui-unit` | |
-| 검색 칸 | `ui-search` > `ui-search-icon` + input (+ kbd) | |
+| 검색 칸 | `ui-search` > `ui-search-icon` + input (+ `ui-search-clear`) (+ kbd) | 지우기는 `ui-icon-btn--xs glyph-icon icon-close ui-search-clear` 버튼. 글자가 있을 때만 보이고 `UI.bindSearchClear`가 처리(브라우저 기본 ×는 감춤) |
 | 체크 · 라디오 | `ui-check` > input + 글자 | |
 | 스위치 | `ui-switch` > input[type=checkbox] + span | `ui-switch--field`: 입력칸 면·높이·테두리를 공유하는 상태 필드 |
 | 슬라이더 | `<input type="range">` (+ `ui-range-ends`) | 브라우저 기본 그리기 + 액센트 색 |
