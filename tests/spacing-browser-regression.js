@@ -123,6 +123,13 @@
   // ---- 설정 패널 ----
   $("tab-uniforms").click();
   await audit("파라미터 탭");
+  for (const [id, label] of [["uniformVary", "무작위 메뉴"], ["uniformMore", "파라미터 ⋯ 메뉴"]]) {
+    $(id).click();
+    await until(() => document.querySelector(".ui-menu:not([hidden])"), label);
+    await audit(label);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await wait(50);
+  }
   // 바꾸기 전과 비교: ⋯로 기억 → 값 하나 바꾸기 → 누르고 있는 동안 이전 보기
   const holdCapture=Element.prototype.setPointerCapture;Element.prototype.setPointerCapture=()=>{};
   $('uniformMore').click();$('compareCapture').click();
@@ -171,6 +178,21 @@
   $("projectMenuToggle").click();
   await audit("프로젝트 메뉴");
   $("projectMenuToggle").click();
+  for (const [id, menu, label] of [["captureToggle", "captureMenu", "캡처 메뉴"], ["moreToggle", "moreMenu", "더보기 메뉴"]]) {
+    $(id).click();
+    await until(() => !$(menu).hidden, label);
+    await audit(label);
+    $(id).click();
+    await until(() => $(menu).hidden, `${label} 닫힘`);
+  }
+  {
+    const box = $("renderViewport").getBoundingClientRect();
+    $("renderViewport").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 }));
+    await until(() => document.querySelector("body > .ui-context-menu"), "우클릭 메뉴");
+    await audit("우클릭 메뉴(뷰포트)");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await until(() => !document.querySelector("body > .ui-context-menu"), "우클릭 메뉴 닫힘");
+  }
   studio.open();
   await until(() => !$("studioDock").hidden, "편집기 열림");
   await audit("편집기");
@@ -179,6 +201,11 @@
   $("studioPassTools").open = true;
   if ($("studioInputs").hidden) $("studioInputsToggle").click();
   await audit("편집기: 버퍼 설정 + 입력 채널");
+  $("studioChannels").querySelector("button").click();
+  await until(() => document.querySelector(".channel-picker:not([hidden])"), "채널 고르기");
+  await audit("입력 채널 고르기");
+  document.querySelector(".channel-picker").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await until(() => !document.querySelector(".channel-picker:not([hidden])"), "채널 고르기 닫힘");
   $("studioPassTools").open = false;
 
   // ---- 대화상자 ----
@@ -201,6 +228,15 @@
   [...$("guideNav").querySelectorAll("button")].find(b => b.textContent.includes("코드 조각")).click();
   await wait(300);
   await audit("가이드: 코드 조각");
-  $("quickHelp").close();
+  $("guideTour").click();
+  await until(() => $("guideContent").querySelector("[data-tour]"), "둘러보기 목록");
+  await audit("가이드: 둘러보기 목록");
+  $("guideContent").querySelector("[data-tour]").click();
+  await until(() => document.querySelector(".guide-tour:not([hidden]) .guide-tour-card"), "둘러보기 카드");
+  await wait(300);
+  await audit("둘러보기 카드");
+  document.querySelector(".guide-tour-skip").click();
+  await until(() => !document.querySelector(".guide-tour:not([hidden])"), "둘러보기 닫힘");
+  if ($("quickHelp").open) $("quickHelp").close();
   console.log("간격 검사 통과");
 })();

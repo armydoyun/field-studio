@@ -1,4 +1,4 @@
-# FIELD Studio — ES Modules (2026-10-18)
+# FIELD Studio — ES Modules (2026-11-15)
 
 WebGL2 / GLSL ES 3.00 기반 Shader Art Studio. 개발 소스는 **표준 JavaScript ES Modules**, 외부 의존성·npm·CDN 없음. 2026-10-15 `a(1).zip` 실행 소스에서 로더 계층만 교체했으며 기능 구현 로직을 보존했습니다.
 
@@ -40,7 +40,7 @@ css/                  # 스타일시트 — 규칙은 docs/DESIGN_SYSTEM.md
   tokens.css          # 디자인 토큰: 색(다크 · 라이트) · 크기 · 간격 · 글자 · 층
   base.css            # 초기화 · 문서 기본 · 초점
   icons.css           # glyph-icon + icon-* (SVG 마스크 아이콘)
-  components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · tag · menu · dialog · notice · surface
+  components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · select · tag · menu · dialog · notice · surface · matrix · value-editor
   layout/             # 화면 틀: workspace · panel · stage · dock
   features/           # 기능별 배치: parameters · presets · links · timeline · project-menu · channels · editor · editor-codemirror · video-dialog · gallery · guide · profiler · popout
 js/
@@ -52,12 +52,15 @@ js/
   texture-input.js    # 로컬 이미지 Texture (본문은 IndexedDB) · 큐브맵 채널용 6면 텍스처
   cubemap.js          # 이미지 한 장 → 6면 큐브맵 규칙(십자 · 띠 · 2:1 파노라마, 순수 함수)
   keyboard-input.js   # 키보드 입력 텍스처(쉐이더토이 호환 256×3) — 키를 넘길지는 input.js가 정함
+  midi-input.js       # MIDI 컨트롤러 입력(Web MIDI) — CC 값을 기억해 파라미터 연결의 'MIDI' 소스가 읽음 · 학습
   media-input.js      # 미디어 입력 채널: 마이크 · 오디오 파일(512×2 FFT · 파형) · 웹캠 · 영상 파일(영상 텍스처)
   gpu-diagnostics.js  # GL 오류 격리 · Uniform 리플렉션 · GPU 타이머
   shader.js           # 시작 화면 기본 GLSL
   # 편집기 (Shader Studio)
   studio.js           # 사용자 편집 상태 · 적용 · Undo
   studio-layout.js    # 편집기 배치 · 리사이저 · 도구 서랍
+  workspace-layout.js # 설정 패널 배치: 너비 조절 · 자리(왼쪽 · 오른쪽) · 좁게 끌어 놓으면 숨김
+  dock-drag.js        # 설정 패널 · 편집기를 끌어 정해진 자리(왼쪽·오른쪽·위·아래)에 놓는 공용 손잡이
   studio-pack.js      # Pack 파일 형식 (순수 함수)
   studio-projects.js  # 프로젝트 보관함 화면
   project-menu.js     # 머리줄 프로젝트 메뉴(팝오버) — 저장·열기·프로젝트 파일·이미지 (Ctrl+O · 저장 Ctrl+S · 다른 이름 Ctrl+Shift+S)
@@ -65,6 +68,7 @@ js/
   studio-examples.js  # Studio가 만드는 예제 프로젝트
   studio-dialog.js    # 공용 입력·확인 대화상자
   ui-kit.js           # 디자인 시스템의 JS 쪽: 컴포넌트 클래스 이름 · 요소 만들기(button · segmented · select · menu …)
+  custom-select.js    # 공용 드롭다운 모양(값 · 이벤트의 출처는 원래 <select>)
   context-menu.js     # 우클릭 메뉴: 영역(선택자)마다 기능 모듈이 메뉴를 등록 · 글 입력 칸 · 선택한 글자 · Shift+우클릭은 브라우저 기본
   app-menus.js        # 바탕 · 뷰포트 · 패스 탭의 우클릭 메뉴(툴바 버튼을 그대로 누른다)
   project-model.js    # 프로젝트 데이터 규칙 (순수 함수)
@@ -79,6 +83,13 @@ js/
   codemirror.js       # CodeMirror 6 (MIT, 미리 번들링 · tools/codemirror에서 재생성) — 손으로 고치지 않는다
   # 설정 패널 · 화면
   ui.js               # 설정 패널(렌더링 · 파라미터 · 작업공간 탭)
+  parameter-tools.js  # 파라미터 패널과 Studio가 함께 쓰는 소스 · 값 처리(순수 함수)
+  value-editor.js     # 실수 · 벡터 정밀 입력 대화상자(적용 전까지 렌더러에 닿지 않음)
+  matrix-control.js   # 행렬 파라미터 편집기(행/열로 보여 주고 값은 GLSL 열 우선 순서로 보관)
+  presets.js          # 파라미터 프리셋: 값 묶음 저장 · 호환성 검사 · 즉시/부드러운 전환(순수 함수)
+  links.js            # 파라미터 연결: 소리 · MIDI · 흔들기(LFO) · 키프레임이 값을 정함(순수 함수)
+  link-sheet.js       # 연결 시트 · 연결 미터(소스 → 입력 → 출력 → 반응 → 결과)
+  timeline.js         # 키프레임 타임라인 도크(미리보기 아래): 재생 위치 · 키 끌기 · 확대 · 스냅 · 다중 선택
   profiler.js         # 성능 탭: 프레임·패스별 GPU 시간 · 버퍼 뷰어 · 픽셀 값 · Uniform 진단
   annotations.js      # GLSL 주석 어노테이션(@range·@color·@dir·@enum·@group·@anim·@gradient·@curve…) 파서
   ramp.js             # @gradient·@curve 램프 굽기(256×1 텍스처 자료, 순수 함수)
@@ -92,6 +103,7 @@ js/
   storage.js          # localStorage 창구 (실패를 삼키지 않음)
   theme.js            # 라이트·다크·시스템 테마
   popout.js           # 미리보기 분리 창
+  preview-dom.js      # 분리 창으로 옮긴 UI도 같은 id로 찾는 조회 도우미
   # 학습 · 도움말 (내용은 데이터 모듈에)
   gallery.js          # 예제 갤러리 · 첫 실행 안내
   community-examples.js # 갤러리 "커뮤니티 셰이더" — 다른 사람의 공개 작품(MIT·CC0 등) 이식본과 출처
@@ -101,6 +113,7 @@ js/
   gallery-perf.js     # 갤러리 성능 배지 — 예제마다 지금 미리보기 크기의 한 프레임 시간을 이 컴퓨터에서 재 단계로 표시
   lazy-render.js      # 지연 렌더링 — 보이는 카드만, 비동기 컴파일로, 한 프레임에 하나씩(갤러리 · 코드 조각 미리보기)
   guide.js            # 앱 내장 가이드 · UI 둘러보기 · 문맥 ? 버튼 — 사용자 설명은 여기 TOPICS에서 관리
+  guide-tours.js      # 주제별 UI 둘러보기의 단계(대상 · 제목 · 설명) 데이터
   course.js           # 입문 과정 수업 내용
   glsl-reference.js   # GLSL 내장 함수·변수 레퍼런스
   snippets.js         # GLSL 코드 조각 라이브러리 — 조각 추가는 여기 CATEGORIES에
