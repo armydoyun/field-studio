@@ -8,6 +8,7 @@ import * as Language from "./glsl-language.js";
 import * as Features from "./cm-glsl-features.js";
 import * as Store from "./storage.js";
 import * as SearchPanel from "./cm-search-panel.js";
+import * as ContextMenu from "./context-menu.js";
 // 선택 영역을 줄 높이에 맞춰 그린다.
 // drawSelection은 줄 일부만 선택된 첫·마지막 줄을 글자 상자 높이(coordsAtPos)로 칠하고, 가운데 줄은 그 사이를 꽉 채운다.
 // 이 편집기는 줄 간격이 1.65라서 첫·마지막 줄의 띠만 얇고 위치도 어긋나 보였다.
@@ -1518,6 +1519,78 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   // ---- 편집기 도구 버튼 ----
   listen($("studioFind"), "click", () => showFind());
   listen($("studioReplace"), "click", () => showFind(true));
+  // ---- 우클릭 메뉴(context-menu.js) ----
+  // 누른 자리가 선택 영역 밖이면 커서를 그 자리로 옮긴 뒤(VS Code처럼) 그 자리에 대한 명령을 보인다.
+  const clipboardFailed = key => notify(`클립보드에 접근하지 못했습니다. ${key}를 쓰세요`);
+  ContextMenu.register(
+    ".studio-cm-host .cm-editor",
+    (node, event) => {
+      if (event.target.closest(".cm-panels,.cm-tooltip,.cm-gutters")) return null;
+      const pos = event.clientX || event.clientY ? view.posAtCoords({ x: event.clientX, y: event.clientY }) : null;
+      if (pos !== null && !view.state.selection.ranges.some(range => range.from <= pos && pos <= range.to))
+        view.dispatch({ selection: { anchor: pos } });
+      view.focus();
+      const text = view.state.selection.ranges.map(range => view.state.sliceDoc(range.from, range.to)).join("\n"),
+        readOnly = view.state.readOnly;
+      return {
+        label: "코드 편집기",
+        items: [
+          { label: "정의로 이동", icon: "goto", kbd: "F12", onSelect: () => features.goToDefinition(view) },
+          {
+            label: "이름 바꾸기…",
+            icon: "edit",
+            kbd: "F2",
+            disabled: readOnly,
+            onSelect: () => features.renameSymbol(view),
+          },
+          { label: "색상 선택기", disabled: readOnly, onSelect: () => features.openColorPicker(view) },
+          { separator: true },
+          {
+            label: "잘라내기",
+            kbd: "Ctrl+X",
+            disabled: readOnly || !text,
+            onSelect: () =>
+              navigator.clipboard
+                ?.writeText(text)
+                .then(() => view.dispatch(view.state.replaceSelection("")))
+                .catch(() => clipboardFailed("Ctrl+X")),
+          },
+          {
+            label: "복사",
+            icon: "copy",
+            kbd: "Ctrl+C",
+            disabled: !text,
+            onSelect: () => navigator.clipboard?.writeText(text).catch(() => clipboardFailed("Ctrl+C")),
+          },
+          {
+            label: "붙여넣기",
+            kbd: "Ctrl+V",
+            disabled: readOnly,
+            onSelect: () =>
+              navigator.clipboard
+                ?.readText()
+                .then(clip => {
+                  view.dispatch(view.state.replaceSelection(clip));
+                  view.focus();
+                })
+                .catch(() => clipboardFailed("Ctrl+V")),
+          },
+          { separator: true },
+          { label: "줄 주석 전환", kbd: "Ctrl+/", disabled: readOnly, onSelect: () => CM.toggleComment(view) },
+          {
+            label: "코드 조각 넣기…",
+            icon: "snippet",
+            disabled: readOnly,
+            onSelect: () => $("studioSnippets")?.click(),
+          },
+          { label: "찾아 바꾸기", icon: "search", kbd: "Ctrl+H", onSelect: () => showFind(true) },
+          { separator: true },
+          { label: "명령 팔레트…", kbd: "F1", onSelect: () => openPalette(">") },
+        ],
+      };
+    },
+    { signal }
+  );
   listen($("studioGoto"), "click", () => openPalette(":"));
   listen($("studioComplete"), "click", () => {
     view.focus();

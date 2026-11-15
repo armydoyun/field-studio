@@ -96,4 +96,29 @@ const changedFromDefault = (item, spec) =>
   !spec ||
   item.type !== spec.type ||
   !equalValue(item.value, Annotations.clampValue(spec.value, item.options || {}, item.type));
-export { writeDefaults, varyValue, canVary, equalValue, changedFromDefault };
+// 값을 GLSL 코드 조각으로(우클릭 '값을 GLSL로 복사'): float 1.0 · int 3 · uint 3u · bool true ·
+// vec3(0.1, 0.2, 0.3) · ivec2(1, 2) · bvec2(true, false) · mat2(…) · 배열 float[3](…). 램프(sampler2D)는 null.
+const glslLiteral = item => {
+  const array = /^(\w+)\[(\d+)\]$/.exec(item.type || "");
+  const base = array ? array[1] : item.type;
+  if (!base || base === "sampler2D") return null;
+  const values = (Array.isArray(item.value) ? item.value : [item.value]).map(Number);
+  if (values.some(v => !Number.isFinite(v) && typeof v !== "boolean")) return null;
+  const kind = /^(?:b|bool)/.test(base) ? "b" : /^(?:u|uint)/.test(base) ? "u" : /^(?:i|int)/.test(base) ? "i" : "f";
+  const scalar = v => {
+    if (kind === "b") return v ? "true" : "false";
+    if (kind === "i") return String(Math.round(v));
+    if (kind === "u") return `${Math.max(0, Math.round(v))}u`;
+    const text = String(Number(v.toPrecision(7)));
+    return /[.e]/.test(text) ? text : `${text}.0`;
+  };
+  const size = /^(?:vec|ivec|uvec|bvec)([234])$/.exec(base)?.[1] ?? /^mat([234])$/.exec(base)?.[1] ** 2;
+  const one = list => (size ? `${base}(${list.map(scalar).join(", ")})` : scalar(list[0]));
+  if (!array) return one(values);
+  const count = Number(array[2]),
+    width = size || 1;
+  const parts = Array.from({ length: count }, (_, i) => one(values.slice(i * width, i * width + width)));
+  return `${base}[${count}](${parts.join(", ")})`;
+};
+
+export { writeDefaults, varyValue, canVary, equalValue, changedFromDefault, glslLiteral };

@@ -17,10 +17,10 @@
   };
   try {
     if (editorOpen()) studio.close();
-    await pickCard(/Keyboard Control/);
+    await pickCard(/Keyboard Explorer/);
     test(!editorOpen(), "편집기를 닫은 채 예제를 열면 편집기는 닫힌 채");
-    test(studio.getProject().imageChannels[1]?.keyboard === true, "예제는 열렸다");
-    await pickCard(/Ray Marching/);
+    test(studio.getProject().passes[0]?.channels?.[1]?.keyboard === true, "예제는 열렸다");
+    await pickCard(/Orbit Camera/);
     test(!editorOpen(), "다른 예제로 바꿔도 닫힌 채");
 
     // 가이드의 과정 프로젝트 불러오기
@@ -42,7 +42,7 @@
 
     // 편집기를 연 상태라면 예제를 바꿔도 열린 채
     studio.open();
-    await pickCard(/Keyboard Control/);
+    await pickCard(/Keyboard Explorer/);
     test(editorOpen(), "편집기를 연 채 예제를 열면 열린 채");
     studio.close();
 

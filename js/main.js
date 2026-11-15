@@ -1,4 +1,6 @@
 import * as CustomSelect from "./custom-select.js";
+import * as ContextMenu from "./context-menu.js";
+import * as AppMenus from "./app-menus.js";
 import * as Kit from "./ui-kit.js";
 // 앱 조립 진입점. 범용 기본 GLSL과 Ray Marching 프리셋은 shader.js, GPU 렌더링은 renderer.js가 담당한다.
 import * as Renderer from "./renderer.js";
@@ -94,6 +96,9 @@ const initialize = async () => {
       },
     });
     guide = Guide.mount({ studio, gallery });
+    // 우클릭 메뉴: 바탕 · 뷰포트(여기) + 각 기능 모듈이 등록한 영역 메뉴
+    AppMenus.mount({ studio: () => studio });
+    ContextMenu.mount(document);
     renderer.start();
     status.textContent = "";
     // HTML 패널 없이도 사용자 설정과 키 이벤트를 직접 제어할 수 있다.

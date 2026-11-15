@@ -10,6 +10,7 @@ import * as Examples from "./studio-examples.js";
 import * as Store from "./storage.js";
 import * as Technique from "./technique-examples.js";
 import * as Raymarch from "./raymarch-lessons.js";
+import * as FeatureLessons from "./feature-lessons.js";
 import * as UI from "./ui-kit.js";
 const { COMMUNITY } = Community;
 // 예제의 파라미터(범위·기본값·색상)는 셰이더 소스의 @어노테이션 한곳에만 적는다.
@@ -616,121 +617,73 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 // 참고: 노이즈처럼 소수부가 필요한 계산은 좌표 자체가 수백만이면 float에 소수부가 남지 않는다.
 // 그럴 때는 격자 번호(정수)와 칸 안 위치(소수)를 따로 계산해 해시에는 정수부만 넘기세요.
 `;
-// 키보드로 점 움직이기: Buffer A(1×1)가 점의 상태를 저장한다. iChannel0 = A · previous(직전 상태), iChannel1 = 키보드.
-// 뷰포트를 클릭하면 키가 셰이더로 간다. 방향키·WASD로 이동, Space로 색 바꾸기(토글), Esc로 빠져나오기.
-// 키 읽기 함수와 키 코드는 두 패스가 같이 쓰므로 Common 탭에 둔다(두 패스 모두 iChannel1에 키보드를 연결했다).
-const keyboardCommon = `// Keyboard Control · Common: A(상태)와 Image(그리기)가 같이 쓰는 키 읽기.
-// iChannel1은 패스마다 그 패스에 연결된 입력이다 — 이 예제는 두 패스 모두 iChannel1에 키보드를 연결했다.
-// 키보드 텍스처 256×3: x = 키 코드, y = 0 지금 누름 · 1 이번 프레임에 눌림 · 2 누를 때마다 켜짐/꺼짐
-const int KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40, KEY_SPACE = 32;
-const int KEY_A = 65, KEY_D = 68, KEY_S = 83, KEY_W = 87;
-float keyDown(int k)    { return texelFetch(iChannel1, ivec2(k, 0), 0).x; }
-float keyPressed(int k) { return texelFetch(iChannel1, ivec2(k, 1), 0).x; }
-float keyToggled(int k) { return texelFetch(iChannel1, ivec2(k, 2), 0).x; }
-`;
-const keyboardState = `#version 300 es
-precision highp float;
-// Buffer A (1×1 상태 버퍼): xy = 점의 위치(0~1), z = 색 토글, w = Space를 누른 횟수
-uniform int uFrame;
-uniform float uDeltaTime;
-uniform sampler2D iChannel0;   // A · previous
-uniform sampler2D iChannel1;   // 키보드
-// keyDown · keyPressed · keyToggled와 KEY_ 코드는 Common 탭에 있다.
-
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec4 state = uFrame == 0 ? vec4(0.5, 0.5, 0.0, 0.0) : texelFetch(iChannel0, ivec2(0), 0);
-    vec2 dir = vec2(max(keyDown(KEY_RIGHT), keyDown(KEY_D)) - max(keyDown(KEY_LEFT), keyDown(KEY_A)),
-                    max(keyDown(KEY_UP), keyDown(KEY_W)) - max(keyDown(KEY_DOWN), keyDown(KEY_S)));
-    if (dot(dir, dir) > 0.0) dir = normalize(dir);
-    state.xy = clamp(state.xy + dir * 0.5 * uDeltaTime, 0.03, 0.97);
-    state.z = keyToggled(KEY_SPACE);     // 누를 때마다 켜짐/꺼짐
-    state.w += keyPressed(KEY_SPACE);    // 누른 순간 한 번만 더해진다
-    fragColor = state;
-}`;
-const keyboardImage = `#version 300 es
-precision highp float;
-// Image: A의 상태를 읽어 점을 그리고, 방향키 네 개의 눌림 상태를 아래에 보여 준다.
-uniform vec2 uResolution;
-uniform sampler2D iChannel0;   // A · current
-uniform sampler2D iChannel1;   // 키보드
-// keyDown과 KEY_ 코드는 Common 탭에 있다.
-
-float box(vec2 p, vec2 c, float r) { vec2 d = abs(p - c) - r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
-
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec2 uv = fragCoord / uResolution, aspect = vec2(uResolution.x / uResolution.y, 1.0);
-    vec4 state = texelFetch(iChannel0, ivec2(0), 0);
-    vec3 col = mix(vec3(0.05, 0.06, 0.09), vec3(0.11, 0.13, 0.2), uv.y);
-    // 점: Space 토글로 색이 바뀐다. 누른 횟수(w)만큼 고리가 생긴다.
-    float d = length((uv - state.xy) * aspect);
-    vec3 dotColor = state.z > 0.5 ? vec3(1.0, 0.5, 0.2) : vec3(0.3, 0.75, 1.0);
-    col = mix(col, dotColor, smoothstep(0.032, 0.028, d));
-    float rings = min(state.w, 6.0);
-    col += dotColor * 0.5 * smoothstep(0.004, 0.0, abs(d - 0.05 - 0.012 * floor(mod(rings, 7.0)))) * step(0.5, rings);
-    // 방향키 표시(←↓→, ↑): 누르면 밝아진다
-    vec2 p = (uv - vec2(0.5, 0.11)) * aspect / 0.05;
-    float k[4] = float[4](keyDown(KEY_LEFT), keyDown(KEY_DOWN), keyDown(KEY_RIGHT), keyDown(KEY_UP));
-    vec2 at[4] = vec2[4](vec2(-1.1, 0.0), vec2(0.0, 0.0), vec2(1.1, 0.0), vec2(0.0, 1.1));
-    for (int i = 0; i < 4; i++) {
-        float b = box(p, at[i], 0.45);
-        col = mix(col, mix(vec3(0.22, 0.25, 0.32), vec3(0.95), k[i]), smoothstep(0.04, 0.0, b));
-    }
-    fragColor = vec4(col, 1.0);
-}`;
 const mrtSource = `#version 300 es
 precision highp float;
-// Buffer A · Out = 2 (MRT). 한 번의 실행으로 두 출력에 서로 다른 데이터를 쓴다.
-// mainImage의 out vec4 매개변수 순서가 출력 번호다: outColor = 출력 0(보이는 색), outField = 출력 1(거리장, 채널 선택에서 A[1]).
+// Buffer A · Out = 2 (MRT, 여러 출력). 한 번의 실행으로 두 출력에 서로 다른 데이터를 쓴다.
+// mainImage의 out vec4 매개변수 순서가 출력 번호다: outColor = 출력 0(A, 보이는 색), outField = 출력 1(A[1], 거리장).
+// 거리장(r = 가장 가까운 모양까지의 거리, gb = 거리가 커지는 방향)을 같이 남겨 두면, Image는 장면을 다시 계산하지 않고도
+// 그림자 · 빛 번짐 · 윤곽을 만든다. 출력이 하나뿐이었다면 같은 거리 계산을 패스마다 되풀이해야 한다.
 uniform vec2 uResolution;
 uniform float uTime;
+uniform int uBlobs;    // 공 수 · @range 1 8 @default 5 @group 장면(Buffer A)
+uniform float uBlend;  // 공끼리 녹아 붙는 정도(smooth min) · @range 0 0.3 @step 0.005 @default 0.12 @group 장면(Buffer A)
+vec3 hue(float t) { return 0.5 + 0.5 * cos(6.2831853 * (t + vec3(0.0, 0.33, 0.67))); }
 void mainImage(out vec4 outColor, out vec4 outField, in vec2 fragCoord) {
     vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
     float d = 1e3;
-    for (int i = 0; i < 5; i++) {
-        float t = uTime * 0.6 + float(i) * 1.26;
-        d = min(d, length(uv - 0.5 * vec2(cos(t), sin(t * 1.3))) - 0.12);
+    vec3 color = vec3(0.0);
+    float weight = 0.0;
+    for (int i = 0; i < 8; i++) {
+        if (i >= uBlobs) break;
+        float t = uTime * 0.5 + float(i) * 2.4;
+        float di = length(uv - vec2(0.55 * cos(t), 0.3 * sin(t * 1.3))) - 0.1 - 0.03 * float(i % 3);
+        // smooth min: 가까운 두 공 사이를 부드럽게 메운다. 색도 같은 비율로 섞는다.
+        float k = max(uBlend, 1e-4), h = clamp(0.5 + 0.5 * (d - di) / k, 0.0, 1.0);
+        d = mix(d, di, h) - k * h * (1.0 - h);
+        float w = exp(-12.0 * max(di, 0.0));
+        color += hue(float(i) * 0.13 + 0.55) * w;
+        weight += w;
     }
-    outColor = vec4(0.5 + 0.5 * cos(6.28 * (uv.x + uTime * 0.1) + vec3(0, 2, 4)), 1.0) * step(d, 0.0);
-    outField = vec4(d, d, d, 1.0);
+    float px = 1.0 / uResolution.y;
+    outColor = vec4(color / max(weight, 1e-4) * (1.0 - smoothstep(-px, px, d)), 1.0);
+    // 출력 1: 거리와 그 기울기(화면에서 이웃 픽셀과의 차 — dFdx · dFdy). RGBA16F라 음수 · 소수도 그대로 남는다.
+    vec2 grad = vec2(dFdx(d), dFdy(d));
+    outField = vec4(d, normalize(grad + 1e-6), 1.0);
 }`;
 const mrtImage = `#version 300 es
 precision highp float;
-// Image: iChannel0 = A[0] (색), iChannel1 = A[1] (거리장). 왼쪽은 색, 오른쪽은 거리장을 등고선으로 표시.
+// Image: iChannel0 = A[0](색), iChannel1 = A[1](거리장). 두 출력을 섞어 장면을 꾸민다.
+// '거리장' 보기로 바꾸면 출력 1에 무엇이 들었는지(등고선 · 안쪽 주황 · 바깥 파랑) 볼 수 있다.
 uniform vec2 uResolution;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
+uniform int uView;       // 보기 · @enum 합성 색(출력_0) 거리장(출력_1) @default 0 @group 보기
+uniform float uGlow;     // 바깥으로 번지는 빛 · @range 0 1 @step 0.01 @default 0.6 @group 거리장으로 꾸미기 @if uView == 합성
+uniform float uOutline;  // 윤곽선 굵기(px) · @range 0 8 @step 0.1 @default 2 @group 거리장으로 꾸미기 @if uView == 합성
+uniform vec2 uShadow;    // 그림자가 지는 방향 · @dir @default 0.6 -0.6 @group 거리장으로 꾸미기 @if uView == 합성
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / uResolution;
-    if (uv.x < 0.5) { fragColor = texture(iChannel0, uv); return; }
-    float d = texture(iChannel1, uv).r;
-    vec3 col = d < 0.0 ? vec3(1.0, 0.55, 0.2) : vec3(0.25, 0.55, 1.0);
-    col *= 0.6 + 0.4 * cos(120.0 * d);                  // 등고선
-    col = mix(col, vec3(1.0), 1.0 - smoothstep(0.0, 0.006, abs(d)));
+    vec4 field = texture(iChannel1, uv);
+    float d = field.r, px = 1.0 / uResolution.y;
+    if (uView == 1) { fragColor = texture(iChannel0, uv); return; }
+    if (uView == 2) {
+        vec3 col = d < 0.0 ? vec3(1.0, 0.55, 0.2) : vec3(0.25, 0.55, 1.0);
+        col *= 0.6 + 0.4 * cos(120.0 * d);                 // 등고선: 거리가 같은 점끼리 이은 선
+        col = mix(col, vec3(1.0), 1.0 - smoothstep(0.0, 2.0 * px, abs(d)));
+        fragColor = vec4(col, 1.0);
+        return;
+    }
+    vec3 col = mix(vec3(0.05, 0.06, 0.1), vec3(0.12, 0.1, 0.18), uv.y);
+    // 그림자: 빛 반대쪽으로 조금 옮긴 자리의 거리가 음수(모양 안)면 어둡게 — 거리장을 한 번 더 읽을 뿐이다
+    float behind = texture(iChannel1, uv - uShadow * 0.035 * vec2(uResolution.y / uResolution.x, 1.0)).r;
+    col *= 1.0 - 0.6 * (1.0 - smoothstep(-0.02, 0.03, behind));
+    // 바깥 빛 번짐: 거리가 멀수록 약해지는 빛
+    col += vec3(0.4, 0.6, 1.0) * uGlow * 0.5 * exp(-18.0 * max(d, 0.0)) * step(0.0, d);
+    vec3 shape = texture(iChannel0, uv).rgb;
+    col = mix(col, shape, 1.0 - smoothstep(-px, px, d));
+    // 윤곽선: |거리| < 굵기
+    col = mix(col, vec3(1.0), (1.0 - smoothstep(uOutline * px, uOutline * px + px, abs(d))) * step(0.01, uOutline));
     fragColor = vec4(col, 1.0);
-}`;
-const mipSource = `#version 300 es
-precision highp float;
-// Buffer A · Mip 켜짐. 선명한 패턴을 그리면 매 프레임 밉맵(축소 사본)이 자동 생성된다.
-uniform vec2 uResolution;
-uniform float uTime;
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
-    vec2 g = fract(uv * 6.0 + uTime * 0.2) - 0.5;
-    float ring = abs(fract(length(uv) * 8.0 - uTime * 0.5) - 0.5);
-    vec3 col = 0.5 + 0.5 * cos(6.28 * length(uv) + vec3(0, 2, 4) + uTime);
-    fragColor = vec4(col * step(0.25, ring) * step(abs(g.x) + abs(g.y), 0.45), 1.0);
-}`;
-const mipImage = `#version 300 es
-precision highp float;
-// Image: textureLod로 밉 레벨을 골라 읽는다. 위아래로 갈수록 높은 레벨 = 더 흐림 (틸트 시프트).
-uniform vec2 uResolution;
-uniform sampler2D iChannel0;
-uniform float uBlur;  // 가장 흐린 곳의 밉 레벨 · @range 0 8 @step 0.1 @default 5 @group 초점
-uniform float uFocus; // 또렷한 줄의 높이(재생로 위아래로 훑는다) · @range 0 1 @step 0.01 @default 0.5 @anim 8 @group 초점 @if uBlur > 0
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec2 uv = fragCoord / uResolution;
-    float lod = uBlur * smoothstep(0.05, 0.45, abs(uv.y - uFocus));
-    fragColor = textureLod(iChannel0, uv, lod);
 }`;
 // 블룸(Bloom) 후처리: 밝은 빛이 주변으로 번져 보이는 효과. 장면 → 밝은 부분 추출 → 흐리게 → 합성 → 톤 매핑.
 // 버퍼를 이어 쓰는 후처리의 기본 모양이라 단계마다 패스를 나눴다. 각 패스를 미리보기로 골라 단계별 결과를 볼 수 있다.
@@ -845,7 +798,7 @@ ${HASH}
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 px = 1.0 / uResolution, uv = fragCoord * px;
     if (uFrame == 0) {   // 초기 상태: U=1, 무작위 점과 중앙 사각형에만 V
-        float seed = step(0.997, hash(floor(fragCoord / 6.0))) + step(abs(uv.x - 0.5), 0.04) * step(abs(uv.y - 0.5), 0.04);
+        float seed = step(0.985, hash(floor(fragCoord / 6.0))) + step(abs(uv.x - 0.5), 0.04) * step(abs(uv.y - 0.5), 0.04);
         fragColor = vec4(1.0, min(seed, 1.0), 0.0, 1.0);
         return;
     }
@@ -887,6 +840,8 @@ const LESSONS = [
     thumb: "annotations",
     project: { image: annotated, passes: [], imageChannels: {} },
   },
+  // 앱 기능(연결 · 키프레임 · 프리셋 · 이미지 · 소리 입력)을 직접 만져 보는 예제는 feature-lessons.js에 있다.
+  ...FeatureLessons.LESSONS,
   {
     id: "hashprecision",
     title: "Hash Precision",
@@ -900,9 +855,17 @@ const LESSONS = [
     id: "reaction",
     title: "Reaction–Diffusion",
     tag: "Fixed size · RGBA16F · Repeat",
-    description: "고정 해상도 피드백 시뮬레이션. 화면을 눌러 끌면 패턴을 심습니다.",
+    description:
+      "지난 프레임을 읽어 한 단계씩 나아가는 고정 해상도 시뮬레이션. 프리셋 칩으로 패턴 종류를 바꾸고, 화면을 눌러 끌면 씨앗을 심습니다.",
     thumb: "reaction",
     project: {
+      // F(먹이) · k(제거) 조합마다 전혀 다른 무늬가 자란다(Pearson의 분류). 프리셋을 고르면 전환 시간 동안 천천히 옮겨 간다.
+      presets: [
+        { name: "산호", values: { uFeed: 0.0545, uKill: 0.062 } },
+        { name: "세포 분열", values: { uFeed: 0.0367, uKill: 0.0649 } },
+        { name: "지렁이", values: { uFeed: 0.078, uKill: 0.061 } },
+        { name: "구멍", values: { uFeed: 0.039, uKill: 0.058 } },
+      ],
       image: reactionImage,
       passes: [
         {
@@ -919,50 +882,16 @@ const LESSONS = [
     },
   },
   {
-    id: "keyboard",
-    title: "Keyboard Control",
-    tag: "키보드 입력 · 상태 버퍼",
-    description: "뷰포트를 클릭하고 방향키·WASD로 점을 움직이기. Space로 색 바꾸기, Esc로 나가기.",
-    thumb: "keyboard",
-    project: {
-      image: keyboardImage,
-      common: keyboardCommon,
-      passes: [
-        {
-          name: "A",
-          fragment: keyboardState,
-          format: "rgba16f",
-          scale: 1,
-          size: [1, 1],
-          filter: "nearest",
-          channels: { 0: { buffer: "A", frame: "previous" }, 1: { keyboard: true } },
-        },
-      ],
-      imageChannels: { 0: { buffer: "A", frame: "current" }, 1: { keyboard: true } },
-    },
-  },
-  {
     id: "mrt",
     title: "MRT Outputs",
     tag: "Out = 2 · A[1]",
-    description: "한 패스에서 색과 거리장을 동시에 쓰고 Image에서 따로 읽기.",
+    description:
+      "한 패스(Out = 2)가 색과 거리장을 함께 쓰고, Image는 거리장만으로 그림자 · 빛 번짐 · 윤곽을 더합니다. 보기를 바꿔 두 출력을 따로 보세요.",
     thumb: "mrt",
     project: {
       image: mrtImage,
       passes: [{ name: "A", fragment: mrtSource, format: "rgba16f", scale: 1, outputs: 2, channels: {} }],
       imageChannels: { 0: { buffer: "A", frame: "current" }, 1: { buffer: "A", frame: "current", attachment: 1 } },
-    },
-  },
-  {
-    id: "mipblur",
-    title: "Mipmap Blur",
-    tag: "Mip · textureLod",
-    description: "밉맵 레벨을 골라 읽는 저비용 블러(틸트 시프트).",
-    thumb: "mipblur",
-    project: {
-      image: mipImage,
-      passes: [{ name: "A", fragment: mipSource, format: "rgba8", scale: 1, mipmap: true, channels: {} }],
-      imageChannels: { 0: { buffer: "A", frame: "current" } },
     },
   },
   {
@@ -991,30 +920,6 @@ const LESSONS = [
   ...Technique.LESSONS,
   // 3D 레이마칭(궤도 카메라 · 유리 · 반사 재질 · 키보드 탐험)은 raymarch-lessons.js에 있다.
   ...Raymarch.LESSONS,
-  {
-    id: "raymarch",
-    title: "Ray Marching SDF",
-    tag: "3D · 키보드 카메라",
-    description: "SDF 장면, 키보드·드래그 카메라(상태 버퍼), 스텝 히트맵 디버그.",
-    action: "exampleRaymarch",
-    thumb: "raymarch",
-  },
-  {
-    id: "pipeline",
-    title: "Buffer Pipeline",
-    tag: "Multi-pass",
-    description: "A → B 후처리 → Image. 버퍼 연결의 기본.",
-    action: "examplePipeline",
-    thumb: "pipeline",
-  },
-  {
-    id: "feedback",
-    title: "Feedback Trails",
-    tag: "Multi-pass · previous",
-    description: "이전 프레임을 읽어 잔상을 누적하는 피드백 루프.",
-    action: "exampleFeedback",
-    thumb: "feedback",
-  },
 ];
 // preview: { pause() → 멈췄으면 true, resume(), size() → { width, height } } — 성능을 재는 동안 메인 미리보기를 멈추고,
 // 배지는 미리보기가 지금 그리는 크기로 환산한다(없으면 그대로 재고 1920×1080으로 환산).
@@ -1069,7 +974,7 @@ const mount = ({ studio, Shader, preview = null }) => {
     if (dialog.open) dialog.close();
     finishOnboarding();
     const project = item.project || { image: item.image, passes: [], imageChannels: {} };
-    const ok = await (item.action ? studio[item.action]() : studio.loadExample(project, params(sourcesOf(item))));
+    const ok = await studio.loadExample(project, params(sourcesOf(item)));
     // 예제를 열어도 편집기 열림 상태는 그대로 둔다(보기만 하려는 사람이 예제를 바꿀 때마다 편집기를 닫지 않게).
     // 코드를 보려면 편집기 버튼(E)으로 연다.
     if (ok) {
@@ -1122,28 +1027,19 @@ const mount = ({ studio, Shader, preview = null }) => {
     Object.assign(result, { ms, size, ...state });
     setBadge(id, state);
   };
-  // 성능을 잴 프로젝트: 예제 카드가 Studio에 넘기는 것과 같은 패스 구성. Studio 소유 예제는 그 소스를 직접 쓴다.
+  // 성능을 잴 프로젝트: 예제 카드가 Studio에 넘기는 것과 같은 패스 구성.
   const perfProject = item => {
-    if (item.action === "exampleRaymarch")
-      return {
-        project: { image: Shader.raymarch, passes: Shader.raymarchPasses },
-        uniforms: Shader.rayUniforms.map(([name, type, value]) => ({ name, type, value })),
-      };
-    if (item.action === "examplePipeline") return { project: Examples.pipelineProject(), uniforms: [] };
-    if (item.action === "exampleFeedback") return { project: Examples.feedbackProject(), uniforms: [] };
     const project = item.project || { image: item.image, passes: [] };
     return { project, uniforms: params(sourcesOf(item)) };
   };
-  // 썸네일로 그릴 소스: 단일 패스 예제 · Ray Marching · liveThumb 예제(상태 버퍼가 비면 처음 시점을 그리도록 짠 Image를
+  // 썸네일로 그릴 소스: 단일 패스 예제 · liveThumb 예제(상태 버퍼가 비면 처음 시점을 그리도록 짠 Image를
   // 버퍼 없이 그린다). 그 밖에 버퍼가 필요한 예제는 CSS 그림(data-thumb)을 쓴다.
   const thumbSource = item =>
     item.image
       ? { fragment: item.image, uniforms: params([item.image]) }
       : item.liveThumb && item.project
         ? { fragment: item.project.image, common: item.project.common, uniforms: params(sourcesOf(item)) }
-        : item.action === "exampleRaymarch"
-          ? { fragment: Shader.raymarch, uniforms: perfProject(item).uniforms }
-          : null;
+        : null;
   const startLazy = () => {
     const surface = document.createElement("canvas");
     surface.width = 320;

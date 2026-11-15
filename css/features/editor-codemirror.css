@@ -79,7 +79,8 @@
 .cm-error-lens.is-warning .cm-error-lens-text { background:color-mix(in srgb,var(--warning) 9%,transparent); }
 .cm-error-lens.is-stale { opacity:.45; }
 .studio-cm-host .is-scrubbing .cm-content { cursor:ew-resize; }
-.studio-cm-host .cm-panel.cm-panel-lint ul { max-height:140px;padding-right:calc(var(--control-xs) + var(--space-4));font:12px var(--mono); }
+/* 줄 높이를 글꼴과 관계없이 고정한다: 위아래 3px + 18px = 24px(닫기 버튼 높이) — 닫기가 첫 줄과 세로 중심이 맞게 */
+.studio-cm-host .cm-panel.cm-panel-lint ul { max-height:140px;padding-right:calc(var(--control-xs) + var(--space-4));font:12px/18px var(--mono); }
 /* 오류 목록 닫기(cm-editor.js가 공용 아이콘 버튼으로 바꾼다): 첫 줄과 세로 중심을 맞춘다. CodeMirror 기본 테마(글자 ×)보다 우선하도록 [name=close]까지 쓴다 */
 .studio-cm-host .cm-panel.cm-panel-lint>button[name=close].studio-lint-close { top:0;right:var(--space-2);background:transparent; }
 .studio-cm-host .cm-panel.cm-panel-lint>button[name=close].studio-lint-close:hover { background:var(--surface-hover); }

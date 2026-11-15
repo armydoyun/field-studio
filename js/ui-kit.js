@@ -174,9 +174,20 @@ const notice = (text, { tone = "", bar = false, className = "" } = {}) =>
 
 // 떠 있는 메뉴. anchor(버튼) 아래에 붙여 열고, 바깥을 누르거나 Esc · 항목 선택으로 닫는다. ↑↓ Home End로 항목을 옮긴다.
 // items: [{ id, label, icon, kbd, danger, disabled, pressed, title, onSelect } | { separator: true } | { title: "묶음 제목" }]
-// 반환: { element, close() }. 닫히면 anchor로 초점이 돌아가고 onClose가 불린다.
-const menu = ({ anchor, items = [], label = "", align = "start", onClose } = {}) => {
-  const doc = anchor?.ownerDocument || document;
+// at: { x, y, doc } — anchor 대신 그 화면 좌표(우클릭 위치)에 연다. returnFocus: 닫힐 때 초점을 돌려줄 요소(at과 함께).
+// 반환: { element, close() }. 닫히면 anchor(또는 returnFocus)로 초점이 돌아가고 onClose가 불린다.
+// focusFirst: false면 첫 항목 대신 메뉴 자체에 초점(포인터로 연 우클릭 메뉴 — 방향키를 누르면 첫 항목부터).
+const menu = ({
+  anchor,
+  at,
+  returnFocus,
+  focusFirst = true,
+  items = [],
+  label = "",
+  align = "start",
+  onClose,
+} = {}) => {
+  const doc = anchor?.ownerDocument || at?.doc || document;
   const view = doc.defaultView || window;
   const element = el("div", "ui-popover ui-menu");
   element.setAttribute("role", "menu");
@@ -191,7 +202,7 @@ const menu = ({ anchor, items = [], label = "", align = "start", onClose } = {})
     doc.removeEventListener("keydown", onKey, true);
     view.removeEventListener("resize", close);
     anchor?.setAttribute("aria-expanded", "false");
-    if (focus) anchor?.focus();
+    if (focus) (anchor || returnFocus)?.focus?.({ preventScroll: true });
     onClose?.();
   };
   const onOutside = event => {
@@ -253,11 +264,23 @@ const menu = ({ anchor, items = [], label = "", align = "start", onClose } = {})
     element.style.maxHeight = `${view.innerHeight - 16}px`;
     anchor.setAttribute("aria-haspopup", "menu");
     anchor.setAttribute("aria-expanded", "true");
+  } else if (at) {
+    // 포인터 오른쪽 아래로 열고, 창 밖으로 나가면 반대쪽으로 뒤집는다.
+    const size = element.getBoundingClientRect();
+    const left = at.x + size.width > view.innerWidth - 8 ? at.x - size.width : at.x;
+    const top = at.y + size.height > view.innerHeight - 8 ? at.y - size.height : at.y;
+    element.style.left = `${Math.max(8, Math.min(left, view.innerWidth - size.width - 8))}px`;
+    element.style.top = `${Math.max(8, Math.min(top, view.innerHeight - size.height - 8))}px`;
+    element.style.maxHeight = `${view.innerHeight - 16}px`;
   }
   doc.addEventListener("pointerdown", onOutside, true);
   doc.addEventListener("keydown", onKey, true);
   view.addEventListener("resize", close);
-  enabled()[0]?.focus();
+  if (focusFirst) enabled()[0]?.focus();
+  else {
+    element.tabIndex = -1;
+    element.focus({ preventScroll: true });
+  }
   return { element, close };
 };
 

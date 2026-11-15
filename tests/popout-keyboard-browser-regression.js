@@ -20,8 +20,8 @@
     test(!panelHidden(), "편집기를 열어도 설정 패널이 그대로 열려 있다");
     $("galleryToggle").click();
     await frames(2);
-    const card = [...$("gallery").querySelectorAll("button")].find(b => /Keyboard Control/.test(b.textContent));
-    test(!!card, "갤러리에 Keyboard Control 예제");
+    const card = [...$("gallery").querySelectorAll("button")].find(b => /Keyboard Explorer/.test(b.textContent));
+    test(!!card, "갤러리에 Keyboard Explorer 예제");
     card.click();
     await frames(4);
     test(!panelHidden(), "예제를 골라도 설정 패널이 그대로 열려 있다");
