@@ -127,6 +127,14 @@
   $('compareA').click();
   await audit("A 기준 미리보기");
   $('compareClear').click();
+  const previousPresets = window.shaderSettings.getPresets();
+  window.shaderSettings.setPresets([{name:'호환성 검사',values:{uGain:0.5,uRemoved:1}}]);
+  $('presetBlend').value='0';
+  document.querySelector('.preset-apply').click();
+  $('presetReport').open=true;
+  await audit("프리셋 적용 내역");
+  window.shaderSettings.setPresets(previousPresets);
+  $('compareClear').click();
   document.querySelector(".ui-matrix .ui-matrix-tools button").click();
   await audit("행렬 확대 편집");
   document.querySelector('dialog[aria-label="uMatrix 행렬 확대 편집"] .ui-icon-btn').click();

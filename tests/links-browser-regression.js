@@ -121,7 +121,8 @@
     test(steps.join() === "0,3,5,10", `키프레임(int 반올림 · 끝 값 유지): ${steps}`);
     // 시간 기준: '한 번'이 기본 · '반복'으로 바꾸면 길이 칸과 지금 바퀴 안내 · 길이 밖 키 경고
     const timeMode = label => [...editor("uStep").querySelectorAll('[aria-label="키프레임 시간 기준"] [role="radio"]')].find(b => b.textContent.startsWith(label));
-    test(timeMode("한 번").getAttribute("aria-checked") === "true" && editor("uStep").textContent.includes("마지막 키 값을 유지"), "기본은 '한 번'과 설명");
+    test(timeMode("한 번").getAttribute("aria-checked") === "true" && !settings.getLinks().find(l => l.name === "uStep").loop, "기본은 한 번 재생");
+    test(editor("uStep").querySelector('[data-guide="connections"]'), "연결 사용법은 도움말에서 확인");
     timeMode("반복").click();
     await until(() => settings.getLinks().find(l => l.name === "uStep").loop === 2, "반복으로 바꾸면 마지막 키를 담는 길이(2초)");
     await until(() => /바퀴 안 \d+\.\d\d초 · \d+번째 바퀴/.test(editor("uStep").querySelector(".link-loop-status").textContent), "지금 바퀴 안내");
@@ -131,13 +132,17 @@
     await wait(30);
     const looped = await offlineAt([1.5], "uStep");
     test(looped[0] === 5, `1초 반복: 1.5초 → ${looped[0]}`);
-    // 끝과 처음: 기본은 '끝 값 유지', '처음으로 잇기'를 고르면 저장되고 설명이 바뀐다 · 다시 끄면 설정에서 빠진다
+    // 끝과 처음: 유지와 잇기의 실제 출력 및 선택 상태 · 다시 끄면 설정에서 빠진다
     const wrapMode = label => [...editor("uStep").querySelectorAll('[aria-label="반복의 끝과 처음"] [role="radio"]')].find(b => b.textContent.startsWith(label));
     test(wrapMode("끝 값 유지").getAttribute("aria-checked") === "true", "반복이면 '끝과 처음' 선택이 보이고 기본은 유지");
+    choose(field("uStep", "반복 길이(초)"), 2);
+    test((await offlineAt([1.5], "uStep"))[0] === 10, "끝 값 유지: 마지막 키 뒤 값 10");
     wrapMode("처음으로 잇기").click();
-    await until(() => settings.getLinks().find(l => l.name === "uStep").wrap === true && editor("uStep").textContent.includes("튀지 않습니다"), "'처음으로 잇기' 저장 · 설명");
+    await until(() => settings.getLinks().find(l => l.name === "uStep").wrap === true && wrapMode("처음으로 잇기").getAttribute("aria-checked") === "true", "처음으로 잇기 저장 · 선택 상태");
+    test((await offlineAt([1.5], "uStep"))[0] === 5, "처음으로 잇기: 다음 바퀴의 첫 값까지 보간");
     wrapMode("끝 값 유지").click();
     await until(() => !("wrap" in settings.getLinks().find(l => l.name === "uStep")), "다시 끄면 설정에서 빠짐");
+    choose(field("uStep", "반복 길이(초)"), 1);
     [...editor("uStep").querySelectorAll("button")].find(b => b.textContent === "타임라인에서 편집").click();
     await until(() => !$("timelineDock").hidden && !!$("timelineDock").querySelector('.timeline-lane[data-name="uStep"] .timeline-key.is-selected'), "타임라인 도크가 열리고 그 레인의 첫 키가 선택됨");
     test(document.activeElement === $("timelineDock").querySelector(".timeline-body"), "도크에 초점(방향키로 바로 옮기기)");

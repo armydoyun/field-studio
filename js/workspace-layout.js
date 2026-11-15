@@ -58,7 +58,7 @@ const mount = ({ doc = document, onCollapse = null } = {}) => {
     doc.documentElement.classList.toggle("panel-right", side === "right");
     if (grip) {
       const here = DockDrag.LABEL[side];
-      grip.title = `끌어서 설정 패널을 화면 왼쪽·오른쪽으로 옮기기 · ←→로도 옮김 (지금 ${here})`;
+      grip.title = `패널 위치 이동 (현재 ${here}) · ←→`;
       grip.setAttribute("aria-label", `설정 패널 위치 옮기기 (지금 ${here})`);
     }
   };

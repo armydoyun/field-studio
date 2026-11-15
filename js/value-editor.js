@@ -111,19 +111,19 @@ const create = ({
     };
     const hint =
       info.kind === "b"
-        ? "켜짐은 true, 꺼짐은 false입니다. 적용 전까지 원래 값은 유지됩니다."
+        ? "true / false"
         : info.kind === "u"
-          ? "0 ~ 4294967295 범위의 정수 · 소수와 음수는 사용할 수 없습니다."
+          ? "0 ~ 4294967295 · 정수"
           : info.kind === "i"
-            ? "-2147483648 ~ 2147483647 범위의 정수 · 소수는 사용할 수 없습니다."
+            ? "-2147483648 ~ 2147483647 · 정수"
             : options.angle
-              ? "각도 원본은 라디안입니다. 패널 다이얼은 각도로 표시합니다."
+              ? "입력 단위: 라디안"
               : options.dir
-                ? "방향 성분을 편집합니다. 적용 시 길이 1로 정규화합니다."
-                : "소수·지수 표기로 전체 값을 편집합니다. 적용 전까지 원래 값은 유지됩니다.";
+                ? "0이 아닌 방향 벡터 · 단위 길이로 정규화"
+                : "소수·지수 표기 지원";
     heading.append(UI.el("h2", "", "값 편집"), UI.el("p", "", `${name} · ${type}`));
     head.append(heading, UI.iconButton({ icon: "close", label: "값 편집 취소", size: "lg", onClick: () => close() }));
-    body.append(UI.notice(hint));
+    body.append(UI.hint(hint));
     for (let index = 0; index < info.count; index++) {
       const axis =
         info.count === 1
@@ -216,12 +216,7 @@ const create = ({
           },
         })
       );
-      bulk.append(
-        summary,
-        area,
-        UI.hint(`${info.count}개 값을 쉼표·공백·줄바꿈으로 구분하세요. 입력칸에 채워도 아직 적용되지 않습니다.`),
-        actions
-      );
+      bulk.append(summary, area, UI.hint(`${info.count}개 값 · 쉼표·공백·줄바꿈 구분`), actions);
       body.append(bulk);
     }
     body.append(error);
