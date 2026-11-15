@@ -32,6 +32,7 @@ select.ui-input--sm { padding-right:24px; }
 .ui-hint { margin:8px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65;overflow-wrap:anywhere; }
 .ui-hint:empty { display:none; }
 .ui-hint--lead { margin:0 0 16px; }
+.ui-hint--inline { margin:0; }
 .ui-error { display:block;margin-top:6px;color:var(--danger);font-size:var(--text-sm);font-weight:500;line-height:1.5; }
 /* 칸 + 단위 */
 .ui-input-group { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch; }

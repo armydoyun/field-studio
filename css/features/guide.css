@@ -128,7 +128,7 @@
 .ref-ex pre { flex:1;min-width:0;margin:0;padding:7px 10px;overflow-x:auto;color:var(--code-text);font:var(--text-xs)/1.6 var(--mono);white-space:pre; }
 .ref-ex button { flex-shrink:0;margin:4px; }
 /* ── 문맥 도움말 버튼(?) · 가이드로 가는 글자 링크 ── */
-.guide-hint { margin:-2px 0 -2px 2px;vertical-align:-6px; }
+.guide-hint { flex-shrink:0;margin:-2px 0; }
 .guide-hint.glyph-icon::before { flex-basis:15px;width:15px;height:15px; }
 .guide-hint:hover { color:var(--accent-strong); }
 /* ── UI 둘러보기: 대상만 밝게 남기는 스포트라이트 + 설명 카드 ── */

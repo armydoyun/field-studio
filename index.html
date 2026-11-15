@@ -128,7 +128,7 @@
                             </div>
                             <p id="compareNotice" class="ui-hint" role="status">기준을 잡은 뒤 값을 바꿔 비교하세요.</p>
                         </div>
-                        <div class="parameter-filter"><button id="uniformChangedOnly" type="button" class="ui-btn ui-btn--sm" aria-pressed="false" title="코드 기본값과 다른 항목 보기">변경만 보기 <span id="uniformChangedCount" class="ui-count">0</span></button><span class="ui-hint">코드 기본값 기준</span></div>
+                        <div class="parameter-filter"><button id="uniformChangedOnly" type="button" class="ui-btn ui-btn--sm" aria-pressed="false" title="코드 기본값과 다른 항목 보기">변경만 보기 <span id="uniformChangedCount" class="ui-count">0</span></button><span class="ui-hint ui-hint--inline">코드 기본값 기준</span></div>
                         <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" class="ui-btn--sm" hidden>삭제 되돌리기</button></div>
                         <div id="presetBar" class="ui-card preset-bar" role="group" aria-labelledby="presetTitle">
                             <div class="preset-head"><span id="presetTitle" class="preset-title">프리셋</span><label class="preset-blend" title="프리셋을 고를 때 값이 바뀌는 시간">전환 <select id="presetBlend" class="ui-input--sm"><option value="0">즉시</option><option value="0.5">0.5초</option><option value="1" selected>1초</option><option value="2">2초</option><option value="4">4초</option></select></label></div>
@@ -159,7 +159,7 @@
                                 <div class="uniform-form-actions"><button id="uniformCancel" class="ui-btn--ghost" type="button">취소</button><button id="uniformCreate" class="ui-btn--primary" type="submit">추가하고 적용</button></div>
                             </form>
                         </details>
-                        <details class="ui-disclosure builtin-reference"><summary>내장 Uniform 참조</summary><dl><dt>vec2 uResolution</dt><dd>현재 패스의 픽셀 크기</dd><dt>float uTime / uDeltaTime</dt><dd>재생 시간 / 프레임 간격 (초)</dd><dt>int uFrame</dt><dd>누적 렌더 프레임</dd><dt>vec2 uMouse</dt><dd>현재 패스 기준 포인터 픽셀 좌표</dd><dt>float uWheel</dt><dd>마우스 휠 누적 칸 수 (위로 +1)</dd><dt>sampler2D iChannel0…3</dt><dd>편집기에서 연결한 이미지 또는 버퍼</dd><dt>vec3 iChannelResolution[4]</dt><dd>각 채널의 입력 크기</dd></dl><button type="button" class="ui-link guide-link" data-guide="uniforms">허용 타입·마우스 클릭(vec4) 등 전체 보기 →</button></details>
+                        <div class="ui-stack builtin-reference"><button type="button" class="ui-btn--lg ui-btn--block glyph-icon icon-help" data-guide="uniforms" title="uResolution · uTime · uMouse · iChannel 등 렌더러가 자동으로 넣는 값">내장 Uniform 알아보기</button></div>
                     </section>
                 </div>
 
