@@ -804,7 +804,8 @@ const mount = (renderer, input, settings) => {
   };
   // 램프 편집기(uniform sampler2D · @gradient/@curve). 값은 렌더러가 위치 순으로 정렬해 256×1 텍스처로 굽는다.
   // 편집기는 점 객체 배열을 들고 있어 끄는 동안 순서가 바뀌어도 선택한 점을 놓치지 않는다.
-  const RAMP_LIMIT = 16;
+  const RAMP_LIMIT = 16,
+    RAMP_DRAG_SLOP = 3; // 정지점 손잡이: 이만큼(px) 끌어야 움직인다(타임라인 키와 같은 값)
   const rampButton = (icon, label, onClick) =>
     UI.iconButton({
       icon,
@@ -934,13 +935,37 @@ const mount = (renderer, input, settings) => {
             handle.type = "button";
             handle.className = "uniform-ramp-stop";
             handles.set(stop, handle);
-            padDrag(handle, event => {
-              selected = stop;
-              const box = track.getBoundingClientRect();
-              stop.t = Number(clamp01((event.clientX - box.left) / box.width).toFixed(3));
-              apply(handle);
+            // 누르기만 하면 선택만 한다(손잡이가 포인터 쪽으로 튀지 않게). 3px 넘게 끌어야 움직이고,
+            // 움직임은 누른 지점 기준 상대 거리라 손잡이 가운데를 정확히 누르지 않아도 위치가 바뀌지 않는다.
+            handle.addEventListener("pointerdown", event => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              handle.dataset.pointer = "";
+              handle.focus({ preventScroll: true });
+              handle.setPointerCapture?.(event.pointerId);
+              const width = track.getBoundingClientRect().width || 1,
+                startX = event.clientX,
+                startT = stop.t;
+              let moving = false;
+              const move = next => {
+                const dx = next.clientX - startX;
+                if (!moving && Math.abs(dx) < RAMP_DRAG_SLOP) return;
+                if (!moving) handle.classList.add("is-dragging");
+                moving = true;
+                selected = stop;
+                stop.t = Number(clamp01(startT + dx / width).toFixed(3));
+                apply(handle);
+              };
+              const end = () => {
+                handle.removeEventListener("pointermove", move);
+                handle.classList.remove("is-dragging");
+              };
+              handle.addEventListener("pointermove", move);
+              handle.addEventListener("pointerup", end, { once: true });
+              handle.addEventListener("pointercancel", end, { once: true });
             });
             handle.addEventListener("keydown", event => {
+              delete handle.dataset.pointer;
               const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -1, ArrowUp: 1 };
               selected = stop;
               if (event.key === "Delete" || event.key === "Backspace") {
@@ -983,13 +1008,17 @@ const mount = (renderer, input, settings) => {
     // 빈 곳을 누르면 그 위치의 지금 색으로 정지점을 더한다.
     track.addEventListener("pointerdown", event => {
       if (event.target !== track || event.button !== 0 || stops.length >= RAMP_LIMIT) return;
+      // 기본 동작(누른 곳으로 초점 이동)이 새 손잡이의 초점을 빼앗으면, 목록 밖 초점으로 보고 목록을 다시 그려 선택이 첫 정지점으로 돌아간다.
+      event.preventDefault();
       const box = track.getBoundingClientRect(),
         t = Number(clamp01((event.clientX - box.left) / box.width).toFixed(3)),
         samples = renderer.sampleRamp(item.options, current(), 256);
       selected = { t, c: samples[Math.round(t * 255)].map(v => Number(v.toFixed(4))) };
       stops.push(selected);
       apply(track);
-      handles.get(selected)?.focus?.();
+      const added = handles.get(selected);
+      if (added) added.dataset.pointer = "";
+      added?.focus?.({ preventScroll: true });
     });
     picker.addEventListener("input", () => {
       const rgb = picker.value.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16) / 255);
@@ -1202,7 +1231,8 @@ const mount = (renderer, input, settings) => {
             d: Math.hypot((p.x - x) * (box.width - INSET * 2), ((p.y - y) / span) * (box.height - INSET * 2)),
           }))
           .sort((a, b) => a.d - b.d)[0];
-      if (hit && hit.d <= 10) selected = hit.i;
+      const grabbed = hit && hit.d <= 10;
+      if (grabbed) selected = hit.i;
       else if (points.length < RAMP_LIMIT) {
         const at = points.findIndex(p => p.x > x);
         selected = at < 0 ? points.length : at;
@@ -1213,9 +1243,17 @@ const mount = (renderer, input, settings) => {
       sync(false);
       pad.setPointerCapture?.(event.pointerId);
       pad.classList.add("is-dragging");
+      // 기존 점을 잡았으면 누르기만으로는 움직이지 않고(3px 넘게 끌어야), 누른 지점 기준으로 옮겨 점이 포인터로 튀지 않는다.
+      const startX = event.clientX,
+        startY = event.clientY,
+        origin = { ...points[selected] };
+      let moving = !grabbed;
       const move = moveEvent => {
+        if (!moving && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < RAMP_DRAG_SLOP) return;
+        moving = true;
         const next = pointerToValue(moveEvent);
-        place(selected, next.x, next.y);
+        if (grabbed) place(selected, origin.x + next.x - x, origin.y + next.y - y);
+        else place(selected, next.x, next.y);
         apply(pad);
       };
       const end = () => {
@@ -2298,6 +2336,20 @@ const mount = (renderer, input, settings) => {
   // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
   let hiddenKey = "",
     hiddenDisclosureKey = "";
+  // 목록 안에서 포인터를 누르고 있는 동안(슬라이더 · 패드 끌기)에는 @if로 인한 다시 그리기를 미뤘다가 놓을 때 한다.
+  // 놓은 직후의 change(되돌리기 기록 등)가 먼저 끝나도록 다음 작업으로 넘긴다.
+  let listPointer = false,
+    conditionRedraw = null;
+  listen($("uniformList"), "pointerdown", () => (listPointer = true));
+  const releaseListPointer = () => {
+    if (!listPointer) return;
+    listPointer = false;
+    const redraw = conditionRedraw;
+    conditionRedraw = null;
+    if (redraw) setTimeout(redraw);
+  };
+  listen(window, "pointerup", releaseListPointer);
+  listen(window, "pointercancel", releaseListPointer);
   const conditionHidden = (items, defaults) => {
     const values = new Map(items.map(item => [item.name, item.value]));
     return items
@@ -2567,16 +2619,25 @@ const mount = (renderer, input, settings) => {
           field.removeAttribute("aria-invalid");
           showError("");
           // 이 값이 다른 파라미터의 @if를 바꾸면 목록을 다시 그리고 초점은 이 파라미터 줄로 돌려 둔다.
+          // 슬라이더 · 패드를 끄는 중이면 다시 그리는 순간 끌던 조작이 사라져 끌기가 끊기므로, 손을 뗄 때까지 미룬다.
           if (!$("uniformSearch").value.trim()) {
             const users = renderer.getUserUniforms();
-            if (conditionHidden(users, annotatedDefaults()).join() !== hiddenKey)
-              queueMicrotask(() => {
+            if (conditionHidden(users, annotatedDefaults()).join() !== hiddenKey) {
+              const redraw = () => {
+                if (
+                  $("uniformSearch").value.trim() ||
+                  conditionHidden(renderer.getUserUniforms(), annotatedDefaults()).join() === hiddenKey
+                )
+                  return;
                 renderUniforms();
                 [...$("uniformList").querySelectorAll(".uniform-row")]
                   .find(node => node.dataset.name === item.name)
                   ?.querySelector("input,button,select")
                   ?.focus();
-              });
+              };
+              if (listPointer) conditionRedraw = redraw;
+              else queueMicrotask(redraw);
+            }
           }
           return true;
         } catch (error) {

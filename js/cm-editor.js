@@ -491,6 +491,15 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { dark: true }
   );
 
+  // 오류 목록(CodeMirror lint 패널)의 닫기 버튼은 글자 ×를 패널 오른쪽 위에 띄운 기본 모양이라, 열릴 때 공용 아이콘 버튼으로 바꾼다.
+  const styleLintClose = update => {
+    const close = update.view.dom.querySelector(".cm-panel-lint>button[name=close]:not(.glyph-icon)");
+    if (!close) return;
+    close.className = "ui-icon-btn ui-icon-btn--xs glyph-icon icon-close studio-lint-close";
+    close.textContent = "";
+    close.setAttribute("aria-label", "오류 목록 닫기");
+    close.title = "오류 목록 닫기 (Esc)";
+  };
   const notifyTextarea = update => {
     if (update.docChanged && !update.transactions.some(tr => tr.annotation(External))) {
       const tr = update.transactions.find(t => t.docChanged),
@@ -1036,6 +1045,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
         CM.EditorState.phrases.of(PHRASES),
         CM.placeholder("// GLSL 코드를 입력하세요 · Ctrl+Space 자동 완성 · Ctrl+Shift+P 명령 팔레트"),
         CM.EditorView.updateListener.of(notifyTextarea),
+        CM.EditorView.updateListener.of(styleLintClose),
       ],
     }),
   });
