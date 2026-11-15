@@ -40,10 +40,10 @@ const usedChannels = source => {
 
 // 미디어 입력(media-input.js): 칩 배지 · 고르기 단추 이름
 const MEDIA = {
-  mic: { badge: "MIC", label: "마이크" },
-  audio: { badge: "♪", label: "오디오 파일…" },
-  webcam: { badge: "CAM", label: "웹캠" },
-  video: { badge: "▶", label: "영상 파일…" },
+  mic: { icon: "mic", label: "마이크" },
+  audio: { icon: "audio", label: "오디오 파일…" },
+  webcam: { icon: "camera", label: "웹캠" },
+  video: { icon: "video", label: "영상 파일…" },
 };
 const MEDIA_STATE = { off: "꺼짐", starting: "켜는 중", error: "오류" };
 
@@ -79,12 +79,12 @@ const create = ({
     options = [];
 
   const short = ref => {
-    if (!ref) return { badge: "＋", tag: "비어 있음", kind: "empty" };
-    if (ref.keyboard) return { badge: "⌨", tag: "키보드", kind: "keyboard" };
+    if (!ref) return { icon: "plus", tag: "비어 있음", kind: "empty" };
+    if (ref.keyboard) return { icon: "keyboard", tag: "키보드", kind: "keyboard" };
     if (ref.media) {
       const media = mediaState(ref.media);
       return {
-        badge: MEDIA[ref.media]?.badge || "?",
+        icon: MEDIA[ref.media]?.icon || "help",
         tag: media.state === "on" ? media.name : MEDIA_STATE[media.state] || media.state,
         kind: "media",
         state: media.state,
@@ -116,9 +116,10 @@ const create = ({
     chip.value = valueOf(ref);
     chip.dataset.kind = view.kind;
     chip.dataset.state = view.state || "";
-    badge.className =
-      view.kind === "image" || view.kind === "missing" ? "chip-badge glyph-icon icon-image" : "chip-badge";
-    badge.textContent = view.badge;
+    const icon = view.kind === "image" || view.kind === "missing" ? "image" : view.icon;
+    badge.className = icon ? `chip-badge glyph-icon icon-${icon}` : "chip-badge";
+    badge.textContent = view.badge || "";
+    badge.setAttribute("aria-hidden", "true");
     tag.className = "chip-tag";
     tag.textContent = view.tag;
     chip.replaceChildren(badge, ...(view.tag ? [tag] : []));
@@ -278,9 +279,14 @@ const create = ({
     });
     cubes.push(button("loadcube", "큐브맵 이미지 불러오기…", { className: "channel-load glyph-icon icon-plus" }));
     // 입력: 키보드(쉐이더토이 호환 256×3 텍스처). 뷰포트를 클릭하면 키가 셰이더로 간다.
-    const inputs = [button("keyboard", "키보드", { pressed: current === "keyboard", className: "channel-keyboard" })];
+    const inputs = [
+      button("keyboard", "키보드", {
+        pressed: current === "keyboard",
+        className: "channel-keyboard glyph-icon icon-keyboard",
+      }),
+    ];
     // 미디어: 고르면 켜고(권한 · 파일 고르기) 연결한다. 연결돼 있지만 꺼져 있으면 다시 골라 켠다.
-    for (const [kind, { label }] of Object.entries(MEDIA)) {
+    for (const [kind, { label, icon }] of Object.entries(MEDIA)) {
       const media = mediaState(kind),
         reason =
           media.state === "on"
@@ -294,15 +300,15 @@ const create = ({
         button(`media:${kind}`, label, {
           pressed: current === `media:${kind}`,
           reason,
-          className: `channel-media channel-${kind}`,
+          className: `channel-media channel-${kind} glyph-icon icon-${icon}`,
         })
       );
       // 보관한 파일(오디오 · 영상 파일)이 있고 꺼져 있으면: 파일을 고르지 않고 다시 켜기
       if (media.savedName && media.state !== "on")
         inputs.push(
-          button(`media:${kind}:saved`, `▶ ${media.savedName}`, {
+          button(`media:${kind}:saved`, media.savedName, {
             reason: `보관한 ${kind === "audio" ? "오디오" : "영상"} 파일로 켜기`,
-            className: `channel-media channel-${kind}-saved`,
+            className: `channel-media channel-${kind}-saved glyph-icon icon-play`,
           })
         );
     }

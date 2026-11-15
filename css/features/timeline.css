@@ -3,7 +3,7 @@
 .timeline-dock { grid-area:timeline;display:flex;flex-direction:column;height:var(--timeline-height,220px);min-height:0;border-top:1px solid var(--line);background:var(--panel);font-size:var(--text-xs);container:timeline / inline-size; }
 .timeline-dock[hidden] { display:none; }
 .timeline-resize { border-top:0; }
-/* ── 위 막대: [▶ ⟲ 시간 배속] [스냅 − + 맞춤] ………… [선택한 키] [×] ── */
+/* ── 위 막대: [재생 ⟲ 시간 배속] [스냅 − + 맞춤] ………… [선택한 키] [×] ── */
 .timeline-bar { position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:6px 46px 6px 10px;border-bottom:1px solid var(--line); }
 .timeline-group { display:flex;flex-wrap:nowrap;align-items:center;gap:4px; }
 .timeline-field { display:inline-flex;align-items:center;gap:4px;margin:0;color:var(--muted);white-space:nowrap; }

@@ -8,6 +8,17 @@
 
 눈으로 확인하는 카탈로그: `docs/design-system.html` (로컬 서버를 띄우고 `http://127.0.0.1:8000/docs/design-system.html`).
 
+## 필수 원칙: 이모지·이모티콘 금지, 아이콘은 SVG만 사용
+
+**이 프로젝트에는 이모지와 이모티콘을 절대로 사용하지 않는다.** 운영체제·글꼴에 따라 모양이 달라지는 문자 그림, 장식용 유니코드 기호, 텍스트 얼굴도 아이콘으로 사용할 수 없다. 이 규칙은 화면, 버튼, 상태 표시, 툴팁, 안내 문구, 가이드, 갤러리 카드, 예제 코드 주석, 디자인 카탈로그와 내보낸 결과에 모두 적용한다.
+
+- 모양을 전달해야 하면 **인라인 SVG 또는 `css/icons.css`의 공통 SVG 마스크**를 사용한다. 기존에 같은 뜻의 아이콘이 있으면 재사용하며, 없으면 같은 체계의 SVG를 추가한다.
+- 공통 격자는 `viewBox="0 0 24 24"`, 기본 획은 1.8, 선 끝과 모서리는 둥글게 한다. 단색 SVG는 `currentColor`로, 마스크는 부모의 글자색으로 다크·라이트 테마와 상태색을 따른다.
+- 아이콘만 있는 조작에는 `aria-label`과 동작을 설명하는 `title`을 준다. 글자와 함께 있는 장식 SVG에는 `aria-hidden="true"`, `focusable="false"`를 준다. 그림만으로 상태를 전달하지 않는다.
+- SVG를 넣을 수 없는 브라우저 탭 제목과 일반 텍스트·코드 주석에는 상태·동작의 **이름을 글자로** 쓴다. 예: `[저장 안 됨]`, `[실행 대기]`, `[컴파일 오류]`, 잠금, 무작위, 재생.
+- 수학 기호, 코드 연산자, 단위, 키 이름은 의미 있는 텍스트로 유지한다. 아이콘을 대신하는 문자 그림과 구분한다.
+- 새 화면과 문구를 추가할 때 `node tests/no-emoji-regression.js`로 위반을 검사한다. 실제 화면에서는 SVG 마스크 표시, 접근 가능한 이름, 상태 전환, 좁은 패널과 두 테마를 확인한다.
+
 ## 1. 파일 구조
 
 ```text
@@ -70,7 +81,7 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 아이콘 버튼 | `ui-icon-btn glyph-icon icon-이름` | 크기 `ui-icon-btn--xs · --sm · --lg` · 삭제류 `--danger`. `aria-label` 필수 · `title`에 하는 일 |
 | 켜고 끄는 버튼 | 위 + `aria-pressed="true"` | 켜지면 옅은 액센트 면. `ui-btn` 또는 `ui-icon-btn` 클래스가 있어야 한다 |
 | 글자냐 아이콘이냐 | | 도구 막대의 뜻이 하나뿐인 짧은 행동(지우기 · 복제 · 확대/축소 · 맞춤 · 자석)은 아이콘만. 메뉴 항목 · 대화상자 버튼 · 설명이 필요한 행동(되돌리기 알림, 초기화)은 글자로 |
-| 붙은 버튼 묶음 | `ui-btn-group` > button | ◀ ◆ ▶, − + |
+| 붙은 버튼 묶음 | `ui-btn-group` > button | 이전 키·키 설정·다음 키, − + |
 | 도구 막대 | `ui-toolbar` (+ `ui-sep`) | |
 | 글자 링크 | `ui-link` | |
 | 하나 고르기 | `ui-seg` > button | 고른 칸: `aria-pressed/checked/selected="true"` 또는 `.is-active/.is-selected`. 크기 `ui-seg--sm · --lg` |
@@ -111,11 +122,11 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 
 | 규칙 | 값 | 이유 · 예 |
 |---|---|---|
-| 조작 ↔ 구역을 나누는 선 | **8px 이상**(패널에서는 12px) | 설정 패널 탭 아래 선, 검색 칸 아래 선, 대화상자 머리 · 바닥 선 |
-| 조작 ↔ 그 밖의 선(한 줄 도구 막대 · 목록 줄 · 상자 안쪽) | **4px 이상** | 편집기 머리줄(44px 안의 32px 버튼), 타임라인 '선택한 키' 상자 |
-| 조작 ↔ 잘리는 가장자리(`overflow`) | **3px 이상** | 초점 링(2px + 간격 2px)이 잘리지 않게. 넘치는 도구 줄은 `padding:4px;margin:-4px` |
+| 조작과 구역 경계선 사이 | **8px 이상**(패널에서는 12px) | 설정 패널 탭 아래 선, 검색 칸 아래 선, 대화상자 머리 · 바닥 선 |
+| 조작과 그 밖의 선 사이(도구 막대 · 목록 · 상자) | **4px 이상** | 편집기 머리줄(44px 안의 32px 버튼), 타임라인 '선택한 키' 상자 |
+| 조작과 잘리는 가장자리 사이(`overflow`) | **3px 이상** | 초점 링(2px + 간격 2px)이 잘리지 않게. 넘치는 도구 줄은 `padding:4px;margin:-4px` |
 | 트랙 · 메뉴 안의 칸 | 초점 링을 **안쪽**(`outline-offset:-2px`) | `ui-seg` · `ui-tabs` · `ui-menu-item`: 링이 트랙 테두리를 덮지 않는다 |
-| 글자 ↔ 그것을 두른 테두리 | **4px 이상** | 카드 · 알림 · 꼬리표 밖의 글자 |
+| 글자와 테두리 사이 | **4px 이상** | 카드 · 알림 · 꼬리표 밖의 글자 |
 | 나란한 조작 사이 | 도구 아이콘 2px · 버튼 6~8px · 붙이려면 `ui-btn-group` | 0~1px로 어정쩡하게 붙이지 않는다 |
 | 같은 줄의 같은 종류 사이 | **같은 간격** | 뷰포트 머리줄의 칩들(프로젝트 · 저장 · 상태)은 모두 8px |
 | 선은 한 번만 | 맞닿은 두 영역 중 한쪽만 선을 그린다 | 탭 아래 선은 스크롤 영역이, 그래서 첫 구역(`ui-section`)은 위 선을 그리지 않는다 |
@@ -136,7 +147,7 @@ UI.select({ options: [["0", "즉시"], ["1", "1초"]], value: "1", size: "sm", o
 UI.numberInput({ value: 0.5, min: 0, max: 1, step: 0.01, size: "sm", onChange });
 UI.checkbox({ label: "자동", checked: true, onChange });
 UI.field({ label: "이름", control: input, hint: "설명" });
-UI.tag("↻ 4초", { tone: "accent" });
+UI.tag("반복 4초", { tone: "accent" });
 UI.notice("저장했습니다.", { tone: "success" });
 UI.menu({ anchor: button, items: [{ label: "이름 바꾸기…", onSelect }, { separator: true }, { label: "삭제", danger: true, onSelect }] });
 

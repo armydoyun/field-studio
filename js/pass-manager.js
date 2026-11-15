@@ -312,7 +312,7 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
       for (let i = 0; i < passes.length; i++) {
         const pass = passes[i],
           spec = normalized[i];
-        // 소스가 바뀌었거나, 채널이 2D ↔ 큐브맵으로 바뀌면(자동 선언하는 sampler 타입이 달라진다) 다시 만든다.
+        // 소스가 바뀌었거나, 채널이 2D와 큐브맵 사이에서 바뀌면(자동 선언하는 sampler 타입이 달라진다) 다시 만든다.
         if (pass.fragment !== spec.fragment || !sameTypes(pass.channels, spec.channels))
           next.push({ pass, ...compilePass(spec.fragment, spec.name, spec.channels) });
         if (JSON.stringify(pass.channels) !== JSON.stringify(spec.channels)) changed = true;

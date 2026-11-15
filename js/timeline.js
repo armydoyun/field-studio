@@ -188,7 +188,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     node.append(...nodes);
     return node;
   };
-  // 붙은 버튼 쌍(▶ ⟲ · − +)
+  // 붙은 버튼 쌍(재생 ⟲ · − +)
   const joined = (...nodes) => {
     const node = element("span", "ui-btn-group");
     node.append(...nodes);
@@ -408,14 +408,14 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
     lane.dataset.name = link.name;
     remove.title = "이 파라미터의 키프레임 연결 지우기(값은 지금 값으로 남는다)";
     on(remove, "click", () => settings.setLinks(links().filter(l => l.name !== link.name)));
-    // 시간 기준: '한 번'(키 시간 = 재생 시간, 마지막 키 뒤로는 그 값 유지) · '↻ N초'(N초 길이로 되풀이)
+    // 시간 기준: '한 번'(키 시간 = 재생 시간, 마지막 키 뒤로는 그 값 유지) · '반복 N초'(N초 길이로 되풀이)
     const mode = element(
       "span",
-      link.loop > 0 ? "ui-tag timeline-lane-mode is-loop" : "ui-tag timeline-lane-mode",
+      link.loop > 0 ? "ui-tag timeline-lane-mode is-loop glyph-icon icon-loop" : "ui-tag timeline-lane-mode",
       link.loop > 0
         ? link.wrap
-          ? `↻ ${round(link.loop, 2)}초 이어 반복`
-          : `↻ ${round(link.loop, 2)}초마다 반복`
+          ? `${round(link.loop, 2)}초 이어 반복`
+          : `${round(link.loop, 2)}초마다 반복`
         : "한 번 · 끝 값 유지"
     );
     mode.title =
@@ -564,7 +564,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
         element(
           "p",
           "timeline-empty",
-          "키프레임 연결이 없습니다. 왼쪽 위 '+ 파라미터'로 레인을 만들거나, 파라미터 줄의 연결 버튼(⛓)에서 '키프레임'을 고르세요."
+          "키프레임 연결이 없습니다. 왼쪽 위 '+ 파라미터'로 레인을 만들거나, 파라미터 줄의 연결 버튼(사슬)에서 '키프레임'을 고르세요."
         )
       );
     for (const link of list) track.append(renderLane(link, items.get(link.name)));

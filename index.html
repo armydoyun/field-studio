@@ -116,7 +116,7 @@
                                                 <p id="uiError" class="ui-notice ui-notice--danger" role="alert" aria-live="polite"></p>
                         <div class="parameter-actions" role="group" aria-label="파라미터 일괄 작업">
                             <button id="uniformWriteDefaults" type="button" class="ui-btn--sm" title="바뀐 값을 모든 패스의 @default에 반영">바뀐 값 모두 코드에 반영</button>
-                            <button id="uniformRandomize" type="button" class="ui-btn--sm" title="잠금·숨김·연결·램프 제외 · Ctrl+Z로 되돌리기">🎲 전체 무작위</button>
+                            <button id="uniformRandomize" type="button" class="ui-btn--sm glyph-icon icon-dice" title="잠금·숨김·연결·램프 제외 · Ctrl+Z로 되돌리기">전체 무작위</button>
                             <button id="uniformJitter" type="button" class="ui-btn--sm" title="현재 값의 ±10% 안에서 변경 · 0이면 범위 기준 · 잠금·숨김·연결·램프 제외">조금씩 바꾸기</button>
                         </div>
                         <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" class="ui-btn--sm" hidden>삭제 되돌리기</button></div>
@@ -126,6 +126,11 @@
                             <p id="presetNotice" class="ui-hint preset-notice" role="status"><span id="presetNoticeText"></span><button id="presetFinish" type="button" class="ui-btn--xs" hidden>바로 끝내기</button><button id="presetUndo" type="button" class="ui-btn--xs" hidden>되돌리기</button></p>
                         </div>
                         <p id="uniformResults" class="ui-hint" role="status"></p>
+                        <details id="uniformHidden" class="ui-disclosure uniform-hidden-params" hidden>
+                            <summary title="조건으로 숨긴 파라미터 목록">조건으로 숨김 <span id="uniformHiddenCount" class="ui-tag ui-tag--plain">0개</span></summary>
+                            <p class="ui-hint uniform-hidden-help">이름을 누르면 검색으로 확인할 수 있습니다.</p>
+                            <div id="uniformHiddenList" class="uniform-hidden-list" role="group" aria-label="조건으로 숨긴 파라미터"></div>
+                        </details>
                         <div id="uniformList" class="ui-card ui-dense uniform-list"></div>
                         <details id="uniformEditor">
                             <summary class="ui-btn ui-btn--dashed ui-btn--sm"><span class="summary-plus glyph-icon icon-plus" aria-hidden="true"></span> 파라미터 추가</summary>
@@ -196,7 +201,7 @@
                     </section>
                     <section class="ui-section">
                         <div class="ui-section-head"><h2>화면 배치</h2></div>
-                        <p class="ui-hint ui-hint--lead">경계를 끌면 너비가, 손잡이(⠿)를 끌면 자리가 바뀝니다.</p>
+                        <p class="ui-hint ui-hint--lead">경계를 끌면 너비가, 이동 손잡이를 끌면 자리가 바뀝니다.</p>
                         <button id="layoutReset" class="ui-btn--lg ui-btn--block" type="button">화면 배치 초기화</button>
                     </section>
                     <section class="ui-section">
@@ -255,11 +260,11 @@
                     <button id="previewImage" type="button" class="ui-icon-btn glyph-icon icon-image" title="최종 Image 보기" aria-label="최종 Image 보기"></button>
                     <button id="studioToggle" type="button" aria-controls="studioDock" aria-expanded="false" class="ui-icon-btn glyph-icon icon-code" title="셰이더 코드와 버퍼 편집기 (E)" aria-label="셰이더 편집기 열기"></button>
                     <button id="recordStop" type="button" class="record-stop" title="녹화 중지" aria-label="녹화 중지" hidden><span class="record-dot" aria-hidden="true"></span><span id="recordTime">0:00</span></button>
-                    <button id="quickShot" type="button" class="ui-icon-btn" title="스크린샷 저장(PNG) · 고해상도 · 영상은 옆의 ▾" aria-label="스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg></button>
+                    <button id="quickShot" type="button" class="ui-icon-btn" title="스크린샷 저장(PNG) · 고해상도 · 영상은 옆의 캡처 메뉴" aria-label="스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg></button>
                     <button id="captureToggle" type="button" class="ui-icon-btn" title="캡처 메뉴 · 고해상도 PNG · 영상 렌더링 · 녹화" aria-label="캡처 메뉴" aria-controls="captureMenu"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5"/></svg></button>
                     <button id="fullscreenToggle" type="button" class="ui-icon-btn" title="전체화면 (F)" aria-label="전체화면"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>
                     <button id="moreToggle" type="button" class="ui-icon-btn glyph-icon icon-more" title="더보기 · 갤러리 · 가이드 · 타임라인 · HUD · 테마" aria-label="더보기 메뉴" aria-controls="moreMenu"></button>
-                    <!-- 캡처 ▾ 메뉴 -->
+                    <!-- 캡처 메뉴 -->
                     <div id="captureMenu" class="ui-popover ui-menu stage-menu" role="group" aria-label="캡처" hidden>
                         <button id="screenshotButton" type="button" class="ui-menu-item" title="화면을 PNG로 저장" aria-label="PNG 스크린샷 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>스크린샷 저장</span><kbd>PNG</kbd></button>
                         <button id="screenshot2x" type="button" class="ui-menu-item" data-capture="2" title="지금 화면을 두 배 해상도로 다시 그려 PNG로 저장 · 버퍼 패스가 없는 프로젝트만" aria-label="2배 해상도 PNG 저장"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg><span>2배 해상도로 저장</span><kbd>2×</kbd></button>
@@ -310,7 +315,7 @@
                             <button id="studioUndo" type="button" class="ui-icon-btn glyph-icon icon-undo" aria-label="되돌리기" title="코드 편집·버퍼 변경 되돌리기 (Ctrl+Z)" disabled></button>
                             <button id="studioRedo" type="button" class="ui-icon-btn glyph-icon icon-redo" aria-label="다시 실행" title="코드 편집·버퍼 변경 다시 실행 (Ctrl+Y / Ctrl+Shift+Z)" disabled></button>
                             <label class="ui-check studio-live" title="코드를 고치면 0.9초 뒤 자동으로 적용"><input id="studioLive" type="checkbox" checked> 자동</label>
-                            <button id="studioRun" type="button" class="ui-btn--primary studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Alt+Enter)">실행 <span>Alt+↵</span></button>
+                            <button id="studioRun" type="button" class="ui-btn--primary studio-primary glyph-icon icon-play" title="현재 GLSL/채널 설정을 적용 (Alt+Enter)">실행 <span>Alt+Enter</span></button>
                         </div>
                         <span class="ui-sep studio-tool-sep" aria-hidden="true"></span>
                         <button id="studioPause" type="button" class="ui-icon-btn glyph-icon icon-pause" aria-label="일시정지" title="재생/일시정지 · 집중 모드에서는 복귀 후 재생 여부 선택"></button>

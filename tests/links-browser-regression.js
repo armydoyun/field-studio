@@ -148,9 +148,9 @@
     await wait(30);
     source("uGain", "MIDI").click();
     await wait(30);
-    // 입력이 없으면 '연결이 정함'이 아니라 까닭과 '값 그대로'를 보인다 · 연결이 값을 정하는 동안 ↺는 꺼짐
+    // 입력이 없으면 '연결이 정함'이 아니라 까닭과 '값 그대로'를 보인다 · 연결이 값을 정하는 동안 기본값 복원는 꺼짐
     await until(() => row("uGain").querySelector(".link-meter-note").textContent === "MIDI 신호 없음 · 값 그대로", `입력 없음 표시: ${row("uGain").querySelector(".link-meter-note").textContent}`);
-    test(row("uGain").querySelector(".reset-uniform").disabled, "연결된 줄의 ↺(기본값으로)는 꺼짐");
+    test(row("uGain").querySelector(".reset-uniform").disabled, "연결된 줄의 기본값 복원(기본값으로)는 꺼짐");
     test([...editor("uGain").querySelectorAll(".link-end-label")].map(n => n.textContent).join() === "노브 처음(0),노브 끝(127)", "값 범위 양 끝 라벨이 소스에 맞음");
     editor("uGain").querySelector(".link-learn").click();
     await until(() => r.midiStatus().state === "on", "MIDI 켜짐");

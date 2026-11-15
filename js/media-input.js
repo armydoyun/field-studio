@@ -96,7 +96,7 @@ const fileProblem = (kind, file) => {
 
 // ---- 고른 파일 보관(IndexedDB) ----
 // 오디오 · 영상 파일은 종류마다 마지막으로 고른 것 하나를 브라우저에 보관한다. 새로 고침 뒤에도 파일을 다시 고르지 않고
-// 채널 고르기의 '▶ 파일 이름'으로 다시 켤 수 있다(소리가 갑자기 나지 않도록 저절로 켜지는 않는다).
+// 채널 고르기의 보관한 파일 이름으로 다시 켤 수 있다(소리가 갑자기 나지 않도록 저절로 켜지는 않는다).
 const DB_NAME = "shader-studio-media-v1",
   DB_STORE = "files";
 const mediaDB = async (mode, action) => {

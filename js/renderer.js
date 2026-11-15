@@ -416,7 +416,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // Common이 한 패스에만 선언된 Uniform(파라미터 등)을 쓰면 다른 패스에도 그 선언을 넣는 데 쓴다. 둘 중 하나라도 바뀌면
   // 모든 프로그램을 다시 만든다(withCommon).
   const NO_SHARED = Object.freeze({ common: "", uniforms: [] });
-  // Image 패스의 채널 sampler 타입(지금 적용된 것). Image 채널이 2D ↔ 큐브맵으로 바뀌면 Image를 다시 만든다.
+  // Image 패스의 채널 sampler 타입(지금 적용된 것). Image 채널이 2D와 큐브맵 사이에서 바뀌면 Image를 다시 만든다.
   const SAMPLER_2D = PassManager.channelTypes({});
   let imageTypes = SAMPLER_2D;
   const typesOf = channels => PassManager.channelTypes(channels);

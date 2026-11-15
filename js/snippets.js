@@ -1470,7 +1470,7 @@ mat3 rotZ(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0, -s, c, 0
       },
       {
         id: "srgb",
-        title: "sRGB ↔ 선형",
+        title: "sRGB·선형 변환",
         desc: "조명 계산은 선형 공간에서, 출력 직전 sRGB로",
         code: `vec3 srgbToLinear(vec3 c) { return pow(c, vec3(2.2)); }
 vec3 linearToSrgb(vec3 c) { return pow(c, vec3(1.0 / 2.2)); }`,

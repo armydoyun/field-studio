@@ -86,7 +86,7 @@ const meter = (item, link, active = () => true) => {
     gauge = bar(`${item.name} 값(연결이 정함)`),
     value = element("output", "link-meter-value"),
     note = element("span", "link-meter-note", "연결이 정함");
-  node.title = `${describe(link)} — 값은 연결이 프레임마다 정합니다. 연결 버튼(⛓)에서 바꾸거나 끄세요.`;
+  node.title = `${describe(link)} — 값은 연결이 프레임마다 정합니다. 연결 버튼(사슬)에서 바꾸거나 끄세요.`;
   node.append(gauge.node, value, note);
   let idle = null;
   const update = current => {
@@ -471,7 +471,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     }
     paint();
     track.append(fill, a, b);
-    const flip = element("button", "ui-btn--sm link-flip", "⇅ 뒤집기");
+    const flip = element("button", "ui-btn--sm link-flip glyph-icon icon-swap", "뒤집기");
     flip.type = "button";
     flip.setAttribute("aria-pressed", String(inverted));
     flip.title = "소스가 클수록 값이 작아지게(최소 · 최대를 맞바꿈)";

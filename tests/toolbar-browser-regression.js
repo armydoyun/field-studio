@@ -1,5 +1,5 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
-// 뷰포트 툴바: 자주 쓰는 버튼만 남기고 나머지는 ⋯ 더보기 · 캡처 ▾ 메뉴로 옮겼다. 메뉴 동작과 실제 녹화(WebM 내려받기)를 확인한다.
+// 뷰포트 툴바: 자주 쓰는 버튼만 남기고 나머지는 ⋯ 더보기 · 캡처 펼치기 메뉴로 옮겼다. 메뉴 동작과 실제 녹화(WebM 내려받기)를 확인한다.
 (async () => {
   const $ = id => document.getElementById(id), stage = $("stage");
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
@@ -68,7 +68,7 @@
   let probeRecorder;
   try {
     const direct = [...$("stageToolbar").children].filter(n => n.tagName === "BUTTON" && visible(n)).map(n => n.id);
-    test(JSON.stringify(direct) === JSON.stringify(["panelToggle", "previewPause", "studioToggle", "quickShot", "captureToggle", "fullscreenToggle", "moreToggle"]), `툴바에는 자주 쓰는 버튼만(설정 패널 · 재생 · 편집기 · 스크린샷 · 캡처 ▾ · 전체화면 · 더보기): ${direct}`);
+    test(JSON.stringify(direct) === JSON.stringify(["panelToggle", "previewPause", "studioToggle", "quickShot", "captureToggle", "fullscreenToggle", "moreToggle"]), `툴바에는 자주 쓰는 버튼만(설정 패널 · 재생 · 편집기 · 스크린샷 · 캡처 펼치기 · 전체화면 · 더보기): ${direct}`);
     for (const id of ["galleryToggle", "helpToggle", "hudToggle", "previewPopout", "themeToggle"])
       test($("moreMenu").contains($(id)) && !visible($(id)), `${id}는 닫힌 ⋯ 메뉴 안에`);
     test($("captureMenu").contains($("screenshotButton")) && $("captureMenu").contains($("recordButton")), "스크린샷·녹화는 캡처 메뉴 안에");

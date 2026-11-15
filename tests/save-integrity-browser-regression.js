@@ -1,6 +1,6 @@
 // 실제 앱 개발자 콘솔에 붙여 넣어 실행(npm test가 browser 묶음에서 자동 실행).
 // 저장 정확성: 외부 검토에서 재현된 문제들이 다시 생기지 않는지 본다.
-//   1) 이미지를 읽는 동안(저장 도중) 코드를 고치면: 보관함에는 저장 시작 시점 내용 · 저장 뒤에도 '저장 안 됨'(●)
+//   1) 이미지를 읽는 동안(저장 도중) 코드를 고치면: 보관함에는 저장 시작 시점 내용 · 저장 뒤에도 '저장 안 됨'(저장 안 됨)
 //   2) 이미지 샘플링(Filter·Wrap)만 바꿔도 '저장 안 됨'
 //   3) 실행까지 마친 변경도 다른 작업으로 바꾸기 전에 묻는다(저장하고 계속 · 저장하지 않고 계속 · 취소)
 //   4) 다른 탭이 먼저 저장했으면 덮어쓰지 않고 묻는다(revision 비교)
@@ -50,18 +50,18 @@
     const stored = JSON.parse(await store.load(record.id));
     test(!stored.project.image.includes("저장 도중 고친 줄"), "보관함에는 저장을 시작한 순간의 코드가 들어간다");
     test(area.value.includes("저장 도중 고친 줄"), "편집기에는 저장 도중 고친 코드가 남는다");
-    test(await until(marked), "저장 도중 고친 내용은 '저장 안 됨'(●)으로 남는다");
-    test(document.title.includes("● "), `탭 제목에도 ●: ${document.title}`);
+    test(await until(marked), "저장 도중 고친 내용은 '저장 안 됨'(저장 안 됨)으로 남는다");
+    test(document.title.includes("[저장 안 됨] "), `탭 제목에도 저장 안 됨: ${document.title}`);
     test(Number.isInteger(record.revision) && record.revision === 1, "보관함 항목에 revision");
 
     // 2) 이미지 샘플링 변경 감지
     setCode(base);
     test(studio.apply(), "저장한 코드로 되돌려 적용");
-    test(await until(() => !marked()), "저장한 상태와 같으면 ● 없음");
+    test(await until(() => !marked()), "저장한 상태와 같으면 저장 안 됨 없음");
     await renderer.setTextureSampling(textureId, { filter: "nearest", wrapS: "repeat" });
     test(await until(marked), "이미지 Filter·Wrap만 바꿔도 '저장 안 됨'");
     await renderer.setTextureSampling(textureId, { filter: "linear", wrapS: "clamp" });
-    test(await until(() => !marked()), "샘플링을 되돌리면 ● 사라짐");
+    test(await until(() => !marked()), "샘플링을 되돌리면 저장 안 됨 사라짐");
 
     // 3) 실행까지 마친 변경도 교체 전에 묻는다
     setCode(base.replace("void main", "// 실행한 변경\nvoid main"));

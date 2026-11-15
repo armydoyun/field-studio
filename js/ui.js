@@ -1335,7 +1335,7 @@ const mount = (renderer, input, settings) => {
   const playing = new Map(),
     playViews = new Map(),
     playButtons = new Map(),
-    // 행의 ↺(기본값으로 되돌리기) 버튼 상태 갱신. 재생은 commit을 거치지 않으므로 여기로 직접 알린다.
+    // 행의 기본값 복원(기본값으로 되돌리기) 버튼 상태 갱신. 재생은 commit을 거치지 않으므로 여기로 직접 알린다.
     resetSyncs = new Map();
   let playFrame = 0;
   const playStep = now => {
@@ -1856,7 +1856,7 @@ const mount = (renderer, input, settings) => {
     if ($("studioInputsToggle")?.getAttribute("aria-expanded") !== "true") $("studioInputsToggle")?.click();
     $("studioInputs")?.querySelector("button")?.focus();
   };
-  // ---- 키프레임 정밀 입력: 키프레임 연결 줄의 내비게이터(◀ ◆ ▶ · 재생 위치) · 자동 키 ----
+  // ---- 키프레임 정밀 입력: 키프레임 연결 줄의 내비게이터(이전 키·키 설정·다음 키 · 재생 위치) · 자동 키 ----
   // 키프레임 연결 줄에서 값을 바꾸면 재생선 위치에 키를 찍는다(그 시간에 키가 있으면 값만 바꾼다).
   // 끄는 동안은 렌더러에만 적용하고, 놓거나(change · pointerup · keyup) 잠시 멈추면 저장한다 — 끌기가 끊기지 않게.
   const KEY_EPSILON = 5e-4;
@@ -1907,14 +1907,13 @@ const mount = (renderer, input, settings) => {
       time = element("input"),
       hint = element("span");
     nav.className = "key-nav";
-    for (const [button, label, text] of [
-      [prev, "이전 키로", "◀"],
-      [key, "이 시간에 키", "◆"],
-      [next, "다음 키로", "▶"],
+    for (const [button, label, icon] of [
+      [prev, "이전 키로", "previous-key"],
+      [key, "이 시간에 키", "keyframe"],
+      [next, "다음 키로", "next-key"],
     ]) {
       button.type = "button";
-      button.className = "ui-btn--sm key-nav-button";
-      button.textContent = text;
+      button.className = `ui-btn--sm key-nav-button glyph-icon icon-${icon}`;
       button.setAttribute("aria-label", `${item.name} ${label}`);
     }
     key.classList.add("key-nav-key");
@@ -1932,7 +1931,7 @@ const mount = (renderer, input, settings) => {
     const current = () => linkOf(item.name) || link,
       keys = () => current().keys;
     const at = t => keys().findIndex(([k]) => Math.abs(k - t) < KEY_EPSILON);
-    // ◀ ▶는 이 바퀴 안에서 움직인다(반복이 있으면 바퀴 시작 + 키 시간)
+    // 이전 키 재생는 이 바퀴 안에서 움직인다(반복이 있으면 바퀴 시작 + 키 시간)
     prev.addEventListener("click", () => {
       const { local, base } = loopTime(current()),
         before = keys().filter(([k]) => k < local - KEY_EPSILON);
@@ -1959,12 +1958,12 @@ const mount = (renderer, input, settings) => {
     time.addEventListener("keydown", event => {
       if (event.key === "Enter") time.dispatchEvent(new Event("change"));
     });
-    // 시간 기준 표시: '한 번'(키 시간 = 재생 시간) · '↻ N초'(재생 시간을 N초로 잘라 되풀이). 반복이면 바퀴 안 시간을 따로 보인다.
+    // 시간 기준 표시: '한 번'(키 시간 = 재생 시간) · '반복 N초'(재생 시간을 N초로 잘라 되풀이). 반복이면 바퀴 안 시간을 따로 보인다.
     const mode = element("span"),
       inner = element("span");
     mode.className = "ui-tag key-nav-mode";
     inner.className = "key-nav-local";
-    // 한 줄: [한 번 | ↻ N초] ◀ ◆ ▶ [재생 위치] 초 — 둘째 줄(설명): (바퀴 안 X초 ·) 값을 바꾸면 … 키
+    // 한 줄: [한 번 | 반복 N초] 이전 키·키 설정·다음 키 [재생 위치] 초 — 둘째 줄(설명): (바퀴 안 X초 ·) 값을 바꾸면 … 키
     const caption = element("div");
     caption.className = "key-nav-caption";
     caption.append(mode, inner, hint);
@@ -1973,7 +1972,7 @@ const mount = (renderer, input, settings) => {
     timeLabel.textContent = "재생";
     timeLabel.title = "재생 위치(uTime, 초)";
     timeLabel.append(time);
-    // 첫 줄: ◀ ◆ ▶ · 재생 [초] — 둘째 줄: [한 번 | ↻ N초] (바퀴 안 X초) · 값을 바꾸면 … 키
+    // 첫 줄: 이전 키·키 설정·다음 키 · 재생 [초] — 둘째 줄: [한 번 | 반복 N초] (바퀴 안 X초) · 값을 바꾸면 … 키
     const group = element("span");
     group.className = "ui-btn-group";
     group.append(prev, key, next);
@@ -1985,6 +1984,8 @@ const mount = (renderer, input, settings) => {
         here = at(t) >= 0,
         list = keys();
       key.setAttribute("aria-pressed", String(here));
+      key.classList.toggle("icon-keyframe", !here);
+      key.classList.toggle("icon-keyframe-filled", here);
       key.title = here ? "이 시간의 키 지우기" : "이 시간에 지금 값으로 키 찍기";
       prev.disabled = !list.some(([k]) => k < t - KEY_EPSILON);
       next.disabled = !list.some(([k]) => k > t + KEY_EPSILON);
@@ -1995,7 +1996,9 @@ const mount = (renderer, input, settings) => {
       if (loop !== shownLoop) {
         // 글자는 반복 설정이 바뀔 때만 고친다(매 프레임 바뀌는 글자 없음)
         shownLoop = loop;
-        mode.textContent = loop ? `↻ ${Number(loop.toFixed(2))}초` : "한 번";
+        mode.textContent = loop ? `${Number(loop.toFixed(2))}초` : "한 번";
+        mode.classList.toggle("glyph-icon", !!loop);
+        mode.classList.toggle("icon-loop", !!loop);
         mode.title = loop
           ? `재생 시간을 ${Number(loop.toFixed(2))}초 길이로 잘라 키를 되풀이합니다 — 키의 시간은 바퀴 안의 시간`
           : "키의 시간 = 재생 시간(uTime). 마지막 키 뒤로는 그 값을 유지합니다";
@@ -2027,13 +2030,13 @@ const mount = (renderer, input, settings) => {
   // 다시 그려도 편집 칸 안의 초점은 같은 자리(같은 파라미터의 n번째 조작)로 돌려 둔다.
   listen(document, "shader-links-changed", () => {
     const active = document.activeElement,
-      // 연결 시트 안이면 시트 기준, 아니면 파라미터 줄(◆ · 슬라이더 …) 기준으로 같은 자리를 찾는다
+      // 연결 시트 안이면 시트 기준, 아니면 파라미터 줄(키 설정 · 슬라이더 …) 기준으로 같은 자리를 찾는다
       box = active instanceof Element ? active.closest(".link-editor, .uniform-row") : null,
       selector = box?.classList.contains("link-editor") ? ".link-editor" : ".uniform-row",
       controls = node => [...node.querySelectorAll("select,input,button")],
       index = box ? controls(box).indexOf(active) : -1,
       name = box?.dataset.name;
-    // 화면 고정: 다시 그리면 줄 위쪽에 칸이 생기거나 사라질 수 있다(키프레임을 고르면 ◀ ◆ ▶ 줄이 생김).
+    // 화면 고정: 다시 그리면 줄 위쪽에 칸이 생기거나 사라질 수 있다(키프레임을 고르면 이전 키·키 설정·다음 키 줄이 생김).
     // 누른 칸(없으면 열린 연결 시트)이 화면에서 같은 자리에 머물도록 다시 그린 뒤 스크롤을 그만큼 옮긴다.
     const scroller = $("panel")?.querySelector?.(".panel-scroll"),
       sheetName = document.querySelector(".link-editor")?.dataset?.name,
@@ -2059,7 +2062,8 @@ const mount = (renderer, input, settings) => {
     keepAnchor(target);
   });
   // @if: 조건이 거짓인 파라미터 이름(검색 중에는 숨기지 않는다). 값이 바뀌어 이 목록이 달라지면 다시 그린다.
-  let hiddenKey = "";
+  let hiddenKey = "",
+    hiddenDisclosureKey = "";
   const conditionHidden = (items, defaults) => {
     const values = new Map(items.map(item => [item.name, item.value]));
     return items
@@ -2179,14 +2183,15 @@ const mount = (renderer, input, settings) => {
           if (event.target instanceof HTMLInputElement && event.target.type === "range") restore();
         });
       }
-      // 덧붙이는 버튼: 🎲 무작위(@seed) · ▶ 재생(@anim).
+      // 덧붙이는 버튼: 무작위(@seed) · 재생(@anim).
       const extras = [];
       const lock = element("button");
-      lock.className = "ui-icon-btn ui-icon-btn--xs lock-uniform";
+      lock.className = "ui-icon-btn ui-icon-btn--xs lock-uniform glyph-icon";
       lock.type = "button";
       const syncLock = () => {
         const locked = lockedParameters.has(item.name);
-        lock.textContent = locked ? "🔒" : "🔓";
+        lock.classList.toggle("icon-lock", locked);
+        lock.classList.toggle("icon-unlock", !locked);
         lock.setAttribute("aria-pressed", String(locked));
         lock.setAttribute("aria-label", `${item.name} 무작위 변경 잠금`);
         lock.title = locked
@@ -2200,9 +2205,8 @@ const mount = (renderer, input, settings) => {
         syncLock();
       });
       const write = element("button");
-      write.className = "ui-icon-btn ui-icon-btn--xs write-default-uniform";
+      write.className = "ui-icon-btn ui-icon-btn--xs write-default-uniform glyph-icon icon-down";
       write.type = "button";
-      write.textContent = "↓";
       write.title = "현재 값을 코드의 @default에 반영 · Ctrl+Z로 되돌리기";
       write.setAttribute("aria-label", `${item.name} 현재 값을 코드에 반영`);
       write.addEventListener("click", () => writeDefaults([item.name]));
@@ -2351,7 +2355,7 @@ const mount = (renderer, input, settings) => {
               );
         watchLink(item.name, value => {
           nav.update();
-          // 값 칸(숫자 · 슬라이더 · 위젯)을 만지는 중일 때만 멈춘다 — 줄의 다른 곳(연결 시트 · ◆)에 초점이 있어도 값은 따라간다
+          // 값 칸(숫자 · 슬라이더 · 위젯)을 만지는 중일 때만 멈춘다 — 줄의 다른 곳(연결 시트 · 키 설정)에 초점이 있어도 값은 따라간다
           const active = document.activeElement,
             editing =
               row.contains(active) &&
@@ -2807,7 +2811,7 @@ const mount = (renderer, input, settings) => {
         const editor = linkEditor(item),
           held = heldNav.get(row);
         if (held) editor.insertBefore(held, editor.children[1] ?? null);
-        // 시트는 이름 바로 아래(조작 칸 위)에 연다: 방식을 바꾸면 조작 칸(다이얼 · 슬라이더 ↔ 미터)이 달라지는데,
+        // 시트는 이름 바로 아래(조작 칸 위)에 연다: 방식을 바꾸면 조작 칸(다이얼 · 슬라이더 ~ 미터)이 달라지는데,
         // 그 변화가 누른 버튼보다 아래에서만 일어나 버튼이 화면에서 튀지 않는다.
         top.after(editor);
       }
@@ -2852,11 +2856,30 @@ const mount = (renderer, input, settings) => {
     // 고를 파라미터가 없으면 검색 칸은 쓸모가 없다(검색 중이면 지울 수 있게 남긴다)
     const searchWrap = $("uniformSearch")?.closest?.(".uniform-search-wrap");
     if (searchWrap) searchWrap.hidden = !items.length && !search;
-    $("uniformResults").textContent = search
-      ? `${items.length}개 중 ${count}개 표시`
-      : hidden.size
-        ? `조건(@if)으로 숨긴 파라미터 ${hidden.size}개: ${[...hidden].join(", ")}`
-        : "";
+    $("uniformResults").textContent = search ? `${items.length}개 중 ${count}개 표시` : "";
+    // Keep the default panel compact. Details are bounded and names double as search shortcuts.
+    const hiddenDetails = $("uniformHidden");
+    hiddenDetails.hidden = !hidden.size;
+    if (!hidden.size || hiddenDisclosureKey !== hiddenKey) hiddenDetails.open = false;
+    if (hiddenDisclosureKey !== hiddenKey) {
+      hiddenDisclosureKey = hiddenKey;
+      $("uniformHiddenCount").textContent = `${hidden.size}개`;
+      $("uniformHiddenList").replaceChildren(
+        ...[...hidden].map(name => {
+          const button = element("button");
+          button.type = "button";
+          button.className = "ui-chip ui-chip--pill uniform-hidden-name";
+          button.textContent = name;
+          button.title = `${name} 검색해서 보기`;
+          button.addEventListener("click", () => {
+            $("uniformSearch").value = name;
+            renderUniforms();
+            $("uniformSearch").focus();
+          });
+          return button;
+        })
+      );
+    }
     if (!count) {
       const hint = element("div");
       hint.className = "ui-empty uniform-empty";
@@ -3336,7 +3359,7 @@ const mount = (renderer, input, settings) => {
   listen($("panelToggle"), "click", togglePanel);
   listen($("hudToggle"), "click", toggleHud);
   listen($("fullscreenToggle"), "click", toggleFullscreen);
-  // ---- 뷰포트 툴바 메뉴: 캡처 ▾ · ⋯ 더보기 (stage-menu.js) ----
+  // ---- 뷰포트 툴바 메뉴: 캡처 펼치기 · ⋯ 더보기 (stage-menu.js) ----
   const captureMenu = StageMenu.create({ toggle: $("captureToggle"), menu: $("captureMenu"), signal }),
     moreMenu = StageMenu.create({ toggle: $("moreToggle"), menu: $("moreMenu"), signal });
   // 메뉴 안으로 옮긴 버튼(패널·가이드)은 닫힌 메뉴 속에 있어 초점을 받을 수 없다. 그럴 때는 메뉴 버튼으로 돌려준다.
@@ -3399,7 +3422,7 @@ const mount = (renderer, input, settings) => {
     recorder.stop();
     $("captureToggle").focus();
   });
-  // 도구 막대의 카메라 = 한 번에 스크린샷(PNG). 고해상도 · 영상 · 녹화는 옆의 ▾ 메뉴.
+  // 도구 막대의 카메라 = 한 번에 스크린샷(PNG). 고해상도 · 영상 · 녹화는 옆의 캡처 메뉴 메뉴.
   if ($("quickShot")) listen($("quickShot"), "click", () => $("screenshotButton").click());
   listen($("screenshotButton"), "click", async () => {
     const button = $("screenshotButton");

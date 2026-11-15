@@ -65,7 +65,7 @@
 
     // 4) @if: uMode == 보임일 때만 uCols, uMode가 0일 때만 uOn
     test(!row("uCols") && !!row("uOn"), "처음(uMode = 숨김): uCols 숨김 · uOn 보임");
-    test($("uniformResults").textContent.includes("uCols"), `숨긴 파라미터 안내: ${$("uniformResults").textContent}`);
+    test(!$("uniformHidden").hidden && !$("uniformHidden").open && $("uniformHiddenList").textContent.includes("uCols"), "숨긴 파라미터 안내는 기본적으로 접힌 목록");
     const choice = [...row("uMode").querySelectorAll("button,input")].find(node => (node.textContent || node.value || "").includes("보임") || node.getAttribute("aria-label")?.includes("보임"));
     test(!!choice, "@enum '보임' 선택지");
     choice.click();

@@ -24,8 +24,8 @@
 .uniform-type { color:var(--faint);font:var(--text-2xs)/1.5 var(--mono); }
 /* 설명은 버튼과 폭을 나누지 않고 머리줄 전체 너비를 쓴다. */
 .uniform-desc { flex:1 1 100%;min-width:0;color:var(--muted);font:var(--text-xs)/1.4 var(--sans);overflow-wrap:anywhere; }
-/* 줄 아이콘(ui-icon-btn--xs): 🎲 ▶ 연결 ↺ ×. 삭제(×)는 되돌리기(↺)와 떨어뜨리고, 포인터를 올린 줄에서만 보인다
-   (자리는 그대로 — 줄이 흔들리지 않게). 되돌릴 것이 없으면 ↺도 감춘다. 터치 기기에서는 늘 보인다. */
+/* 줄 아이콘(ui-icon-btn--xs): 무작위 재생 연결 기본값 복원 ×. 삭제(×)는 되돌리기(기본값 복원)와 떨어뜨리고, 포인터를 올린 줄에서만 보인다
+   (자리는 그대로 — 줄이 흔들리지 않게). 되돌릴 것이 없으면 기본값 복원도 감춘다. 터치 기기에서는 늘 보인다. */
 .uniform-top .ui-icon-btn { color:var(--faint); }
 .uniform-top .ui-icon-btn[aria-pressed="true"] { background:transparent;color:var(--accent-strong); }
 .reset-uniform { margin-left:auto; }
@@ -153,3 +153,8 @@
 .uniform-array-item>.value-edit-open { justify-self:end; }
 
 .parameter-actions { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+
+.uniform-hidden-params { min-width:0;margin:0 0 12px; }
+.uniform-hidden-help { margin:4px 0 8px; }
+.uniform-hidden-list { display:flex;flex-wrap:wrap;gap:6px;max-height:144px;overflow-y:auto;overscroll-behavior:contain;padding:4px;margin:0 -4px; }
+.uniform-hidden-name { min-width:0;max-width:100%;font-family:var(--mono);white-space:normal;overflow-wrap:anywhere;text-align:left; }

@@ -38,7 +38,7 @@ uniform float uAmbient;   // 하늘빛 세기 · @range 0 2 @step 0.01 @default 
 uniform vec3 uLightColor; // 빛 색 · @color @default 1 1 1 @group 빛 @if uView == 결과 || uView >= 4
 uniform float uSwing;     // 빛이 좌우로 흔들리는 폭(마우스를 쓰지 않을 때) · @range 0 1.5 @step 0.01 @default 0.6 @group 빛
 uniform bool uGrid;       // 거칠기 × 금속성 격자로 보기 · @default true @group 보기
-uniform int uView;        // 보기(▶: 항 하나씩 차례로) · @enum 결과 D G F 난반사만 정반사만 @default 0 @anim 2 @group 보기
+uniform int uView;        // 보기(재생: 항 하나씩 차례로) · @enum 결과 D G F 난반사만 정반사만 @default 0 @anim 2 @group 보기
 
 const float PI = 3.14159265;
 
@@ -153,7 +153,7 @@ uniform float uWind;       // 바람 · @range 0 2 @step 0.01 @default 0.4 @grou
 uniform vec3 uSunCol;      // 햇빛 · @color @default 1 0.92 0.8 @group 빛 @if uView == 결과
 uniform vec3 uSkyCol;      // 하늘빛(그늘을 채움) · @color @default 0.45 0.6 0.85 @group 빛 @if uView == 결과
 uniform vec3 uSunDir;      // 해 방향 · @dir hemi @default 0.6 0.35 0.7 @group 빛 @if uView == 결과 || uView == 받은_해빛
-uniform int uView;         // 보기(▶: 차례로) · @enum 결과 밀도 투과율 받은_해빛 @default 0 @anim 3 @group 보기
+uniform int uView;         // 보기(재생: 차례로) · @enum 결과 밀도 투과율 받은_해빛 @default 0 @anim 3 @group 보기
 
 const float BOTTOM = 1.5, TOP = 4.0;                           // 구름층 높이
 #define SUN uSunDir                                             // 해 방향(@dir라 늘 길이 1)
@@ -385,7 +385,7 @@ uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
-uniform int uView;            // 보기(속도: 방향 = 색상, 압력: 빨강 +, 파랑 -, ▶: 차례로) · @enum 물감 속도 압력 발산 @default 0 @anim 3 @group 보기
+uniform int uView;            // 보기(속도: 방향 = 색상, 압력: 빨강 +, 파랑 -, 재생: 차례로) · @enum 물감 속도 압력 발산 @default 0 @anim 3 @group 보기
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / uResolution;
     vec3 col;
