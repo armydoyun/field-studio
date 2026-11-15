@@ -114,7 +114,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // Comparison changes GPU inputs only. Persistence, presets and history keep the editable values.
   let uniformPreview = null;
   // 마지막 성공 프로그램이 지금 파라미터 구성과 어긋나 있는지(파라미터를 지웠는데 코드가 아직 그 이름을 써 컴파일 실패)
-  let programsStale = false;
   // 마우스는 0~1 상대 좌표로 보관하고 Uniform 전송 시 버퍼 픽셀 좌표로 환산한다.
   // uMouse를 vec4로 선언하면 zw에 클릭 위치를 전달한다: z>0 버튼 누름 중, w>0 누른 직후 첫 프레임.
   const mouse = [-1, -1],
@@ -140,11 +139,15 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   let cpuMs = 0,
     frameMs = 0;
   const gpuTimer = Diagnostics.createGpuTimer(gl);
-  const createShader = (type, source) => {
+  const startShader = (type, source) => {
     const shader = gl.createShader(type);
     if (!shader) throw new Error("Shader 생성 실패");
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
+    return shader;
+  };
+  // 컴파일 결과를 확인한다. 실패하면 셰이더를 지우고 줄 번호를 붙인 원문과 함께 던진다.
+  const checkShader = (shader, type, source) => {
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       const error = gl.getShaderInfoLog(shader),
         typeName = type === gl.VERTEX_SHADER ? "Vertex" : "Fragment";
@@ -155,31 +158,73 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       gl.deleteShader(shader);
       throw new Error(`${typeName} Shader 컴파일 실패:\n${error || "로그 없음"}\n\n${numbered}`);
     }
+  };
+  const createShader = (type, source) => {
+    const shader = startShader(type, source);
+    checkShader(shader, type, source);
     return shader;
   };
-  // Vertex/Fragment를 연결한 GPU 프로그램을 새로 만든다.
-  const createProgram = fragment => {
-    let vs = null,
-      fs = null,
-      result = null;
+  // GPU 프로그램 만들기는 두 단계: start는 컴파일 · 링크를 GPU에 맡기기만 하고(바로 돌아온다), finish가 결과를 확인한다.
+  // 결과를 묻는 순간(getShaderParameter · getProgramParameter) 메인 스레드는 컴파일이 끝날 때까지 멈춘다 — 무거운 셰이더는 몇 초.
+  // 그래서 미리 컴파일(prepareProject)은 start만 해 두고, GPU가 끝났다고 알릴 때(KHR_parallel_shader_compile)까지
+  // 프레임마다 기다렸다가 적용한다. 적용이 같은 최종 소스를 만들면 warm에서 꺼내 쓰므로 다시 컴파일하지 않는다.
+  const startProgram = fragment => {
+    const entry = { program: null, vs: null, fs: null, fragment, done: false };
     try {
-      vs = createShader(gl.VERTEX_SHADER, vertexSource);
-      fs = createShader(gl.FRAGMENT_SHADER, fragment);
-      result = gl.createProgram();
-      if (!result) throw new Error("Program 생성 실패");
-      gl.attachShader(result, vs);
-      gl.attachShader(result, fs);
-      gl.linkProgram(result);
-      if (!gl.getProgramParameter(result, gl.LINK_STATUS))
-        throw new Error(gl.getProgramInfoLog(result) || "Program 링크 실패");
-      return result;
+      entry.vs = startShader(gl.VERTEX_SHADER, vertexSource);
+      entry.fs = startShader(gl.FRAGMENT_SHADER, fragment);
+      entry.program = gl.createProgram();
+      if (!entry.program) throw new Error("Program 생성 실패");
+      gl.attachShader(entry.program, entry.vs);
+      gl.attachShader(entry.program, entry.fs);
+      gl.linkProgram(entry.program);
+      return entry;
     } catch (error) {
-      if (result) gl.deleteProgram(result);
+      dropEntry(entry);
       throw error;
-    } finally {
-      if (vs) gl.deleteShader(vs);
-      if (fs) gl.deleteShader(fs);
     }
+  };
+  const dropEntry = entry => {
+    if (!lost) {
+      if (entry.program) gl.deleteProgram(entry.program);
+      if (entry.vs) gl.deleteShader(entry.vs);
+      if (entry.fs) gl.deleteShader(entry.fs);
+    }
+    entry.program = entry.vs = entry.fs = null;
+  };
+  const finishProgram = entry => {
+    if (entry.done) return entry.program;
+    try {
+      checkShader(entry.vs, gl.VERTEX_SHADER, vertexSource);
+      checkShader(entry.fs, gl.FRAGMENT_SHADER, entry.fragment);
+      if (!gl.getProgramParameter(entry.program, gl.LINK_STATUS))
+        throw new Error(gl.getProgramInfoLog(entry.program) || "Program 링크 실패");
+    } catch (error) {
+      dropEntry(entry);
+      throw error;
+    }
+    gl.deleteShader(entry.vs);
+    gl.deleteShader(entry.fs);
+    entry.vs = entry.fs = null;
+    entry.done = true;
+    return entry.program;
+  };
+  // 컴파일이 끝났는지 멈추지 않고 물을 수 있는 확장. 없으면(소프트웨어 렌더링 등) 미리 컴파일하지 않고 지금처럼 적용한다.
+  let parallel = gl.getExtension("KHR_parallel_shader_compile");
+  // 최종 fragment 소스 → 미리 시작한(또는 확인을 마친) 프로그램. 적용이 꺼내 쓰고, 남은 것은 dropWarm이 지운다.
+  const warm = new Map();
+  const dropWarm = () => {
+    for (const entry of warm.values()) dropEntry(entry);
+    warm.clear();
+  };
+  // Vertex/Fragment를 연결한 GPU 프로그램을 새로 만든다(미리 컴파일한 것이 있으면 그것을 쓴다).
+  // park: 확인을 마친 프로그램을 warm에도 남겨 다음 같은 소스 요청이 다시 쓰게 한다(Common 바꿀 때 시험 컴파일 → 실제 적용).
+  const createProgram = (fragment, { park = false } = {}) => {
+    const entry = warm.get(fragment) || startProgram(fragment);
+    warm.delete(fragment);
+    const program = finishProgram(entry);
+    if (park) warm.set(fragment, entry);
+    return program;
   };
   const textureInput = TextureInput.createTextureInput(gl);
   // 키보드 입력 텍스처(쉐이더토이 호환 256×3). 키를 넘길지는 input.js가 정하고 setKey로 알려 준다.
@@ -437,18 +482,16 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const sameShared = (a, b) => a.common === b.common && JSON.stringify(a.uniforms) === JSON.stringify(b.uniforms);
   // channels: 이 패스의 채널 sampler 타입 4개(PassManager.channelTypes) — 선언하지 않은 iChannelN을 그 타입으로 넣는다.
-  const buildFragment = (source, context = shared, channels = SAMPLER_2D) => {
-    if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
-    // 파라미터(사용자 Uniform) 선언은 대신 넣지 않는다: 코드가 선언해야 그 이름을 쓸 수 있다('파라미터 추가'는 선언 줄을 코드에 쓴다).
-    // 여기서는 코드가 선언한 파라미터의 타입이 등록 타입과 같은지만 확인한다.
-    const declarations = [],
-      code = Prepare.blankComments(context.common + "\n" + source);
+  // 파라미터(사용자 Uniform) 선언은 대신 넣지 않는다: 코드가 선언해야 그 이름을 쓸 수 있다('파라미터 추가'는 선언 줄을 코드에 쓴다).
+  // 그래서 컴파일 결과는 어떤 파라미터가 등록돼 있는지와 무관하다. 확인할 것은 코드가 선언한 타입이 등록 타입과 같은지뿐이다.
+  const checkDeclaredTypes = (source, context = shared, users = userUniforms) => {
+    const code = Prepare.blankComments(context.common + "\n" + source);
     // 배열: uniform float uW[4]; · uniform float[4] uW; 둘 다 타입 "float[4]"
     const uniforms = [
       ...code.matchAll(/\buniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)(\s*\[\s*\d+\s*\])?\s+([^;{}]+);/g),
     ];
     const sizeOf = text => (text ? /\d+/.exec(text)[0] : "");
-    for (const [name, item] of userUniforms) {
+    for (const [name, item] of users) {
       const match = uniforms.find(m => m[3].split(",").some(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name));
       if (match) {
         const part = match[3].split(",").find(part => part.trim().match(/^[A-Za-z_]\w*/)?.[0] === name),
@@ -458,16 +501,25 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           throw new Error(`${name}: GLSL 선언(${declared})과 등록 타입(${item.type})이 다릅니다.`);
       }
     }
-    return Prepare.prepareFragment(source, declarations, {
+  };
+  // 지금 화면의 모든 코드(Image · 버퍼 패스)에 대해 위 검사를 한다 — 파라미터를 등록 · 해제할 때 다시 컴파일하는 대신.
+  const checkAllDeclaredTypes = users => {
+    checkDeclaredTypes(fragmentSource, shared, users);
+    for (const pass of passManager.getSpecs()) checkDeclaredTypes(pass.fragment, shared, users);
+  };
+  const buildFragment = (source, context = shared, channels = SAMPLER_2D) => {
+    if (typeof source !== "string") throw new TypeError("Fragment Shader는 문자열이어야 합니다.");
+    checkDeclaredTypes(source, context);
+    return Prepare.prepareFragment(source, [], {
       common: context.common,
       uniforms: context.uniforms,
       channels,
     });
   };
-  const compileFragment = (source, context = shared, channels = SAMPLER_2D) => {
+  const compileFragment = (source, context = shared, channels = SAMPLER_2D, options) => {
     const compiled = buildFragment(source, context, channels);
     try {
-      return createProgram(compiled.source);
+      return createProgram(compiled.source, options);
     } catch (error) {
       if (compiled.injected && error.message?.startsWith("Fragment Shader 컴파일 실패:"))
         error.glslInjected = compiled.injected;
@@ -617,7 +669,6 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     program = next;
     uniforms = nextUniforms;
     fragmentSource = source;
-    programsStale = false;
     imageTypes = types;
     uniformPreview = null;
     if (previous) gl.deleteProgram(previous);
@@ -1179,6 +1230,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       passManager.restoreTargets({ discard: true });
     }
     copyProgram = null; // 잃은 컨텍스트의 객체라 다시 만든다
+    warm.clear(); // 미리 컴파일한 것도 잃은 컨텍스트의 객체 — 참조만 버린다
+    parallel = null;
     cancelFrame();
     captureQueue.splice(0).forEach(({ reject }) => reject(new Error("WebGL 컨텍스트가 손실되었습니다.")));
     capturePaused = false;
@@ -1195,6 +1248,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const onContextRestored = () => {
     if (disposed) return;
     lost = false;
+    parallel = gl.getExtension("KHR_parallel_shader_compile");
     try {
       gpuTimer.restore();
       textureInput.restore();
@@ -1231,6 +1285,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     canvas.removeEventListener("webglcontextlost", onContextLost);
     canvas.removeEventListener("webglcontextrestored", onContextRestored);
     document.removeEventListener("visibilitychange", onVisibilityChange);
+    dropWarm();
     if (!lost) {
       passManager.dispose();
       textureInput.dispose();
@@ -1441,13 +1496,10 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     if (userUniforms.size >= 64) throw new Error("사용자 Uniform은 최대 64개입니다.");
     const entry = normalizeEntry(name, type, value, options);
     if (entry.type === "sampler2D") checkRampCount([...userUniforms.values(), entry]);
+    // 등록만으로는 셰이더가 바뀌지 않으므로 다시 컴파일하지 않는다(무거운 셰이더는 몇 초씩 멈췄다). 위치는 그릴 때 이름으로 찾는다.
+    checkAllDeclaredTypes(new Map([[name, entry]]));
     userUniforms.set(name, entry);
-    try {
-      replacePrograms(fragmentSource, passManager.refreshPrograms);
-    } catch (error) {
-      userUniforms.delete(name);
-      throw error;
-    }
+    scheduleFrame();
     return true;
   };
   const setUniform = (name, value) => {
@@ -1463,21 +1515,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     writeData(item);
     return true;
   };
-  // keepOnError: 다시 컴파일이 실패해도(코드가 선언 없이 그 이름을 쓰던 경우) 지운 채로 두고 오류를 던진다.
-  // 화면은 마지막 성공 프로그램을 계속 그리고, 프로그램이 지금 파라미터 구성과 어긋났다고 표시해(programsStale)
-  // 다음 적용 때 코드가 같아도 모든 패스를 다시 컴파일한다 — 그래야 코드를 고치기 전에는 오류가 남는다.
-  const removeUniform = (name, { keepOnError = false } = {}) => {
+  // 등록 해제도 셰이더를 바꾸지 않으므로 다시 컴파일하지 않는다. 코드가 그 이름을 아직 쓰면 다음 적용(코드 실행)에서
+  // 컴파일러가 선언 없는 이름으로 알린다(코드가 선언의 주인). 두 번째 인자는 예전 호출과의 호환을 위해 받기만 한다.
+  const removeUniform = name => {
     if (disposed || lost) throw new Error("현재 Uniform을 제거할 수 없습니다.");
-    const item = userUniforms.get(name);
-    if (!item) return false;
+    if (!userUniforms.has(name)) return false;
     userUniforms.delete(name);
-    try {
-      replacePrograms(fragmentSource, passManager.refreshPrograms);
-    } catch (error) {
-      if (keepOnError) programsStale = true;
-      else userUniforms.set(name, item);
-      throw error;
-    }
+    pruneRamps();
+    scheduleFrame();
     return true;
   };
   const getUserUniforms = () =>
@@ -1532,16 +1577,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   };
   const setUserUniforms = items => {
     if (disposed || lost) throw new Error("현재 Uniform을 교체할 수 없습니다.");
-    const next = prepareUsers(items),
-      old = new Map(userUniforms);
-    try {
-      swapUsers(next);
-      replacePrograms(fragmentSource, passManager.refreshPrograms);
-      return true;
-    } catch (error) {
-      swapUsers(old);
-      throw error;
-    }
+    const next = prepareUsers(items);
+    // 등록 구성은 셰이더를 바꾸지 않으므로 다시 컴파일하지 않는다(값 묶음 · 프리셋 · 어노테이션 동기화가 자주 부른다).
+    checkAllDeclaredTypes(next);
+    swapUsers(next);
+    pruneRamps();
+    scheduleFrame();
+    return true;
   };
   const validatePortable = (scene, items) => {
     if (disposed || lost) throw new Error("Pack을 적용할 수 없는 Renderer 상태입니다.");
@@ -1583,6 +1625,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       swapUsers(old);
       shared = previousShared;
       throw error;
+    } finally {
+      dropWarm();
     }
   };
   // 공유 문맥(Common · 프로젝트 Uniform)이 바뀌면 모든 패스 소스를 새 문맥으로 먼저 컴파일해 보고(실패한 패스 이름을 붙여
@@ -1594,14 +1638,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       ["Image", scene.image, scene.imageChannels],
       ...scene.passes.map(p => [p.name, p.fragment, p.channels]),
     ]) {
-      let candidate;
       try {
-        candidate = compileFragment(source, context, typesOf(channels));
+        // 시험 컴파일한 프로그램은 버리지 않고 warm에 남겨, 아래 실제 적용이 그대로 쓴다(Common을 바꿀 때 두 번 컴파일하지 않게).
+        compileFragment(source, context, typesOf(channels), { park: true });
       } catch (error) {
         error.passName ??= name;
         throw error;
       }
-      gl.deleteProgram(candidate);
     }
     const previous = shared;
     shared = context;
@@ -1615,9 +1658,69 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const applyProject = scene => {
     if (disposed || lost) throw new Error("현재 프로젝트를 적용할 수 없습니다.");
     assertOnline();
+    try {
+      return applyScene(scene);
+    } finally {
+      dropWarm(); // 쓰지 않은 미리 컴파일(그새 코드가 또 바뀌었거나 실패) 정리
+    }
+  };
+  // 미리 컴파일: 다음 applyProject(scene)가 다시 만들 프로그램만 골라 컴파일 · 링크를 GPU에 맡기고,
+  // 모두 끝나면 풀리는 Promise를 돌려준다. 그동안 메인 스레드는 멈추지 않는다(입력 · 애니메이션이 계속된다).
+  // 확장이 없거나 다시 만들 것이 없으면 null — 부르는 쪽은 그때 바로 적용한다(이전과 같은 동작).
+  // 컴파일 오류는 여기서 알리지 않는다. 적용이 같은 프로그램을 꺼내 확인하면서 평소와 같은 오류를 던진다.
+  const prepareProject = scene => {
+    if (!parallel || disposed || lost || offline || !scene || typeof scene.image !== "string") return null;
+    dropWarm();
+    let context;
+    try {
+      context = sharedOf(scene);
+    } catch (_) {
+      return null;
+    }
+    const rebuild = !sameShared(context, shared),
+      current = new Map(passManager.getSpecs().map(spec => [spec.name, spec])),
+      jobs = [];
+    const types = typesOf(scene.imageChannels);
+    if (rebuild || scene.image !== fragmentSource || types.join() !== imageTypes.join())
+      jobs.push([scene.image, types]);
+    for (const pass of Array.isArray(scene.passes) ? scene.passes : []) {
+      const before = current.get(pass?.name),
+        passTypes = typesOf(pass?.channels);
+      if (
+        rebuild ||
+        !before ||
+        before.fragment !== pass.fragment ||
+        typesOf(before.channels).join() !== passTypes.join()
+      )
+        jobs.push([pass?.fragment, passTypes]);
+    }
+    for (const [source, channelTypes] of jobs) {
+      try {
+        const final = buildFragment(source, context, channelTypes).source;
+        if (!warm.has(final)) warm.set(final, startProgram(final));
+      } catch (_) {
+        // 다듬기에서 걸리는 오류(타입 충돌 등)는 적용이 그대로 다시 만나 알린다
+      }
+    }
+    if (!warm.size) return null;
+    const entries = [...warm.values()];
+    return new Promise(resolve => {
+      const poll = () => {
+        if (disposed || lost || !parallel) return resolve(false);
+        if (
+          entries.every(
+            entry => !entry.program || gl.getProgramParameter(entry.program, parallel.COMPLETION_STATUS_KHR)
+          )
+        )
+          return resolve(true);
+        setTimeout(poll, 16); // 숨긴 탭에서도 멈추지 않게 requestAnimationFrame 대신
+      };
+      poll();
+    });
+  };
+  const applyScene = scene => {
     return withCommon(scene, commonChanged => {
-      // 프로그램이 파라미터 구성과 어긋나 있으면(removeUniform keepOnError) 코드가 같아도 모두 다시 만든다.
-      const rebuild = commonChanged || programsStale,
+      const rebuild = commonChanged,
         types = typesOf(scene.imageChannels),
         imageChanged = rebuild || scene.image !== fragmentSource || types.join() !== imageTypes.join();
       let result;
@@ -1727,7 +1830,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const setLinks = list => {
     links = Links.validate(list);
     linkValues.clear();
-    scheduleFrame();
+    // 일시정지 중이어도 한 번 그려 연결이 정한 값을 바로 반영한다(되돌리기 · 타임라인 · 프로젝트 열기 모두 이 길을 지난다).
+    redraw();
     return links.map(link => ({ ...link }));
   };
   // 적용한 구성의 채널이 더는 읽지 않는 미디어(마이크 · 카메라 · 파일)는 끈다.
@@ -1942,6 +2046,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     validatePortable,
     applyPortable,
     applyProject,
+    prepareProject,
     setUserUniforms,
     sampleRamp,
     setPasses,

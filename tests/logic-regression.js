@@ -7,9 +7,9 @@ const {mockGL}=require('./architecture-regression');
 const root=process.env.SHADER_TEST_ROOT || path.resolve(__dirname,'..');
 let passed=0,failed=0;
 async function test(name,run){try{await run();passed++;console.log('PASS',name);}catch(e){failed++;console.error('FAIL',name,'—',e.message);}}
-function fixture(_realEditor=false,compact=false,initialStorage={}){
+function fixture(_realEditor=false,compact=false,initialStorage={},setupGL=()=>{}){
   const metrics={stringify:0,locations:0,maxQueries:0,arrays:0,paints:0};
-  const gl=mockGL(),nodes=new Map(),storage=new Map(Object.entries(initialStorage)),frames=[],reads=[],outputs=[],errors=[];let pendingBitmap=null,closed=0,textureCreates=0;
+  const gl=(g=>(setupGL(g),g))(mockGL()),nodes=new Map(),storage=new Map(Object.entries(initialStorage)),frames=[],reads=[],outputs=[],errors=[];let pendingBitmap=null,closed=0,textureCreates=0;
   const getLocation=gl.getUniformLocation,getParameter=gl.getParameter;
   gl.getUniformLocation=(...args)=>{metrics.locations++;return getLocation(...args);};
   gl.getParameter=key=>{if(key===gl.MAX_TEXTURE_SIZE)metrics.maxQueries++;return getParameter(key);};
@@ -81,11 +81,45 @@ async function main(){
       const n=Number(/ERROR: 0:(\d+):/.exec(error.message)?.[1]),info=error.glslInjected;
       assert(info);assert(n>info.after+(info.generated??info.count));assert.equal(n-info.count,2);}finally{f.dispose();}
   });
-  await test('Uniform failure retains original program objects without rollback compilation',()=>{
+  await test('Registering, replacing and removing parameters never recompiles (the code owns declarations)',()=>{
     const f=fixture();try{f.renderer.setPasses([pass()]);const before=f.gl.programs.filter(p=>!f.gl.deleted.includes(p));let links=0;
-      f.gl.getProgramParameter=()=>++links<2;assert.throws(()=>f.renderer.defineUniform('uFail','float',1));
-      assert(before.every(p=>!f.gl.deleted.includes(p)));assert.equal(f.renderer.getUserUniforms().length,0);assert.equal(links,2);
+      f.gl.getProgramParameter=()=>{links++;return true;};
+      f.renderer.defineUniform('uGain','float',1);assert.equal(f.renderer.getUserUniforms().length,1);
+      f.renderer.setUserUniforms([{name:'uGain',type:'float',value:0.5},{name:'uOther',type:'vec2',value:[0,1]}]);assert.equal(f.renderer.getUserUniforms().length,2);
+      f.renderer.removeUniform('uOther');assert.equal(f.renderer.getUserUniforms().length,1);
+      assert.equal(links,0,'컴파일 · 링크 없음');assert(before.every(p=>!f.gl.deleted.includes(p)),'기존 프로그램 유지');
     }finally{f.dispose();}
+  });
+  await test('Background compile: prepareProject compiles changed programs once and apply reuses them',async()=>{
+    const COMPLETION=0x91B1;let done=false,statusQueries=0;
+    const f=fixture(false,false,{},gl=>{
+      const ext=gl.getExtension;gl.getExtension=name=>name==='KHR_parallel_shader_compile'?{COMPLETION_STATUS_KHR:COMPLETION}:ext(name);
+      const get=gl.getProgramParameter;gl.getProgramParameter=(p,n)=>{if(n===COMPLETION)return done;statusQueries++;return get(p,n);};
+    });
+    try{
+      f.renderer.setPasses([pass()]);
+      const next={image:src.replace('void main','// edited\nvoid main'),passes:[pass()],imageChannels:{}};
+      let compiled=f.gl.compiledSources.length,queries=statusQueries;
+      const waiting=f.renderer.prepareProject(next);
+      assert.equal(typeof waiting?.then,'function','확장이 있으면 기다릴 Promise');
+      assert.equal(f.gl.compiledSources.length-compiled,2,'바뀐 Image만(vertex+fragment) 컴파일을 맡긴다 — 그대로인 버퍼 패스는 아니다');
+      assert.equal(statusQueries,queries,'결과를 묻지 않는다(묻는 순간 메인 스레드가 멈춘다)');
+      let settled=false;waiting.then(()=>settled=true);await Promise.resolve();await Promise.resolve();
+      assert.equal(settled,false,'GPU가 끝나기 전에는 풀리지 않는다');
+      done=true;const ready=f.renderer.prepareProject(next);compiled=f.gl.compiledSources.length;
+      assert.equal(await ready,true,'끝나면 풀린다');
+      f.renderer.applyProject(next);
+      assert.equal(f.gl.compiledSources.length,compiled,'적용은 미리 컴파일한 프로그램을 쓰고 다시 컴파일하지 않는다');
+      assert.equal(f.renderer.getFragmentSource(),next.image);
+      assert.equal(f.renderer.prepareProject(next),null,'다시 만들 것이 없으면 null(바로 적용)');
+      // 컴파일 오류는 적용이 평소와 같은 메시지로 알린다
+      const broken={...next,image:next.image+'\n// broken'};const shaderStatus=f.gl.getShaderParameter;f.gl.getShaderParameter=(shader,n)=>shader.source?.includes('// broken')?false:shaderStatus(shader,n);
+      try{await f.renderer.prepareProject(broken);assert.throws(()=>f.renderer.applyProject(broken),/Fragment Shader 컴파일 실패/);}finally{f.gl.getShaderParameter=shaderStatus;}
+      assert.equal(f.renderer.getFragmentSource(),next.image,'실패하면 이전 코드 유지');
+    }finally{f.dispose();}
+  });
+  await test('Without the extension prepareProject returns null so callers apply immediately',()=>{
+    const f=fixture();try{assert.equal(f.renderer.prepareProject({image:src+'\n//x',passes:[],imageChannels:{}}),null);}finally{f.dispose();}
   });
   await test('Portable failure retains original image and buffer programs',()=>{
     const f=fixture();try{f.renderer.setPasses([pass()]);const before=f.gl.programs.filter(p=>!f.gl.deleted.includes(p)),image=f.renderer.getFragmentSource();let links=0;

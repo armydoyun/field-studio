@@ -69,7 +69,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       return wasLive;
     },
     resume: wasLive => {
-      if (wasLive && dirty && !disposed && $("studioLive").checked) timer = setTimeout(apply, 900);
+      if (wasLive && dirty && !disposed && $("studioLive").checked) timer = setTimeout(applyLater, 900);
     },
   });
   const ask = dialogs.ask;
@@ -456,9 +456,29 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       ? "미리보기 고정 중: 탭을 바꿔도 미리보기가 그대로입니다 (누르면 해제)"
       : "미리보기 고정: 켜면 탭을 바꿔도 미리보기를 바꾸지 않습니다";
   };
+  // 무거운 셰이더는 컴파일에 몇 초가 걸리고, 그동안 화면 전체가 멈춘다. 그래서 자동 적용 · 파라미터 추가/삭제는
+  // GPU에 컴파일을 먼저 맡기고(renderer.prepareProject) 끝난 뒤에 적용한다 — 그사이 입력 · 미리보기는 계속 움직인다.
+  // 확장이 없으면 prepareProject가 null이고, 이전과 같이 바로 적용한다. 그사이 코드가 다시 바뀌거나 다른 적용이 일어나면
+  // (warming 번호가 바뀌면) 기다리던 적용은 하지 않는다.
+  let warming = 0;
+  const applyWhenReady = (done = () => {}) => {
+    rememberEditor();
+    const ticket = ++warming,
+      ready = renderer.prepareProject?.(project);
+    if (!ready) return done(apply());
+    setStatus("컴파일 중… · 편집은 계속할 수 있습니다", "is-dirty");
+    ready.then(() => {
+      if (ticket === warming && !disposed) done(apply());
+    });
+  };
+  const applyLater = () => {
+    timer = null;
+    applyWhenReady();
+  };
   // 구조 변경은 전체 Pass 교체. 소스·채널만 바뀌면 해당 패스만 갱신하여 이전 Texture를 보존한다.
   const apply = (users = null) => {
     if (disposed) return false;
+    warming++; // 기다리던 미리 컴파일 적용은 이 적용이 대신한다
     document.dispatchEvent(new Event("shader-before-apply"));
     if (timer) {
       clearTimeout(timer);
@@ -564,7 +584,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     );
     scheduleDraft();
     if (timer) clearTimeout(timer);
-    if ($("studioLive").checked) timer = setTimeout(apply, 900);
+    warming++; // 코드가 또 바뀌었으니 진행 중인 미리 컴파일 결과는 쓰지 않는다
+    if ($("studioLive").checked) timer = setTimeout(applyLater, 900);
   };
   const rememberEditor = () => setSourceOf(project, selected, $("studioCode").value);
   const activeChannels = () => (selected === "Image" ? project.imageChannels : find(selected)?.channels);
@@ -1385,14 +1406,16 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     setSourceOf(project, tab, Insert.codeEdit(sourceOf(project, tab), 0, { global: line }).src);
     renderEditor();
     recordEdit(false, true);
-    const ok = apply();
-    if (ok) setStatus(`${tab}에 선언을 넣었습니다 · ${line.split(";")[0]} · Ctrl+Z로 되돌리기`);
-    return ok;
+    applyWhenReady(ok => {
+      if (ok) setStatus(`${tab}에 선언을 넣었습니다 · ${line.split(";")[0]} · Ctrl+Z로 되돌리기`);
+    });
+    return true;
   };
   // 파라미터 삭제: 코드가 선언했으면 그 선언도 지운다(코드가 파라미터의 주인 — 남겨 두면 어노테이션 동기화가 다시 등록한다).
   // 선언 삭제와 등록 해제를 Undo 한 번으로 되돌린다. 코드가 아직 그 이름을 쓰면 실행이 실패하고 오류는 편집기에 보인다.
-  // 돌려주는 값: 코드에 선언이 없었으면 null(등록만 지운다), 있었으면 { applied: 실행 성공 여부 }
-  const removeParameter = name => {
+  // 돌려주는 값: 코드에 선언이 없었으면 null(등록만 지운다), 있었으면 {}. 실행 성공 여부는 onApplied(ok)로 알린다 —
+  // 미리 컴파일을 기다리면 나중에, 아니면 돌아오기 전에 부른다.
+  const removeParameter = (name, onApplied = () => {}) => {
     if (disposed) return null;
     const edits = tabNames()
       .map(tab => [tab, ParameterTools.removeDeclaration(sourceOf(project, tab) || "", name)])
@@ -1401,14 +1424,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     document.dispatchEvent(new Event("shader-before-parameter-change"));
     rememberEditor();
     for (const [tab, result] of edits) setSourceOf(project, tab, result.source);
-    try {
-      renderer.removeUniform(name, { keepOnError: true });
-    } catch (_) {
-      // 마지막 성공 코드로 다시 만드는 일이 실패해도 아래 실행이 지금 코드로 다시 컴파일하고 오류를 알린다
-    }
+    renderer.removeUniform(name); // 등록만 지운다(컴파일 없음). 아래 실행이 바뀐 코드를 한 번 컴파일한다
     renderEditor();
     recordEdit(false, true);
-    return { applied: apply() };
+    applyWhenReady(onApplied);
+    return {};
   };
   const setParameterValues = items => {
     if (disposed || !items.length) return false;
