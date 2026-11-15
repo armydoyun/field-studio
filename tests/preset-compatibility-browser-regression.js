@@ -76,7 +76,20 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
       check(studio.setProject({image:image+'\n// new source',passes:[],imageChannels:{}}),'전환 중 소스 변경');
       const stopped=value('uGain');step(3000);
       check(value('uGain')===stopped&&!$('presetBar').classList.contains('is-morphing'),'소스를 바꾸면 이전 전환이 새 프로젝트 값을 덮어쓰지 않음');
+      // 전환 중에 그 파라미터를 연결하면 전환은 멈추고, 이후 값은 연결이 정한다(프리셋이 덮어쓰지 않음)
+      click('legacy');step(3000);step(3250);
+      check($('presetBar').classList.contains('is-morphing'),'연결 검사용 전환 진행 중');
+      settings.setLinks([...settings.getLinks(),{name:'uGain',source:'keys',keys:[[0,0.33]],loop:0,ease:'linear',smooth:0}]);
+      step(3500);step(3750);
+      check(!$('presetBar').classList.contains('is-morphing')&&$('presetNoticeText').textContent.includes('멈췄습니다'),'전환 중 연결하면 전환을 멈추고 알림');
     });
+    {
+      const frames=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      await frames();await frames();
+      check(Math.abs(value('uGain')-0.33)<1e-6,'멈춘 뒤 값은 연결이 정함');
+      await frames();check(Math.abs(value('uGain')-0.33)<1e-6,'멈춘 전환이 연결된 값을 다시 덮어쓰지 않음');
+      settings.setLinks(settings.getLinks().filter(link=>link.name!=='uGain'));
+    }
     settings.save();const saved=JSON.parse(localStorage.getItem('webgl.raymarch-template.settings.v1'));
     check(saved.presets[0].schema.uTint.type==='vec3'&&saved.presets[0].schema.uRamp.ramp==='gradient','자동 저장에 타입·램프 정보 유지');
     const copy=settings.getPresets();copy[0].schema.uMode.enum[0]='changed';copy[0].values.uTint[0]=9;

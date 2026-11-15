@@ -1727,7 +1727,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   const setLinks = list => {
     links = Links.validate(list);
     linkValues.clear();
-    scheduleFrame();
+    // 일시정지 중이어도 한 번 그려 연결이 정한 값을 바로 반영한다(되돌리기 · 타임라인 · 프로젝트 열기 모두 이 길을 지난다).
+    redraw();
     return links.map(link => ({ ...link }));
   };
   // 적용한 구성의 채널이 더는 읽지 않는 미디어(마이크 · 카메라 · 파일)는 끈다.
