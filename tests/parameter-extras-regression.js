@@ -89,6 +89,39 @@ await ui('@color hdr: 밝기 배율 줄이 값 = 색 × 배율로 맞춘다',`un
   intensity.value='0';await intensity.dispatchEvent({type:'input'});assert.deepEqual(value(f,'uGlow'),[0,0,0]);
   intensity.value='2';await intensity.dispatchEvent({type:'input'});assert.deepEqual(value(f,'uGlow'),[0,2,0],'0에서 다시 올려도 마지막 색을 기억한다');
 });
+await ui('@color hdr: 어두운 색 입력이 반복되어도 I와 알파를 유지한다',`uniform vec4 uTint; // @color hdr 20 @default 4 2 1 0.25`,async(f,n,list)=>{
+  const row=rowOf(list,'uTint'),[picker,hex]=row.children[1].children,[,intensity,number]=row.children[2].children;
+  for(const color of ['#808040','#202010','#010001']){
+    for(let i=0;i<40;i++){
+      picker.value=color;await picker.dispatchEvent({type:'input'});
+      close(Math.max(...value(f,'uTint').slice(0,3)),4);
+      assert.equal(Number(number.value),4,'네이티브 색 선택기의 연속 input은 밝기 배율을 감쇠시키면 안 된다');
+      assert.equal(value(f,'uTint')[3],0.25,'색을 바꿔도 알파는 유지');
+    }
+  }
+  hex.value='#102020';await hex.dispatchEvent({type:'change'});
+  assert.deepEqual(value(f,'uTint'),[2,4,4,0.25],'HEX 입력도 밝기 배율과 별도로 색 비율만 변경');
+  intensity.value='0';await intensity.dispatchEvent({type:'input'});
+  picker.value='#010001';await picker.dispatchEvent({type:'input'});
+  assert.deepEqual(value(f,'uTint'),[1,0,1,0.25],'밝기 0에서도 색 선택으로 복구');
+  picker.value='#000000';await picker.dispatchEvent({type:'input'});
+  assert.deepEqual(value(f,'uTint'),[0,0,0,0.25],'명시적으로 고른 검정은 검정으로 적용');
+  picker.value='#080800';await picker.dispatchEvent({type:'input'});
+  assert.deepEqual(value(f,'uTint'),[1,1,0,0.25],'검정에서 다시 색을 골라도 검정에 고정되지 않음');
+});
+await ui('@color hdr: 작은 I를 표시나 색 변경 중 0으로 반올림하지 않는다',`uniform vec3 uDim; // @color hdr @default 1e-8 5e-9 0`,async(f,n,list)=>{
+  const row=rowOf(list,'uDim'),[picker]=row.children[1].children,[,,number]=row.children[2].children;
+  assert.equal(Number(number.value),1e-8);
+  picker.value='#010001';await picker.dispatchEvent({type:'input'});
+  assert.deepEqual(value(f,'uDim'),[1e-8,0,1e-8]);assert.equal(Number(number.value),1e-8);
+  number.value='2e-8';await number.dispatchEvent({type:'change'});
+  assert.deepEqual(value(f,'uDim'),[2e-8,0,2e-8]);assert.equal(Number(number.value),2e-8);
+});
+await ui('@color: 일반 색상은 정규화하지 않고 고른 밝기를 유지한다',`uniform vec3 uPlain; // @color @default 1 1 1`,async(f,n,list)=>{
+  const picker=rowOf(list,'uPlain').children[1].children[0];
+  picker.value='#402010';await picker.dispatchEvent({type:'input'});
+  assert.deepEqual(value(f,'uPlain'),[0.25098,0.12549,0.062745]);
+});
 await ui('@seed: 범위 안에서 step 단위로 고른다',`uniform float uSeed; // @seed @range 10 20 @step 0.5 @default 10
 uniform int uPick; // @seed @range 3 5`,async(f,n,_list)=>{
   const real=Math.random;try{

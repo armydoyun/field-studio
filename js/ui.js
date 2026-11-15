@@ -2505,7 +2505,7 @@ const mount = (renderer, input, settings) => {
             lastBase = [1, 1, 1];
           const split = values => {
             const level = Math.max(0, ...values.slice(0, 3));
-            if (level > 1e-6) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
+            if (level > 0) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
             return { level, base: lastBase };
           };
           const show = values => {
@@ -2513,7 +2513,7 @@ const mount = (renderer, input, settings) => {
               const { level, base } = split(values);
               picker.value = hex(base);
               intensity.value = String(level);
-              showNumber(intensityNumber, Number(level.toFixed(4)));
+              showNumber(intensityNumber, level);
             } else picker.value = hex(values);
             hexField.value = picker.value;
             hexField.removeAttribute("aria-invalid");
@@ -2537,9 +2537,13 @@ const mount = (renderer, input, settings) => {
             }
             const values = current(),
               picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
-            // HDR: 고른 색에 지금 밝기 배율을 곱한다(배율이 0이면 1로 되살린다).
-            const level = hdr ? split(values).level || 1 : 1;
-            values.splice(0, 3, ...picked.map(v => Number((v * level).toFixed(6))));
+            // HDR stores peak-normalized color × I. Raw picker RGB would attenuate I on every input.
+            // Normalize the picked color first; an explicit black remains black, and zero I revives at 1.
+            const level = hdr ? split(values).level || 1 : 1,
+              peak = Math.max(...picked),
+              base = hdr && peak > 0 ? picked.map(v => v / peak) : picked;
+            // Keep HDR radiance precision: fixed decimal rounding can turn small nonzero I into zero.
+            values.splice(0, 3, ...base.map(v => (hdr ? v * level : Number(v.toFixed(6)))));
             if (commit(field, values)) show(values);
           };
           picker.addEventListener("input", () => setRGB(picker, picker.value));
@@ -2577,7 +2581,7 @@ const mount = (renderer, input, settings) => {
               if (!Number.isFinite(level)) return show(current());
               const values = current(),
                 { base } = split(values);
-              values.splice(0, 3, ...base.map(v => Number((v * Math.max(0, level)).toFixed(6))));
+              values.splice(0, 3, ...base.map(v => v * Math.max(0, level)));
               if (commit(field, values)) show(values);
               else show(current());
             };
