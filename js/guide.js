@@ -1536,7 +1536,7 @@ const mount = ({ studio, gallery }) => {
   // 터치 기기에서는 검색창에 자동 포커스하면 가상 키보드가 본문을 가리므로 본문에 포커스한다.
   const touchOnly = window.matchMedia?.("(hover:none) and (pointer:coarse)").matches === true;
   if (touchOnly) content.autofocus = true;
-  const open = (id = current) => {
+  const open = (id = current, { focusSearch = true } = {}) => {
     window.focus?.();
     search.value = "";
     renderNav();
@@ -1546,7 +1546,7 @@ const mount = ({ studio, gallery }) => {
       // 닫힌 채로 주제를 고르면 스크롤할 수 없으므로, 연 다음에 고른 주제 탭을 보이는 자리로 옮긴다(좁은 화면의 가로 탭 줄).
       nav.querySelector("button.is-active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     }
-    if (!touchOnly) setTimeout(() => search.focus(), 0);
+    if (!touchOnly && focusSearch) setTimeout(() => search.focus(), 0);
   };
   listen(search, "input", renderNav);
   listen(search, "keydown", event => {
@@ -1792,7 +1792,7 @@ const mount = ({ studio, gallery }) => {
     for (const [node, inert] of state.inert) if (node.isConnected) node.inert = inert;
     restoreUi(state);
     if (state.guide) {
-      open(state.topic);
+      open(state.topic, { focusSearch: false });
       search.value = state.query;
       renderNav();
       show(state.topic);

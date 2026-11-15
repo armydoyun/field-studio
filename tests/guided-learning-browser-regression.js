@@ -42,6 +42,7 @@
       }
       await frames();
       check(overlay().hidden&&!$('workspace').inert&&$('quickHelp').open,`${tour.id}: 완료 후 도움말 복귀`);
+      check(document.activeElement.dataset.tour===tour.id,`${tour.id}: 시작 버튼으로 초점 복원`);
       check(state()===layout,`${tour.id}: 패널·편집기·타임라인·입력·HUD 상태 복원`);
       check(scroll.scrollTop===savedScroll,`${tour.id}: 스크롤 복원`);
       check(JSON.stringify({project:studio.getProject(),users:r.getUserUniforms(),presets:settings.getPresets(),links:settings.getLinks()})===model,`${tour.id}: 코드·파라미터·프리셋·연결 불변`);
