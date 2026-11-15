@@ -37,8 +37,12 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
     check(range.getBoundingClientRect().right<=$('presetBar').getBoundingClientRect().right-4,'띄어쓰기 없는 긴 프리셋 이름도 내역 제목 안에서 줄바꿈');
     summary.textContent=summaryText;
     for(const word of ['vec3 → vec4','선택지','종류','없는 파라미터','범위','연결'])check($('presetReportList').textContent.includes(word),`건너뛴 이유: ${word}`);
-    check(!$('compareA').disabled,'프리셋 적용 직전 값을 A로 기억');
-    $('compareA').click();check(r.isUniformPreviewActive()&&value('uGain')===0.8,'프리셋 전 상태 미리보기는 B 보존');$('compareB').click();
+    check(!$('parameterCompare').hidden&&!$('compareA').disabled,'프리셋 적용 직전 값을 기억해 비교 바 표시');
+    {const capture=Element.prototype.setPointerCapture;Element.prototype.setPointerCapture=()=>{};
+    $('compareA').dispatchEvent(new PointerEvent('pointerdown',{button:0,buttons:1,pointerId:5,bubbles:true,cancelable:true}));
+    check(r.isUniformPreviewActive()&&value('uGain')===0.8,'프리셋 전 상태 미리보기는 지금 값 보존');
+    $('compareA').dispatchEvent(new PointerEvent('pointerup',{button:0,pointerId:5,bubbles:true,cancelable:true}));
+    Element.prototype.setPointerCapture=capture;}
     studio.undo();check(value('uGain')===0.2,'즉시 적용은 Undo 한 번으로 복원');
     studio.redo();check(value('uGain')===0.8,'즉시 적용 Redo');
     click('legacy');

@@ -123,9 +123,15 @@
   // ---- 설정 패널 ----
   $("tab-uniforms").click();
   await audit("파라미터 탭");
-  $('compareCapture').click();
-  $('compareA').click();
-  await audit("A 기준 미리보기");
+  // 바꾸기 전과 비교: ⋯로 기억 → 값 하나 바꾸기 → 누르고 있는 동안 이전 보기
+  const holdCapture=Element.prototype.setPointerCapture;Element.prototype.setPointerCapture=()=>{};
+  $('uniformMore').click();$('compareCapture').click();
+  r.setUniform('uGain',r.getUserUniforms().find(u=>u.name==='uGain').value===0.9?0.1:0.9);$('uniformSearch').dispatchEvent(new Event('input',{bubbles:true}));
+  await audit("바꾸기 전과 비교 바");
+  $('compareA').dispatchEvent(new PointerEvent('pointerdown',{button:0,buttons:1,pointerId:5,bubbles:true,cancelable:true}));
+  await audit("이전 값 미리보기");
+  $('compareA').dispatchEvent(new PointerEvent('pointerup',{button:0,pointerId:5,bubbles:true,cancelable:true}));
+  Element.prototype.setPointerCapture=holdCapture;
   $('compareClear').click();
   const previousPresets = window.shaderSettings.getPresets();
   window.shaderSettings.setPresets([{name:'호환성 검사',values:{uGain:0.5,uRemoved:1}}]);
@@ -134,7 +140,7 @@
   $('presetReport').open=true;
   await audit("프리셋 적용 내역");
   window.shaderSettings.setPresets(previousPresets);
-  $('compareClear').click();
+  if(!$('parameterCompare').hidden)$('compareClear').click();
   document.querySelector(".ui-matrix .ui-matrix-tools button").click();
   await audit("행렬 확대 편집");
   document.querySelector('dialog[aria-label="uMatrix 행렬 확대 편집"] .ui-icon-btn').click();

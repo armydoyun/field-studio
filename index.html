@@ -114,21 +114,14 @@
                     <section class="ui-section ui-section--flush uniform-section">
                         <div class="ui-section-head"><h2>프로젝트 파라미터 <button type="button" class="ui-icon-btn ui-icon-btn--xs guide-hint glyph-icon icon-help" data-guide="params" aria-label="파라미터·어노테이션 가이드" title="파라미터·어노테이션 사용법"></button></h2><span id="uniformCount" class="ui-tag ui-tag--plain">0</span></div>
                                                 <p id="uiError" class="ui-notice ui-notice--danger" role="alert" aria-live="polite"></p>
-                        <div class="parameter-actions" role="group" aria-label="파라미터 일괄 작업">
-                            <button id="uniformWriteDefaults" type="button" class="ui-btn--sm" title="현재 값을 코드 기본값에 반영">바뀐 값 모두 코드에 반영</button>
-                            <button id="uniformRandomize" type="button" class="ui-btn--sm glyph-icon icon-dice" title="잠기지 않은 값 무작위 변경">전체 무작위</button>
-                            <button id="uniformJitter" type="button" class="ui-btn--sm" title="현재 값 주변으로 변경">조금씩 바꾸기</button>
+                        <div class="parameter-toolbar" role="group" aria-label="파라미터 보기 · 일괄 작업">
+                            <button id="uniformChangedOnly" type="button" class="ui-btn ui-btn--sm" aria-pressed="false" title="코드 기본값(@default)과 다른 항목만 보기">변경만 보기 <span id="uniformChangedCount" class="ui-count">0</span></button>
+                            <span class="parameter-toolbar-end"><button id="uniformVary" type="button" class="ui-btn--sm glyph-icon icon-dice" aria-haspopup="menu" title="잠기지 않은 값을 무작위로 · 조금씩 바꾸기">무작위</button><button id="uniformMore" type="button" class="ui-icon-btn ui-icon-btn--sm glyph-icon icon-more" aria-haspopup="menu" aria-label="파라미터 작업 더보기" title="코드에 반영 · 비교 기준 기억"></button></span>
                         </div>
-                        <div id="parameterCompare" class="ui-card parameter-compare" role="group" aria-label="파라미터 A/B 비교">
-                            <div class="parameter-compare-actions">
-                                <button id="compareCapture" type="button" class="ui-btn--sm" title="지금 값을 A 기준으로 기억">A 기준 잡기</button>
-                                <div id="compareSwitch" class="ui-seg ui-seg--sm" role="group" aria-label="비교할 값" hidden><button id="compareA" type="button" aria-pressed="false" disabled>A 기준</button><button id="compareB" type="button" aria-pressed="true" disabled>B 현재</button></div>
-                                <button id="compareApply" type="button" class="ui-btn--sm" hidden>A를 현재 값으로</button>
-                                <button id="compareClear" type="button" class="ui-btn--ghost ui-btn--sm" hidden>비교 끝내기</button>
-                            </div>
-                            <p id="compareNotice" class="ui-hint" role="status">기준을 잡은 뒤 값을 바꿔 비교하세요.</p>
+                        <div id="parameterCompare" class="ui-card parameter-compare" role="group" aria-labelledby="compareTitle" hidden>
+                            <div class="parameter-compare-head"><strong id="compareTitle">바꾸기 전과 비교</strong><span id="compareNotice" class="ui-hint ui-hint--inline" role="status"></span><button id="compareClear" type="button" class="ui-icon-btn ui-icon-btn--xs glyph-icon icon-close" aria-label="비교 끝내기 · 지금 값 유지" title="비교 끝내기 · 지금 값 유지"></button></div>
+                            <div class="parameter-compare-actions"><button id="compareA" type="button" class="ui-btn--sm glyph-icon icon-eye" aria-pressed="false" title="누르고 있는 동안 바꾸기 전 값으로 화면을 봅니다(키보드: Space를 누르고 있기)">누르는 동안 이전 보기</button><button id="compareApply" type="button" class="ui-btn--sm glyph-icon icon-undo" title="바꾸기 전 값으로 되돌립니다 · Ctrl+Z로 다시 지금 값">이전 값으로 되돌리기</button></div>
                         </div>
-                        <div class="parameter-filter"><button id="uniformChangedOnly" type="button" class="ui-btn ui-btn--sm" aria-pressed="false" title="코드 기본값과 다른 항목 보기">변경만 보기 <span id="uniformChangedCount" class="ui-count">0</span></button><span class="ui-hint ui-hint--inline">코드 기본값 기준</span></div>
                         <div class="uniform-undo"><span id="uniformNotice" role="status"></span><button id="undoUniform" type="button" class="ui-btn--sm" hidden>삭제 되돌리기</button></div>
                         <div id="presetBar" class="ui-card preset-bar" role="group" aria-labelledby="presetTitle">
                             <div class="preset-head"><span id="presetTitle" class="preset-title">프리셋</span><label class="preset-blend" title="프리셋을 고를 때 값이 바뀌는 시간">전환 <select id="presetBlend" class="ui-input--sm"><option value="0">즉시</option><option value="0.5">0.5초</option><option value="1" selected>1초</option><option value="2">2초</option><option value="4">4초</option></select></label></div>
@@ -302,7 +295,7 @@
             <div id="stageHint" class="ui-hud stage-hint" aria-hidden="true">E 편집기 열기 · / 파라미터 찾기</div>
             <p id="keyboardHint" class="keyboard-hint" role="status" hidden>키보드 입력 중 · 키가 셰이더로 갑니다 · <kbd>Esc</kbd>로 나가기</p>
             <p id="previewNotice" class="ui-notice ui-notice--warning preview-notice" role="status" hidden></p>
-            <p id="comparePreviewNotice" class="ui-hud compare-preview-notice" role="status" hidden>A 기준 미리보기 · 저장되는 값은 B 현재 값입니다.</p>
+            <p id="comparePreviewNotice" class="ui-hud compare-preview-notice" role="status" hidden>바꾸기 전 값 미리보기 · 손을 떼면 지금 값으로 돌아갑니다</p>
             <div id="perfSuggest" class="ui-popover perf-suggest" role="status" hidden><span id="perfSuggestText"></span><span class="perf-suggest-actions"><button id="perfSuggestApply" type="button" class="ui-btn--primary ui-btn--sm"></button><button id="perfSuggestDismiss" type="button" class="ui-btn--sm">그대로 두기</button></span></div>
             <div id="viewportFooter" class="viewport-footer">
             <div id="viewportInfo" class="ui-hud viewport-info"><span class="ui-dot ui-dot--success"></span><span>미리보기</span><span id="viewportMode">IMAGE</span></div>

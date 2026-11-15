@@ -1,4 +1,5 @@
 // Comparison is a GPU preview, never an edit to persisted B values.
+// 비교 바: 무작위 · 프리셋 · ⋯ 메뉴로 '바꾸기 전' 값을 기억하고, '누르는 동안 이전 보기'를 누르고 있는 동안만 A를 그린다.
 (async () => {
   const r=window.shaderPlayground, studio=window.shaderStudio, settings=window.shaderSettings;
   const $=id=>document.getElementById(id), wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -8,6 +9,10 @@
   const refresh=()=>$('uniformSearch').dispatchEvent(new Event('input',{bubbles:true}));
   const user=name=>r.getUserUniforms().find(item=>item.name===name);
   const set=(name,value)=>{r.setUniform(name,value);refresh();};
+  const menuPick=(trigger,id)=>{$(trigger).click();const item=document.getElementById(id);if(!item||item.disabled)throw new Error(`메뉴 항목 ${id}을 누를 수 없음`);item.click();};
+  const pointer=type=>$('compareA').dispatchEvent(new PointerEvent(type,{button:0,buttons:type==='pointerdown'?1:0,pointerId:5,bubbles:true,cancelable:true}));
+  const holdA=()=>pointer('pointerdown'),releaseA=()=>pointer('pointerup');
+  const capture=Element.prototype.setPointerCapture;Element.prototype.setPointerCapture=()=>{};
   const image=`uniform float uValue; // @range 0 10 @default 2
 uniform bool uShow; // @default false
 uniform float uHidden; // @range 0 10 @default 1 @if uShow
@@ -39,59 +44,73 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uValue/10.0, texture(uRamp,vec2(0.5)
     $('uniformSearch').value='uHidden';refresh();
     check(!!row('uHidden')&&!row('uPoints'),'검색으로 숨긴 변경 항목 확인');
     $('uniformSearch').value='';refresh();$('uniformChangedOnly').click();
-    $('uniformWriteDefaults').click();
+    menuPick('uniformMore','uniformWriteDefaults');
     check($('uniformChangedCount').textContent==='0','코드 반영 직후 변경 표시 해제');
     studio.undo();
     check($('uniformChangedCount').textContent==='4','Undo로 기본값을 되돌리면 변경 표시 복구');
 
-    $('compareCapture').click();
+    check($('parameterCompare').hidden,'비교 전에는 비교 바를 숨김');
+    menuPick('uniformMore','compareCapture');
+    check(!$('parameterCompare').hidden&&$('compareA').disabled&&$('compareNotice').textContent.includes('같음'),'⋯ 메뉴로 기억하면 비교 바가 나타나고, 같은 값이면 이전 보기는 꺼짐');
     set('uValue',8);set('uRamp',[0,1,0,0,1,1,1,0,0,1]);set('uMatrix',[0.9,0,0,1]);
     const editable=JSON.stringify(r.getUserUniforms());
-    $('compareA').click();
-    check(r.isUniformPreviewActive()&&$('compareA').getAttribute('aria-pressed')==='true','A를 별도 미리보기로 선택');
+    check(!$('compareA').disabled&&$('compareNotice').textContent.includes('3개 다름'),'다른 값 개수 표시');
+    holdA();
+    check(r.isUniformPreviewActive()&&$('compareA').getAttribute('aria-pressed')==='true','누르고 있는 동안 A를 별도 미리보기로 그림');
     let rejected=false;
     try { r.setUniformPreview([{name:'uValue',type:'vec2',value:[0,0]}]); } catch { rejected=true; }
     check(rejected&&r.isUniformPreviewActive(),'잘못된 비교 자료는 기존 미리보기를 손상시키지 않고 거부');
     check(JSON.stringify(r.getUserUniforms())===editable&&user('uValue').value===8,'A 미리보기가 실제 B 값을 변경하지 않음');
-    check($('uniformList').inert&&$('presetBar').inert&&$('uniformWriteDefaults').disabled,'A에서는 B 편집과 코드 반영 잠금');
-    check(!$('comparePreviewNotice').hidden&&$('compareNotice').textContent.includes('B'),'뷰포트와 패널에 저장 대상 안내');
+    check($('uniformList').inert&&$('presetBar').inert&&$('uniformMore').disabled&&$('uniformVary').disabled&&$('compareApply').disabled,'A에서는 B 편집 · 코드 반영 · 무작위 잠금');
+    check(!$('comparePreviewNotice').hidden&&$('compareNotice').textContent.includes('이전'),'뷰포트와 패널에 이전 값 미리보기 안내');
     settings.save();
     const saved=JSON.parse(localStorage.getItem('webgl.raymarch-template.settings.v1'));
     check(saved.user.find(item=>item.name==='uValue').value===8,'A를 보는 동안 자동 저장도 B 유지');
     check(r.exportScene().uniforms.find(item=>item.name==='uValue').values[0]===8,'HTML 내보내기 모델도 B 유지');
     r.beginOffline({width:16,height:16});offline=true;
     const pixel=()=>{const canvas=r.renderOfflineFrame({time:0,delta:0,frame:0}),copy=document.createElement('canvas');copy.width=copy.height=16;const ctx=copy.getContext('2d');ctx.drawImage(canvas,0,0);return ctx.getImageData(8,8,1,1).data;};
-    const a=pixel();$('compareB').click();const b=pixel();$('compareA').click();const aAgain=pixel();
+    const a=pixel();releaseA();const b=pixel();check(!r.isUniformPreviewActive()&&$('comparePreviewNotice').hidden,'손을 떼면 지금 값(B)으로 돌아감');holdA();const aAgain=pixel();
     check(Math.abs(a[0]-51)<2&&Math.abs(b[0]-204)<2,'GPU에서 A와 B 스칼라 값을 구분');
     check(Math.abs(a[1]-128)<3&&b[1]>250,'램프 텍스처도 A/B에 맞춰 전환');
     check(Math.abs(a[2]-13)<2&&Math.abs(b[2]-23)<2,'행렬의 업로드 자료도 A/B에 맞춰 전환');
     check(a.every((v,i)=>v===aAgain[i]),'반복 전환해도 A가 변하지 않음');
     check(JSON.stringify(r.getUserUniforms())===editable,'GPU 전환 후에도 B 값·설정 보존');
     r.endOffline();offline=false;
+    releaseA();
+    $('compareA').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true,cancelable:true}));
+    check(r.isUniformPreviewActive(),'키보드: Space를 누르고 있는 동안 A');
+    $('compareA').dispatchEvent(new KeyboardEvent('keyup',{key:' ',bubbles:true,cancelable:true}));
+    check(!r.isUniformPreviewActive(),'키보드: Space를 떼면 B');
     $('compareApply').click();
     check(!r.isUniformPreviewActive()&&user('uValue').value===2,'A 적용은 명시적으로 B 값을 변경');
     studio.undo();check(user('uValue').value===8&&!r.isUniformPreviewActive(),'A 적용은 Undo 한 번으로 B 복구');
     studio.redo();check(user('uValue').value===2,'A 적용 Redo');
     // Looking at A and returning to B must not consume history entries.
     studio.setParameterValues([{...user('uValue'),value:7}]);
-    $('compareCapture').click();set('uValue',9);$('compareA').click();$('compareB').click();$('compareClear').click();
+    menuPick('uniformMore','compareCapture');set('uValue',9);holdA();releaseA();$('compareClear').click();
+    check($('parameterCompare').hidden,'× 로 비교 바를 닫음');
     check(user('uValue').value===9&&!r.isUniformPreviewActive(),'비교 종료는 B 유지');
     studio.undo();check(user('uValue').value===2,'비교·종료는 Undo 기록을 추가하지 않음');
     const originalRandom=Math.random;
-    try {Math.random=()=>0.8;$('uniformRandomize').click();} finally {Math.random=originalRandom;}
-    check(!$('compareA').disabled,'전체 무작위 전에 A 자동 기억');
-    $('compareA').click();check(r.isUniformPreviewActive(),'자동 기준으로도 비교 가능');
-    studio.undo();check(!$('compareA').getAttribute('aria-pressed').includes('true')&&!r.isUniformPreviewActive(),'Undo하면 기준과 A 미리보기 해제');
-    $('compareCapture').click();$('compareA').click();
+    try {Math.random=()=>0.8;menuPick('uniformVary','uniformRandomize');} finally {Math.random=originalRandom;}
+    check(!$('parameterCompare').hidden&&!$('compareA').disabled,'전체 무작위 전에 A 자동 기억 · 비교 바 표시');
+    holdA();check(r.isUniformPreviewActive(),'자동 기준으로도 비교 가능');
+    studio.undo();check(!$('compareA').getAttribute('aria-pressed').includes('true')&&!r.isUniformPreviewActive()&&$('parameterCompare').hidden,'Undo하면 기준과 A 미리보기 해제');
+    releaseA();
+    menuPick('uniformMore','compareCapture');set('uValue',3);holdA();
+    check(r.isUniformPreviewActive(),'프로젝트를 바꾸기 전 A를 보는 중');
     check(studio.setProject({image:'void mainImage(out vec4 c,in vec2 p){c=vec4(0.1);}',passes:[],imageChannels:{}}),'다른 프로젝트로 변경');
     await wait(650);
-    check(!r.isUniformPreviewActive()&&$('compareA').disabled&&!$('uniformList').inert,'프로젝트 변경 시 이전 비교가 누출되지 않음');
+    check(!r.isUniformPreviewActive()&&$('parameterCompare').hidden&&!$('uniformList').inert,'프로젝트 변경 시 이전 비교가 누출되지 않음');
+    releaseA();
     settings.setLinks([{name:'uValue',source:'lfo',min:0,max:1,period:2}]);
-    $('compareCapture').click();
-    check(!$('compareA').disabled,'연결되지 않은 항목으로 기준 생성');
-    $('compareA').click();settings.setLinks([]);
-    check(!r.isUniformPreviewActive()&&$('compareA').disabled,'연결 설정 변경 시 비교 해제');
+    menuPick('uniformMore','compareCapture');
+    check(!$('parameterCompare').hidden,'연결되지 않은 항목으로 기준 생성');
+    settings.setLinks([]);
+    check(!r.isUniformPreviewActive()&&$('parameterCompare').hidden,'연결 설정 변경 시 비교 해제');
   } finally {
+    Element.prototype.setPointerCapture=capture;
+    document.querySelector('body > .ui-popover.ui-menu')?.remove();
     if(offline)r.endOffline();
     if(r.isUniformPreviewActive())r.setUniformPreview(null);
     if($('uniformChangedOnly').getAttribute('aria-pressed')==='true')$('uniformChangedOnly').click();

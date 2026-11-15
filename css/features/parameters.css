@@ -3,12 +3,17 @@
    여기에는 위젯의 배치와, 이 탭에만 있는 조작(방향 패드 · 램프 · 곡선)의 모양만 둔다. */
 /* 검색 칸과 목록 구역은 한 덩어리다: 사이에 선을 긋지 않는다(구역에 ui-section--flush) */
 .uniform-search-wrap { margin:var(--space-6) var(--panel-inset) 0; }
-.parameter-compare { display:grid;gap:var(--space-4);margin-bottom:var(--space-3); }
-.parameter-compare.is-active { padding:var(--space-6);margin-bottom:var(--space-6); }
+/* 상단 도구막대 한 줄: [변경만 보기] …… [무작위 ▾][⋯]. 무작위 · 코드 반영 · 비교 기준은 메뉴(ui.js)로 접는다 */
+.parameter-toolbar { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4);margin-bottom:var(--space-6); }
+.parameter-toolbar-end { display:flex;align-items:center;gap:var(--space-2);margin-left:auto; }
+/* 바꾸기 전과 비교: 무작위 · 프리셋 직후(또는 ⋯로 기억했을 때)만 나타나는 얇은 바 */
+.parameter-compare { display:grid;gap:var(--space-4);margin-bottom:var(--space-6);padding:var(--space-4) var(--space-4) var(--space-4) var(--space-6); }
+.parameter-compare[hidden] { display:none; }
+.parameter-compare-head { display:flex;align-items:center;gap:var(--space-4);min-width:0; }
+.parameter-compare-head>strong { font-size:var(--text-sm);font-weight:650; }
+#compareClear { margin-left:auto; }
+.parameter-compare-actions { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4);padding-bottom:var(--space-2); }
 .uniform-changed.is-unchanged { visibility:hidden; }
-.parameter-compare-actions,.parameter-filter { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4); }
-.parameter-compare>p { margin:0; }
-.parameter-filter { margin-bottom:var(--space-6); }
 .uniform-section .ui-section-head { margin-bottom:8px; }
 #uiError { margin:0 0 12px; }
 #uiError:empty { display:none; }
@@ -154,8 +159,6 @@
 }
 
 .uniform-array-item>.value-edit-open { justify-self:end; }
-
-.parameter-actions { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
 
 .uniform-hidden-params { min-width:0;margin:0 0 12px; }
 .uniform-hidden-help { margin:4px 0 8px; }
