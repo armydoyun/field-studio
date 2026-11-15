@@ -1402,6 +1402,10 @@ const mount = (renderer, input, settings) => {
     ]);
   // 바꾸기 전과 비교(A/B): 무작위 · 조금씩 · 프리셋 적용 직전 값(또는 ⋯ 메뉴로 기억한 값)을 '이전'으로 들고 있다가,
   // 비교 바의 버튼을 누르고 있는 동안만 이전 값으로 화면을 그린다(저장 · 편집되는 값은 언제나 지금 값).
+  // 무작위 · 프리셋 적용 직전 값을 자동으로 기억해 비교 바를 띄울지(⋯ 메뉴에서 켜고 끈다, 기본은 끔).
+  // 켜 두지 않으면 비교 바는 ⋯의 '지금 값을 비교 기준으로 기억'으로만 나타난다 — 프리셋만 바꿨는데 바가 생겨 화면이 밀리지 않게.
+  const AUTO_COMPARE_KEY = "field.compare.auto.v1";
+  let autoCompare = Store.read(AUTO_COMPARE_KEY) === "1";
   const endComparison = () => {
     if (renderer.isUniformPreviewActive?.()) renderer.setUniformPreview(null);
     comparison = null;
@@ -1654,7 +1658,7 @@ const mount = (renderer, input, settings) => {
     for (const item of items) playing.delete(item.name);
     syncPlayButtons();
     attempt(() => {
-      if (items.length && !comparison) captureComparison();
+      if (items.length && !comparison && autoCompare) captureComparison();
       varyingParameters = true;
       try {
         window.shaderStudio?.setParameterValues(
@@ -1823,14 +1827,23 @@ const mount = (renderer, input, settings) => {
           id: "compareCapture",
           icon: "pin",
           label: comparison ? "지금 값을 비교 기준으로 다시 기억" : "지금 값을 비교 기준으로 기억",
-          title:
-            "지금 값을 기억해 두고, 값을 바꾼 뒤 '누르는 동안 이전 보기'로 비교하기(무작위 · 프리셋은 자동으로 기억)",
+          title: "지금 값을 기억해 두고, 값을 바꾼 뒤 '누르는 동안 이전 보기'로 비교하기",
           disabled: !users.some(item => !linked.has(item.name)),
           onSelect: () =>
             attempt(() => {
               captureComparison();
               renderUniforms();
             }),
+        },
+        {
+          id: "compareAuto",
+          label: "무작위 · 프리셋 뒤 자동으로 비교",
+          title: "켜면 무작위 · 프리셋을 적용하기 직전 값을 기억해 '바꾸기 전과 비교' 바를 띄웁니다",
+          pressed: autoCompare,
+          onSelect: () => {
+            autoCompare = !autoCompare;
+            Store.write(AUTO_COMPARE_KEY, autoCompare ? "1" : "0");
+          },
         },
       ],
     });
@@ -2105,7 +2118,11 @@ const mount = (renderer, input, settings) => {
       showPresetReport(preset, result, from);
       return;
     }
-    if (!comparison && result.applied.some(item => !ParameterTools.equalValue(item.value, from[item.name])))
+    if (
+      autoCompare &&
+      !comparison &&
+      result.applied.some(item => !ParameterTools.equalValue(item.value, from[item.name]))
+    )
       captureComparison();
     const commit = window.shaderStudio?.beginParameterChange?.(names) || (() => {}),
       key = comparisonKey();
@@ -2279,9 +2296,12 @@ const mount = (renderer, input, settings) => {
       presetNotice("프리셋을 바로 전으로 되돌렸습니다");
     });
   });
+  // 프리셋 알림 · 적용 내역의 생명주기: 프리셋 목록이 바뀌면(예제 · 프로젝트 교체 · Undo · 저장 · 이름 · 삭제) 지난 알림을 지운다.
+  // 저장 · 이름 바꾸기 · 삭제 · 되돌리기는 setPresets 다음에 자기 알림을 다시 쓰므로 그 알림은 남는다.
   listen(document, "shader-presets-changed", () => {
     stopMorph();
     clearPresetReport();
+    presetNotice("");
     renderPresets(true);
   });
   listen(document, "shader-before-history", () => stopMorph());
@@ -4173,6 +4193,9 @@ const mount = (renderer, input, settings) => {
   listen(document, "shader-settings-applied", () => {
     stopMorph();
     clearPresetReport();
+    // 값 묶음이 다른 길(무작위 · Undo · 프로젝트)로 바뀌면 '적용 결과' 알림은 더 이상 지금 값을 말하지 않는다.
+    // (프리셋 적용 자체는 이 이벤트를 내지 않는다 — beginParameterChange)
+    presetNotice("");
     if (!varyingParameters) endComparison("프로젝트 또는 값 묶음이 바뀌어 비교를 끝냈습니다. 새 기준을 잡으세요.");
     clearDeleted();
     $("uniformSearch").value = "";

@@ -72,7 +72,13 @@
     check(settings.getPresets().map(p => p.name).join() === "산호,세포 분열,지렁이,구멍", "Reaction–Diffusion: 패턴 프리셋");
     check(settings.getPresets()[0].values.uFeed === 0.0545 && settings.getPresets()[0].values.uKill === 0.062, "프리셋 값");
 
+    // 프리셋 알림의 생명주기: 적용 결과는 남아 있다가, 예제(프로젝트)를 바꾸면 지운다
+    $("presetBlend").value = "0";
+    document.querySelector("#presetList .preset-apply").click();
+    await wait(50);
+    check($("presetNoticeText").textContent.includes("산호"), "프리셋 적용 결과 알림");
     await open("mrt");
+    check(!$("presetNoticeText").textContent && !$("presetNotice").getClientRects().length, "예제를 바꾸면 이전 프리셋 알림을 지움");
     const project = studio.getProject();
     check(project.passes[0].outputs === 2 && project.imageChannels[1]?.attachment === 1, "MRT: 출력 2개 · Image가 A[1]을 읽음");
     check(["uView", "uGlow", "uOutline", "uShadow", "uBlobs", "uBlend"].every(name => r.getUserUniforms().some(item => item.name === name)), "MRT: 보기 · 거리장 꾸미기 파라미터");

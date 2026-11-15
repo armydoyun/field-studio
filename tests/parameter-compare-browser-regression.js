@@ -92,12 +92,18 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uValue/10.0, texture(uRamp,vec2(0.5)
     check(user('uValue').value===9&&!r.isUniformPreviewActive(),'비교 종료는 B 유지');
     studio.undo();check(user('uValue').value===2,'비교·종료는 Undo 기록을 추가하지 않음');
     const originalRandom=Math.random;
+    const setAuto=on=>{$('uniformMore').click();const item=document.getElementById('compareAuto');if((item.getAttribute('aria-pressed')==='true')!==on)item.click();else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));};
+    // 기본(꺼짐): 무작위를 눌러도 비교 바가 갑자기 생기지 않는다
+    try {Math.random=()=>0.3;menuPick('uniformVary','uniformRandomize');} finally {Math.random=originalRandom;}
+    check($('parameterCompare').hidden,'자동 비교가 꺼져 있으면 무작위 뒤에 비교 바가 생기지 않음');
+    setAuto(true);
     try {Math.random=()=>0.8;menuPick('uniformVary','uniformRandomize');} finally {Math.random=originalRandom;}
-    check(!$('parameterCompare').hidden&&!$('compareA').disabled,'전체 무작위 전에 A 자동 기억 · 비교 바 표시');
+    check(!$('parameterCompare').hidden&&!$('compareA').disabled,'자동 비교를 켜면 전체 무작위 전에 A 자동 기억 · 비교 바 표시');
+    setAuto(false);
     holdA();check(r.isUniformPreviewActive(),'자동 기준으로도 비교 가능');
     studio.undo();check(!$('compareA').getAttribute('aria-pressed').includes('true')&&!r.isUniformPreviewActive()&&$('parameterCompare').hidden,'Undo하면 기준과 A 미리보기 해제');
     releaseA();
-    menuPick('uniformMore','compareCapture');set('uValue',3);holdA();
+    menuPick('uniformMore','compareCapture');set('uValue',user('uValue').value===7.5?6.5:7.5);holdA();
     check(r.isUniformPreviewActive(),'프로젝트를 바꾸기 전 A를 보는 중');
     check(studio.setProject({image:'void mainImage(out vec4 c,in vec2 p){c=vec4(0.1);}',passes:[],imageChannels:{}}),'다른 프로젝트로 변경');
     await wait(650);
