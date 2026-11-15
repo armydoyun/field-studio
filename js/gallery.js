@@ -298,11 +298,13 @@ const ART = [
 const annotated = `#version 300 es
 precision highp float;
 precision highp int;
+// FIELD Studio: annotation-lab-v2
 uniform vec2 uResolution;
 uniform float uTime;
 // ── 주석 어노테이션 실습 ─────────────────────────────────────────────────────────────
 // 1. uView = 결과: 행성·위성·별을 조절한다. 꺼진 기능의 세부 항목은 조건에 따라 숨는다.
-// 2. uView = 타입_실험: 배열·성분별 범위·정수/불리언 벡터·행렬을 화면의 점·격자·색으로 확인한다.
+// 2. uView = 타입_실험: uLab에서 배열·벡터·행렬·램프를 하나씩 고른다.
+//    배열: 번호가 원소 인덱스, 빈 원은 꺼진 원소. 행렬: 왼쪽 0은 기준, 오른쪽 1은 변환 결과.
 // 3. uView = 램프: 색 램프와 곡선을 읽는 법을 본다. 실험 보기에도 추가 램프가 있다.
 // 값이 마음에 들면 이름 옆 코드 반영 버튼 또는 '바뀐 값 모두 코드에 반영'으로 기본값에 쓴다(Ctrl+Z로 복원).
 // 잠금 버튼으로 고정한 뒤 전체 무작위/조금씩 바꾸기 → 프리셋 저장도 해 보자. 이 버튼들은 태그가 아니라 패널 기능이다.
@@ -320,116 +322,234 @@ uniform float uTime;
 // gradient의 #RRGGBBAA 끝 두 자리는 알파다. uMoons는 이 표현을, uNumericGradient는 숫자 RGBA를 보여 준다.
 // ── 기본 장면: 스칼라·위젯·단일/복합 조건 ──
 uniform int   uView;     // 보기(재생: 차례로, 타입 실험은 마지막) · @enum 결과 명암만 거리장 램프 타입_실험 @default 0 @anim 2 @group 보기
-uniform bool  uMoonEnabled; // 위성 켜기(세부 조절기도 함께 표시) · @default true @group 모양
+uniform int uLab; // 실험 선택: 배열의 점, 벡터의 데이터, 행렬 비교, 램프 그래프 · @enum 배열 벡터 행렬 램프 @default 0 @group 실험_선택 @if uView == 타입_실험
+uniform int uMatrixMode; // 행렬 선택: XY 선형 변환, 동차 좌표, RGBA 색 변환 · @enum XY_변환 동차_좌표 색_변환 @default 0 @group 실험_선택 @if uView == 타입_실험 && uLab == 행렬
+uniform bool  uMoonEnabled; // 위성 켜기(세부 조절기도 함께 표시) · @default true @group 모양 @if uView < 3
 uniform float uRadius;   // 행성 크기(range의 세 번째 숫자는 step) · @range 0.1 0.4 0.005 @default 0.24 @group 모양 @if uView < 3
 uniform int   uCount;    // 위성 수(재생: int는 한 칸씩 왕복) · @min 0 @max 9 @default 5 @anim 6 @group 모양 @if uMoonEnabled == true && uView < 3
 uniform float uOrbit;    // 궤도 반지름(위성이 있을 때) · @range 0.3 0.8 @step 0.01 @default 0.5 @group 모양 @if uCount > 0 && uMoonEnabled && uView < 3
 uniform float uSpin;     // 위성 돌리기(30deg를 라디안으로 읽음) · @angle @default 30deg @anim 12 @group 모양 @if uCount >= 1 && uMoonEnabled && uView < 3
-uniform vec2  uCenter;   // 화면 중심(값 하나로 XY 모두 초기화) · @pos @range -1 1 @default 0 @group 모양 @if uView != 램프
-uniform float uZoom;     // 확대(로그 눈금) · @log @range 0.25 4 @default 1 @group 모양 @if uView != 램프
+uniform vec2  uCenter;   // 화면 중심(값 하나로 XY 모두 초기화) · @pos @range -1 1 @default 0 @group 모양 @if uView < 3
+uniform float uZoom;     // 확대(로그 눈금) · @log @range 0.25 4 @default 1 @group 모양 @if uView < 3
 uniform bool  uGlowEnabled; // 빛 번짐 켜기 · @default true @group 빛 @if uView == 결과
 uniform vec3  uLightDir; // 빛 방향(+Y 반구로 정규화) · @dir hemi @default 0.55 0.6 0.58 @group 빛 @if uView <= 1
 uniform vec3  uLight;    // 빛 색(최대 밝기 4) · @color hdr 4 @default 1.3 1.2 1 @group 빛 @if uView == 결과
 uniform vec3  uAmbientFill; // 번짐을 껐을 때의 주변 빛 · @color @default 0.01 0.02 0.04 @group 빛 @if !uGlowEnabled && uView == 0
-uniform sampler2D uToon; // 명암 계단(step 보간) · @gradient step @default 0 #141833 0.3 #33438a 0.65 #7c9cf0 0.92 #e8f0ff @group 빛 @if uView == 결과 || uView == 램프
-uniform sampler2D uGlow; // 거리 → 번짐(기본 보간은 smooth) · @curve @default 0 1 0.15 0.4 0.45 0.1 1 0 @group 빛 @if uView == 결과 && uGlowEnabled || uView == 램프
+uniform sampler2D uToon; // 색 띠 3: step(행성의 명암 계단) · @gradient step @default 0 #141833 0.3 #33438a 0.65 #7c9cf0 0.92 #e8f0ff @group 색_램프 @if uView == 결과 || uView == 램프 || uView == 타입_실험 && uLab == 램프
+uniform sampler2D uGlow; // 곡선 2: smooth 번짐, 거리에서 세기로 · @curve @default 0 1 0.15 0.4 0.45 0.1 1 0 @group 곡선 @if uView == 결과 && uGlowEnabled || uView == 램프 || uView == 타입_실험 && uLab == 램프
 uniform float uGlowSize; // 번짐 범위(결과이고 번짐이 켜졌을 때) · @range 0.05 0.6 @step 0.01 @default 0.3 @group 빛 @if uView == 0 && uGlowEnabled != false
 uniform vec3  uBack;     // 바탕 · @color @default 0.02 0.02 0.04 @group 배경 @if uView == 결과
-uniform sampler2D uSky;  // 하늘(smooth 보간) · @gradient smooth @default 0 #120a2e 0.6 #05060f 1 #000000 @group 배경 @if uView == 결과 || uView == 램프
-uniform sampler2D uMoons;// 위성 색(linear, 알파는 실험 상단에 표시) · @gradient linear @default 0 #ffb34700 0.5 #ff5e7eaa 1 #8f7bffff @group 배경 @if uView == 결과 && uMoonEnabled || uView >= 3
+uniform sampler2D uSky;  // 색 띠 2: smooth(하늘 색도 사용) · @gradient smooth @default 0 #120a2e 0.6 #05060f 1 #000000 @group 색_램프 @if uView == 결과 || uView == 램프 || uView == 타입_실험 && uLab == 램프
+uniform sampler2D uMoons;// 색 띠 1: linear와 HEX 알파(위성 색도 사용) · @gradient linear @default 0 #ffb34700 0.5 #ff5e7eaa 1 #8f7bffff @group 색_램프 @if uView == 결과 && uMoonEnabled || uView == 램프 || uView == 타입_실험 && uLab == 램프
 uniform float uStars;    // 별 밀도 · @range 0 1 @step 0.01 @default 0.35 @group 배경 @if uView == 결과
 uniform float uSeed;     // 별 배치(float 무작위, 범위·간격 제한) · @seed @range 0 999 @step 1 @default 0 @group 배경 @if uStars > 0 && uView == 결과
 uniform vec2  uDrift;    // 별이 흐르는 방향(전체 원) · @dir @default 1 0.25 @group 배경 @if uStars > 0 && uView == 결과
 uniform float uTwinkle;  // 위성 깜빡임(float 왕복) · @range 0 1 @step 0.01 @default 0.4 @anim 3 @group 배경 @if uMoonEnabled && uCount > 0 && uView < 2
-uniform bool  uOrbitLine;// 궤도선(조건의 단독 이름) · @default true @group 모양 @if uMoonEnabled
+uniform bool  uOrbitLine;// 궤도선(조건의 단독 이름) · @default true @group 모양 @if uMoonEnabled && uView < 3
 // ── 타입 실험: 아래의 모든 값은 lab()에서 실제로 사용한다 ──
-uniform vec2 uOffset;    // 성분별 범위: X -1~1, Y -0.5~0.5 · @range -1 1 -0.5 0.5 @default 0 @group 좌표_실험 @if uView == 타입_실험
-uniform vec2 uPad;       // xy는 pos의 별칭(범위 생략 시 -1~1) · @xy @default 0 @group 좌표_실험 @if uView == 타입_실험
-uniform float uLabPhase; // 색 줄무늬의 위상(숫자는 라디안) · @angle @default 0.2 @group 좌표_실험 @if uView == 타입_실험
-uniform vec3 uLabDir;    // 점을 비추는 방향(전체 구, 단위 벡터) · @dir @default 0.3 0.5 1 @group 좌표_실험 @if uView == 타입_실험
-uniform float uRotation;// 실험 좌표 회전(° 표기, anim 생략 시 4초) · @angle @default 45° @anim @group 좌표_실험 @if uView == 타입_실험
-uniform vec2 uPoints[3]; // 이름 뒤 배열 + 원소마다 다른 XY · @pos @range -0.8 0.8 @default -0.5 -0.1 0 0.25 0.5 -0.1 @group 배열_실험 @if uView == 타입_실험
-uniform float[3] uSizes;// 타입 뒤 배열 + 값 하나를 모든 원소에 · @range 0.03 0.18 @default 0.09 @group 배열_실험 @if uView == 타입_실험
-uniform vec3 uColors[3];// 색 배열 + 전체 성분을 차례로 · @color @default 1 0.4 0.2 0.2 0.8 1 0.7 0.4 1 @group 배열_실험 @if uView == 타입_실험
-uniform vec2 uDirs[3];  // 방향 배열 + 원소 하나 분량을 반복(+Y 반원) · @dir hemi @default 1 1 @group 배열_실험 @if uView == 타입_실험
-uniform bool uEnabled[3];// bool 배열(1/0도 true/false와 같다) · @default 1 0 1 @group 배열_실험 @if uView == 타입_실험
-uniform ivec2 uGrid;    // 정수 성분별 범위: 가로 2~12, 세로 2~8 · @range 2 12 2 8 @default 8 4 @group 벡터_실험 @if uView == 타입_실험
-uniform uvec2 uShift;   // 부호 없는 XY: 격자 이동 · @range 0 8 @default 0 1 @group 벡터_실험 @if uView == 타입_실험
-uniform ivec3 uBands;   // RGB 줄무늬의 세 주파수 · @range 1 12 @default 3 5 7 @group 벡터_실험 @if uView == 타입_실험
-uniform lowp ivec4 uSlots;   // 네 세로 구역에서 강조할 채널(R=0 G=1 B=2) · @range 0 2 @default 0 1 2 0 @group 벡터_실험 @if uView == 타입_실험
-uniform uvec3 uHash;    // RGB 줄무늬의 세 위상 · @range 0 31 @default 1 7 13 @group 벡터_실험 @if uView == 타입_실험
-uniform uvec4 uCodes;   // 네 사분면의 빗금 비트(0~15) · @range 0 15 @default 1 3 7 15 @group 벡터_실험 @if uView == 타입_실험
-uniform bvec2 uAxes;    // 가로·세로 격자 켜기(값 하나를 두 성분에) · @default true @group 벡터_실험 @if uView == 타입_실험
-uniform bvec3 uChannels;// RGB 채널 켜기 · @default true true true @group 벡터_실험 @if uView == 타입_실험
-uniform bvec4 uQuadrants;// 네 사분면 켜기 · @default true true true true @group 벡터_실험 @if uView == 타입_실험
-uniform uint uPaletteIndex;// uint 선택지 + 쉼표 + 이름의 밑줄은 빈칸 · @enum 합성, 색_채널, 격자_비트 @default 0 @anim 2 @group 벡터_실험 @if uView == 타입_실험
-uniform int uSeedInt;   // 점의 색 고르기(int, 범위 생략 시 0~99999) · @seed @default 0 @group 배열_실험 @if uView == 타입_실험
-uniform uint uSeedUint; // 점의 밝기 고르기(uint도 무작위·왕복 가능) · @seed @range 0 99 @default 0 @anim 8 @group 배열_실험 @if uView == 타입_실험
-uniform mat2 uMatrix2;  // XY 선형 변환(기본값 생략 = 단위 행렬) · @group 행렬_실험 @if uView == 타입_실험
-uniform mat3 uMatrix3;  // 동차 좌표 변환(열 우선으로 9성분) · @default 1 0 0 0 1 0 0 0 1 @group 행렬_실험 @if uView == 타입_실험
-uniform mat4 uMatrix4;  // RGBA 변환(열 우선으로 16성분) · @default 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 @group 행렬_실험 @if uView == 타입_실험
-uniform mediump vec4 uLabTint;  // HDR + 알파(최대 밝기 생략 시 10, 알파 0~1) · @color hdr @default 1 0.8 0.6 0.7 @group 색_실험 @if uView == 타입_실험
-uniform highp float uGain, uBias; // 한 줄 여러 선언: 같은 설정을 각각 적용 · @range 0 1 @step 0.01 @default 0.5 @group 색_실험 @if uView == 타입_실험
-uniform float uPulse;   // 점의 맥동(기본값 생략 = 범위 안의 0, 기본 주기 4초) · @range 0 1 @anim @group 배열_실험 @if uView == 타입_실험
-uniform sampler2D uLinearCurve; // 선형 곡선 + Y 범위 -1~1 · @curve linear @range -1 1 @default 0 -0.8 0.5 0.7 1 0 @group 램프_실험 @if uView == 타입_실험
-uniform sampler2D uNumericGradient; // 숫자로 쓰는 위치 R G B A 다섯 개씩 · @gradient smooth @default 0 0.1 0.3 1 1 0.5 0.8 0.2 0.4 0.5 1 1 0.8 0.2 1 @group 램프_실험 @if uView == 타입_실험
-uniform sampler2D uAutoGradient; // 모드·기본값 생략 = linear, 검정→흰색 · @gradient @group 램프_실험 @if uView == 타입_실험
-uniform sampler2D uAutoCurve; // 기본값 생략 = (0,0)→(1,1), 보간은 smooth · @curve smooth @group 램프_실험 @if uView == 타입_실험
+uniform vec2 uOffset;    // 성분별 범위: X -1~1, Y -0.5~0.5 · @range -1 1 -0.5 0.5 @default 0 @group 좌표_실험 @if uView == 타입_실험 && uLab == 배열
+uniform vec2 uPad;       // xy는 pos의 별칭(범위 생략 시 -1~1) · @xy @default 0 @group 좌표_실험 @if uView == 타입_실험 && uLab == 행렬 && uMatrixMode == 동차_좌표
+uniform float uLabPhase; // 색 줄무늬의 위상(숫자는 라디안) · @angle @default 0.2 @group 좌표_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 격자_비트
+uniform vec3 uLabDir;    // 점을 비추는 방향(전체 구, 단위 벡터) · @dir @default 0.3 0.5 1 @group 좌표_실험 @if uView == 타입_실험 && uLab == 배열
+uniform float uRotation;// 변환 결과만 회전(° 표기, 기본 4초) · @angle @default 0° @anim @group 좌표_실험 @if uView == 타입_실험 && uLab == 행렬 && uMatrixMode == XY_변환
+uniform vec2 uPoints[3]; // 이름 뒤 배열 + 원소마다 다른 XY · @pos @range -0.8 0.8 @default -0.5 -0.1 0 0.25 0.5 -0.1 @group 배열_실험 @if uView == 타입_실험 && uLab == 배열
+uniform float[3] uSizes;// 타입 뒤 배열 + 값 하나를 모든 원소에 · @range 0.03 0.18 @default 0.09 @group 배열_실험 @if uView == 타입_실험 && uLab == 배열
+uniform vec3 uColors[3];// 색 배열 + 전체 성분을 차례로 · @color @default 1 0.4 0.2 0.2 0.8 1 0.7 0.4 1 @group 배열_실험 @if uView == 타입_실험 && uLab == 배열
+uniform vec2 uDirs[3];  // 방향 배열 + 원소 하나 분량을 반복(+Y 반원) · @dir hemi @default 1 1 @group 배열_실험 @if uView == 타입_실험 && uLab == 배열 && uPulse > 0
+uniform bool uEnabled[3];// bool 배열(1/0도 true/false와 같다) · @default 1 0 1 @group 배열_실험 @if uView == 타입_실험 && uLab == 배열
+uniform ivec2 uGrid;    // 정수 성분별 범위: 가로 2~12, 세로 2~8 · @range 2 12 2 8 @default 8 4 @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 색_채널
+uniform uvec2 uShift;   // 부호 없는 XY: 격자 이동 · @range 0 8 @default 0 1 @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 색_채널
+uniform ivec3 uBands;   // RGB 줄무늬의 세 주파수 · @range 1 12 @default 3 5 7 @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 격자_비트
+uniform lowp ivec4 uSlots;   // 네 세로 구역에서 강조할 채널(R=0 G=1 B=2) · @range 0 2 @default 0 1 2 0 @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 격자_비트
+uniform uvec3 uHash;    // RGB 줄무늬의 세 위상 · @range 0 31 @default 1 7 13 @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 격자_비트
+uniform uvec4 uCodes;   // 네 비트 그룹의 켜진 비트(0~15) · @range 0 15 @default 1 3 7 15 @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 색_채널
+uniform bvec2 uAxes;    // 가로·세로 격자 켜기(값 하나를 두 성분에) · @default true @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 색_채널
+uniform bvec3 uChannels;// RGB 채널 켜기 · @default true true true @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 격자_비트
+uniform bvec4 uQuadrants;// 네 비트 그룹 켜기 · @default true true true true @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터 && uPaletteIndex != 색_채널
+uniform uint uPaletteIndex;// uint 선택지 + 쉼표 + 이름의 밑줄은 빈칸 · @enum 합성, 색_채널, 격자_비트 @default 0 @anim 2 @group 벡터_실험 @if uView == 타입_실험 && uLab == 벡터
+uniform int uSeedInt;   // 점의 색 고르기(int, 범위 생략 시 0~99999) · @seed @default 0 @group 배열_실험 @if uView == 타입_실험 && uLab == 배열
+uniform uint uSeedUint; // 점의 밝기 고르기(uint도 무작위·왕복 가능) · @seed @range 0 99 @default 0 @anim 8 @group 배열_실험 @if uView == 타입_실험 && uLab == 배열
+uniform mat2 uMatrix2;  // XY 선형 변환(기본값 생략 = 단위 행렬) · @group 행렬_실험 @if uView == 타입_실험 && uLab == 행렬 && uMatrixMode == XY_변환
+uniform mat3 uMatrix3;  // 동차 좌표 변환(열 우선으로 9성분) · @default 1 0 0 0 1 0 0 0 1 @group 행렬_실험 @if uView == 타입_실험 && uLab == 행렬 && uMatrixMode == 동차_좌표
+uniform mat4 uMatrix4;  // RGBA 변환(열 우선으로 16성분) · @default 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 @group 행렬_실험 @if uView == 타입_실험 && uLab == 행렬 && uMatrixMode == 색_변환
+uniform mediump vec4 uLabTint;  // HDR + 알파(최대 밝기 생략 시 10, 알파 0~1) · @color hdr @default 1 0.8 0.6 0.7 @group 색_실험 @if uView == 타입_실험 && uLab == 행렬 && uMatrixMode == 색_변환
+uniform highp float uGain, uBias; // 한 줄 여러 선언: 같은 설정을 각각 적용 · @range 0 1 @step 0.01 @default 0.5 @group 색_실험 @if uView == 타입_실험 && uLab == 행렬 && uMatrixMode == 색_변환
+uniform float uPulse;   // 점의 맥동(기본값 생략 = 범위 안의 0, 기본 주기 4초) · @range 0 1 @anim @group 배열_실험 @if uView == 타입_실험 && uLab == 배열
+uniform sampler2D uLinearCurve; // 곡선 1: linear, Y 범위 -1~1 · @curve linear @range -1 1 @default 0 -0.8 0.5 0.7 1 0 @group 곡선 @if uView == 램프 || uView == 타입_실험 && uLab == 램프
+uniform sampler2D uNumericGradient; // 색 띠 4: 숫자 위치 R G B A 다섯 개씩 · @gradient smooth @default 0 0.1 0.3 1 1 0.5 0.8 0.2 0.4 0.5 1 1 0.8 0.2 1 @group 색_램프 @if uView == 램프 || uView == 타입_실험 && uLab == 램프
+uniform sampler2D uAutoGradient; // 색 띠 0: 기본 linear, 검정에서 흰색 · @gradient @group 색_램프 @if uView == 램프 || uView == 타입_실험 && uLab == 램프
+uniform sampler2D uAutoCurve; // 곡선 0: 기본 (0,0)에서 (1,1), smooth · @curve smooth @group 곡선 @if uView == 램프 || uView == 타입_실험 && uLab == 램프
 ${HASH}
 // 램프 읽기: 그라데이션은 .rgb(0~1 위치의 색), 곡선은 .r(x의 y). 0~1 밖은 끝 값으로 고정된다.
 vec3 ramp(sampler2D s, float t) { return texture(s, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb; }
 float curve(sampler2D s, float x) { return texture(s, vec2(clamp(x, 0.0, 1.0), 0.5)).r; }
-// 타입 실험의 값은 점·격자·줄무늬·곡선으로 읽는다. 어떤 타입도 선언만 해 놓지 않는다.
-vec3 lab(vec2 uv) {
-    vec3 homogeneous = uMatrix3 * vec3(uMatrix2 * (uv - uPad * 0.25), 1.0);
-    float w = abs(homogeneous.z) < 0.05 ? (homogeneous.z < 0.0 ? -0.05 : 0.05) : homogeneous.z;
-    vec2 q = homogeneous.xy / w - uOffset * 0.2;
-    float c = cos(uRotation), s = sin(uRotation);
-    q = mat2(c, -s, s, c) * q;
-    vec2 tile = abs(fract(q * vec2(uGrid) + vec2(uShift) * 0.1) - 0.5);
-    float grid = max(uAxes.x ? step(0.46, tile.x) : 0.0, uAxes.y ? step(0.46, tile.y) : 0.0);
-    int quadrant = (q.x > 0.0 ? 1 : 0) + (q.y > 0.0 ? 2 : 0);
-    uint bit = uint(mod(floor((q.x + q.y + 2.0) * 28.0), 4.0));
-    float hatch = (uCodes[quadrant] & (1u << bit)) != 0u ? 1.0 : 0.0;
-    vec3 stripes = 0.5 + 0.5 * sin((q.x + q.y) * vec3(uBands) * 6.28318 + vec3(uHash) * 0.2 + uLabPhase);
-    int slot = clamp(int(floor((q.x + 0.8) * 2.5)), 0, 3);
-    stripes[uSlots[slot]] += 0.3;
-    vec3 channels = vec3(uChannels.x ? 1.0 : 0.0, uChannels.y ? 1.0 : 0.0, uChannels.z ? 1.0 : 0.0);
-    vec4 numericColor = texture(uNumericGradient, vec2(clamp(q.x + 0.5, 0.0, 1.0), 0.5));
-    vec3 col = mix(vec3(0.02), numericColor.rgb, numericColor.a) * (0.15 + 0.3 * stripes) * channels;
-    if (uPaletteIndex != 1u) col += vec3(0.1, 0.25, 0.3) * (grid + hatch * 0.2);
-    if (uPaletteIndex == 2u) col = vec3(grid * 0.8 + hatch * 0.15);
-    for (int i = 0; i < 3; i++) {
-        if (!uEnabled[i]) continue;
-        vec2 point = uPoints[i] + uDirs[i] * 0.04 * sin(uTime);
-        float size = uSizes[i] * (1.0 + 0.3 * uPulse);
-        vec2 local = (q - point) / size;
-        float d = length(local);
-        vec3 n = normalize(vec3(local, 1.0));
-        float light = 0.35 + 0.65 * max(dot(n, uLabDir), 0.0);
-        float pick = hash(vec2(float(uSeedInt), float(i) + float(uSeedUint)));
-        vec3 dotColor = mix(uColors[i], ramp(uMoons, pick), 0.25) * light;
-        col = mix(col, dotColor, 1.0 - smoothstep(0.9, 1.0, d));
+// 실험별로 좌표계를 분리한다. 패널의 uLab에서 한 실험씩 선택한다.
+float labBox(vec2 p, vec2 halfSize) {
+    vec2 d = abs(p) - halfSize;
+    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+float labLine(vec2 p, vec2 a, vec2 b) {
+    vec2 d = b - a;
+    return length(p - a - d * clamp(dot(p - a, d) / max(dot(d, d), 1e-8), 0.0, 1.0));
+}
+float labDigit(vec2 p, int number) {
+    // 숫자는 데이터의 인덱스다. 작은 7세그먼트 글자로 배열/비트 그룹을 구별한다.
+    const int masks[10] = int[10](63, 6, 91, 79, 102, 109, 125, 7, 127, 111);
+    int bits = masks[clamp(number, 0, 9)];
+    float d = 10.0;
+    for (int i = 0; i < 7; i++) {
+        if ((bits & (1 << i)) == 0) continue;
+        vec2 center = i == 0 ? vec2(0, 0.42) : i == 1 ? vec2(0.24, 0.21) : i == 2 ? vec2(0.24, -0.21)
+                    : i == 3 ? vec2(0, -0.42) : i == 4 ? vec2(-0.24, -0.21) : i == 5 ? vec2(-0.24, 0.21) : vec2(0);
+        vec2 size = i == 0 || i == 3 || i == 6 ? vec2(0.2, 0.035) : vec2(0.035, 0.17);
+        d = min(d, labBox(p - center, size));
     }
-    // 위는 알파 그라데이션, 아래는 linear/smooth 곡선과 기본 그라데이션이다.
-    vec4 alphaColor = texture(uMoons, vec2(clamp(q.x + 0.5, 0.0, 1.0), 0.5));
-    if (q.y > 0.48) col = mix(col, alphaColor.rgb, alphaColor.a);
-    float x = clamp(q.x + 0.5, 0.0, 1.0);
-    float linearY = -0.5 + 0.12 * curve(uLinearCurve, x);
-    float smoothY = -0.7 + 0.12 * curve(uAutoCurve, x);
-    col += vec3(1.0, 0.6, 0.2) * (1.0 - smoothstep(0.0, 0.012, abs(q.y - linearY)));
-    col += vec3(0.2, 0.8, 1.0) * (1.0 - smoothstep(0.0, 0.012, abs(q.y - smoothY)));
-    if (q.y < -0.8) col = ramp(uAutoGradient, x);
-    col *= uQuadrants[quadrant] ? 1.0 : 0.15;
-    col = mix(col, col * uLabTint.rgb, uLabTint.a);
-    col = col * (2.0 * uGain) + (uBias - 0.5) * 0.3;
-    vec4 mapped = uMatrix4 * vec4(col, 1.0);
-    return max(mapped.rgb, vec3(0.0)) * clamp(mapped.a, 0.0, 1.0);
+    return 1.0 - smoothstep(0.0, 0.035, d);
+}
+vec3 labPaper(vec2 q, float px) {
+    vec3 col = vec3(0.035, 0.045, 0.065);
+    float frame = abs(labBox(q, vec2(0.96, 0.82)));
+    return col + vec3(0.10, 0.13, 0.18) * (1.0 - smoothstep(px, px * 2.0, frame));
+}
+vec3 labArrays(vec2 q, float px) {
+    vec3 col = labPaper(q, px);
+    // 성긴 기준선 위에서 점의 위치·크기·색과 배열 번호를 읽는다.
+    vec2 grid = abs(fract(q * 2.0 + 0.5) - 0.5) / 2.0;
+    float line = 1.0 - smoothstep(px, px * 1.5, min(grid.x, grid.y));
+    col += vec3(0.025, 0.03, 0.04) * line;
+    for (int i = 0; i < 3; i++) {
+        vec2 point = uPoints[i] + uOffset * 0.25 + uDirs[i] * uPulse * 0.08 * sin(uTime);
+        float size = uSizes[i] * (1.0 + 0.2 * uPulse);
+        vec2 local = (q - point) / size;
+        float d = length(local), edge = 1.0 - smoothstep(0.0, px * 2.0, abs(length(q - point) - size));
+        float light = 0.45 + 0.55 * max(dot(normalize(vec3(local, 1.0)), uLabDir), 0.0);
+        float pick = hash(vec2(float(uSeedInt), float(i) + 17.0));
+        vec3 color = uColors[i];
+        if (uSeedInt != 0) color = mix(color, 0.5 + 0.5 * cos(pick * 6.28318 + vec3(0, 2, 4)), 0.5);
+        color *= light * (1.0 + 0.3 * sin(float(uSeedUint)));
+        if (uEnabled[i]) col = mix(col, color, 1.0 - smoothstep(1.0 - px / size, 1.0, d));
+        else col = mix(col, vec3(0.25, 0.29, 0.35), edge);
+        float label = labDigit((q - point - vec2(0, -size - 0.1)) / 0.09, i);
+        col = mix(col, uEnabled[i] ? vec3(0.86, 0.9, 0.96) : vec3(0.4, 0.45, 0.52), label);
+    }
+    return col;
+}
+vec3 labVectorPart(vec2 p, int part, float px) {
+    float x = clamp(p.x * 0.5 + 0.5, 0.0, 0.9999), y = clamp(p.y * 0.5 + 0.5, 0.0, 0.9999);
+    if (part == 0) {
+        int channel = clamp(int((1.0 - y) * 3.0), 0, 2), slot = int(x * 4.0);
+        float wave = 0.55 + 0.2 * sin(x * float(uBands[channel]) * 6.28318 + float(uHash[channel]) * 0.2 + uLabPhase);
+        vec3 colors[3] = vec3[3](vec3(0.95, 0.28, 0.32), vec3(0.2, 0.8, 0.55), vec3(0.25, 0.55, 1.0));
+        vec3 color = uChannels[channel] ? colors[channel] * (wave + (uSlots[slot] == channel ? 0.22 : 0.0)) : vec3(0.12, 0.14, 0.18);
+        float separators = step(0.96, fract(x * 4.0)) + step(0.96, fract(y * 3.0));
+        return mix(color, vec3(0.035, 0.045, 0.065), min(separators, 1.0));
+    }
+    if (part == 1) {
+        vec2 g = vec2(x, y) * vec2(uGrid) + vec2(uShift) * 0.1;
+        vec2 lines = 1.0 - smoothstep(vec2(0.025), vec2(0.05), min(fract(g), 1.0 - fract(g)));
+        float grid = max(uAxes.x ? lines.y : 0.0, uAxes.y ? lines.x : 0.0);
+        return mix(vec3(0.055, 0.075, 0.095), vec3(0.25, 0.65, 0.8), grid);
+    }
+    int group = clamp(int(x * 4.0), 0, 3), bit = clamp(int(fract(x * 4.0) * 4.0), 0, 3);
+    bool enabled = uQuadrants[group], on = (uCodes[group] & (1u << uint(bit))) != 0u;
+    vec3 color = enabled && on ? vec3(0.95, 0.65, 0.25) : vec3(0.11, 0.14, 0.19);
+    float cell = 1.0 - smoothstep(0.42, 0.48, abs(fract(x * 16.0) - 0.5));
+    color *= 0.5 + 0.5 * cell;
+    float label = labDigit(vec2((fract(x * 4.0) - 0.5) * 4.0, (y - 0.5) * 2.0), group);
+    return mix(color, enabled ? vec3(0.94) : vec3(0.4), label * 0.7);
+}
+vec3 labVectors(vec2 q, float px) {
+    vec3 col = labPaper(q, px);
+    if (abs(q.x) > 0.85 || abs(q.y) > 0.71) return col;
+    if (uPaletteIndex == 1u) return labVectorPart(q / vec2(0.85, 0.71), 0, px);
+    if (uPaletteIndex == 2u) {
+        int part = q.y > 0.0 ? 1 : 2;
+        return labVectorPart(vec2(q.x / 0.85, (q.y + (part == 1 ? -0.36 : 0.36)) / 0.31), part, px);
+    }
+    int part = q.y > 0.25 ? 0 : q.y < -0.25 ? 2 : 1;
+    float center = part == 0 ? 0.49 : part == 1 ? 0.0 : -0.49;
+    if (abs(q.y - center) > 0.2) return col;
+    return labVectorPart(vec2(q.x / 0.85, (q.y - center) / 0.2), part, px);
+}
+vec3 labMatrices(vec2 q, float px) {
+    vec3 col = labPaper(q, px);
+    bool changed = q.x > 0.0;
+    vec2 center = vec2(changed ? 0.48 : -0.48, 0);
+    vec2 p = q - center;
+    vec2 corners[4] = vec2[4](vec2(-0.25, -0.3), vec2(0.25, -0.3), vec2(0.25, 0.3), vec2(-0.25, 0.3));
+    if (changed && uMatrixMode < 2) for (int i = 0; i < 4; i++) {
+        if (uMatrixMode == 0) {
+            float c = cos(uRotation), s = sin(uRotation);
+            corners[i] = mat2(c, s, -s, c) * uMatrix2 * corners[i];
+        } else {
+            vec3 h = uMatrix3 * vec3(corners[i], 1.0);
+            float w = abs(h.z) < 0.05 ? (h.z < 0.0 ? -0.05 : 0.05) : h.z;
+            corners[i] = h.xy / w + uPad * 0.2;
+        }
+    }
+    float edge = 10.0, area = 0.0;
+    bool positive = true, negative = true;
+    for (int i = 0; i < 4; i++) {
+        vec2 a = corners[i], b = corners[(i + 1) % 4];
+        area += a.x * b.y - a.y * b.x;
+        float crossValue = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+        positive = positive && crossValue >= 0.0; negative = negative && crossValue <= 0.0;
+        edge = min(edge, labLine(p, a, b));
+    }
+    if (abs(area) > 1e-8 && (positive || negative)) {
+        if (uMatrixMode == 2) {
+            vec3 source = mix(vec3(0.2, 0.55, 0.85), vec3(0.95, 0.55, 0.25), step(0.0, p.y));
+            vec4 inputColor = vec4(source * uLabTint.rgb * (uGain * 2.0) + (uBias - 0.5) * 0.3, uLabTint.a);
+            vec4 mapped = changed ? uMatrix4 * inputColor : inputColor;
+            vec3 checker = vec3(mod(floor(p.x * 24.0) + floor(p.y * 24.0), 2.0) < 1.0 ? 0.08 : 0.14);
+            col = mix(checker, max(mapped.rgb, 0.0), clamp(mapped.a, 0.0, 1.0));
+        } else col = changed ? vec3(0.12, 0.42, 0.58) : vec3(0.12, 0.16, 0.23);
+    }
+    col = mix(col, changed ? vec3(0.35, 0.85, 1.0) : vec3(0.8, 0.84, 0.9), 1.0 - smoothstep(px, px * 2.0, edge));
+    if (changed && uMatrixMode < 2) col += vec3(0.16) * (1.0 - smoothstep(px, px * 2.0, abs(labBox(p, vec2(0.25, 0.3)))));
+    float label = labDigit((p - vec2(0, -0.6)) / 0.1, changed ? 1 : 0);
+    return mix(col, vec3(0.85), label);
+}
+vec3 labRamps(vec2 q, float px) {
+    vec3 col = labPaper(q, px);
+    if (q.x < -0.05 && q.x > -0.82) {
+        int row = clamp(int((0.75 - q.y) / 0.3), 0, 4);
+        float center = 0.6 - float(row) * 0.3;
+        if (abs(q.y - center) < 0.105) {
+            float t = clamp((q.x + 0.8) / 0.73, 0.0, 1.0);
+            vec4 value = row == 0 ? texture(uAutoGradient, vec2(t, 0.5)) : row == 1 ? texture(uMoons, vec2(t, 0.5))
+                       : row == 2 ? texture(uSky, vec2(t, 0.5)) : row == 3 ? texture(uToon, vec2(t, 0.5)) : texture(uNumericGradient, vec2(t, 0.5));
+            vec3 checker = vec3(mod(floor(q.x * 35.0) + floor(q.y * 35.0), 2.0) < 1.0 ? 0.1 : 0.18);
+            col = mix(checker, value.rgb, value.a);
+        }
+    }
+    if (q.x > 0.16 && q.x < 0.85) {
+        int row = clamp(int((0.75 - q.y) / 0.5), 0, 2);
+        float center = 0.5 - float(row) * 0.5;
+        vec2 p = vec2((q.x - 0.16) / 0.69, (q.y - center) / 0.2);
+        if (abs(p.y) < 1.0) {
+            float value = row == 0 ? curve(uAutoCurve, p.x) : row == 1 ? curve(uLinearCurve, p.x) * 0.5 + 0.5 : curve(uGlow, p.x);
+            col += vec3(0.10) * (1.0 - smoothstep(px, px * 2.0, abs(p.y)));
+            col += vec3(0.35, 0.85, 1.0) * (1.0 - smoothstep(0.025, 0.055, abs(p.y - (value * 2.0 - 1.0))));
+        }
+    }
+    for (int i = 0; i < 5; i++) col = mix(col, vec3(0.7), labDigit((q - vec2(-0.9, 0.6 - float(i) * 0.3)) / 0.075, i));
+    for (int i = 0; i < 3; i++) col = mix(col, vec3(0.7), labDigit((q - vec2(0.07, 0.5 - float(i) * 0.5)) / 0.075, i));
+    return col;
+}
+vec3 lab(vec2 fragCoord) {
+    // 위쪽은 실습 안내, 아래쪽은 HUD 여백이다. 해상도 배율을 바꿔도 같은 구도를 유지한다.
+    float side = max(1.0, min(uResolution.x * 0.88, uResolution.y * 0.76));
+    vec2 q = (fragCoord - uResolution * vec2(0.5, 0.455)) * 2.0 / side;
+    float px = 2.0 / side;
+    int chapter = uView == 3 ? 3 : uLab;
+    vec3 col = chapter == 0 ? labArrays(q, px) : chapter == 1 ? labVectors(q, px) : chapter == 2 ? labMatrices(q, px) : labRamps(q, px);
+    return abs(q.x) <= 1.0 && abs(q.y) <= 0.86 ? col : vec3(0.035, 0.045, 0.065);
 }
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y / uZoom - uCenter * 0.5;
     float px = 1.5 / uResolution.y / uZoom;
-    if (uView == 4) { fragColor = vec4(lab(uv), 1.0); return; }
+    if (uView == 3 || uView == 4) { fragColor = vec4(lab(fragCoord), 1.0); return; }
     // 하늘 + 흐르는 별(uSeed가 배치를, uDrift가 방향을 정한다)
     vec3 col = uBack + ramp(uSky, fragCoord.y / uResolution.y);
     vec2 sp = uv * 14.0 + uDrift * uTime * 0.5;
@@ -466,12 +586,6 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // 보기: 1 명암만 · 2 거리장(등고선, 안쪽은 주황) · 3 램프 넷을 띠로(위부터 하늘·명암·위성·빛 번짐 곡선)
     if (uView == 1) col = vec3(0.06 + 0.94 * light) * step(dPlanet, 0.0);   // 그림자 쪽도 옅게 남겨 윤곽이 보이게
     else if (uView == 2) col = mix(vec3(0.25, 0.55, 1.0), vec3(1.0, 0.55, 0.2), step(dScene, 0.0)) * (0.55 + 0.45 * cos(dScene * 120.0));
-    else if (uView == 3) {
-        vec2 q = fragCoord / uResolution;
-        float band = floor(q.y * 4.0);
-        col = band == 3.0 ? ramp(uSky, q.x) : band == 2.0 ? ramp(uToon, q.x) : band == 1.0 ? ramp(uMoons, q.x) : vec3(0.06);
-        if (band == 0.0) col += vec3(1.0, 0.8, 0.3) * (1.0 - smoothstep(0.0, 0.012, abs(q.y * 4.0 - curve(uGlow, q.x))));
-    }
     fragColor = vec4(col, 1.0);
 }`;
 const hashPrecision = `#version 300 es
@@ -769,7 +883,7 @@ const LESSONS = [
     title: "Annotated Parameters",
     tag: "모든 @태그 한눈에",
     description:
-      "행성과 타입 실험실로 배우는 모든 어노테이션: 위젯·복합 조건·성분별 범위·배열·행렬·램프. 보기에서 실습을 고르세요.",
+      "행성으로 위젯을 익힌 뒤 배열·벡터·행렬·램프를 하나씩 실습합니다. 화면의 설명과 번호를 따라 값을 바꿔 보세요.",
     image: annotated,
     thumb: "annotations",
     project: { image: annotated, passes: [], imageChannels: {} },
