@@ -347,7 +347,10 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
     row("시간 기준", mode);
     if (looping) {
       const length = element("div", "link-inline"),
+        // 재생 중 매 프레임 바뀌는 숫자: 두 줄로 고정해(줄마다 말줄임) 자릿수가 늘어도 시트 높이가 흔들리지 않게 한다.
         status = element("p", "ui-hint link-note link-loop-status"),
+        statusTime = element("span"),
+        statusCycle = element("span"),
         outside = link.keys.filter(([t]) => t >= link.loop - 1e-9).length;
       length.append(
         numberField("반복 길이(초)", link.loop, loop => loop > 0 && change({ loop }), {
@@ -362,6 +365,7 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
         outside ? `반복 길이(${seconds(link.loop)}) 밖의 키 ${outside}개는 쓰이지 않습니다.` : ""
       );
       warn.hidden = !outside;
+      status.append(statusTime, statusCycle);
       row("반복 길이", length, status, warn);
       // 바퀴가 바뀔 때: 마지막 키 값에서 첫 키 값으로 건너뛸지(유지), 마지막 키 → 다음 바퀴의 첫 키로 이어 갈지(잇기)
       row(
@@ -379,7 +383,8 @@ const sheet = ({ item, link, renderer, save, preview, openTimeline, openInputs =
       live.push(() => {
         const t = renderer.getStats().time ?? 0,
           cycle = Math.floor(t / link.loop);
-        status.textContent = `지금 uTime ${t.toFixed(2)}초 → 바퀴 안 ${(t - cycle * link.loop).toFixed(2)}초 · ${cycle + 1}번째 바퀴`;
+        statusTime.textContent = `지금 uTime ${t.toFixed(2)}초`;
+        statusCycle.textContent = `→ 바퀴 안 ${(t - cycle * link.loop).toFixed(2)}초 · ${cycle + 1}번째 바퀴`;
       });
     }
     const open = element("button", "ui-btn--block link-open-timeline", "타임라인에서 편집");

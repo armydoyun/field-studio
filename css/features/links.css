@@ -15,6 +15,8 @@
 .link-hint,.link-note { margin:0;font-size:var(--text-xs);line-height:1.6; }
 .link-hint { margin-top:12px; }
 .link-loop-status { color:var(--text-soft);font-variant-numeric:tabular-nums; }
+/* 재생 중 매 프레임 바뀌는 두 줄(uTime · 바퀴): 줄마다 한 줄로 고정해 자릿수가 늘어도 시트 높이가 흔들리지 않게 */
+.link-loop-status>span { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .link-warn { color:var(--warning); }
 .link-go { margin-left:2px;vertical-align:baseline; }
 .link-inline { display:flex;flex-wrap:wrap;align-items:center;gap:8px; }

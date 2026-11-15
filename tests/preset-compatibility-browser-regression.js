@@ -21,6 +21,8 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
     settings.setPresets([P.capture('old',old),{name:'legacy',values:{uGain:0.6,uTint:[0.2,0.3,0.4,1]}},P.capture('only skipped',[old[1]])]);
     settings.setLinks([{name:'uLinked',source:'keys',keys:[[0,0.4]],loop:0,ease:'linear',smooth:0}]);
     $('tab-uniforms').click();$('presetBlend').value='0';
+    // '무작위 · 프리셋 뒤 자동으로 비교'는 기본으로 꺼져 있다 — 이 검사에서는 켜고 적용 직전 값 기억을 확인한다
+    const setAuto=on=>{$('uniformMore').click();const item=document.getElementById('compareAuto');if((item.getAttribute('aria-pressed')==='true')!==on)item.click();else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));};setAuto(true);
     const untouched=JSON.stringify(r.getUserUniforms().filter(item=>item.name!=='uGain'));
     click('old');
     check(value('uGain')===0.8,'호환되는 값만 적용');
@@ -29,11 +31,12 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
     check(!$('presetReport').hidden&&!$('presetReport').open,'내역은 기본적으로 접어서 표시');
     const notice=$('presetNoticeText'),noticeText=notice.textContent;
     notice.textContent='LongPresetName'.repeat(12);notice.style.fontSize='18px';
-    const range=document.createRange();range.selectNodeContents(notice);
-    check(range.getBoundingClientRect().right<=$('presetBar').getBoundingClientRect().right-4,'긴 이름과 큰 글꼴에서도 적용 결과가 카드 안에서 줄바꿈');
+    // 알림 줄은 한 줄로 고정(문구가 바뀌어도 막대가 밀리지 않게): 넘치는 문구는 카드 안에서 말줄임, 전체 문구는 툴팁
+    check(notice.getBoundingClientRect().right<=$('presetBar').getBoundingClientRect().right-4&&getComputedStyle(notice).textOverflow==='ellipsis','긴 이름과 큰 글꼴에서도 적용 결과가 카드 안에서 말줄임');
+    check(notice.title===noticeText,'알림 전체 문구는 툴팁으로');
     notice.textContent=noticeText;notice.style.removeProperty('font-size');
     const summary=$('presetReportSummary'),summaryText=summary.textContent;
-    summary.textContent='LongPresetName'.repeat(4);range.selectNodeContents(summary);
+    const range=document.createRange();summary.textContent='LongPresetName'.repeat(4);range.selectNodeContents(summary);
     check(range.getBoundingClientRect().right<=$('presetBar').getBoundingClientRect().right-4,'띄어쓰기 없는 긴 프리셋 이름도 내역 제목 안에서 줄바꿈');
     summary.textContent=summaryText;
     for(const word of ['vec3 → vec4','선택지','종류','없는 파라미터','범위','연결'])check($('presetReportList').textContent.includes(word),`건너뛴 이유: ${word}`);
@@ -82,6 +85,7 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
     check(settings.getPresets()[0].schema.uRenamed.type==='float'&&settings.getPresets()[0].values.uRenamed===0.8,'이름 변경 시 값과 타입 정보 함께 이동');
     settings.renameParameter('uRenamed','uGain');
   } finally {
+    try{const item=($('uniformMore').click(),document.getElementById('compareAuto'));if(item?.getAttribute('aria-pressed')==='true')item.click();else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));}catch{/* 정리 중 실패는 원래 검사 결과를 가리지 않는다 */}
     $('presetFinish').click();settings.setLinks([]);studio.setProject(before);r.setUserUniforms(users);settings.setPresets(presets);settings.setLinks(links);
     document.dispatchEvent(new Event('shader-settings-applied'));
   }

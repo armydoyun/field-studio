@@ -186,15 +186,19 @@ const create = ({
     options.push(item);
     return item;
   };
-  const group = (title, items, note = "") => {
+  // 묶음: [제목 · (오른쪽 조작)] + 타일들 (+ 한 줄 안내)
+  const group = (title, items, { note = "", aside = null, className = "" } = {}) => {
     const box = element("div"),
-      head = element("p"),
+      head = element("div"),
+      name = element("p"),
       row = element("div");
-    box.className = "channel-picker-group";
+    box.className = `channel-picker-group ${className}`.trim();
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", title);
-    head.className = "channel-picker-title";
-    head.textContent = title;
+    head.className = "channel-picker-group-head";
+    name.className = "channel-picker-title";
+    name.textContent = title;
+    head.append(name, ...(aside ? [aside] : []));
     row.className = "channel-picker-items";
     row.append(...items);
     box.append(head, row);
@@ -206,28 +210,37 @@ const create = ({
     }
     return box;
   };
-  // 팝오버 내용: 읽는 시점 · 버퍼 · 이미지 · 해제
+  // 팝오버 내용: [머리: 채널 · 지금 연결] · 버퍼(있을 때만, 읽는 시점은 제목 줄의 작은 세그먼트) · 이미지 · 장치 · 파일 · [해제 · 도움말]
+  // 기술 설명(텍스처 크기 · 좌표)은 각 선택지의 툴팁으로 두고, 자세한 내용은 도움말(?)로 보낸다 — 팝오버를 짧게.
   const build = () => {
     const i = openIndex,
       ref = state.channels?.[i],
-      current = valueOf(ref);
+      current = valueOf(ref),
+      now = short(ref);
     options = [];
-    const head = element("p");
+    const head = element("div"),
+      title = element("p"),
+      status = element("p");
     head.className = "channel-picker-head";
-    head.textContent = `${state.target === "Image" ? "Image" : `Buffer ${state.target}`} · iChannel${i}`;
+    title.textContent = `${state.target === "Image" ? "Image" : `Buffer ${state.target}`} · iChannel${i}`;
+    status.className = "channel-picker-now";
+    status.textContent = ref ? `지금: ${now.badge ? `${now.badge} ` : ""}${now.tag}` : "연결 없음";
+    head.append(title, status);
     // 읽는 시점: 바꾸면 지금 연결된 버퍼도 그 시점으로 바꾼다(가능할 때만).
-    const frames = ["current", "previous"].map(name => {
+    const frameSwitch = element("div");
+    frameSwitch.className = "ui-seg ui-seg--sm channel-frames";
+    frameSwitch.setAttribute("role", "group");
+    frameSwitch.setAttribute("aria-label", "읽는 시점");
+    for (const name of ["current", "previous"]) {
       const toggle = element("button");
       toggle.type = "button";
-      toggle.className = "ui-btn ui-btn--sm channel-frame";
+      toggle.className = "channel-frame";
       toggle.dataset.frame = name;
-      const word = element("span");
-      word.textContent = name;
-      toggle.append(word, textNode(name === "current" ? "이번 프레임" : "지난 프레임"));
+      toggle.textContent = name === "current" ? "이번 프레임" : "지난 프레임";
       toggle.title =
         name === "current"
-          ? "앞서 실행된 버퍼의 이번 프레임 결과"
-          : "지난 프레임에 저장된 결과 · 자기 자신도 연결 가능(피드백)";
+          ? "current · 앞서 실행된 버퍼의 이번 프레임 결과"
+          : "previous · 지난 프레임에 저장된 결과 · 자기 자신도 연결 가능(피드백)";
       toggle.setAttribute("aria-pressed", String(frame === name));
       on(toggle, "click", () => {
         frame = name;
@@ -239,8 +252,8 @@ const create = ({
         options.find(item => item.dataset.frame === name)?.focus?.();
       });
       options.push(toggle);
-      return toggle;
-    });
+      frameSwitch.append(toggle);
+    }
     const buffers = [],
       blocked = [];
     for (const pass of state.passes) {
@@ -260,32 +273,39 @@ const create = ({
         );
       }
     }
+    // 이미지: 불러온 이미지 · 큐브맵으로 읽을 수 있는 이미지(비율이 맞는 것만) · 불러오기 두 가지
     const images = state.assets.map(asset =>
       button(`tex:${asset.id}`, asset.name, {
         pressed: current === `tex:${asset.id}`,
         className: "channel-image glyph-icon icon-image",
       })
     );
-    images.push(button("load", "이미지 불러오기…", { className: "channel-load glyph-icon icon-plus" }));
-    // 큐브맵: 같은 이미지를 6면 큐브맵(samplerCube)으로. 비율이 맞지 않는 이미지는 이유와 함께 비활성.
-    const cubes = state.assets.map(asset => {
-      const layout = Cubemap.layoutOf(asset.width, asset.height);
-      return button(`cube:${asset.id}`, asset.name, {
-        disabled: !layout.kind,
-        reason: layout.kind ? "" : "비율이 맞지 않음",
-        pressed: current === `cube:${asset.id}`,
-        className: "channel-cube",
-      });
+    for (const asset of state.assets) {
+      if (!Cubemap.layoutOf(asset.width, asset.height).kind) continue;
+      images.push(
+        button(`cube:${asset.id}`, `${asset.name} · 큐브맵`, {
+          pressed: current === `cube:${asset.id}`,
+          className: "channel-image channel-cube",
+        })
+      );
+    }
+    images.push(button("load", "이미지…", { className: "channel-load glyph-icon icon-plus" }));
+    const loadCube = button("loadcube", "큐브맵…", { className: "channel-load glyph-icon icon-plus" });
+    loadCube.title = "6면 큐브맵(samplerCube)으로 읽을 이미지 · 4:3 · 3:4 십자, 6:1 · 1:6 띠, 2:1 파노라마";
+    images.push(loadCube);
+    // 장치 · 파일: 같은 크기 타일. 고르면 켜고(권한 · 파일 고르기) 연결한다. 연결돼 있지만 꺼져 있으면 다시 골라 켠다.
+    const keyboard = button("keyboard", "키보드", {
+      pressed: current === "keyboard",
+      className: "channel-tile channel-keyboard glyph-icon icon-keyboard",
     });
-    cubes.push(button("loadcube", "큐브맵 이미지 불러오기…", { className: "channel-load glyph-icon icon-plus" }));
-    // 입력: 키보드(쉐이더토이 호환 256×3 텍스처). 뷰포트를 클릭하면 키가 셰이더로 간다.
-    const inputs = [
-      button("keyboard", "키보드", {
-        pressed: current === "keyboard",
-        className: "channel-keyboard glyph-icon icon-keyboard",
-      }),
-    ];
-    // 미디어: 고르면 켜고(권한 · 파일 고르기) 연결한다. 연결돼 있지만 꺼져 있으면 다시 골라 켠다.
+    keyboard.title = "키보드 · 256×3 텍스처: x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글";
+    const devices = [keyboard];
+    const MEDIA_TIP = {
+      mic: "512×2 텍스처: y = 0.25 주파수 · 0.75 파형",
+      audio: "512×2 텍스처: y = 0.25 주파수 · 0.75 파형",
+      webcam: "영상 텍스처 · 위쪽이 v = 1",
+      video: "영상 텍스처 · 위쪽이 v = 1",
+    };
     for (const [kind, { label, icon }] of Object.entries(MEDIA)) {
       const media = mediaState(kind),
         reason =
@@ -296,42 +316,44 @@ const create = ({
               : current === `media:${kind}`
                 ? "꺼짐 · 눌러 켜기"
                 : "";
-      inputs.push(
-        button(`media:${kind}`, label, {
-          pressed: current === `media:${kind}`,
-          reason,
-          className: `channel-media channel-${kind} glyph-icon icon-${icon}`,
-        })
-      );
+      const tile = button(`media:${kind}`, label.replace("…", ""), {
+        pressed: current === `media:${kind}`,
+        reason,
+        className: `channel-tile channel-media channel-${kind} glyph-icon icon-${icon}`,
+      });
+      tile.title = `${label}${reason ? ` — ${reason}` : ""} · ${MEDIA_TIP[kind]}`;
+      devices.push(tile);
       // 보관한 파일(오디오 · 영상 파일)이 있고 꺼져 있으면: 파일을 고르지 않고 다시 켜기
       if (media.savedName && media.state !== "on")
-        inputs.push(
+        devices.push(
           button(`media:${kind}:saved`, media.savedName, {
-            reason: `보관한 ${kind === "audio" ? "오디오" : "영상"} 파일로 켜기`,
-            className: `channel-media channel-${kind}-saved glyph-icon icon-play`,
+            reason: `보관한 ${kind === "audio" ? "오디오" : "영상"} 다시 켜기`,
+            className: `channel-tile channel-media channel-${kind}-saved glyph-icon icon-play`,
           })
         );
     }
-    const clear = button("", "연결 해제", { disabled: !ref, className: "channel-clear" });
+    const foot = element("div");
+    foot.className = "channel-picker-foot";
+    if (ref) foot.append(button("", "연결 해제", { className: "channel-clear ui-btn--ghost" }));
+    const help = element("button");
+    help.type = "button";
+    help.className = "ui-icon-btn ui-icon-btn--xs glyph-icon icon-help channel-picker-help";
+    help.dataset.guide = "inputs";
+    help.setAttribute("aria-label", "입력 채널 도움말");
+    help.title = "입력 채널 도움말 · 텍스처 크기와 좌표";
+    foot.append(help);
     const sections = [
       head,
-      group("읽는 시점", frames),
-      group(
-        "버퍼",
-        buffers.length ? buffers : [textNode("버퍼 패스가 없습니다. 패스 탭의 +로 추가하세요.")],
-        blocked.length
-          ? `${blocked.join(", ")}: current는 앞서 실행되는 버퍼만 읽을 수 있습니다. previous로 연결하세요.`
-          : ""
-      ),
+      state.passes.length
+        ? group("버퍼", buffers, {
+            aside: frameSwitch,
+            note: blocked.length ? `${blocked.join(", ")}: 이번 프레임은 앞서 실행된 버퍼만 · previous로 연결` : "",
+          })
+        : null,
       group("이미지", images),
-      group("큐브맵", cubes, "samplerCube로 읽기 · 4:3 · 3:4 십자, 6:1 · 1:6 띠, 2:1 파노라마"),
-      group(
-        "입력",
-        inputs,
-        "키보드 256×3: x = 키 코드, y = 0 누름 · 1 이번 프레임에 눌림 · 2 토글 · 소리 512×2: y = 0.25 주파수 · 0.75 파형 · 카메라 · 영상: 위쪽이 v = 1"
-      ),
-      clear,
-    ];
+      group("장치 · 파일", devices, { className: "channel-picker-devices" }),
+      foot,
+    ].filter(Boolean);
     picker.replaceChildren(...sections);
     picker.setAttribute("aria-label", `iChannel${i} 입력 고르기`);
   };

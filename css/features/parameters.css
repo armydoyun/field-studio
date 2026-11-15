@@ -10,7 +10,9 @@
 .parameter-compare { display:grid;gap:var(--space-4);margin-bottom:var(--space-6);padding:var(--space-4) var(--space-4) var(--space-4) var(--space-6); }
 .parameter-compare[hidden] { display:none; }
 .parameter-compare-head { display:flex;align-items:center;gap:var(--space-4);min-width:0; }
-.parameter-compare-head>strong { font-size:var(--text-sm);font-weight:650; }
+/* 머리줄은 언제나 한 줄: 문구(개수 · 이전 보는 중)가 바뀌어도 줄이 늘지 않게 넘치면 말줄임(전체 문구는 툴팁) */
+.parameter-compare-head>strong { flex:0 0 auto;font-size:var(--text-sm);font-weight:650;white-space:nowrap; }
+#compareNotice { flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 #compareClear { margin-left:auto; }
 .parameter-compare-actions { display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4);padding-bottom:var(--space-2); }
 .uniform-changed.is-unchanged { visibility:hidden; }
@@ -156,6 +158,9 @@
 }
 @container settings (max-width:284px) {
  .range-grid,.uniform-form-actions { grid-template-columns:minmax(0,1fr); }
+ /* 비교 바 문구는 제목 아래 줄에 둔다(폭마다 배치가 고정이라 문구가 바뀌어도 밀리지 않는다) */
+ .parameter-compare-head { flex-wrap:wrap; }
+ #compareNotice { flex:1 0 100%;order:3; }
 }
 
 .uniform-array-item>.value-edit-open { justify-self:end; }
