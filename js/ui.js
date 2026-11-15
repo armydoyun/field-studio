@@ -2663,18 +2663,38 @@ const mount = (renderer, input, settings) => {
       remove.type = "button";
       remove.title = `${item.name} 삭제 · GLSL에서 참조 중이면 먼저 코드를 수정하세요`;
       remove.setAttribute("aria-label", `${item.name} 삭제`);
-      remove.addEventListener("click", () =>
+      remove.addEventListener("click", async () => {
+        // 코드가 uniform 선언 없이 이 파라미터를 쓰면(앱이 선언을 대신 넣어 왔다) 그냥 지우면 컴파일에 실패한다.
+        // 이유를 알리고, 코드에 선언을 남긴 채 지울지(값은 0) 묻는다.
+        const studio = window.shaderStudio,
+          uses = studio?.implicitParameterUses?.(item.name) || [];
+        if (uses.length) {
+          const ok = await studio.ask?.({
+            title: `${item.name}을(를) 코드에서 쓰고 있습니다`,
+            message: `${uses.join(" · ")} 코드가 ${item.name}을(를) uniform 선언 없이 씁니다(파라미터가 선언을 대신해 왔습니다). 그대로 지우면 셰이더가 ${item.name}을(를) 찾지 못해 컴파일에 실패합니다. 코드에 'uniform ${item.type.replace(/^(\w+)\[(\d+)\]$/, `$1 ${item.name}[$2]`).replace(/^(\w+)$/, `$1 ${item.name}`)};' 선언을 남기고 지울까요? 값은 0이 됩니다(Ctrl+Z로 코드 되돌리기).`,
+            ok: "선언 남기고 삭제",
+          });
+          if (!ok) return;
+          studio.declareParameter(item.name, item.type);
+        }
         attempt(() => {
           const current = renderer.getUserUniforms().find(u => u.name === item.name);
           if (!current) return renderUniforms();
-          renderer.removeUniform(item.name);
+          try {
+            renderer.removeUniform(item.name);
+          } catch (error) {
+            // 렌더러는 실패하면 파라미터를 되살린다. 컴파일 오류 원문 대신 무엇을 하면 되는지 알린다.
+            throw new Error(
+              `${item.name}을(를) 지우면 코드가 컴파일되지 않습니다 — 코드에서 ${item.name}을(를) 먼저 지우거나 선언하세요. (${String(error.message).split("\n")[0]})`
+            );
+          }
           deletedUniform = current;
           $("undoUniform").hidden = false;
           $("uniformNotice").textContent = `${item.name} 삭제됨`;
           renderUniforms();
           $("undoUniform").focus();
-        })
-      );
+        });
+      });
       let reset = null,
         syncReset = null;
       if (annotated) {

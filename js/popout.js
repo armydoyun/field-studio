@@ -54,9 +54,12 @@ const mount = ({ doc = document } = {}) => {
     });
   };
   const mirrorHud = (copy, d, comparisonCopy) => () => {
+    // 다시 베끼면 사본 요소가 새로 생기므로, 통계 HUD에 있던 초점은 새 사본으로 옮긴다(키보드로 이어서 펼치고 접게).
+    const focused = d.activeElement?.closest?.("[data-mirror=hud] .stage-stats");
     copy.className = footer.className;
     copy.innerHTML = footer.innerHTML;
     for (const node of copy.querySelectorAll("[id]")) node.removeAttribute("id");
+    if (focused) copy.querySelector(".stage-stats")?.focus?.({ preventScroll: true });
     d.body.classList.toggle("hud-hidden", !!stage?.classList.contains("hud-hidden"));
     if (comparisonCopy) {
       const source = $("comparePreviewNotice");
@@ -77,6 +80,18 @@ const mount = ({ doc = document } = {}) => {
       comparisonCopy.setAttribute("role", "status");
       d.body.append(comparisonCopy);
     }
+    // 사본은 내용만 베끼므로(이벤트 없음) 통계 HUD를 누르거나 Enter · Space를 누르면 원본을 누른다(펼치기 · 접기).
+    const stats = $("stats"),
+      toStats = () => stats?.click();
+    copy.addEventListener("click", event => {
+      if (event.target.closest?.(".stage-stats")) toStats();
+    });
+    copy.addEventListener("keydown", event => {
+      if ((event.key === "Enter" || event.key === " ") && event.target.closest?.(".stage-stats")) {
+        event.preventDefault();
+        toStats();
+      }
+    });
     const mirror = mirrorHud(copy, d, comparisonCopy);
     mirror();
     hudObserver = new win.MutationObserver(mirror);
