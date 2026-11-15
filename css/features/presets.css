@@ -40,3 +40,4 @@
 .preset-notice:empty,.preset-notice:has(#presetNoticeText:empty) { display:none; }
 .preset-report-list { display:grid;gap:var(--space-4);max-height:220px;overflow:auto;margin:var(--space-4) 0 0;padding:var(--space-2) var(--space-4) var(--space-2) var(--space-10);overflow-wrap:anywhere; }
 .preset-report-hint { margin:var(--space-4) 0 0; }
+.preset-report>summary { overflow-wrap:anywhere; }
