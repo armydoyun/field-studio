@@ -96,6 +96,13 @@ try:
             expect(popup.locator('[data-mirror="comparison"]')).to_be_hidden()
             popup.keyboard.press("g")
             expect(popup.locator('[data-mirror="hud"]')).to_be_visible()
+            # 분리 창의 FPS HUD(사본)를 눌러도 원본처럼 펼치고 접는다
+            before = page.evaluate("document.getElementById('stats').dataset.expanded")
+            popup.locator('[data-mirror="hud"] .stage-stats').click()
+            page.wait_for_function(f"document.getElementById('stats').dataset.expanded !== {before!r}")
+            expect(popup.locator('[data-mirror="hud"] .stage-stats')).to_have_attribute("aria-expanded", "false" if before == "true" else "true")
+            popup.locator('[data-mirror="hud"] .stage-stats').press("Enter")
+            page.wait_for_function(f"document.getElementById('stats').dataset.expanded === {before!r}")
             expect(popup.locator('[data-mirror="comparison"]')).to_be_visible()
             page.evaluate("document.getElementById('compareA').dispatchEvent(new PointerEvent('pointerup',{button:0,pointerId:5,bubbles:true,cancelable:true})); document.getElementById('compareClear').click()")
             expect(popup.locator('[data-mirror="comparison"]')).to_be_hidden()

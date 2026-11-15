@@ -1339,6 +1339,34 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (applied) setStatus("현재 값을 @default에 반영했습니다 · Ctrl+Z로 되돌리기");
     return true; // The source edit remains available even if a pending shader edit fails to compile.
   };
+  // 코드가 uniform 선언 없이 쓰는 파라미터: 등록된 파라미터는 앱이 선언을 대신 넣으므로 코드에 선언이 없어도 돌아가지만,
+  // 파라미터를 지우면 그 선언도 사라져 컴파일에 실패한다. 그런 탭 이름을 돌려준다(Common에 선언이 있으면 모든 패스가 본다).
+  const implicitParameterUses = name => {
+    if (!/^[A-Za-z_]\w*$/.test(name)) return [];
+    const word = new RegExp(`\\b${name}\\b`),
+      declared = code => new RegExp(`\\buniform\\s+[^;]*\\b${name}\\b`).test(code),
+      clean = tab => Insert.stripComments(sourceOf(project, tab) || ""),
+      common = hasCommon() && declared(clean(COMMON));
+    return tabNames().filter(tab => {
+      const code = clean(tab);
+      return word.test(code) && !declared(code) && !(common && tab !== COMMON);
+    });
+  };
+  // 파라미터를 지우기 전에, 선언 없이 쓰는 탭에 'uniform 타입 이름;'을 넣는다(값은 0이 된다). Ctrl+Z로 되돌릴 수 있다.
+  const declareParameter = (name, type) => {
+    const tabs = implicitParameterUses(name);
+    if (disposed || !tabs.length) return false;
+    const array = /^(\w+)\[(\d+)\]$/.exec(type),
+      line = array ? `uniform ${array[1]} ${name}[${array[2]}];` : `uniform ${type} ${name};`;
+    rememberEditor();
+    // Common은 모든 패스 앞에 붙으므로, Common도 쓰고 있으면 Common 한 곳에만 넣는다(패스마다 넣으면 선언이 겹친다).
+    for (const tab of tabs.includes(COMMON) ? [COMMON] : tabs)
+      setSourceOf(project, tab, Insert.codeEdit(sourceOf(project, tab), 0, { global: line }).src);
+    renderEditor();
+    recordEdit(false, true);
+    apply();
+    return true;
+  };
   const setParameterValues = items => {
     if (disposed || !items.length) return false;
     document.dispatchEvent(new Event("shader-before-parameter-change"));
@@ -2626,6 +2654,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     insertSnippet,
     insertCode,
     writeParameterDefaults,
+    implicitParameterUses,
+    declareParameter,
     setParameterValues,
     beginParameterChange,
     getEditorSource: () => $("studioCode").value,
