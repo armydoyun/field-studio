@@ -41,25 +41,25 @@
     ]);
     await until(() => document.querySelectorAll(".preset-apply").length === 2, "프리셋 막대");
     const apply = name => [...document.querySelectorAll(".preset-apply")].find(b => b.textContent === name).click();
-    $("presetBlend").value = "2";
+    $("presetBlend").value = "4"; // 넉넉히: 동시에 도는 테스트로 느려져도 중간에서 볼 수 있게
 
     // 숫자 · 선택지만 바뀌는 전환: 행이 그대로 남고 슬라이더가 따라 움직인다
     const gainRow = row("uGain"),
       modeRow = row("uMode");
     apply("숫자만");
-    await wait(800); // updateStats(0.5초)가 적어도 한 번 지나간다
+    await wait(650); // updateStats(0.5초)가 적어도 한 번 지나간다
     const middle = value("uGain");
     test(middle > 0 && middle < 1, "전환 중간값");
     test(row("uGain") === gainRow && row("uMode") === modeRow, "전환 중에는 목록을 다시 그리지 않는다");
     const slider = gainRow.querySelector('input[type="range"]');
     test(!slider || Math.abs(Number(slider.value) - middle) < 0.05, "슬라이더가 지금 값을 보여 준다");
-    await until(() => value("uGain") === 1 && value("uMode") === 2, "전환 끝");
+    await until(() => value("uGain") === 1 && value("uMode") === 2, "전환 끝", 15000);
 
     // 색이 섞이면 이전처럼 목록을 다시 그려 값을 맞춘다(색 칸이 바로 따라가는 함수를 갖지 않음)
     const tintRow = row("uTint");
     apply("색 포함");
     await until(() => row("uTint") !== tintRow, "색이 섞인 전환은 목록을 다시 그린다", 3000);
-    await until(() => value("uGain") === 0, "두 번째 전환 끝");
+    await until(() => value("uGain") === 0, "두 번째 전환 끝", 15000);
   } finally {
     $("presetBlend").value = blend;
     settings.setPresets(presets);

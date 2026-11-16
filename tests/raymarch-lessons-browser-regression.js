@@ -17,10 +17,11 @@
     test(await studio.loadExample(project, users), "예제 불러오기");
     await frames(4);
   };
-  const before = studio.getProject(), wasRunning = r.getStats().running, scale = r.getStats().resolutionScale;
+  const before = studio.getProject(), wasRunning = r.getStats().running, scale = r.getStats().resolutionScale, maxPixels = r.getStats().maxPixels;
   try {
     if (!wasRunning) studio.togglePlayback();
     r.setResolutionScale(0.25);   // GPU 없는 환경(소프트웨어 렌더)에서도 제때 끝나게 화면만 작게 그린다. 상태 버퍼는 그대로다
+    r.setMaxPixels(64 * 64);      // 검사는 3×1 상태 버퍼만 읽는다 — 화면은 아주 작아도 된다(프레임이 빨라 테스트 시간이 준다)
     test(L.LESSONS.length === 4 && L.LESSONS.every(item => item.project && item.liveThumb), "레슨 4개 · 모두 프로젝트와 실시간 썸네일");
 
     // ---- Orbit Camera ----
@@ -67,6 +68,7 @@
     key("keydown", "Escape", 27); key("keyup", "Escape", 27);
   } finally {
     r.setResolutionScale(scale);
+    r.setMaxPixels(maxPixels);
     studio.setProject(before);
     if (r.getStats().running !== wasRunning) studio.togglePlayback();
   }

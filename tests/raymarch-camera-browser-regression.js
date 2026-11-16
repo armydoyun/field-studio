@@ -10,7 +10,8 @@
   const camera = () => Array.from(r.readPassPixel("A", 0, 0)).slice(0, 3);
   const rect = canvas.getBoundingClientRect();
   const pointer = (type, fx, fy) => canvas.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: "mouse", button: 0, buttons: type === "pointerup" ? 0 : 1, clientX: rect.left + rect.width * fx, clientY: rect.top + rect.height * fy, bubbles: true, cancelable: true }));
-  const before = studio.getProject(), wasRunning = r.getStats().running;
+  const before = studio.getProject(), wasRunning = r.getStats().running, maxPixels = r.getStats().maxPixels;
+  r.setMaxPixels(64 * 64); // 검사는 카메라 상태 버퍼(3×1)만 읽는다 — 화면은 아주 작게 그려도 된다(테스트 시간이 준다)
   try {
     if (!wasRunning) studio.togglePlayback();
     test(studio.exampleRaymarch(), "Ray Marching 예제 시작");
@@ -41,6 +42,7 @@
     test(camera()[0] > 0.01, "← 키로 회전");
     key("keydown", "Escape", 27);
   } finally {
+    r.setMaxPixels(maxPixels);
     studio.setProject(before);
     if (r.getStats().running !== wasRunning) studio.togglePlayback();
   }

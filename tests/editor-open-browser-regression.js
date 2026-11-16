@@ -6,7 +6,9 @@
   const test = (condition, label) => { if (!condition) throw new Error(`FAIL: ${label}`); console.log(`PASS: ${label}`); };
   const frames = n => new Promise(resolve => { const step = () => (n-- <= 0 ? resolve() : requestAnimationFrame(step)); step(); });
   const editorOpen = () => !$("studioDock").hidden;
-  const before = studio.getProject();
+  const before = studio.getProject(), maxPixels = window.shaderPlayground.getStats().maxPixels;
+  // 검사는 편집기 열림 상태만 본다 — 무거운 3D 예제를 소프트웨어 렌더로 크게 그릴 필요가 없다(테스트 시간이 준다)
+  window.shaderPlayground.setMaxPixels(64 * 64);
   const pickCard = async pattern => {
     $("galleryToggle").click();
     await frames(2);
@@ -56,6 +58,7 @@
     await frames(1);
     test(editorOpen(), "코드 조각 삽입은 넣은 코드를 보여 주려 편집기를 연다");
   } finally {
+    window.shaderPlayground.setMaxPixels(maxPixels);
     if (!studio.setProject(before)) console.warn("테스트 이전 프로젝트 복원 실패");
     if ($("quickHelp").open) $("quickHelp").close();
     if (editorOpen()) studio.close();
