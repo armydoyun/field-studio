@@ -1463,6 +1463,8 @@ const mount = (renderer, input, settings) => {
             row.append(line);
           }
           show(item.value);
+          // 프리셋 전환 · 재생처럼 밖에서 바뀐 값을 목록을 다시 그리지 않고 보여 준다
+          playViews.set(item.name, values => Array.isArray(values) && show(values));
         } else if (item.options?.enum) {
           const choices = enumControl(item, commit);
           playViews.set(item.name, choices.refresh);
@@ -1500,6 +1502,8 @@ const mount = (renderer, input, settings) => {
             kind === "b" ? "is-bool" : ranged ? "is-ranged" : item.value.length <= 2 ? "is-inline" : "is-stacked";
           const grid = element("div");
           grid.className = `uniform-vector ${layout}`;
+          // 성분마다 밖에서 바뀐 값을 보여 주는 함수(프리셋 전환). 입력 중인 숫자 칸은 showNumber가 건드리지 않는다.
+          const refreshers = [];
           item.value.forEach((value, index) => {
             const field = element(kind === "b" ? "label" : "div");
             field.className =
@@ -1580,8 +1584,15 @@ const mount = (renderer, input, settings) => {
             } else if (kind === "b") field.append(input, label);
             else field.append(label, input);
             grid.append(field);
+            refreshers.push(values => {
+              const next = values[index];
+              if (kind === "b") input.checked = !!next;
+              else showNumber(input, next);
+              if (slider && document.activeElement !== slider) slider.value = String(next);
+            });
           });
           row.append(grid);
+          playViews.set(item.name, values => Array.isArray(values) && refreshers.forEach(refresh => refresh(values)));
           if (ranged) {
             row.style.setProperty("--number-width", rangedWidth(opts));
             if (!opts.ranges) row.append(rangeEnds(opts, true));

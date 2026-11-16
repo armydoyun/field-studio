@@ -1598,13 +1598,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       swapUsers(next);
       const context = sharedOf(scene);
+      // 검사한 프로그램은 버리지 않고 warm에 남긴다 — 곧 이어지는 applyPortable이 그대로 쓴다(Pack · 보관함 열기에서
+      // 모든 셰이더를 두 번 컴파일하던 것). 적용하지 않고 끝나면 부른 쪽이 discardPrepared()로 정리한다.
       for (const [source, channels] of [
         [scene.image, scene.imageChannels],
         ...scene.passes.map(p => [p.fragment, p.channels]),
-      ]) {
-        const candidate = compileFragment(source, context, typesOf(channels));
-        gl.deleteProgram(candidate);
-      }
+      ])
+        compileFragment(source, context, typesOf(channels), { park: true });
     } finally {
       swapUsers(old);
     }
@@ -2066,6 +2066,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     applyPortable,
     applyProject,
     prepareProject,
+    discardPrepared: () => dropWarm(),
     setUserUniforms,
     sampleRamp,
     setPasses,

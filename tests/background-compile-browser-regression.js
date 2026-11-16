@@ -144,6 +144,27 @@
     ready = true;
     test((await opened) === true, "예제: 끝나면 바꾸고 성공을 알린다");
     test(r.getFragmentSource().includes("0.75 * uGain") && r.getPasses().length === 0, "예제: 새 프로젝트 적용");
+
+    // 7) 기다리는 사이 WebGL 컨텍스트를 잃으면: 적용하지 않고(컴파일 오류로 보이지 않게) 복구 뒤 실행을 안내한다
+    $("studioLive").checked = false;
+    ready = false;
+    edit("c = vec4(uGain * 0.0625);");
+    $("studioRun").click();
+    await until(() => $("studioMessage").textContent.includes("컴파일 중"), "손실 전: 컴파일 중", 3000);
+    const lostEvent = once($("screen"), "webglcontextlost");
+    lose.loseContext();
+    await lostEvent;
+    await until(() => $("studioMessage").textContent.includes("컨텍스트를 잃어"), "컨텍스트 손실 안내", 3000);
+    test($("studioState").dataset.state !== "error", "컨텍스트 손실은 컴파일 오류로 표시하지 않는다");
+    test(studio.getProject().image.includes("uGain * 0.0625"), "코드는 그대로 남는다");
+    await wait(50);
+    const restored = once($("screen"), "webglcontextrestored");
+    lose.restoreContext();
+    await restored;
+    await wait(200);
+    ready = true;
+    $("studioRun").click();
+    await until(() => r.getFragmentSource().includes("uGain * 0.0625"), "복구 뒤 실행하면 적용");
   } finally {
     gl.getExtension = realExtension;
     gl.getProgramParameter = realProgramParameter;

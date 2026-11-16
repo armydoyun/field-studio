@@ -152,6 +152,23 @@ async function main(){
       assert.equal(JSON.stringify(f.renderer.getUserUniforms().map(u=>u.name)),'["uOther"]','실패하면 파라미터 구성도 되돌린다');
     }finally{f.dispose();}
   });
+  await test('Opening a Pack compiles each program once: validation parks programs for apply, discard cleans up',()=>{
+    const f=fixture();try{
+      const scene={image:src.replace('void main','// pack\nvoid main'),passes:[pass('A'),{...pass('B'),fragment:src.replace('void main','// B\nvoid main')}],imageChannels:{}},users=[{name:'uGain',type:'float',value:0.5}];
+      let compiled=f.gl.compiledSources.length;
+      f.renderer.validatePortable(scene,users);
+      assert.equal(f.gl.compiledSources.length-compiled,6,'검사: Image · A · B(각 vertex+fragment)');
+      compiled=f.gl.compiledSources.length;
+      f.renderer.applyPortable(scene,users);
+      assert.equal(f.gl.compiledSources.length-compiled,0,'적용은 검사한 프로그램을 그대로 쓴다');
+      // 적용하지 않고 끝나면(확인 창에서 취소) 정리한다: 검사한 프로그램이 모두 지워진다
+      const other={...scene,image:scene.image+'\n// other'};const before=f.gl.deleted.length;
+      f.renderer.validatePortable(other,users);f.renderer.discardPrepared();
+      assert(f.gl.deleted.length-before>=1,'버린 프로그램을 지운다');
+      compiled=f.gl.compiledSources.length;f.renderer.applyPortable(other,users);
+      assert.equal(f.gl.compiledSources.length-compiled,6,'정리한 뒤에는 다시 컴파일한다(남은 것을 잘못 쓰지 않는다)');
+    }finally{f.dispose();}
+  });
   await test('Without the extension prepareProject returns null so callers apply immediately',()=>{
     const f=fixture();try{assert.equal(f.renderer.prepareProject({image:src+'\n//x',passes:[],imageChannels:{}}),null);}finally{f.dispose();}
   });

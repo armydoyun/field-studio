@@ -82,7 +82,12 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   const fontComp = new CM.Compartment(),
     wrapComp = new CM.Compartment(),
     tabComp = new CM.Compartment();
-  const fontTheme = () => CM.EditorView.theme({ "&": { fontSize: `${fontSize}px` } });
+  // 글자 크기와 함께 바뀌는 것: 크기 테마 + 커서 가로 여백. 긴 줄을 쓰다 커서가 오른쪽 끝에 닿으면 편집기 가장자리에
+  // 붙지 않고 약 6글자만큼 여유를 두고 스크롤한다(기본 5px라 커서가 맨 끝에 붙어 불편했다). 세로는 기본 그대로.
+  const fontTheme = () => [
+    CM.EditorView.theme({ "&": { fontSize: `${fontSize}px` } }),
+    CM.EditorView.cursorScrollMargin.of({ x: Math.round(fontSize * 0.6 * 6), y: 5 }),
+  ];
   const tabConfig = () => [
     CM.EditorState.tabSize.of(tabSize),
     CM.indentUnit.of(" ".repeat(tabSize)),

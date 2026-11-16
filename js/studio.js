@@ -476,8 +476,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!ready) return done(apply());
     setStatus("컴파일 중… · 편집은 계속할 수 있습니다", "is-dirty");
     const since = now();
-    ready.then(() => {
+    ready.then(finished => {
       if (ticket !== warming || disposed) return;
+      // 기다리는 사이 WebGL 컨텍스트를 잃었다(finished = false): 지금 적용하면 렌더러가 거절하고 그것이 컴파일 오류처럼
+      // 보인다. 코드는 그대로 두고(수정됨) 복구된 뒤 실행하도록 알린다.
+      if (finished === false) {
+        setStatus("WebGL 컨텍스트를 잃어 적용을 미뤘습니다 · 복구되면 실행(Alt+Enter)으로 적용", "is-dirty");
+        return done(false);
+      }
       backgroundSince = since;
       done(apply());
     });
@@ -1938,13 +1944,34 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (data.version === 3 && !state) throw new Error("설정 복원 API를 사용할 수 없습니다.");
     const { ids, decoded } = Pack.decodeTextures(data.textures);
     Pack.checkReferences(next, ids);
-    // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
-    if (state) renderer.validatePortable(Pack.withoutTextures(next), state.user);
-    else {
-      renderer.validateFragment(next.image, next, next.imageChannels);
-      for (const pass of next.passes) renderer.validateFragment(pass.fragment, next, pass.channels);
+    // 컴파일을 GPU에 먼저 맡기고 끝날 때까지 기다린다(그사이 화면이 멈추지 않게). 아래 검사가 그 프로그램을 꺼내
+    // 확인하고, 적용이 다시 그대로 쓴다. 확장이 없으면 null — 검사가 바로 컴파일한다(그래도 적용은 다시 컴파일하지 않는다).
+    const ready = renderer.prepareProject?.(next, { all: true });
+    if (ready) {
+      setStatus("프로젝트 컴파일 중… · 화면은 계속 움직입니다", "is-dirty");
+      await ready;
+      try {
+        check();
+      } catch (error) {
+        renderer.discardPrepared?.(); // 기다리는 사이 작업이 바뀌었다 — 열지 않는다
+        throw error;
+      }
     }
-    if (!(await confirmReplace())) return false;
+    try {
+      // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
+      if (state) renderer.validatePortable(Pack.withoutTextures(next), state.user);
+      else {
+        renderer.validateFragment(next.image, next, next.imageChannels);
+        for (const pass of next.passes) renderer.validateFragment(pass.fragment, next, pass.channels);
+      }
+    } catch (error) {
+      renderer.discardPrepared?.();
+      throw error;
+    }
+    if (!(await confirmReplace())) {
+      renderer.discardPrepared?.(); // 바꾸지 않았다 — 미리 만든 프로그램을 정리한다
+      return false;
+    }
     check();
     const added = [],
       map = new Map(),
@@ -2008,6 +2035,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           console.error("Pack 복원 실패 후 롤백 오류:", rollback);
         }
       }
+      renderer.discardPrepared?.(); // 적용하기 전에 실패했으면 미리 만든 프로그램이 남아 있다
       for (const id of added.reverse())
         try {
           await renderer.removeTexture(id);
@@ -2593,7 +2621,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       }
       if (!ready) return replaceProject(next, users);
       setStatus("예제 컴파일 중… · 화면은 계속 움직입니다", "is-dirty");
-      return ready.then(() => ticket === warming && !disposed && replaceProject(next, users));
+      return ready.then(finished => {
+        if (ticket !== warming || disposed) return false;
+        if (finished === false) {
+          setStatus("WebGL 컨텍스트를 잃어 예제를 열지 못했습니다 · 복구된 뒤 다시 여세요", "is-error");
+          return false;
+        }
+        return replaceProject(next, users);
+      });
     });
   // 가이드 코드 예시 삽입. replace=true면 현재 패스 전체를 교체한다(Undo로 복원 가능).
   // 커서가 #version/precision 줄보다 앞에 있으면 컴파일이 깨지므로 precision 줄 다음으로 옮겨 넣는다(code-insert.js).
