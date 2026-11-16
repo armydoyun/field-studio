@@ -1,7 +1,7 @@
 // 파라미터 목록을 행 단위로 그린다(ui.js renderUniforms · buildRow):
 //  · 검색 · 변경만 보기 · @if로 걸러도 남는 행은 그대로, 다시 보이는 행도 새로 만들지 않는다
 //  · 밖에서 값만 바뀌면(값 묶음 적용 · 되돌리기) 행을 남긴 채 보이는 값만 바뀐다 — 숫자 · 켜기 · 선택지 · 색 · 벡터 · 위치 · 방향 · 행렬
-//  · 그라데이션처럼 값만 고치는 함수가 없는 행은 그 행만 다시 만든다
+//  · 그라데이션 · 곡선 · 배열도 값만 바뀌면 행을 남긴다(값만 고치는 함수가 없는 종류가 생기면 그 행만 다시 만든다)
 //  · 코드 주석(@range 등)을 바꾸면 그 파라미터 행만 다시 만들고, 연결 시트를 열고 닫아도 그 행만 바뀐다
 //  · 지운 파라미터의 행은 사라지고 같은 이름을 다시 만들면 새 행이 된다 · 묶음 접기도 그대로 동작한다
 (async () => {
@@ -39,9 +39,11 @@
       "uniform mat2 uTurn;    // @default 1",
       "uniform sampler2D uRamp; // @gradient @group 빛",
       "uniform float uFog;    // @range 0 1 @default 0 @if uOn",
+      "uniform sampler2D uBend; // @curve @default 0 0 1 1",
+      "uniform float uW[3];   // @range 0 1 @default 0.1 0.2 0.3",
       "void mainImage(out vec4 c, in vec2 p) {",
       "  c = vec4(texture(uRamp, p / iResolution.xy).rgb * uTint * uGain + uOffset + vec3(uSpot, float(uMode)) + uSun * uFog, 1.0);",
-      "  c.xy = uTurn * c.xy; if (!uOn) c *= 0.5;",
+      "  c.xy = uTurn * c.xy; if (!uOn) c *= 0.5; c.r += texture(uBend, vec2(0.5)).r * (uW[0] + uW[1] + uW[2]);",
       "}",
     ].join("\n");
   const before = studio.getProject(),
@@ -49,18 +51,18 @@
   try {
     settings.setLinks([]);
     test(studio.setProject({ image: image(), passes: [], imageChannels: {} }), "검사 장면");
-    await until(() => r.getUserUniforms().length === 10, "파라미터 10개 등록");
+    await until(() => r.getUserUniforms().length === 12, "파라미터 12개 등록");
     $("tab-uniforms").click();
     search("");
     await wait(50);
     const all = snapshot();
-    test(all.size === 10, "처음에는 10개 행");
+    test(all.size === 12, "처음에는 12개 행");
 
     // 1) 검색: 남는 행은 그대로, 지우면 걸렀던 행도 새로 만들지 않고 돌아온다
     search("uG");
     test(rows().length === 1 && row("uGain") === all.get("uGain"), "검색: 남는 행은 같은 요소");
     search("");
-    test(rows().length === 10 && [...snapshot()].every(([name, node]) => node === all.get(name)), "검색을 지우면 모든 행이 같은 요소로 돌아온다");
+    test(rows().length === 12 && [...snapshot()].every(([name, node]) => node === all.get(name)), "검색을 지우면 모든 행이 같은 요소로 돌아온다");
 
     // 2) 밖에서 값만 바뀜: 행을 남긴 채 보이는 값만 바뀐다
     setValues({ uGain: 0.25, uOn: false, uMode: 2, uTint: [0, 0, 1], uOffset: [0.5, -0.5, 0], uSpot: [0.1, 0.9], uSun: [1, 0, 0], uTurn: [0, 1, -1, 0] });
@@ -86,11 +88,16 @@
     await wait(50);
     test(row("uFog") === all.get("uFog"), "@if로 다시 보이면 같은 요소");
 
-    // 4) 그라데이션은 값만 고치는 함수가 없어 그 행만 다시 만든다
-    const ramp = user("uRamp");
-    setValues({ uRamp: ramp.value.map((v, i) => (i === 1 ? 1 - v : v)) });
+    // 4) 그라데이션 · 곡선 · 배열도 값만 바뀌면 행을 남기고 보이는 값만 바꾼다
+    const rampCanvas = () => row("uRamp").querySelector("canvas").toDataURL();
+    const rampBefore = rampCanvas();
+    const ramp = user("uRamp"),
+      bend = user("uBend");
+    setValues({ uRamp: ramp.value.map((v, i) => (i % 5 === 1 ? 1 - v : v)), uBend: bend.value.map((v, i) => (i === bend.value.length - 1 ? 0.2 : v)), uW: [0.9, 0.8, 0.7] });
     await wait(50);
-    test(row("uRamp") !== all.get("uRamp") && row("uGain") === all.get("uGain"), "그라데이션 값이 바뀌면 그 행만 다시 만든다");
+    test(["uRamp", "uBend", "uW"].every(name => row(name) === all.get(name)), "그라데이션 · 곡선 · 배열 행은 그대로");
+    test(rampCanvas() !== rampBefore, "그라데이션 막대를 새 값으로 다시 그린다");
+    test(Number(row("uW").querySelector('input[type="number"]').value) === 0.9, "배열 첫 원소 칸이 새 값");
 
     // 5) 코드 주석을 바꾸면 그 행만 다시 만든다
     const mid = snapshot();
@@ -121,7 +128,7 @@
     const fog = row("uFog");
     row("uFog").querySelector(".remove-uniform").click();
     await until(() => !row("uFog"), "지운 행이 사라진다");
-    test(row("uGain") && rows().length === 9, "다른 행은 남는다");
+    test(row("uGain") && rows().length === 11, "다른 행은 남는다");
     studio.undo();
     await until(() => row("uFog"), "되돌리면 다시 생긴다");
     test(row("uFog") !== fog, "다시 만든 파라미터는 새 행");
