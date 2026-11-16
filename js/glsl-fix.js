@@ -4,9 +4,13 @@
 //  · 빠진 세미콜론: 다음 줄에서 'syntax error'가 나면 앞 코드 줄 끝에 ;
 //  · 오타 이름: 'undeclared identifier' · 없는 함수 → 비슷한 이름(편집 거리 2 이하 · 대소문자만 다름)
 //  · 벡터 크기: vec4 자리에 vec3 → vec4(…, 1.0) · vec3 자리에 vec4 → (…).xyz
-//   quickFixes({ message, lines, index, names }) → [{ label, line, from, text }]
+//  · 옛 GLSL(ES 1.0) · Shadertoy 코드 옮기기 — 문서 전체를 고친다: texture2D · textureCube(…Lod · Proj) → texture(Lod · Proj),
+//    gl_FragColor → out vec4 fragColor 선언 + 이름 바꾸기, iGlobalTime → iTime, varying → in
+//   quickFixes({ message, lines, index, names }) → [{ label, line, from, text, transform }]
 //     message: 'ERROR: 0:N:' 뒤의 문구, lines: 문서의 줄들, index: 오류 줄(0부터), names: 쓸 수 있는 이름들(코드 · 앱 Uniform · 내장)
-//     line: 고칠 줄(0부터), from: 그 줄의 지금 글자(바뀌었으면 적용하지 않는다), text: 고친 줄
+//     line: 고칠 줄(0부터, 문서 전체 수정이면 -1), from · text: 고치기 전 · 뒤(줄 또는 문서 전체)
+//     transform(문서 글) → 고친 글: 여러 수정을 겹쳐 적용할 때(모두 고치기) 쓴다. 줄 수정은 그 줄이 from 그대로일 때만 바꾼다.
+//   applyAll(text, fixes) → { text, applied } — 줄마다 첫 수정 · 문서 전체 수정을 차례로 겹쳐 적용(같은 수정은 한 번)
 
 const INT = /(?<![\w.])(\d+)(?![\w.])/g; // 소수점 · 지수 · 접미사 없는 정수 리터럴
 const toFloat = text => text.replace(INT, "$1.0");
@@ -15,6 +19,26 @@ const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const splitComment = line => {
   const at = line.indexOf("//");
   return at < 0 ? [line, ""] : [line.slice(0, at), line.slice(at)];
+};
+// 문서의 줄마다 코드 부분(// 주석 앞)에만 fn을 적용한다
+const mapCode = (doc, fn) =>
+  doc
+    .split("\n")
+    .map(row => {
+      if (/^\s*#/.test(row)) return row;
+      const [code, comment] = splitComment(row);
+      return fn(code) + comment;
+    })
+    .join("\n");
+// 옛 GLSL(ES 1.0) · 예전 Shadertoy 이름 → 지금 이름
+const LEGACY = {
+  texture2DLodEXT: "textureLod",
+  texture2DLod: "textureLod",
+  textureCubeLod: "textureLod",
+  texture2DProj: "textureProj",
+  texture2D: "texture",
+  textureCube: "texture",
+  iGlobalTime: "iTime",
 };
 // 대괄호 안(배열 첨자 · 크기)은 정수여야 하므로 바꾸지 않는다
 const outsideBrackets = (code, change) => {
@@ -78,8 +102,46 @@ const quickFixes = ({ message = "", lines = [], index = 0, names = [] } = {}) =>
   if (typeof line !== "string") return [];
   const fixes = [];
   const add = (label, text, at = index) => {
-    if (text !== lines[at] && !fixes.some(fix => fix.text === text && fix.line === at))
-      fixes.push({ label, line: at, from: lines[at], text });
+    if (text === lines[at] || fixes.some(fix => fix.text === text && fix.line === at)) return;
+    const from = lines[at];
+    fixes.push({
+      label,
+      line: at,
+      from,
+      text,
+      transform: doc => {
+        const rows = doc.split("\n");
+        if (rows[at] !== from) return doc;
+        rows[at] = text;
+        return rows.join("\n");
+      },
+    });
+  };
+  // 문서 전체 수정(옛 코드 옮기기): 주석 밖만 바꾼다
+  const whole = (label, transform) => {
+    const doc = lines.join("\n"),
+      text = transform(doc);
+    if (text !== doc && !fixes.some(fix => fix.line === -1 && fix.label === label))
+      fixes.push({ label, line: -1, from: doc, text, transform });
+  };
+  const legacy = name => {
+    const to = LEGACY[name];
+    if (!to) return false;
+    const rename = (code, from, into) => code.replace(new RegExp(`(?<![\\w.])${escapeRe(from)}(?!\\w)`, "g"), into);
+    // 텍스처 함수는 옛 코드에 여러 개가 섞여 있으므로 계열 전체를 한 번에 옮긴다(texture2D · textureCube · …Lod · Proj)
+    if (/^texture/.test(name))
+      whole(`옛 텍스처 함수를 지금 이름으로: ${name} → ${to} 등 (문서 전체)`, doc =>
+        mapCode(doc, code =>
+          Object.entries(LEGACY)
+            .filter(([from]) => /^texture/.test(from))
+            .reduce((out, [from, into]) => rename(out, from, into), code)
+        )
+      );
+    else
+      whole(`옛 이름을 지금 이름으로: ${name} → ${to} (문서 전체)`, doc =>
+        mapCode(doc, code => rename(code, name, to))
+      );
+    return true;
   };
   const [code, comment] = splitComment(line);
 
@@ -116,7 +178,7 @@ const quickFixes = ({ message = "", lines = [], index = 0, names = [] } = {}) =>
   }
   // 3) 함수: 있는 함수면 정수 인자를 실수로(pow(x, 2) → pow(x, 2.0)), 없는 이름이면 비슷한 이름
   const call = /'([A-Za-z_]\w*)' : no matching overloaded function found/.exec(message);
-  if (call) {
+  if (call && !legacy(call[1])) {
     const name = call[1];
     if (names.includes(name)) {
       const start = code.search(new RegExp(`(?<![\\w.])${escapeRe(name)}\\s*\\(`));
@@ -142,7 +204,19 @@ const quickFixes = ({ message = "", lines = [], index = 0, names = [] } = {}) =>
   }
   // 4) 선언하지 않은 이름: 비슷한 이름
   const undeclared = /'([A-Za-z_]\w*)' : undeclared identifier/.exec(message);
-  if (undeclared)
+  if (undeclared?.[1] === "gl_FragColor")
+    whole("gl_FragColor → out vec4 fragColor (GLSL ES 3.0 출력 선언 · 문서 전체)", doc => {
+      const renamed = mapCode(doc, code => code.replace(/(?<![\w.])gl_FragColor(?!\w)/g, "fragColor"));
+      if (/\bout\s+(?:(?:lowp|mediump|highp)\s+)?vec4\s+fragColor\b/.test(renamed)) return renamed;
+      const rows = renamed.split("\n"),
+        at = rows.findIndex(row => /^\s*precision\s+\w+\s+float\s*;/.test(row)),
+        version = rows.findIndex(row => /^\s*#\s*version\b/.test(row));
+      rows.splice(at >= 0 ? at + 1 : version >= 0 ? version + 1 : 0, 0, "out vec4 fragColor;");
+      return rows.join("\n");
+    });
+  else if (undeclared && legacy(undeclared[1])) {
+    // 옛 이름(iGlobalTime 등)
+  } else if (undeclared)
     for (const candidate of similar(undeclared[1], names))
       add(`${candidate}(으)로 바꾸기`, replaceName(line, undeclared[1], candidate));
   // 5) 벡터 크기: vec4 자리에 vec3(색 출력에 흔하다) · vec3 자리에 vec4
@@ -185,7 +259,32 @@ const quickFixes = ({ message = "", lines = [], index = 0, names = [] } = {}) =>
         add("앞 줄 끝에 ; 넣기", trimmed + ";" + prevCode.slice(trimmed.length) + prevComment, at);
     }
   }
+  // 7) 옛 한정자: varying → in (조각 셰이더의 입력)
+  if (/'varying' : Illegal use of reserved word/.test(message))
+    whole("varying → in (GLSL ES 3.0 · 문서 전체)", doc =>
+      mapCode(doc, code => code.replace(/(?<![\w.])varying(?!\w)/g, "in"))
+    );
   return fixes;
 };
 
-export { quickFixes, distance };
+// 여러 오류의 수정을 겹쳐 적용한다: 줄마다 첫 수정 하나 · 문서 전체 수정은 이름(label)마다 하나.
+const applyAll = (text, fixes) => {
+  const seen = new Set(),
+    lineDone = new Set();
+  let out = text,
+    applied = 0;
+  // 줄 수정을 먼저(줄 번호가 원래 글 기준이라), 문서 전체 수정은 그 뒤에
+  for (const fix of [...fixes.filter(f => f.line >= 0), ...fixes.filter(f => f.line < 0)]) {
+    const key = fix.line >= 0 ? `line:${fix.line}` : `whole:${fix.label}`;
+    if (seen.has(key) || (fix.line >= 0 && lineDone.has(fix.line))) continue;
+    seen.add(key);
+    const next = fix.transform(out);
+    if (next === out) continue;
+    out = next;
+    applied++;
+    if (fix.line >= 0) lineDone.add(fix.line);
+  }
+  return { text: out, applied };
+};
+
+export { quickFixes, applyAll, distance };

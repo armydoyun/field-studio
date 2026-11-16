@@ -399,7 +399,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       row.append(" ", tag);
     }
     setStatus(
-      `${error?.passName ? `${error.passName} 컴파일 오류` : "작업 오류"}: ${text.split("\n")[0]}${fixable ? " · Ctrl+.로 빠른 수정" : ""}`,
+      `${error?.passName ? `${error.passName} 컴파일 오류` : "작업 오류"}: ${text.split("\n")[0]}${fixable ? ` · Ctrl+.로 빠른 수정${fixable > 1 ? " · 모두: Ctrl+Shift+." : ""}` : ""}`,
       "is-error"
     );
   };
@@ -1734,6 +1734,23 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   };
   const listVersions = async () => (versions?.available ? versions.list(versionKey()) : []);
+  const changedVersions = () =>
+    document.dispatchEvent(new CustomEvent("shader-versions-changed", { detail: { key: versionKey() } }));
+  // 이름 붙이기: 이름이 있는 버전은 자동 정리(최근 40개)에서 빠져 계속 남는다. 빈 이름이면 이름을 뗀다.
+  const nameVersion = async (id, name) => {
+    const saved = await versions?.update(id, {
+      name: String(name ?? "")
+        .trim()
+        .slice(0, 60),
+    });
+    changedVersions();
+    return saved;
+  };
+  const removeVersion = async id => {
+    const done = await versions?.remove(id);
+    changedVersions();
+    return !!done;
+  };
   // 버전으로 되돌리기: 지금 작업을 먼저 버전으로 남기고, 뒤에서 컴파일한 뒤 프로젝트 전체를 그 버전으로 바꾼다.
   // 보관함 프로젝트와의 연결은 그대로 두고(같은 프로젝트의 옛 모습), Ctrl+Z 한 번으로 바로 전 작업으로 돌아간다.
   const restoreVersion = async id => {
@@ -2934,6 +2951,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     // 버전 기록(version-history.js 화면이 쓴다)
     listVersions,
     restoreVersion,
+    nameVersion,
+    removeVersion,
     keepVersion: (label = "직접 남김") => keepVersion(label, { force: true }),
     redo: () => historyMove(false),
     getProject: () => copy(project),

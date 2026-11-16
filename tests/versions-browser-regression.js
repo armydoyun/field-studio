@@ -70,6 +70,34 @@
     ($("studioDialogAlt").hidden ? $("studioDialogOK") : $("studioDialogAlt")).click();
     test(await opening, "다른 예제 열기");
     await until(async () => (await studio.listVersions()).some(v => v.label === "다른 작업을 열기 전") && (await studio.listVersions()).length > count, "열기 전에 남김");
+    // 이름 붙이기(보관): 화면에서 이름을 붙이면 목록에 이름 · '보관' 표시가 나오고, 자동 정리(최근 40개)에서 빠진다
+    test(studio.setProject({ image: codeA, passes: [], imageChannels: {} }), "다시 버전 A 장면");
+    $("versionOpen").click();
+    await until(() => $("versionDialog").open && items().length > 0, "다시 대화상자");
+    const oldest = items()[items().length - 1];
+    [...oldest.querySelectorAll("button")].find(button => /이름 붙이기/.test(button.textContent)).click();
+    await until(() => $("studioPromptDialog").open, "이름 묻기");
+    $("studioDialogInput").value = "처음 모습";
+    $("studioDialogOK").click();
+    await until(() => items().some(item => item.textContent.includes("처음 모습") && item.textContent.includes("보관")), "이름 · 보관 표시");
+    const named = (await studio.listVersions()).find(v => v.name === "처음 모습");
+    test(!!named, "이름이 저장된다");
+    // 버전을 41개 더 쌓아도(내용이 모두 다르게) 이름 붙인 버전은 남고, 이름 없는 버전은 40개까지
+    for (let i = 0; i < 41; i++) {
+      r.setUniform("uGain", (i + 1) / 100);
+      await studio.keepVersion("직접 남김");
+    }
+    const after = await studio.listVersions();
+    test(after.some(v => v.id === named.id), "이름 붙인 버전은 자동 정리에서 빠진다");
+    test(after.filter(v => !v.name).length === 40, `이름 없는 버전은 최근 40개(${after.filter(v => !v.name).length})`);
+    // 지우기: 확인 뒤 사라진다
+    await until(() => items().length === after.length, "목록 갱신");
+    const target = items().find(item => item.textContent.includes("처음 모습"));
+    target.querySelector(".version-remove").click();
+    await until(() => $("studioPromptDialog").open, "지우기 확인");
+    $("studioDialogOK").click();
+    await until(async () => !(await studio.listVersions()).some(v => v.id === named.id), "지운 버전은 사라진다");
+    await until(() => !items().some(item => item.textContent.includes("처음 모습")), "목록에서도 사라진다");
   } finally {
     if ($("versionDialog").open) $("versionDialog").close();
     settings.setPresets(presets);

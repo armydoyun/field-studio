@@ -6,7 +6,8 @@
 //  · 띄어쓰기: 이항 연산자 · 대입 양옆 한 칸, 쉼표 · 세미콜론 뒤 한 칸, 괄호 안쪽 · 함수 이름과 ( 사이 · 단항 연산자 뒤는 붙인다,
 //    if / for / while / switch / return 뒤 ( 앞은 한 칸
 // 안전장치: 정리 전후의 토큰 목록(공백 제외)이 같아야 한다 — tests/glsl-format-regression.js가 모든 예제로 확인한다.
-//   format(source, { indent = "    " }) → 정리한 코드
+//   format(source, { indent = "    ", keepBlank = false }) → 정리한 코드
+//     keepBlank: 빈 줄을 줄이지 않는다(줄 수가 그대로) — 선택한 줄만 정리할 때 같은 줄 번호로 바꿔 넣으려고
 //   tokenize(line) → 한 줄의 토큰(공백 제외, 주석은 한 토큰) — 검사용
 
 const OPERATORS = [
@@ -118,10 +119,12 @@ const spacing = (prev, token) => {
   return " ";
 };
 
-const format = (source, { indent = "    " } = {}) => {
+const format = (source, { indent = "    ", keepBlank = false } = {}) => {
   if (typeof source !== "string") throw new TypeError("코드는 문자열이어야 합니다.");
   const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  const ended = /\r?\n$/.test(source);
   const lines = source.split(/\r?\n/);
+  if (ended) lines.pop(); // 끝 줄바꿈 뒤의 빈 조각은 줄이 아니다(맨 끝에서 다시 붙인다)
   const out = [];
   let depth = 0,
     parens = 0,
@@ -144,7 +147,7 @@ const format = (source, { indent = "    " } = {}) => {
       continue;
     }
     if (!trimmed) {
-      if (++blank <= 1 && out.length) out.push("");
+      if (keepBlank || (++blank <= 1 && out.length)) out.push("");
       continue;
     }
     blank = 0;
@@ -201,8 +204,7 @@ const format = (source, { indent = "    " } = {}) => {
       else if (token.text === ")") parens = Math.max(0, parens - 1);
     }
   }
-  while (out.length && out[out.length - 1] === "") out.pop();
-  const ended = /\r?\n$/.test(source);
+  if (!keepBlank) while (out.length && out[out.length - 1] === "") out.pop();
   return out.join(newline) + (ended ? newline : "");
 };
 
