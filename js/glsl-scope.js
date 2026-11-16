@@ -333,6 +333,47 @@ const symbolAt = (src, pos, { macros = [] } = {}) => {
 };
 
 const lineOf = (src, at) => src.slice(0, at).split("\n").length;
+
+// 쓰지 않는 지역 변수: 함수 안에서 선언만 하고 한 번도 읽거나 쓰지 않은 변수. [{ name, at, line, removable }]
+//   · 전역(Common과 패스가 나눠 쓴다) · 매개변수(함수 모양의 일부) · 이름이 _로 시작하는 것은 세지 않는다.
+//   · 매크로 본문에 이름이 나오면 매크로로 쓰는 것일 수 있어 세지 않는다. 괄호 짝이 안 맞으면(작성 중) 아무것도 알리지 않는다.
+//   · remove: 그 문장이 이 변수 하나만 선언하면 지울 범위 { from, to }(앞 문장 끝 ~ 이 문장의 ';'), 아니면 null.
+//     초기화 식은 GLSL 함수가 out 인수 말고는 아무것도 바꾸지 않으므로 같이 지운다(되돌리기 한 번으로 돌아온다).
+// 이름 하나만 선언하는 문장의 범위(문장 첫 토큰 ~ ';'). for ( … ) 머리 · 쉼표로 여럿 선언 · 사용자 함수 호출이면 null.
+const statementOf = (info, at) => {
+  const { tokens } = info,
+    index = tokens.findIndex(token => token.at === at);
+  if (index < 0) return null;
+  const userFunctions = new Set(info.decls.filter(d => d.kind === "function").map(d => d.name));
+  let start = index;
+  while (start > 0 && !/^[;{}(]$/.test(tokens[start - 1].v)) start--;
+  if (tokens[start - 1]?.v === "(") return null;
+  let depth = 0;
+  for (let k = index + 1; k < tokens.length; k++) {
+    const v = tokens[k].v;
+    // 사용자 함수(out 인수로 다른 변수를 바꿀 수 있다) · modf · frexp를 부르는 초기화 식은 지우지 않는다
+    if (tokens[k].id && tokens[k + 1]?.v === "(" && (userFunctions.has(v) || /^(?:modf|frexp)$/.test(v))) return null;
+    if (v === "(" || v === "[") depth++;
+    else if (v === ")" || v === "]") depth--;
+    else if (depth === 0 && v === ",") return null;
+    else if (depth === 0 && (v === "{" || v === "}")) return null;
+    else if (depth === 0 && v === ";") return { from: tokens[start].at, to: tokens[k].at + 1 };
+  }
+  return null;
+};
+const unusedLocals = src => {
+  const info = analyze(src);
+  if (!info.balanced) return [];
+  const macroText = [...src.matchAll(/^[ \t]*#\s*define[^\n]*/gm)].map(m => m[0]).join("\n"),
+    out = [];
+  for (const decl of info.decls) {
+    if (decl.kind !== "var" || decl.global || decl.uniform || decl.scope <= 0 || decl.name.startsWith("_")) continue;
+    if (new RegExp(`\\b${decl.name}\\b`).test(macroText)) continue;
+    if (occurrences(info, decl).spots.length !== 1) continue;
+    out.push({ name: decl.name, at: decl.at, line: lineOf(src, decl.at), remove: statementOf(info, decl.at) });
+  }
+  return out;
+};
 // 사람이 읽는 기호 설명: "main 함수의 지역 변수" · "전역 Uniform" · "함수 (오버로드 2개)" …
 const describe = (info, symbol, group) => {
   if (symbol.kind === "function") return group.length > 1 ? `함수 (오버로드 ${group.length}개 모두)` : "함수";
@@ -481,4 +522,5 @@ export {
   applyRename,
   macroSpots,
   lineOf,
+  unusedLocals,
 };

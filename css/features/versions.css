@@ -11,7 +11,8 @@
 .version-compare { display:grid;gap:var(--space-3);margin-top:var(--space-6); }
 .version-compare-title { margin:0;color:var(--text-soft);font-size:var(--text-sm);font-weight:600; }
 .version-diff { max-height:min(320px,40vh);overflow:auto;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--sunken);font:var(--text-xs)/1.6 var(--mono); }
-.version-diff-tab { position:sticky;top:0;margin:0;padding:var(--space-2) var(--space-4);border-bottom:1px solid var(--line);background:var(--elevated);color:var(--text-soft);font:600 var(--text-xs)/1.6 var(--sans); }
+.version-diff-head { position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);min-height:var(--control-sm);padding:var(--space-1) var(--space-4);border-bottom:1px solid var(--line);background:var(--elevated); }
+.version-diff-tab { margin:0;color:var(--text-soft);font:600 var(--text-xs)/1.6 var(--sans); }
 .version-diff-hunk { padding:var(--space-2) 0;border-bottom:1px dashed var(--line); }
 .version-diff-line { display:grid;grid-template-columns:5ch 2ch minmax(0,1fr);padding:0 var(--space-4);white-space:pre; }
 .version-diff-no { color:var(--faint);text-align:right;padding-right:var(--space-3); }

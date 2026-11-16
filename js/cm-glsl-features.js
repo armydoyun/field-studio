@@ -4,6 +4,7 @@
 //  · 색 견본: vec3/vec4(0~1 숫자) 앞에 색 견본을 끼워 넣고, 누르면 색상 선택기로 값을 바꾼다(VS Code식 인라인 위젯).
 //  · 정의로 이동(F12 · Ctrl+클릭), 이름 바꾸기(F2, 범위를 따름 — glsl-scope.js).
 //  · 들여쓰기 안내선, 컴파일 오류 메시지를 줄 끝에 표시(Error Lens).
+//  · 쓰지 않는 지역 변수를 흐리게 표시하고, removeUnused로 한 번에 지운다(glsl-scope.js unusedLocals).
 // 소스 분석은 glsl-language.js가 맡고, 여기서는 화면·키 동작만 다룬다. 이름이 가리키는 선언(범위)은 glsl-scope.js가 찾는다.
 import * as Scope from "./glsl-scope.js";
 
@@ -734,6 +735,84 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     provide: field => CM.EditorView.decorations.from(field, value => value.deco),
   });
 
+  // ==== 쓰지 않는 지역 변수: 이름을 흐리게(마우스를 올리면 설명) · removeUnused로 한 번에 지운다 ====
+  // 입력이 멈춘 뒤(0.3초) 다시 센다. 그 사이 편집으로 위치가 바뀌면 표시를 따라 옮긴다.
+  const setUnused = CM.StateEffect.define();
+  const unusedMark = name =>
+    CM.Decoration.mark({
+      class: "cm-unused",
+      attributes: { title: `쓰지 않는 변수: ${name} · 명령 팔레트 '쓰지 않는 변수 지우기'로 지울 수 있습니다` },
+    });
+  const unusedField = CM.StateField.define({
+    create: () => CM.Decoration.none,
+    update(deco, tr) {
+      for (const effect of tr.effects) if (effect.is(setUnused)) return effect.value;
+      return tr.docChanged ? deco.map(tr.changes) : deco;
+    },
+    provide: field => CM.EditorView.decorations.from(field),
+  });
+  const unusedDecorations = src =>
+    CM.Decoration.set(
+      Scope.unusedLocals(src).map(item => unusedMark(item.name).range(item.at, item.at + item.name.length))
+    );
+  const unusedPlugin = CM.ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.view = view;
+        this.timer = 0;
+        this.schedule(0);
+      }
+      schedule(delay) {
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => {
+          if (options.unusedHints === false) return;
+          try {
+            this.view.dispatch({ effects: setUnused.of(unusedDecorations(docText(this.view.state))) });
+          } catch (_) {
+            // 편집기가 이미 사라졌다
+          }
+        }, delay);
+      }
+      update(update) {
+        if (update.docChanged) this.schedule(300);
+      }
+      destroy() {
+        clearTimeout(this.timer);
+      }
+    }
+  );
+  // 지울 수 있는 것(그 변수 하나만 선언한 문장)을 한 번에 지운다 — 되돌리기 한 칸. 문장이 지워져 빈 줄이 되면 줄째 지운다.
+  // 지운 뒤 다른 변수가 새로 '쓰지 않는' 것이 될 수 있다(그 변수를 쓰던 초기화 식이 사라져서) — 다시 부르면 이어서 지운다.
+  const removeUnused = view => {
+    const doc = view.state.doc,
+      found = Scope.unusedLocals(doc.toString()),
+      removable = found.filter(item => item.remove);
+    if (!removable.length) {
+      notify(
+        found.length
+          ? `쓰지 않는 변수 ${found.length}개는 다른 변수와 한 문장에 있거나 함수를 불러 직접 지워야 합니다`
+          : "쓰지 않는 지역 변수가 없습니다"
+      );
+      return 0;
+    }
+    const changes = removable.map(({ remove }) => {
+      const line = doc.lineAt(remove.from),
+        before = doc.sliceString(line.from, remove.from),
+        after = doc.sliceString(remove.to, line.to);
+      if (!before.trim() && !after.trim()) return { from: line.from, to: Math.min(doc.length, line.to + 1) }; // 줄 전체
+      const space = after.length - after.trimStart().length;
+      return { from: remove.from, to: remove.to + space };
+    });
+    view.dispatch({ changes, userEvent: "delete.unused", scrollIntoView: true });
+    const left = found.length - removable.length;
+    notify(
+      `쓰지 않는 변수 ${removable.length}개를 지웠습니다 (${removable.map(item => item.name).join(", ")})` +
+        (left ? ` · ${left}개는 직접 지우세요` : "") +
+        " · Ctrl+Z로 되돌리기"
+    );
+    return removable.length;
+  };
+
   // ==== 키 · 마우스 ====
   const keys = [
     { key: "Mod-ArrowUp", run: nudge(1, 1) },
@@ -789,10 +868,21 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     })
   );
   return {
-    extensions: [signatureField, trackFocus, colorPlugin, guidePlugin, lensField, mouse, CM.keymap.of(keys)],
+    extensions: [
+      signatureField,
+      trackFocus,
+      colorPlugin,
+      guidePlugin,
+      lensField,
+      unusedField,
+      unusedPlugin,
+      mouse,
+      CM.keymap.of(keys),
+    ],
     setDiagnostics: (view, list) => view.dispatch({ effects: setLens.of(list) }),
     goToDefinition,
     renameSymbol,
+    removeUnused,
     openColorPicker,
     nudge,
     dispose: () => {
