@@ -165,7 +165,8 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
   // hemi는 +Y 반구(vec2는 위쪽 반원)만 허용한다. 끌 때 Shift를 누르면 15° 단위로 맞춘다.
   const DEG = 180 / Math.PI,
     DIR_PAD = 88;
-  let directionRedraws = [];
+  // 다시 그리기 목록: 그리기 함수 → 그 조작의 바깥 요소(wrap). 목록에서 행 하나만 바꿀 때 그 행 안의 것만 잊는다(forget).
+  let directionRedraws = new Map();
   // CSS 너비만 바뀌면 곡선의 기존 비트맵이 늘어나므로, 표시 크기에 맞춰 프레임을 그리기 전에 다시 그린다.
   const curveRedraws = new Map(),
     curveResizeObserver = window.ResizeObserver
@@ -533,7 +534,7 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
       } else state.el = clamp(state.el + delta, hemi ? 0 : -90, 90);
       apply(pad, toVector());
     });
-    directionRedraws.push(draw);
+    directionRedraws.set(draw, wrap);
     sync(current());
     wrap.refresh = () => sync(current());
     return wrap;
@@ -690,8 +691,13 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
       values[move[0]] = Number(clamp(values[move[0]] + move[1] * step * (event.shiftKey ? 10 : 1)).toFixed(decimals));
       apply(pad, values);
     });
-    directionRedraws.push(draw);
+    directionRedraws.set(draw, wrap);
     sync();
+    // 밖에서 바뀐 값을 보여 준다(프리셋 전환 · 값 되돌리기 — 목록을 다시 그리지 않고)
+    wrap.refresh = () => {
+      sync();
+      draw();
+    };
     return wrap;
   };
   // @enum: int/uint를 이름 붙은 선택지로. 짧은 목록은 버튼 묶음(세그먼트), 길면 드롭다운. 값은 0부터의 순번.
@@ -978,7 +984,7 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
       if (alpha.value.trim() && Number.isFinite(a)) selected.c[3] = clamp01(a);
       apply(alpha);
     });
-    directionRedraws.push(draw);
+    directionRedraws.set(draw, wrap);
     stops = read();
     selected = stops[0];
     sync(false);
@@ -1250,20 +1256,29 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
       if (yField.value.trim() && Number.isFinite(y)) place(selected, points[selected].x, y);
       apply(yField);
     });
-    directionRedraws.push(draw);
+    directionRedraws.set(draw, wrap);
     curveRedraws.set(pad, draw);
     curveResizeObserver?.observe(pad);
     sync();
     return wrap;
   };
-  listen(document, "theme-changed", () => directionRedraws.forEach(draw => draw()));
+  listen(document, "theme-changed", () => directionRedraws.forEach((_, draw) => draw()));
   const reset = () => {
-    directionRedraws = [];
+    directionRedraws = new Map();
     curveResizeObserver?.disconnect();
     curveRedraws.clear();
   };
+  // 목록에서 행 하나를 버릴 때: 그 행 안의 조작만 다시 그리기 목록 · 크기 관찰에서 뺀다.
+  const forget = container => {
+    for (const [draw, node] of directionRedraws) if (container.contains(node)) directionRedraws.delete(draw);
+    for (const pad of [...curveRedraws.keys()])
+      if (container.contains(pad)) {
+        curveRedraws.delete(pad);
+        curveResizeObserver?.unobserve(pad);
+      }
+  };
   const redraw = () => {
-    for (const draw of directionRedraws) draw();
+    for (const draw of directionRedraws.keys()) draw();
   };
   return {
     parseBool,
@@ -1278,6 +1293,7 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
     gradientControl,
     curveControl,
     reset,
+    forget,
     redraw,
   };
 };

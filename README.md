@@ -82,7 +82,7 @@ js/
   glsl-highlight.js   # GLSL 강조 (편집기·가이드 공용)
   codemirror.js       # CodeMirror 6 (MIT, 미리 번들링 · tools/codemirror에서 재생성) — 손으로 고치지 않는다
   # 설정 패널 · 화면
-  ui.js               # 설정 패널(렌더링 · 파라미터 · 작업공간 탭)
+  ui.js               # 설정 패널(렌더링 · 파라미터 · 작업공간 탭) · 파라미터 목록은 행 단위로 맞춘다(buildRow · renderUniforms)
   parameter-tools.js  # 파라미터 패널과 Studio가 함께 쓰는 소스 · 값 처리(순수 함수)
   parameter-controls.js # 파라미터 줄의 값 조작 부품: 숫자 칸 · 끌기 · 방향/위치 패드 · 선택지 · 그라데이션 · 곡선
   value-editor.js     # 실수 · 벡터 정밀 입력 대화상자(적용 전까지 렌더러에 닿지 않음)

@@ -1,5 +1,5 @@
 // 프리셋을 부드럽게 바꾸는 동안: 값은 행에서 바로 움직이고, 목록 전체를 다시 그리지 않는다(깜빡임 · 눌러 둔 곳을 잃지 않게).
-// 숫자 · 선택지 · 각도 · 색 · 벡터는 행이 바로 갱신한다. 그럴 수 없는 종류(위치 패드 @pos)가 섞이면 이전처럼 목록을 다시 그린다.
+// 숫자 · 선택지 · 각도 · 색 · 벡터 · 위치 패드는 행이 바로 갱신한다(목록을 다시 그리지 않는다).
 (async () => {
   const r = window.shaderPlayground,
     studio = window.shaderStudio,
@@ -75,10 +75,12 @@
     test(Math.abs(Number(firstAxis.value) - value("uOffset")[0]) < 0.01, "벡터 성분 칸이 지금 값을 보여 준다");
     await until(() => value("uGain") === 0 && value("uOffset")[0] === 1, "두 번째 전환 끝", 15000);
 
-    // 위치 패드(@pos)는 바로 갱신하는 함수가 없다 — 이전처럼 목록을 다시 그려 값을 맞춘다
+    // 위치 패드(@pos)도 이제 행에서 바로: 목록을 다시 그리지 않는다(행 단위로 그리기)
     const spotRow = row("uSpot");
     apply("위치 포함");
-    await until(() => row("uSpot") !== spotRow, "위치 패드가 섞인 전환은 목록을 다시 그린다", 5000);
+    const spotStarted = Date.now();
+    await until(() => Date.now() - spotStarted > 600 && value("uSpot")[0] < 0.5, "위치 전환이 움직인다", 3500);
+    test(row("uSpot") === spotRow, "위치 패드가 섞인 전환도 목록을 다시 그리지 않는다");
     await until(() => value("uGain") === 1, "세 번째 전환 끝", 15000);
   } finally {
     $("presetBlend").value = blend;
