@@ -1,5 +1,6 @@
 import * as ParameterTools from "./parameter-tools.js";
 import * as Presets from "./presets.js";
+import * as Versions from "./version-store.js";
 // 사용자 편집 상태만 소유한다. GPU 자원과 연결 규칙은 Renderer/PassManager가 검증한다.
 // 외부 코드 에디터나 네트워크 요청은 사용하지 않는다. file:// 배포는 deploy/ 번들을 사용한다.
 // 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
@@ -540,6 +541,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       saveLocal();
       const synced = syncAnnotations();
       if (synced) setStatus(`${synced} · ${timing}`);
+      keepVersion("실행"); // 어노테이션으로 등록된 파라미터까지 담기게 그 뒤에
       return true;
     } catch (error) {
       reportCompileError(error);
@@ -1689,7 +1691,99 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   // 프로젝트 메뉴에서 프로젝트를 바꾸면 메뉴를 닫아 새 화면을 보여 준다.
   const revealCode = () => projectMenu.close();
+  // ---- 버전 기록(version-store.js): 되돌리기보다 긴 안전망. 작업 전체(코드 · 파라미터 · 프리셋 · 연결)를 남긴다 ----
+  //  · 실행에 성공할 때(마지막 버전과 다르고 1분이 지났을 때) · 다른 작업을 열기 전 · 버전을 되돌리기 전 · 직접 남길 때
+  //  · 작업 열쇠는 보관함 프로젝트 id(저장 안 한 작업은 "work") — 프로젝트마다 따로 쌓인다
+  const versions = options.versions === false ? null : Versions.create(options.versions || {});
+  let lastVersion = { key: null, print: "", time: 0 };
+  const versionKey = () => projects?.current()?.id || "work";
+  const versionState = () => ({
+    project: copy(project),
+    users: renderer.getUserUniforms(),
+    presets: settings?.getPresets?.() ?? [],
+    links: settings?.getLinks?.() ?? [],
+    selected,
+  });
+  const versionPrint = state =>
+    JSON.stringify([
+      state.project,
+      state.users.map(user => [user.name, user.type, user.value]),
+      state.presets,
+      state.links,
+    ]);
+  // force: 1분 간격을 따지지 않는다(그래도 마지막 버전과 같으면 남기지 않는다). 상태는 부른 순간 잡아 둔다.
+  const keepVersion = async (label, { force = false } = {}) => {
+    if (!versions?.available || disposed) return null;
+    const key = versionKey(),
+      state = versionState(),
+      print = versionPrint(state),
+      now = Date.now();
+    try {
+      if (lastVersion.key !== key) {
+        const [newest] = await versions.list(key);
+        lastVersion = { key, print: newest ? versionPrint(newest) : "", time: newest?.time || 0 };
+      }
+      if (lastVersion.print === print || (!force && now - lastVersion.time < 60000)) return null;
+      lastVersion = { key, print, time: now };
+      const saved = await versions.add({ key, label, ...state });
+      document.dispatchEvent(new CustomEvent("shader-versions-changed", { detail: { key } }));
+      return saved;
+    } catch (error) {
+      console.warn("버전 기록 저장 실패:", error);
+      return null;
+    }
+  };
+  const listVersions = async () => (versions?.available ? versions.list(versionKey()) : []);
+  // 버전으로 되돌리기: 지금 작업을 먼저 버전으로 남기고, 뒤에서 컴파일한 뒤 프로젝트 전체를 그 버전으로 바꾼다.
+  // 보관함 프로젝트와의 연결은 그대로 두고(같은 프로젝트의 옛 모습), Ctrl+Z 한 번으로 바로 전 작업으로 돌아간다.
+  const restoreVersion = async id => {
+    const version = (await listVersions()).find(item => item.id === id);
+    if (!version || disposed) return false;
+    await keepVersion("되돌리기 전", { force: true });
+    const ticket = ++warming,
+      ready = renderer.prepareProject?.(version.project, { all: true });
+    if (ready) {
+      setStatus("버전 컴파일 중… · 화면은 계속 움직입니다", "is-dirty");
+      if ((await ready) === false || ticket !== warming || disposed) return false;
+    }
+    try {
+      rememberEditor();
+      checkpoint = historyState();
+      renderer.applyPortable(version.project, version.users);
+      quietSettings = true;
+      try {
+        settings?.setPresets?.(version.presets || []);
+        settings?.setLinks?.(version.links || []);
+      } finally {
+        quietSettings = false;
+      }
+      workEpoch++;
+      clearChange();
+      views.clear();
+      shown = null;
+      project = copy(version.project);
+      selected = tabExists(version.selected) ? version.selected : "Image";
+      dirty = false;
+      clearError();
+      clearDraft();
+      renderEditor();
+      recordEdit(false, true);
+      Object.assign(checkpoint, { selected, ...cursorState() });
+      preview(true);
+      syncInputs();
+      saveLocal();
+      settings?.save();
+      document.dispatchEvent(new Event("shader-settings-applied"));
+      lastVersion = { key: versionKey(), print: versionPrint(versionState()), time: Date.now() };
+      setStatus(`${new Date(version.time).toLocaleString("ko-KR")} 버전으로 되돌렸습니다 · Ctrl+Z로 바로 전 작업`);
+      return true;
+    } catch (error) {
+      showError(error);
+      return false;
+    }
+  };
   const replaceProject = (next, users = []) => {
+    keepVersion("다른 작업을 열기 전", { force: true });
     try {
       rememberEditor();
       checkpoint = historyState();
@@ -2047,6 +2141,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       }
       Pack.remapTextures(next, map);
       if (state) {
+        keepVersion("다른 작업을 열기 전", { force: true });
         checkpoint = historyState();
         renderer.applyPortable(next, state.user);
         applied = true;
@@ -2765,6 +2860,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   editor.registerCommands?.([
     press("셰이더 실행 (적용)", "studioRun", "Alt+Enter"),
     { label: "프로젝트 저장", key: "Ctrl+S", run: () => saveProject() },
+    { label: "버전 기록 (옛 버전 보기 · 비교 · 되돌리기)", run: () => $("versionOpen")?.click() },
     {
       label: "Ctrl+S로 실행 (이전 방식) 켜기/끄기",
       run: () => setCtrlSRuns(!ctrlSRuns()),
@@ -2835,6 +2931,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     beginParameterChange,
     getEditorSource: () => $("studioCode").value,
     undo: () => historyMove(true),
+    // 버전 기록(version-history.js 화면이 쓴다)
+    listVersions,
+    restoreVersion,
+    keepVersion: (label = "직접 남김") => keepVersion(label, { force: true }),
     redo: () => historyMove(false),
     getProject: () => copy(project),
     exportPack,

@@ -42,7 +42,7 @@ css/                  # 스타일시트 — 규칙은 docs/DESIGN_SYSTEM.md
   icons.css           # glyph-icon + icon-* (SVG 마스크 아이콘)
   components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · select · tag · menu · dialog · notice · surface · matrix · value-editor
   layout/             # 화면 틀: workspace · panel · stage · dock
-  features/           # 기능별 배치: parameters · presets · links · timeline · project-menu · channels · editor · editor-codemirror · video-dialog · gallery · guide · profiler · popout
+  features/           # 기능별 배치: parameters · presets · links · timeline · project-menu · channels · editor · editor-codemirror · video-dialog · gallery · guide · profiler · popout · versions
 js/
   main.js             # type=module 진입점 · 앱 조립
   # 렌더링 (GPU 자원 소유)
@@ -73,6 +73,9 @@ js/
   app-menus.js        # 바탕 · 뷰포트 · 패스 탭의 우클릭 메뉴(툴바 버튼을 그대로 누른다)
   project-model.js    # 프로젝트 데이터 규칙 (순수 함수)
   project-store.js    # 프로젝트 보관함 저장소 (IndexedDB)
+  version-store.js    # 버전 기록 저장소(IndexedDB, 보관함과 따로): 실행 성공 · 다른 작업 열기 전 · 되돌리기 전 · 직접 남김. 작업마다 최근 40개
+  version-history.js  # 버전 기록 대화상자(프로젝트 메뉴 '버전 기록…'): 목록 · 지금 작업과 비교 · 이 버전으로
+  line-diff.js        # 줄 단위 비교(Myers) · 바뀐 곳만 앞뒤 문맥과 묶기(순수 함수)
   code-insert.js      # 코드 삽입 위치 계산 (순수 함수)
   cm-editor.js        # GLSL 코드 편집기: CodeMirror 화면 + studio용 #studioCode 창구 · 팔레트 · 툴바 · 선택 영역 레이어
   cm-search-panel.js  # 두 줄 찾기 · 바꾸기 창 (찾기 → 바꿀 내용 Tab 순서)

@@ -17,6 +17,7 @@ import * as Snippets from "./snippets.js";
 import * as Theme from "./theme.js";
 import * as Popout from "./popout.js";
 import * as WorkspaceLayout from "./workspace-layout.js";
+import * as VersionHistory from "./version-history.js";
 
 // 테마는 WebGL 초기화와 무관하게 먼저 연결한다(렌더러가 실패해도 화면 테마 전환은 동작해야 한다).
 window.shaderTheme = Theme.mount();
@@ -55,7 +56,8 @@ let renderer = null,
   studio = null,
   profiler = null,
   gallery = null,
-  guide = null;
+  guide = null,
+  versionHistory = null;
 const initialize = async () => {
   try {
     renderer = Renderer.createRenderer(canvas, Shader, message => {
@@ -96,6 +98,7 @@ const initialize = async () => {
       },
     });
     guide = Guide.mount({ studio, gallery });
+    versionHistory = VersionHistory.mount({ studio, renderer });
     // 우클릭 메뉴: 바탕 · 뷰포트(여기) + 각 기능 모듈이 등록한 영역 메뉴
     AppMenus.mount({ studio: () => studio });
     ContextMenu.mount(document);
@@ -110,6 +113,7 @@ const initialize = async () => {
       "beforeunload",
       () => {
         guide?.dispose();
+        versionHistory?.dispose();
         gallery?.dispose();
         profiler?.dispose();
         studio?.dispose();

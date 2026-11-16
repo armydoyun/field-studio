@@ -40,6 +40,7 @@
     <link rel="stylesheet" href="./css/features/editor.css">
     <link rel="stylesheet" href="./css/features/editor-codemirror.css">
     <link rel="stylesheet" href="./css/features/video-dialog.css">
+    <link rel="stylesheet" href="./css/features/versions.css">
     <link rel="stylesheet" href="./css/features/gallery.css">
     <link rel="stylesheet" href="./css/features/guide.css">
     <link rel="stylesheet" href="./css/features/profiler.css">
@@ -250,6 +251,7 @@
 
                             <div class="studio-file-actions"><button id="studioExportPack" type="button" title="프로젝트 파일(Pack) 내보내기">프로젝트 파일 내보내기</button><button id="studioImportPack" type="button" title="내보낸 프로젝트 파일(Pack)을 열어 이미지까지 복원">프로젝트 파일 열기</button></div>
                             <div class="studio-file-actions"><button id="studioExportHTML" type="button" title="재생 전용 HTML 내보내기">HTML로 내보내기 (재생 전용)</button></div>
+                            <div class="studio-file-actions"><button id="versionOpen" type="button" aria-haspopup="dialog" aria-controls="versionDialog" title="실행할 때마다 남긴 이 작업의 옛 버전 보기 · 비교 · 되돌리기">버전 기록…</button></div>
                         <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
                             <details class="ui-disclosure project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="ui-hint">코드·버퍼만 포함합니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="코드·버퍼 JSON 내보내기">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
                             <button id="studioReset" type="button" title="기본 장면으로 새 프로젝트 시작">새 프로젝트 (기본 장면)</button>
@@ -460,6 +462,14 @@
         </form>
     </dialog>
 
+    <dialog id="versionDialog" class="ui-dialog ui-dialog--lg version-dialog" aria-labelledby="versionTitle" aria-describedby="versionSummary">
+        <header class="ui-dialog-head"><div class="ui-dialog-text"><h2 id="versionTitle">버전 기록</h2><p id="versionSummary"></p></div><button id="versionClose" type="button" class="ui-icon-btn ui-icon-btn--lg glyph-icon icon-close" aria-label="버전 기록 닫기" title="닫기 (Esc)"></button></header>
+        <div class="ui-dialog-body">
+            <div id="versionList" class="version-list" role="list" aria-label="남긴 버전"></div>
+            <section id="versionCompare" class="version-compare" aria-labelledby="versionCompareTitle" hidden><h3 id="versionCompareTitle" class="version-compare-title"></h3><div id="versionDiff" class="version-diff"></div></section>
+        </div>
+        <footer class="ui-dialog-foot"><button id="versionKeep" type="button" class="ui-btn--lg" title="지금 작업을 버전으로 남긴다">지금 버전 남기기</button><button id="versionDone" type="button" class="ui-btn--primary ui-btn--lg">닫기 <kbd>Esc</kbd></button></footer>
+    </dialog>
     <dialog id="gallery" class="ui-dialog ui-dialog--2xl ui-dialog--column gallery" aria-labelledby="galleryTitle" data-welcome="false">
         <header class="ui-dialog-head ui-dialog-head--bar gallery-head">
             <div class="ui-dialog-text">
