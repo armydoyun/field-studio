@@ -1751,6 +1751,24 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     changedVersions();
     return !!done;
   };
+  // 탭 하나만 되돌리기: 그 탭의 코드를 그 버전의 코드로 바꾼다. 편집기에서 직접 고친 것과 같아서(Ctrl+Z 한 번)
+  // 파라미터 · 다른 탭은 그대로이고, 평소처럼 고친 코드를 미리 본다. 그 탭이 지금 없으면 false.
+  const restoreTab = async (id, name) => {
+    const version = (await listVersions()).find(item => item.id === id),
+      code = version ? sourceOf(version.project, name) : null;
+    if (typeof code !== "string" || !tabExists(name) || disposed) return false;
+    open();
+    select(name);
+    if (code === $("studioCode").value) return true;
+    const area = $("studioCode");
+    area.setRangeText(code, 0, area.value.length, "start");
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+    setStatus(
+      `${name} 탭을 ${new Date(version.time).toLocaleString("ko-KR")} 버전으로 바꿨습니다 · Ctrl+Z로 되돌리기`,
+      "is-dirty"
+    );
+    return true;
+  };
   // 버전으로 되돌리기: 지금 작업을 먼저 버전으로 남기고, 뒤에서 컴파일한 뒤 프로젝트 전체를 그 버전으로 바꾼다.
   // 보관함 프로젝트와의 연결은 그대로 두고(같은 프로젝트의 옛 모습), Ctrl+Z 한 번으로 바로 전 작업으로 돌아간다.
   const restoreVersion = async id => {
@@ -2951,6 +2969,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     // 버전 기록(version-history.js 화면이 쓴다)
     listVersions,
     restoreVersion,
+    restoreTab,
     nameVersion,
     removeVersion,
     keepVersion: (label = "직접 남김") => keepVersion(label, { force: true }),

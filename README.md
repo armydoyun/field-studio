@@ -74,14 +74,14 @@ js/
   project-model.js    # 프로젝트 데이터 규칙 (순수 함수)
   project-store.js    # 프로젝트 보관함 저장소 (IndexedDB)
   version-store.js    # 버전 기록 저장소(IndexedDB, 보관함과 따로): 실행 성공 · 다른 작업 열기 전 · 되돌리기 전 · 직접 남김. 작업마다 최근 40개(이름 붙인 버전은 계속 보관)
-  version-history.js  # 버전 기록 대화상자(프로젝트 메뉴 '버전 기록…'): 목록 · 지금 작업과 비교 · 이 버전으로 · 이름 붙이기 · 지우기
+  version-history.js  # 버전 기록 대화상자(프로젝트 메뉴 '버전 기록…'): 목록 · 지금 작업과 비교 · 이 버전으로 · 이 탭만 되돌리기 · 이름 붙이기 · 지우기
   line-diff.js        # 줄 단위 비교(Myers) · 바뀐 곳만 앞뒤 문맥과 묶기(순수 함수)
   code-insert.js      # 코드 삽입 위치 계산 (순수 함수)
   cm-editor.js        # GLSL 코드 편집기: CodeMirror 화면 + studio용 #studioCode 창구 · 팔레트 · 툴바 · 선택 영역 레이어
   cm-search-panel.js  # 두 줄 찾기 · 바꾸기 창 (찾기 → 바꿀 내용 Tab 순서)
-  cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류
+  cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류 · 쓰지 않는 변수 흐리게
   glsl-language.js    # GLSL 언어 정보(키워드·타입·앱 Uniform·심볼 표·자동 완성 후보)
-  glsl-scope.js       # GLSL 범위 분석(이름이 가리키는 선언) — 이름 바꾸기(F2)·정의로 이동 (순수 함수)
+  glsl-scope.js       # GLSL 범위 분석(이름이 가리키는 선언) — 이름 바꾸기(F2)·정의로 이동 · 쓰지 않는 지역 변수 (순수 함수)
   glsl-fix.js         # 컴파일 오류 빠른 수정(Ctrl+.): 오류 문구 · 코드 줄로 고친 줄 제안 — 정수 리터럴 · 세미콜론 · 오타 이름 · 벡터 크기 · 옛 GLSL/Shadertoy 코드 옮기기, 모두 고치기(Ctrl+Shift+.)(순수 함수)
   glsl-format.js      # 코드 정리(Shift+Alt+F): 들여쓰기 · 띄어쓰기 · 빈 줄만 맞춘다(토큰 · 주석 · 줄 나눔 그대로, 선택한 줄만도, 순수 함수)
   glsl-highlight.js   # GLSL 강조 (편집기·가이드 공용)

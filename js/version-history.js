@@ -2,6 +2,7 @@
 // 버전을 남기고 되돌리는 일은 studio.js(keepVersion · restoreVersion · listVersions), 저장은 version-store.js가 한다.
 //  · 목록: 언제(방금 · 3분 전 · 어제 14:05) · 왜(실행 · 다른 작업을 열기 전 · 되돌리기 전 · 직접 남김) · 요약(코드 줄 수 · 버퍼 · 파라미터)
 //  · 비교: 지금 작업과 탭(Common · Image · 버퍼)마다 줄 단위로(line-diff.js), 바뀐 곳만 앞뒤 2줄과 함께. 파라미터 값 차이도
+//  · 이 탭만 되돌리기: 비교에서 탭 하나의 코드만 그 버전으로(편집기에서 고친 것처럼 Ctrl+Z 한 번)
 //  · 되돌리기: 그 버전으로 작업 전체를 바꾼다(되돌리기 전 지금 작업도 버전으로 남고, Ctrl+Z 한 번으로 바로 전 작업)
 //   mount({ studio }) → { open, dispose }
 import * as UI from "./ui-kit.js";
@@ -47,10 +48,10 @@ const mount = ({ studio, renderer } = {}) => {
   let comparing = null;
   const setSummary = text => ($("versionSummary").textContent = text);
   // 한 탭의 비교를 줄 요소로
-  const diffLines = (name, before, after, budget) => {
+  const diffLines = (before, after, budget, heading) => {
     const groups = LineDiff.hunks(LineDiff.diff(before, after));
     if (!groups.length) return { nodes: [], used: 0 };
-    const nodes = [UI.el("p", "version-diff-tab", name)];
+    const nodes = [heading];
     let used = 0;
     for (const group of groups) {
       let beforeLine = group.beforeLine,
@@ -72,6 +73,25 @@ const mount = ({ studio, renderer } = {}) => {
     }
     return { nodes, used };
   };
+  // 탭 제목 줄: 두 쪽에 다 있는 탭이면 '이 탭만 되돌리기'(그 탭 코드만 그 버전으로 · 파라미터와 다른 탭은 그대로)
+  const tabHeading = (version, name, title, both) => {
+    const row = UI.el("div", "version-diff-head");
+    row.append(UI.el("p", "version-diff-tab", title));
+    if (both)
+      row.append(
+        UI.button({
+          label: "이 탭만 되돌리기",
+          size: "sm",
+          variant: "ghost",
+          className: "version-tab-restore",
+          title: `${name} 탭의 코드만 이 버전으로 바꿉니다 · 파라미터와 다른 탭은 그대로 · Ctrl+Z로 되돌리기`,
+          onClick: async () => {
+            if (await studio.restoreTab?.(version.id, name)) dialog.close();
+          },
+        })
+      );
+    return row;
+  };
   const compare = version => {
     comparing = comparing === version.id ? null : version.id;
     for (const button of $("versionList").querySelectorAll(".version-compare-button"))
@@ -88,11 +108,12 @@ const mount = ({ studio, renderer } = {}) => {
     let budget = MAX_DIFF_LINES,
       changedTabs = 0;
     for (const name of names) {
+      const title = before.has(name) ? name : `${name} (그 버전에는 없음)`;
       const { nodes: tab, used } = diffLines(
-        before.has(name) ? name : `${name} (그 버전에는 없음)`,
         before.get(name) || "",
         after.get(name) || "",
-        budget
+        budget,
+        tabHeading(version, name, title, before.has(name) && after.has(name))
       );
       if (tab.length) changedTabs++;
       nodes.push(...tab);
@@ -105,7 +126,7 @@ const mount = ({ studio, renderer } = {}) => {
         name => JSON.stringify(old.get(name)?.value) !== JSON.stringify(current.get(name)?.value)
       );
     if (paramChanges.length) {
-      nodes.push(UI.el("p", "version-diff-tab", `파라미터 값 ${paramChanges.length}개 다름`));
+      nodes.push(tabHeading(version, "", `파라미터 값 ${paramChanges.length}개 다름`, false));
       nodes.push(
         UI.el(
           "p",

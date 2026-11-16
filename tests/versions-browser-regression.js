@@ -1,7 +1,7 @@
 // 프로젝트 버전 기록(version-store.js · studio.js keepVersion/restoreVersion · version-history.js 대화상자):
 //  · 실행에 성공하면 버전을 남긴다(1분 안에 다시 실행하면 남기지 않는다) · 직접 남기기 · 같은 내용이면 남기지 않는다
 //  · 목록(때 · 까닭 · 요약) · 비교(지금 작업과 줄 단위) · '이 버전으로'(코드 · 파라미터 · 프리셋을 그 버전으로, 그 전 작업도 남김,
-//    Ctrl+Z로 돌아옴) · 다른 예제를 열기 전에 남긴다
+//    Ctrl+Z로 돌아옴) · 이 탭만 되돌리기 · 다른 예제를 열기 전에 남긴다 · 이름 붙이기 · 지우기
 (async () => {
   const r = window.shaderPlayground,
     studio = window.shaderStudio,
@@ -61,6 +61,21 @@
     studio.undo();
     await until(() => studio.getProject().image === codeB, "Ctrl+Z로 바로 전 작업");
     test(r.getUserUniforms()[0].value === 0.8 && settings.getPresets().length === 1, "되돌리기로 파라미터 · 프리셋도 돌아옴");
+    // 이 탭만 되돌리기: 비교에서 Image 탭 코드만 A로 — 파라미터 값은 그대로 · Ctrl+Z 한 번으로 돌아온다
+    $("versionOpen").click();
+    await until(() => $("versionDialog").open && items().length > 1, "대화상자 다시 열기");
+    const versionsNow = await studio.listVersions(),
+      indexA = versionsNow.findIndex(v => v.project.image === codeA);
+    items()[indexA].querySelector(".version-compare-button").click();
+    await until(() => $("versionDiff").querySelector(".version-tab-restore"), "탭 제목 옆 '이 탭만 되돌리기'");
+    test(!$("versionDiff").textContent.includes("파라미터 값") || !$("versionDiff").querySelectorAll(".version-diff-head")[1]?.querySelector(".version-tab-restore"), "파라미터 제목에는 탭 되돌리기가 없다");
+    $("versionDiff").querySelector(".version-tab-restore").click();
+    await until(() => studio.getProject().image === codeA && !$("versionDialog").open, "Image 탭만 A로 · 대화상자 닫힘");
+    test(r.getUserUniforms()[0].value === 0.8 && settings.getPresets().length === 1, "파라미터 · 프리셋은 그대로");
+    test(/Image 탭을 .* 버전으로 바꿨습니다/.test($("studioMessage").textContent), "상태 줄 안내(탭)");
+    studio.undo();
+    await until(() => studio.getEditorSource() === codeB, "Ctrl+Z로 탭 되돌리기 취소");
+    await until(() => studio.getProject().image === codeB, "다시 B로 실행");
     // 다른 예제를 열기 전에 지금 작업을 남긴다
     r.setUniform("uGain", 0.5);
     const count = (await studio.listVersions()).length;

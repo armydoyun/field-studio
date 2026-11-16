@@ -128,5 +128,27 @@ void main() {
   check(renamed.includes('struct Ray { vec3 origin; vec3 d; };')&&renamed.includes('h.ray.origin + uRays[1].origin + makeRay(a).origin + Ray(a, a).origin + h.o;')&&renamed.includes('h.o = r.origin;'),'적용 결과: Ray.o만 바뀌고 Hit.o·매개변수 o는 그대로');
   check(renamed.includes('Ray makeRay(vec3 o)'),'같은 이름의 매개변수 o는 그대로');
   check(S.symbolAt(F,F.indexOf('h.ray.o')+6).symbol.at===F.indexOf('vec3 o;')+5,'정의로 이동: 필드 참조 → 필드 선언');
+  // 쓰지 않는 지역 변수(편집기에서 흐리게 · '쓰지 않는 변수 지우기')
+  const U=`#define P q.x
+uniform float uNever;
+float g = 1.0;
+float f(float a, float unusedParam){ float dead = sin(a); float viaFn = f(a, 0.0); float b = a*2.; return b; }
+void mainImage(out vec4 fragColor, in vec2 fragCoord){
+  vec2 uv = fragCoord/iResolution.xy;
+  vec3 col = vec3(0.), pair = vec3(1.);
+  float q = 1.; vec2 _skip;
+  for (int i=0;i<3;i++){ float t = 0.5; }
+  fragColor = vec4(col + P, 1.);
+}`;
+  const unused=S.unusedLocals(U),names=unused.map(u=>u.name);
+  check(JSON.stringify(names)===JSON.stringify(['dead','viaFn','uv','pair','t']),`쓰지 않는 지역 변수만: ${names}`);
+  check(!names.includes('uNever')&&!names.includes('g')&&!names.includes('unusedParam'),'전역 · Uniform · 매개변수는 세지 않는다');
+  check(!names.includes('q')&&!names.includes('_skip'),'매크로 본문에 나오는 이름 · _로 시작하는 이름은 세지 않는다');
+  const by=n=>unused.find(u=>u.name===n);
+  check(U.slice(by('dead').remove.from,by('dead').remove.to)==='float dead = sin(a);','지울 범위: 그 선언문');
+  check(by('viaFn').remove===null,'사용자 함수를 부르는 초기화(out 인수 가능)는 지우지 않는다');
+  check(by('pair').remove===null,'쉼표로 여럿 선언한 문장은 지우지 않는다');
+  check(U.slice(by('uv').remove.from,by('uv').remove.to)==='vec2 uv = fragCoord/iResolution.xy;','한 줄 선언 범위');
+  check(S.unusedLocals('void main(){ float a = 1.0; ').length===0,'괄호 짝이 안 맞으면(작성 중) 알리지 않는다');
   console.log(`GLSL scope: ${passed} checks passed`);
 })().catch(error=>{console.error(error);process.exit(1);});
