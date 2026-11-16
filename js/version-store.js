@@ -2,8 +2,9 @@
 // 다른 프로젝트를 열기 전 · 버전을 되돌리기 전 · 직접 남길 때 작업 전체(코드 · 파라미터 · 프리셋 · 연결)를 남긴다.
 // 프로젝트 보관함(project-store.js)과 다른 DB라 보관함 형식을 건드리지 않는다.
 //   버전 = { id, key(보관함 프로젝트 id 또는 "work"), time, label, project, users, presets, links, selected }
-//   create({ dbName, now }) → { add(entry), list(key) → 최신 순, remove(id), available }
-//   한 작업(key)마다 최근 KEEP개, 전체 TOTAL개까지 둔다(오래된 것부터 지운다). IndexedDB가 없으면 아무것도 하지 않는다.
+//   create({ dbName, now }) → { add(entry), list(key) → 최신 순, update(id, patch), remove(id), available }
+//   한 작업(key)마다 최근 KEEP개, 전체 TOTAL개까지 둔다(오래된 것부터 지운다). 이름(name)을 붙인 버전은 세지도 지우지도 않는다
+//   — 남겨 두고 싶은 버전은 이름을 붙이면 된다. IndexedDB가 없으면 아무것도 하지 않는다.
 
 const DB_NAME = "field-versions-v1",
   STORE = "versions",
@@ -59,22 +60,36 @@ const create = ({ dbName = DB_NAME, now = () => Date.now() } = {}) => {
     await run("readwrite", async store => {
       store.put(item);
       // 이 작업의 오래된 버전 정리
-      const mine = (await all(store.index("key").getAll(item.key))).sort((a, b) => b.time - a.time);
+      const mine = (await all(store.index("key").getAll(item.key)))
+        .filter(entry => !entry.name)
+        .sort((a, b) => b.time - a.time);
       for (const old of mine.slice(KEEP)) store.delete(old.id);
       const everything = await all(store.index("time").getAllKeys());
       if (everything.length > TOTAL) {
         const oldest = await all(store.index("time").getAll(null, everything.length - TOTAL));
-        for (const old of oldest) store.delete(old.id);
+        for (const old of oldest) if (!old.name) store.delete(old.id);
       }
     });
     return item;
+  };
+  const update = async (id, patch) => {
+    if (!available) return null;
+    let next = null;
+    await run("readwrite", async store => {
+      const [current] = await all(store.getAll(id));
+      if (!current) return;
+      next = { ...current, ...patch, id: current.id, key: current.key, time: current.time };
+      if (!next.name) delete next.name;
+      store.put(next);
+    });
+    return next;
   };
   const remove = async id => {
     if (!available) return false;
     await run("readwrite", store => store.delete(id));
     return true;
   };
-  return { add, list, remove, available };
+  return { add, list, update, remove, available };
 };
 
 export { create, KEEP };

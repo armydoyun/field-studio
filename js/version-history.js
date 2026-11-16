@@ -141,7 +141,10 @@ const mount = ({ studio, renderer } = {}) => {
           actions = UI.el("div", "version-actions");
         item.setAttribute("role", "listitem");
         when.title = new Date(version.time).toLocaleString("ko-KR");
+        // 이름을 붙인 버전: 이름을 앞에 · '보관' 표시(자동 정리에서 빠진다)
+        if (version.name) info.append(UI.el("strong", "version-name", version.name));
         info.append(when, label, detail);
+        if (version.name) info.append(UI.tag("보관", { tone: "accent", pill: true }));
         if (index === 0) info.append(UI.tag("가장 최근", { plain: true }));
         const compareButton = UI.button({
           label: "비교",
@@ -163,7 +166,44 @@ const mount = ({ studio, renderer } = {}) => {
             if (ok) dialog.close();
           },
         });
-        actions.append(compareButton, restore);
+        const ask = window.shaderStudio?.ask;
+        const rename = UI.button({
+          label: version.name ? "이름 고치기…" : "이름 붙이기…",
+          size: "sm",
+          variant: "ghost",
+          title: "이름을 붙이면 자동 정리(최근 40개)에서 빠져 계속 남습니다 · 비우면 이름을 뗍니다",
+          onClick: async () => {
+            const name = ask
+              ? await ask({
+                  title: "버전 이름",
+                  message: "이름을 붙인 버전은 자동으로 지워지지 않고 계속 남습니다. 비워 두면 이름을 뗍니다.",
+                  value: version.name || "",
+                  label: "이름",
+                  validate: text => (text.trim().length > 60 ? "60자 이하로 적으세요." : ""),
+                })
+              : null;
+            if (name === null || name === undefined) return;
+            await studio.nameVersion(version.id, name);
+          },
+        });
+        const remove = UI.iconButton({
+          icon: "trash",
+          label: "이 버전 지우기",
+          size: "sm",
+          className: "ui-icon-btn--danger version-remove",
+          onClick: async () => {
+            const ok = ask
+              ? await ask({
+                  title: "버전 지우기",
+                  message: `${relative(version.time)}${version.name ? ` '${version.name}'` : ""} 버전을 지웁니다. 되돌릴 수 없습니다.`,
+                  ok: "지우기",
+                  danger: true,
+                })
+              : true;
+            if (ok) await studio.removeVersion(version.id);
+          },
+        });
+        actions.append(compareButton, restore, rename, remove);
         item.append(info, actions);
         return item;
       })

@@ -57,6 +57,41 @@
       await run();
       await until(() => !failed(), `${label}: 고친 뒤 실행하면 오류 없음`);
     }
+    // 옛 GLSL(ES 1.0) · Shadertoy 코드: 문서 전체를 지금 문법으로
+    const legacy = [
+      ["옛 텍스처 함수", "uniform sampler2D iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) {\n  c = texture2D(iChannel0, p / iResolution.xy) * uGain;\n}", "texture(iChannel0", true],
+      ["gl_FragColor", "precision highp float;\nuniform vec2 uResolution;\nvoid main() {\n  gl_FragColor = vec4(gl_FragCoord.xy / uResolution, uGain, 1.0);\n}", "out vec4 fragColor;", true],
+      ["iGlobalTime", "void mainImage(out vec4 c, in vec2 p) {\n  c = vec4(sin(iGlobalTime) * uGain);\n}", "sin(iTime)", true],
+      ["varying", "precision highp float;\nvarying vec2 vUv;\nout vec4 o;\nvoid main() {\n  o = vec4(uGain);\n}", "in vec2 vUv;", false],
+    ];
+    for (const [label, code, expected, compiles] of legacy) {
+      setCode(header + code);
+      await run();
+      await until(failed, `${label}: 컴파일 오류`);
+      ctrlDot();
+      await wait(50);
+      test(studio.getProject().image.includes(expected), `${label}: Ctrl+.로 문서 전체를 고침(${expected})`);
+      await run();
+      if (compiles) await until(() => !failed(), `${label}: 고친 뒤 실행하면 오류 없음`);
+      else test(!/Illegal use of reserved word/.test($("studioDiagnostics").textContent), `${label}: 그 오류는 사라짐`);
+    }
+    // 모두 고치기(Ctrl+Shift+.): 오류 셋을 한 번에, 되돌리기 한 칸
+    const many = header + "uniform sampler2D iChannel0;\nvoid mainImage(out vec4 c, in vec2 p) {\n  float x = uGain * 2;\n  c = vec4(uGian) + texture2D(iChannel0, p) * x;\n}";
+    setCode(many);
+    await run();
+    await until(failed, "모두 고치기: 컴파일 오류");
+    test(/모두: Ctrl\+Shift\+\./.test($("studioMessage").textContent), "고칠 오류가 여럿이면 '모두' 안내");
+    const content = document.querySelector(".studio-cm-host .cm-content");
+    content.focus();
+    content.dispatchEvent(new KeyboardEvent("keydown", { key: ">", code: "Period", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })); // 실제 자판: Shift+. = >
+    await wait(50);
+    const fixed = studio.getProject().image;
+    test(fixed.includes("uGain * 2.0") && fixed.includes("vec4(uGain)") && fixed.includes("texture(iChannel0"), "Ctrl+Shift+.로 셋을 한 번에");
+    await run();
+    await until(() => !failed(), "모두 고친 뒤 실행하면 오류 없음");
+    studio.undo();
+    await wait(50);
+    test(studio.getProject().image === many, "모두 고치기는 되돌리기 한 칸");
     // 오류 말풍선의 고치기 버튼(CodeMirror lint actions) · 되돌리기 한 칸
     setCode(header + cases[0][1]);
     await run();

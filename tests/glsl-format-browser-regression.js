@@ -41,7 +41,8 @@
       .split(/\r?\n/)
       .flatMap(F.tokenize)
       .map(token => token.trimEnd());
-  const changedTokens = [],
+  const changedLines = [],
+    changedTokens = [],
     notIdempotent = [];
   let changed = 0;
   for (const [source, where] of sources) {
@@ -50,6 +51,8 @@
       if (out !== source) changed++;
       if (JSON.stringify(tokens(out)) !== JSON.stringify(tokens(source))) changedTokens.push(where);
       if (F.format(out, { indent }) !== out) notIdempotent.push(where);
+      // 선택 정리가 기대는 '줄 수 그대로' 정리: 줄 수가 같아야 같은 줄 번호로 바꿔 넣을 수 있다
+      if (F.format(source, { indent, keepBlank: true }).split("\n").length !== source.split(/\r?\n/).length) changedLines.push(where);
     }
     // 주석 줄(어노테이션 포함)은 글자 그대로 남는다
     const comments = (source.match(/\/\/[^\n]*/g) || []).map(comment => comment.trimEnd());
@@ -57,6 +60,7 @@
     if (!comments.every(comment => out.includes(comment))) changedTokens.push(`${where} (주석)`);
   }
   test(!changedTokens.length, `토큰 · 주석 그대로${changedTokens.length ? ` — ${changedTokens.slice(0, 5).join(", ")}` : ""}`);
+  test(!changedLines.length, `줄 수 그대로 정리(선택 정리용)${changedLines.length ? ` — ${changedLines.slice(0, 5).join(", ")}` : ""}`);
   test(!notIdempotent.length, `두 번 정리해도 같다${notIdempotent.length ? ` — ${notIdempotent.slice(0, 5).join(", ")}` : ""}`);
   test(changed > 0, `실제로 서식을 바꾼 경우가 있다(${changed})`);
   // 컴파일: 원래 통과하던 셰이더(Image · 버퍼 패스)는 정리 뒤에도 통과
@@ -110,6 +114,21 @@
     $("studioTidy").click();
     await wait(50);
     test(studio.getProject().image === tidy && /이미 정리된/.test($("studioMessage").textContent), "이미 정리된 코드는 그대로 · 알림");
+    // 선택한 줄만 정리: 2~3번째 줄(본문)을 고르면 그 줄만 바뀌고 첫 줄 · 끝 줄은 그대로. 깊이는 앞 문맥(중괄호)으로
+    const messy3 = "void mainImage( out vec4 c,in vec2 p ){\nvec2 uv=p/iResolution.xy;\nc=vec4(uv,0.0,1.0);\n}  \n";
+    test(studio.setProject({ image: messy3, passes: [], imageChannels: {} }), "선택 정리 장면");
+    await wait(100);
+    const area = $("studioCode"),
+      start = messy3.indexOf("vec2 uv"),
+      end = messy3.indexOf("1.0);") + 5;
+    area.focus();
+    area.setSelectionRange(start, end);
+    await wait(30);
+    $("studioTidy").click();
+    await wait(50);
+    const partial = studio.getProject().image.split("\n");
+    test(partial[0] === "void mainImage( out vec4 c,in vec2 p ){" && partial[3] === "}  ", "선택 밖 줄은 그대로");
+    test(/^ {2,4}vec2 uv = p \/ iResolution\.xy;$/.test(partial[1]) && /^ {2,4}c = vec4\(uv, 0\.0, 1\.0\);$/.test(partial[2]), "선택한 줄만 정리 · 깊이는 앞 문맥");
   } finally {
     studio.setProject(before);
   }

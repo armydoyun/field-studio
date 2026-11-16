@@ -882,29 +882,48 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   ];
   // 코드 정리(Shift+Alt+F · glsl-format.js): 들여쓰기 · 띄어쓰기 · 빈 줄만 맞춘다(뜻 · 줄 나눔 · 주석은 그대로).
   // 문서 전체를 한 번에 바꿔 Ctrl+Z 한 번으로 돌아가고, 커서는 '앞에 있는 공백이 아닌 글자 수'로 같은 코드 자리에 둔다.
+  // 선택한 부분이 있으면 그 줄들만 정리한다(깊이는 앞 문맥으로 정하려고 문서 전체를 줄 수 그대로 정리해 그 줄만 가져온다).
   const formatDocument = editorView => {
     if (editorView.state.readOnly) return false;
-    const before = editorView.state.doc.toString();
+    const before = editorView.state.doc.toString(),
+      selection = editorView.state.selection.main,
+      indent = " ".repeat(tabSize);
     let after;
     try {
-      after = Format.format(before, { indent: " ".repeat(tabSize) });
+      after = selection.empty
+        ? Format.format(before, { indent })
+        : Format.format(before, { indent, keepBlank: true }).split("\n");
     } catch (_) {
       notify("코드를 정리하지 못했습니다");
+      return true;
+    }
+    if (!selection.empty) {
+      const doc = editorView.state.doc,
+        first = doc.lineAt(selection.from),
+        last = doc.lineAt(
+          selection.to > selection.from && doc.lineAt(selection.to).from === selection.to
+            ? selection.to - 1
+            : selection.to
+        ),
+        text = after.slice(first.number - 1, last.number).join("\n");
+      if (text === doc.sliceString(first.from, last.to)) {
+        notify("선택한 줄은 이미 정리돼 있습니다");
+        return true;
+      }
+      editorView.dispatch({
+        changes: { from: first.from, to: last.to, insert: text },
+        selection: { anchor: first.from, head: first.from + text.length },
+        userEvent: "input.format",
+        scrollIntoView: true,
+      });
+      notify(`선택한 ${last.number - first.number + 1}줄을 정리했습니다 · Ctrl+Z로 되돌리기`);
       return true;
     }
     if (after === before) {
       notify("이미 정리된 코드입니다");
       return true;
     }
-    const solid = before.slice(0, editorView.state.selection.main.head).replace(/\s+/g, "").length;
-    let head = 0;
-    for (let count = 0; head < after.length && count < solid; head++) if (!/\s/.test(after[head])) count++;
-    editorView.dispatch({
-      changes: { from: 0, to: before.length, insert: after },
-      selection: { anchor: head },
-      userEvent: "input.format",
-      scrollIntoView: true,
-    });
+    replaceDocument(editorView, after, "input.format");
     notify("코드를 정리했습니다(들여쓰기 · 띄어쓰기 · 빈 줄) · Ctrl+Z로 되돌리기");
     return true;
   };
@@ -940,6 +959,8 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     // 편집
     ...both("Shift-Alt-f", formatDocument),
     { key: "Mod-.", run: editorView => quickFix(editorView) },
+    // Ctrl+Shift+. : 자판은 Shift+.를 '>'로 보내고, CodeMirror는 글자 키 이름에 Shift를 붙이지 않는다 → "Mod->"
+    { key: "Mod->", run: editorView => quickFixAll(editorView) },
     { key: "Mod-Enter", run: CM.insertBlankLine },
     { key: "Mod-Shift-Enter", run: insertLineAbove },
     { key: "Mod-k Mod-c", run: lineComment(true) },
@@ -1225,19 +1246,36 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       ...uniformNames(),
     ];
   };
-  const applyFix = (editorView, fix) => {
-    const doc = editorView.state.doc;
-    if (fix.line + 1 > doc.lines) return false;
-    const row = doc.line(fix.line + 1);
-    if (row.text !== fix.from) {
-      notify("코드가 바뀌어 이 수정을 적용하지 않았습니다 · 다시 실행하면 새로 제안합니다");
-      return false;
-    }
+  // 문서 전체를 새 글로 바꾼다(커서는 '앞에 있는 공백이 아닌 글자 수'로 같은 코드 자리 근처에)
+  const replaceDocument = (editorView, text, userEvent) => {
+    const before = editorView.state.doc.toString(),
+      solid = before.slice(0, editorView.state.selection.main.head).replace(/\s+/g, "").length;
+    let head = 0;
+    for (let count = 0; head < text.length && count < solid; head++) if (!/\s/.test(text[head])) count++;
     editorView.dispatch({
-      changes: { from: row.from, to: row.to, insert: fix.text },
-      userEvent: "input.quickfix",
+      changes: { from: 0, to: before.length, insert: text },
+      selection: { anchor: Math.min(head, text.length) },
+      userEvent,
       scrollIntoView: true,
     });
+  };
+  const stale = () => notify("코드가 바뀌어 이 수정을 적용하지 않았습니다 · 다시 실행하면 새로 제안합니다");
+  const applyFix = (editorView, fix) => {
+    const doc = editorView.state.doc;
+    if (fix.line < 0) {
+      // 문서 전체 수정(옛 GLSL 옮기기 등): 제안을 만든 뒤 문서가 바뀌었으면 적용하지 않는다
+      if (doc.toString() !== fix.from) return stale(), false;
+      replaceDocument(editorView, fix.text, "input.quickfix");
+    } else {
+      if (fix.line + 1 > doc.lines) return false;
+      const row = doc.line(fix.line + 1);
+      if (row.text !== fix.from) return stale(), false;
+      editorView.dispatch({
+        changes: { from: row.from, to: row.to, insert: fix.text },
+        userEvent: "input.quickfix",
+        scrollIntoView: true,
+      });
+    }
     notify(`빠른 수정: ${fix.label} · Ctrl+Z로 되돌리기`);
     return true;
   };
@@ -1252,6 +1290,20 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       ? here
       : [...lineFixes.keys()].sort((a, b) => Math.abs(a - here) - Math.abs(b - here))[0];
     applyFix(editorView, lineFixes.get(line)[0]);
+    return true;
+  };
+  // Ctrl+Shift+. : 고칠 수 있는 오류를 모두(줄마다 첫 제안 · 문서 전체 수정은 하나씩) 한 번에 — 되돌리기 한 칸
+  const quickFixAll = editorView => {
+    const fixes = [...lineFixes.values()].flat();
+    if (!fixes.length) {
+      notify("고칠 수 있는 오류가 없습니다");
+      return true;
+    }
+    const before = editorView.state.doc.toString(),
+      { text, applied } = Fix.applyAll(before, fixes);
+    if (!applied || text === before) return stale(), true;
+    replaceDocument(editorView, text, "input.quickfix");
+    notify(`빠른 수정 ${applied}개를 한 번에 적용했습니다 · 다시 실행해 확인하세요 · Ctrl+Z로 되돌리기`);
     return true;
   };
   const setDiagnostics = list => {
@@ -1321,6 +1373,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "짝 괄호로 이동", key: "Ctrl+Shift+\\", run: () => jumpToBracket(view) },
     { label: "코드 정리 (들여쓰기 · 띄어쓰기 · 빈 줄)", key: "Shift+Alt+F", run: () => formatDocument(view) },
     { label: "빠른 수정 (커서 줄 오류의 첫 번째 제안 적용)", key: "Ctrl+.", run: () => quickFix(view) },
+    { label: "빠른 수정 모두 적용 (고칠 수 있는 오류 전부)", key: "Ctrl+Shift+.", run: () => quickFixAll(view) },
     { label: "들여쓰기", key: "Ctrl+]", run: () => CM.indentMore(view) },
     { label: "내어쓰기", key: "Ctrl+[", run: () => CM.indentLess(view) },
     { label: "정의로 이동", key: "F12 · Ctrl+클릭", run: () => features.goToDefinition(view) },
@@ -1747,6 +1800,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     showFind,
     setDiagnostics,
     quickFixesAt: line => lineFixes.get(line) || [],
+    quickFixAll: () => quickFixAll(view),
     registerCommands,
     setFiles,
     openPalette,
