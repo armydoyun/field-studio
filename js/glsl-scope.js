@@ -507,6 +507,40 @@ const macroSpots = (src, name) => {
     .filter(at => !/\.\s*$/.test(text.slice(Math.max(0, at - 64), at)));
 };
 
+// 커서 자리 이름이 쓰인 곳(같은 기호 강조 · 참조 찾기 Shift+F12). { name, label, spots: [{ at, decl }] } 또는 { reason }
+//   · 범위를 아는 기호: 그 선언과 그 선언을 가리키는 참조만(같은 이름의 다른 지역 변수는 빼고)
+//   · #define 매크로: 파일 전체의 그 이름(전처리문 안 포함) · 선언이 없는 이름(iTime · Common의 함수 등): 그 이름 전부
+//   · 벡터 성분(.xyz) · 타입을 모르는 필드 · 키워드 · 타입은 { reason }
+const referencesAt = (src, pos, { macros = [] } = {}) => {
+  const found = symbolAt(src, pos, { macros });
+  if (found.symbol) {
+    const { group, spots } = occurrences(found.info, found.symbol),
+      decls = new Set(group.map(d => d.at));
+    return {
+      name: found.symbol.name,
+      label: describe(found.info, found.symbol, group),
+      spots: spots.map(at => ({ at, decl: decls.has(at) })),
+    };
+  }
+  if (found.reason === "macro") {
+    const define = new RegExp(`^[ \\t]*#\\s*define\\s+${found.word.text}\\b`, "m").exec(src),
+      declAt = define ? define.index + define[0].length - found.word.text.length : -1;
+    return {
+      name: found.word.text,
+      label: "#define 매크로",
+      spots: macroSpots(src, found.word.text).map(at => ({ at, decl: at === declAt })),
+    };
+  }
+  if (found.reason === "undeclared" || (found.reason === "braces" && found.word)) {
+    const info = found.info,
+      spots = info.refs.filter(r => !r.member && r.name === found.word.text).map(r => ({ at: r.at, decl: false }));
+    return spots.length
+      ? { name: found.word.text, label: "이 탭에 선언이 없는 이름(내장 · Common)", spots }
+      : { reason: "none" };
+  }
+  return { reason: found.reason };
+};
+
 export {
   KEYWORDS,
   TYPES,
@@ -523,4 +557,5 @@ export {
   macroSpots,
   lineOf,
   unusedLocals,
+  referencesAt,
 };

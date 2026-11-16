@@ -79,9 +79,9 @@ js/
   code-insert.js      # 코드 삽입 위치 계산 (순수 함수)
   cm-editor.js        # GLSL 코드 편집기: CodeMirror 화면 + studio용 #studioCode 창구 · 팔레트 · 툴바 · 선택 영역 레이어
   cm-search-panel.js  # 두 줄 찾기 · 바꾸기 창 (찾기 → 바꿀 내용 Tab 순서)
-  cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류 · 쓰지 않는 변수 흐리게
+  cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 같은 기호 강조 · 참조 찾기(Shift+F12) · 들여쓰기 안내선 · 줄 끝 오류 · 쓰지 않는 변수 흐리게
   glsl-language.js    # GLSL 언어 정보(키워드·타입·앱 Uniform·심볼 표·자동 완성 후보)
-  glsl-scope.js       # GLSL 범위 분석(이름이 가리키는 선언) — 이름 바꾸기(F2)·정의로 이동 · 쓰지 않는 지역 변수 (순수 함수)
+  glsl-scope.js       # GLSL 범위 분석(이름이 가리키는 선언) — 이름 바꾸기(F2)·정의로 이동 · 쓰인 곳 · 쓰지 않는 지역 변수 (순수 함수)
   glsl-fix.js         # 컴파일 오류 빠른 수정(Ctrl+.): 오류 문구 · 코드 줄로 고친 줄 제안 — 정수 리터럴 · 세미콜론 · 오타 이름 · 벡터 크기 · 옛 GLSL/Shadertoy 코드 옮기기, 모두 고치기(Ctrl+Shift+.)(순수 함수)
   glsl-format.js      # 코드 정리(Shift+Alt+F): 들여쓰기 · 띄어쓰기 · 빈 줄만 맞춘다(토큰 · 주석 · 줄 나눔 그대로, 선택한 줄만도, 순수 함수)
   glsl-highlight.js   # GLSL 강조 (편집기·가이드 공용)

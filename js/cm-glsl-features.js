@@ -4,6 +4,7 @@
 //  · 색 견본: vec3/vec4(0~1 숫자) 앞에 색 견본을 끼워 넣고, 누르면 색상 선택기로 값을 바꾼다(VS Code식 인라인 위젯).
 //  · 정의로 이동(F12 · Ctrl+클릭), 이름 바꾸기(F2, 범위를 따름 — glsl-scope.js).
 //  · 들여쓰기 안내선, 컴파일 오류 메시지를 줄 끝에 표시(Error Lens).
+//  · 같은 기호 강조(커서 자리 이름이 쓰인 곳 · 범위를 따름) · 참조 찾기 목록(findReferences, Shift+F12).
 //  · 쓰지 않는 지역 변수를 흐리게 표시하고, removeUnused로 한 번에 지운다(glsl-scope.js unusedLocals).
 // 소스 분석은 glsl-language.js가 맡고, 여기서는 화면·키 동작만 다룬다. 이름이 가리키는 선언(범위)은 glsl-scope.js가 찾는다.
 import * as Scope from "./glsl-scope.js";
@@ -813,6 +814,80 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     return removable.length;
   };
 
+  // ==== 같은 기호 강조: 커서가 이름 위에 있으면 그 기호가 쓰인 곳을 모두(범위를 따른다 — glsl-scope.js referencesAt) ====
+  // 커서가 멈춘 뒤(0.15초) 센다. 선택 영역이 있을 때는 기본 '선택한 글자 강조'에 맡긴다. 두 곳 이상일 때만 그린다.
+  const macrosOf = src => symbolsOf(src).defines.map(d => d.name);
+  const referencesAt = (src, pos) => Scope.referencesAt(src, pos, { macros: macrosOf(src) });
+  const setRefs = CM.StateEffect.define();
+  const refMark = CM.Decoration.mark({ class: "cm-symbol-ref" }),
+    declMark = CM.Decoration.mark({ class: "cm-symbol-ref is-decl" });
+  const refField = CM.StateField.define({
+    create: () => CM.Decoration.none,
+    update(deco, tr) {
+      for (const effect of tr.effects) if (effect.is(setRefs)) return effect.value;
+      return tr.docChanged ? CM.Decoration.none : deco;
+    },
+    provide: field => CM.EditorView.decorations.from(field),
+  });
+  const refPlugin = CM.ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.view = view;
+        this.timer = 0;
+      }
+      update(update) {
+        if (!update.selectionSet && !update.docChanged) return;
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.measure(), 150);
+      }
+      measure() {
+        const view = this.view,
+          range = view.state.selection.main;
+        let deco = CM.Decoration.none;
+        if (range.empty && options.symbolHighlight !== false) {
+          const src = docText(view.state),
+            found = referencesAt(src, range.head);
+          if (found.spots?.length > 1)
+            deco = CM.Decoration.set(
+              found.spots.map(spot => (spot.decl ? declMark : refMark).range(spot.at, spot.at + found.name.length))
+            );
+        }
+        if (deco === CM.Decoration.none && view.state.field(refField) === CM.Decoration.none) return;
+        try {
+          view.dispatch({ effects: setRefs.of(deco) });
+        } catch (_) {
+          // 편집기가 이미 사라졌다
+        }
+      }
+      destroy() {
+        clearTimeout(this.timer);
+      }
+    }
+  );
+  // 참조 찾기(Shift+F12): 커서 자리 이름이 쓰인 곳 목록. cm-editor.js가 팔레트에 띄운다.
+  //   → { name, label, items: [{ at, line, text, decl }] } 또는 { reason, message }
+  const findReferences = (view, pos = view.state.selection.main.head) => {
+    const doc = view.state.doc,
+      found = referencesAt(doc.toString(), pos);
+    if (!found.spots?.length) {
+      const message =
+        found.reason === "swizzle"
+          ? "벡터 성분(.xyz)은 참조를 찾지 않습니다"
+          : found.reason === "field"
+            ? "타입을 알 수 없는 식의 필드라 참조를 찾지 못했습니다"
+            : "커서를 변수 · 함수 · 매크로 이름 위에 두세요";
+      return { reason: found.reason || "none", message };
+    }
+    return {
+      name: found.name,
+      label: found.label,
+      items: found.spots.map(spot => {
+        const line = doc.lineAt(spot.at);
+        return { at: spot.at, line: line.number, text: line.text.trim(), decl: spot.decl };
+      }),
+    };
+  };
+
   // ==== 키 · 마우스 ====
   const keys = [
     { key: "Mod-ArrowUp", run: nudge(1, 1) },
@@ -876,6 +951,8 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       lensField,
       unusedField,
       unusedPlugin,
+      refField,
+      refPlugin,
       mouse,
       CM.keymap.of(keys),
     ],
@@ -883,6 +960,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     goToDefinition,
     renameSymbol,
     removeUnused,
+    findReferences,
     openColorPicker,
     nudge,
     dispose: () => {
