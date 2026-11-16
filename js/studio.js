@@ -1357,14 +1357,43 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     area.scrollTop = scroll[0];
     area.scrollLeft = scroll[1];
     editor.update();
-    const applied = apply(target.users);
-    if (applied && !same(current.users, target.users)) document.dispatchEvent(new Event("shader-settings-applied"));
-    if (applied && target.presets && !same(current.presets, target.presets)) settings?.setPresets?.(target.presets);
-    if (applied && target.links && !same(current.links, target.links)) settings?.setLinks?.(target.links);
+    // 파라미터 구성 · 프리셋 · 연결은 셰이더를 바꾸지 않으므로 지금 한꺼번에 되돌린다. 코드만 일반 수정처럼 뒤에서 컴파일한 뒤
+    // 적용한다(무거운 셰이더에서 Ctrl+Z가 화면을 멈추지 않게). 그사이 다시 되돌리거나 입력해도 코드 밖의 상태는 이미
+    // 제자리라 반쯤 되돌아간 상태가 생기지 않는다. 파라미터 타입이 바뀌는 되돌리기(지금 코드와 맞지 않아 구성만 먼저
+    // 바꿀 수 없음)는 이전처럼 코드와 함께 바로 적용한다.
+    let restored = false;
+    try {
+      if (!same(current.users, target.users)) {
+        renderer.setUserUniforms(target.users);
+        document.dispatchEvent(new Event("shader-settings-applied"));
+      }
+      restored = true;
+    } catch (_) {
+      // 아래에서 코드와 함께 적용한다
+    }
+    const restoreSettings = () => {
+      if (target.presets && !same(current.presets, target.presets)) settings?.setPresets?.(target.presets);
+      if (target.links && !same(current.links, target.links)) settings?.setLinks?.(target.links);
+    };
+    if (restored) restoreSettings();
+    else if (apply(target.users)) {
+      document.dispatchEvent(new Event("shader-settings-applied"));
+      restoreSettings();
+    }
     navigatingHistory = false;
     checkpoint = historyState();
     editTime = 0;
     syncHistory();
+    if (restored) {
+      if (same(current.project, target.project) && !dirty && !compileFailed)
+        setStatus(
+          backwards ? "되돌렸습니다 · 파라미터 · 프리셋 · 연결" : "다시 실행했습니다 · 파라미터 · 프리셋 · 연결"
+        );
+      else {
+        dirty = true; // 코드는 아직 적용 전(컴파일 중) — 적용되면 apply가 푼다
+        applyWhenReady();
+      }
+    }
     return true;
   };
   // Panel batches are one Studio history entry, including all passes and values.

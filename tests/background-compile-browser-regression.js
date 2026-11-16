@@ -145,6 +145,41 @@
     test((await opened) === true, "예제: 끝나면 바꾸고 성공을 알린다");
     test(r.getFragmentSource().includes("0.75 * uGain") && r.getPasses().length === 0, "예제: 새 프로젝트 적용");
 
+    // 8) 되돌리기 · 다시 실행: 파라미터는 바로 되돌리고, 코드는 뒤에서 컴파일한 뒤 적용한다
+    $("studioLive").checked = false;
+    ready = true;
+    edit("c = vec4(uGain * 0.03);");
+    $("studioRun").click();
+    await until(() => r.getFragmentSource().includes("uGain * 0.03"), "되돌리기 준비: 코드 A");
+    const gainOf = () => r.getUserUniforms().find(u => u.name === "uGain").value;
+    const gainBefore = gainOf();
+    studio.setParameterValues([{ ...r.getUserUniforms().find(u => u.name === "uGain"), value: gainBefore === 0.9 ? 0.1 : 0.9 }]);
+    const gainChanged = gainOf();
+    ready = false;
+    edit("c = vec4(uGain * 0.07);");
+    $("studioRun").click();
+    ready = true;
+    await until(() => r.getFragmentSource().includes("uGain * 0.07"), "되돌리기 준비: 코드 B");
+    ready = false;
+    studio.undo(); // 코드 B → A
+    test(studio.getProject().image.includes("uGain * 0.03"), "되돌리기: 편집기 코드는 바로 이전 것");
+    test($("studioMessage").textContent.includes("컴파일 중"), "되돌리기: 코드는 뒤에서 컴파일");
+    test(r.getFragmentSource().includes("uGain * 0.07"), "되돌리기: 끝나기 전에는 화면이 이전 프로그램");
+    // 기다리는 중 다시 실행 → 마지막 상태(B)만 적용
+    studio.redo();
+    test(studio.getProject().image.includes("uGain * 0.07"), "기다리는 중 다시 실행: 편집기는 B");
+    ready = true;
+    await wait(200);
+    test(r.getFragmentSource().includes("uGain * 0.07") && !$("studioMessage").textContent.includes("컴파일 중"), "마지막 상태만 적용");
+    // 파라미터 값만 바뀐 칸 되돌리기: 컴파일 없이 바로
+    studio.undo(); // B → A (코드)
+    await until(() => r.getFragmentSource().includes("uGain * 0.03"), "코드 A로");
+    ready = false;
+    studio.undo(); // 값 되돌리기
+    test(gainOf() === gainBefore && gainOf() !== gainChanged, "값 되돌리기는 바로 제자리");
+    test(!$("studioMessage").textContent.includes("컴파일 중"), "코드가 같으면 컴파일하지 않는다");
+    ready = true;
+
     // 7) 기다리는 사이 WebGL 컨텍스트를 잃으면: 적용하지 않고(컴파일 오류로 보이지 않게) 복구 뒤 실행을 안내한다
     $("studioLive").checked = false;
     ready = false;
