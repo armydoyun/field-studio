@@ -63,6 +63,9 @@
       check(slider.isConnected, `uCount=${v}: 끄는 중에는 슬라이더를 다시 만들지 않음`);
     }
     check(value("uCount") === 9, "조건이 바뀌어도 끝까지 끌림");
+    // 끄는 동안 0.5초마다 도는 목록 갱신(updateStats)이 한 번은 끼어들게 한다 — 예전에 가끔만 실패하던 경우를 늘 재현
+    await wait(600);
+    check(slider.isConnected, "끄는 중 목록 갱신이 끼어들어도 슬라이더는 그대로");
     pointer(slider, "pointerup", 0);
     window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 7 }));
     await wait(50);
