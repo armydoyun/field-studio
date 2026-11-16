@@ -15,6 +15,9 @@
 .studio-chord:focus { outline:none; }
 .studio-cm-host>.cm-editor { flex:1;min-width:0;height:100%; }
 .studio-cm-host .cm-editor.cm-focused { outline:none; }
+/* 가로 스크롤 여백: 가장 긴 줄 끝 뒤에도 빈 곳을 두어, 끝까지 스크롤해도 마지막 글자 · 커서가 편집기 오른쪽 끝에 붙지 않는다.
+   줄 바꿈 모드에서는 가로 스크롤이 없으니 쓸 폭을 줄이지 않는다. 입력 중 커서 여백은 cm-editor.js(cursorScrollMargin). */
+.studio-cm-host .cm-content:not(.cm-lineWrapping) { padding-right:var(--editor-scroll-gutter); }
 .studio-cm-host .cm-selectionLayer:not(.studio-selection-layer) { display:none; }
 /* 찾기 · 바꾸기 창(cm-search-panel.js): 1줄 찾기 + 도구, 2줄 바꿀 내용 + 바꾸기. DOM 순서(찾기 → 바꿀 내용 → 도구)가 Tab 순서다. */
 .studio-cm-host .cm-panel.studio-find { display:grid;grid-template-columns:22px minmax(100px,1fr) auto 24px;grid-template-areas:"mode find find-tools close" ". replace replace-tools .";align-items:center;gap:6px;padding:7px 6px 7px 6px;font:12px var(--sans); }

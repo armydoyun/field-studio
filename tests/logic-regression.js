@@ -118,6 +118,57 @@ async function main(){
       assert.equal(f.renderer.getFragmentSource(),next.image,'실패하면 이전 코드 유지');
     }finally{f.dispose();}
   });
+  await test('A failed compile deletes each shader and the program exactly once (direct and warmed)',async()=>{
+    const COMPLETION=0x91B1;
+    const f=fixture(false,false,{},gl=>{const ext=gl.getExtension;gl.getExtension=name=>name==='KHR_parallel_shader_compile'?{COMPLETION_STATUS_KHR:COMPLETION}:ext(name);
+      const get=gl.getProgramParameter;gl.getProgramParameter=(p,n)=>n===COMPLETION?true:get(p,n);});
+    try{
+      const created=[],deletes=new Map(),programDeletes=new Map();
+      const create=f.gl.createShader;f.gl.createShader=(...a)=>{const x=create(...a);created.push(x);return x;};
+      f.gl.deleteShader=x=>deletes.set(x,(deletes.get(x)||0)+1);
+      const deleteProgram=f.gl.deleteProgram;f.gl.deleteProgram=x=>{programDeletes.set(x,(programDeletes.get(x)||0)+1);deleteProgram(x);};
+      const broken={image:src+'\nGLSL_ERROR',passes:[],imageChannels:{}};
+      const check=label=>{
+        assert(created.length>=2,`${label}: 셰이더를 만들었다`);
+        for(const x of created)assert.equal(deletes.get(x),1,`${label}: 셰이더마다 한 번만 지운다`);
+        for(const [,n] of programDeletes)assert.equal(n,1,`${label}: 프로그램도 한 번만`);
+        created.length=0;deletes.clear();programDeletes.clear();
+      };
+      assert.throws(()=>f.renderer.applyProject(broken),/컴파일 실패/);check('바로 컴파일');
+      await f.renderer.prepareProject(broken);assert.throws(()=>f.renderer.applyProject(broken),/컴파일 실패/);check('미리 컴파일');
+    }finally{f.dispose();}
+  });
+  await test('Undo with a parameter change recompiles only changed passes and keeps buffer textures',()=>{
+    const f=fixture();try{
+      const base={image:src,passes:[pass('A'),pass('B')],imageChannels:{}};f.renderer.applyPortable(base,[{name:'uGain',type:'float',value:0.5}]);
+      let textures=0;const createTexture=f.gl.createTexture;f.gl.createTexture=(...a)=>{textures++;return createTexture(...a);};const compiled=f.gl.compiledSources.length;
+      const next={...base,passes:[pass('A'),{...pass('B'),fragment:src.replace('void main','// B changed\nvoid main')}]};
+      assert.equal(f.renderer.applyProject(next,[{name:'uOther',type:'vec2',value:[1,2]}]),true);
+      assert.equal(f.gl.compiledSources.length-compiled,2,'바뀐 B만(vertex+fragment) 다시 컴파일 — A와 Image는 그대로');
+      assert.equal(JSON.stringify(f.renderer.getUserUniforms().map(u=>u.name)),'["uOther"]','파라미터 구성 교체');
+      assert.equal(textures,0,'버퍼 텍스처를 새로 만들지 않는다(내용이 지워지지 않음)');
+      const broken={...next,image:src+'\nGLSL_ERROR'};
+      assert.throws(()=>f.renderer.applyProject(broken,[{name:'uThird',type:'float',value:1}]),/컴파일/);
+      assert.equal(JSON.stringify(f.renderer.getUserUniforms().map(u=>u.name)),'["uOther"]','실패하면 파라미터 구성도 되돌린다');
+    }finally{f.dispose();}
+  });
+  await test('Opening a Pack compiles each program once: validation parks programs for apply, discard cleans up',()=>{
+    const f=fixture();try{
+      const scene={image:src.replace('void main','// pack\nvoid main'),passes:[pass('A'),{...pass('B'),fragment:src.replace('void main','// B\nvoid main')}],imageChannels:{}},users=[{name:'uGain',type:'float',value:0.5}];
+      let compiled=f.gl.compiledSources.length;
+      f.renderer.validatePortable(scene,users);
+      assert.equal(f.gl.compiledSources.length-compiled,6,'검사: Image · A · B(각 vertex+fragment)');
+      compiled=f.gl.compiledSources.length;
+      f.renderer.applyPortable(scene,users);
+      assert.equal(f.gl.compiledSources.length-compiled,0,'적용은 검사한 프로그램을 그대로 쓴다');
+      // 적용하지 않고 끝나면(확인 창에서 취소) 정리한다: 검사한 프로그램이 모두 지워진다
+      const other={...scene,image:scene.image+'\n// other'};const before=f.gl.deleted.length;
+      f.renderer.validatePortable(other,users);f.renderer.discardPrepared();
+      assert(f.gl.deleted.length-before>=1,'버린 프로그램을 지운다');
+      compiled=f.gl.compiledSources.length;f.renderer.applyPortable(other,users);
+      assert.equal(f.gl.compiledSources.length-compiled,6,'정리한 뒤에는 다시 컴파일한다(남은 것을 잘못 쓰지 않는다)');
+    }finally{f.dispose();}
+  });
   await test('Without the extension prepareProject returns null so callers apply immediately',()=>{
     const f=fixture();try{assert.equal(f.renderer.prepareProject({image:src+'\n//x',passes:[],imageChannels:{}}),null);}finally{f.dispose();}
   });

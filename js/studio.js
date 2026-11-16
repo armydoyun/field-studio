@@ -152,7 +152,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (scrubTimer) return;
     scrubTimer = setTimeout(() => {
       scrubTimer = 0;
-      if (!disposed) apply();
+      if (!disposed) applyWhenReady();
     }, 60);
   };
   // 자동 완성에서 코드 조각 함수를 고르면 필요한 함수 정의를 전역 위치에 넣는다(이름 입력과 함께 Undo 한 번).
@@ -460,15 +460,32 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // GPU에 컴파일을 먼저 맡기고(renderer.prepareProject) 끝난 뒤에 적용한다 — 그사이 입력 · 미리보기는 계속 움직인다.
   // 확장이 없으면 prepareProject가 null이고, 이전과 같이 바로 적용한다. 그사이 코드가 다시 바뀌거나 다른 적용이 일어나면
   // (warming 번호가 바뀌면) 기다리던 적용은 하지 않는다.
-  let warming = 0;
+  let warming = 0,
+    backgroundSince = 0; // 뒤에서 컴파일을 시작한 시각(그 적용이면 걸린 시간을 여기부터 잰다)
+  // 상태 줄의 걸린 시간: 실제 GPU에서 무거운 셰이더가 얼마나 걸리는지, 화면이 멈췄는지 사용자가 직접 볼 수 있게.
+  const now = () => (typeof performance === "object" ? performance.now() : Date.now());
+  const took = ms => (ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}초`);
   const applyWhenReady = (done = () => {}) => {
+    if (timer) {
+      clearTimeout(timer); // 이 적용이 기다리던 자동 적용을 대신한다
+      timer = null;
+    }
     rememberEditor();
     const ticket = ++warming,
       ready = renderer.prepareProject?.(project);
     if (!ready) return done(apply());
     setStatus("컴파일 중… · 편집은 계속할 수 있습니다", "is-dirty");
-    ready.then(() => {
-      if (ticket === warming && !disposed) done(apply());
+    const since = now();
+    ready.then(finished => {
+      if (ticket !== warming || disposed) return;
+      // 기다리는 사이 WebGL 컨텍스트를 잃었다(finished = false): 지금 적용하면 렌더러가 거절하고 그것이 컴파일 오류처럼
+      // 보인다. 코드는 그대로 두고(수정됨) 복구된 뒤 실행하도록 알린다.
+      if (finished === false) {
+        setStatus("WebGL 컨텍스트를 잃어 적용을 미뤘습니다 · 복구되면 실행(Alt+Enter)으로 적용", "is-dirty");
+        return done(false);
+      }
+      backgroundSince = since;
+      done(apply());
     });
   };
   const applyLater = () => {
@@ -485,21 +502,27 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       timer = null;
     }
     rememberEditor();
+    const started = now(),
+      since = backgroundSince;
+    backgroundSince = 0;
     try {
       validateProject(project);
       const touched =
         users && !same(users, renderer.getUserUniforms())
-          ? renderer.applyPortable(project, users)
+          ? renderer.applyProject(project, users) // 되돌리기 · 다시 실행: 바뀐 패스만 다시 컴파일
           : renderer.applyProject(project);
       syncHistory();
       keepPreview(); // 적용할 때는 미리보기를 바꾸지 않는다(위 preview 설명)
       dirty = false;
       clearError();
       clearDraft();
-      setStatus(touched ? "적용됨 · GPU 프로그램/채널 동기화 완료" : "변경 사항 없음");
+      const timing = since
+        ? `걸린 시간 ${took(now() - since)}(뒤에서 컴파일 · 화면은 멈추지 않음)`
+        : `걸린 시간 ${took(now() - started)}`;
+      setStatus(touched ? `적용됨 · ${timing}` : "변경 사항 없음");
       saveLocal();
       const synced = syncAnnotations();
-      if (synced) setStatus(synced);
+      if (synced) setStatus(`${synced} · ${timing}`);
       return true;
     } catch (error) {
       reportCompileError(error);
@@ -664,11 +687,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     syncTextureTargets();
     syncInputs();
     if (!$("studioLive").checked) return;
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    apply();
+    applyWhenReady();
   };
   // 미디어: 연결한 뒤 켠다(마이크 · 카메라는 권한을 묻고, 파일 종류는 먼저 파일을 고른다).
   const MEDIA_ACCEPT = { audio: "audio/*", video: "video/*" };
@@ -1214,7 +1233,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     selected = name;
     renderEditor();
     schedule();
-    apply();
+    applyWhenReady();
   };
   // Common 추가: 없을 때만. 빈 틀을 넣고 Common 탭을 연다(비어 있으면 컴파일에 아무 영향이 없다).
   const addCommon = () => {
@@ -1224,7 +1243,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     selected = COMMON;
     renderEditor();
     schedule();
-    apply();
+    applyWhenReady();
     showChange("Common 추가 · 여기에 쓴 함수·상수는 모든 패스에서 씁니다");
   };
   const duplicate = () => {
@@ -1242,7 +1261,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     selected = name;
     renderEditor();
     schedule();
-    apply();
+    applyWhenReady();
   };
   const remove = () => {
     if (selected === "Image") return;
@@ -1252,7 +1271,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       selected = "Image";
       renderEditor();
       schedule();
-      apply();
+      applyWhenReady();
       showChange("Common 삭제 · Undo로 복원");
       return;
     }
@@ -1266,7 +1285,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     selected = "Image";
     renderEditor();
     schedule();
-    apply();
+    applyWhenReady();
     showChange(
       `${name} 삭제${refs.length ? ` · 해제된 연결 ${refs.length}개: ${refs.join(", ")}` : " · 다른 패스의 연결 변경 없음"}`
     );
@@ -1280,7 +1299,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const changed = normalizeDependencies();
     renderEditor();
     schedule();
-    apply();
+    applyWhenReady();
     showChange(
       changed.length
         ? `실행 순서 변경 · current → previous: ${changed.join(", ")}`
@@ -1338,14 +1357,43 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     area.scrollTop = scroll[0];
     area.scrollLeft = scroll[1];
     editor.update();
-    const applied = apply(target.users);
-    if (applied && !same(current.users, target.users)) document.dispatchEvent(new Event("shader-settings-applied"));
-    if (applied && target.presets && !same(current.presets, target.presets)) settings?.setPresets?.(target.presets);
-    if (applied && target.links && !same(current.links, target.links)) settings?.setLinks?.(target.links);
+    // 파라미터 구성 · 프리셋 · 연결은 셰이더를 바꾸지 않으므로 지금 한꺼번에 되돌린다. 코드만 일반 수정처럼 뒤에서 컴파일한 뒤
+    // 적용한다(무거운 셰이더에서 Ctrl+Z가 화면을 멈추지 않게). 그사이 다시 되돌리거나 입력해도 코드 밖의 상태는 이미
+    // 제자리라 반쯤 되돌아간 상태가 생기지 않는다. 파라미터 타입이 바뀌는 되돌리기(지금 코드와 맞지 않아 구성만 먼저
+    // 바꿀 수 없음)는 이전처럼 코드와 함께 바로 적용한다.
+    let restored = false;
+    try {
+      if (!same(current.users, target.users)) {
+        renderer.setUserUniforms(target.users);
+        document.dispatchEvent(new Event("shader-settings-applied"));
+      }
+      restored = true;
+    } catch (_) {
+      // 아래에서 코드와 함께 적용한다
+    }
+    const restoreSettings = () => {
+      if (target.presets && !same(current.presets, target.presets)) settings?.setPresets?.(target.presets);
+      if (target.links && !same(current.links, target.links)) settings?.setLinks?.(target.links);
+    };
+    if (restored) restoreSettings();
+    else if (apply(target.users)) {
+      document.dispatchEvent(new Event("shader-settings-applied"));
+      restoreSettings();
+    }
     navigatingHistory = false;
     checkpoint = historyState();
     editTime = 0;
     syncHistory();
+    if (restored) {
+      if (same(current.project, target.project) && !dirty && !compileFailed)
+        setStatus(
+          backwards ? "되돌렸습니다 · 파라미터 · 프리셋 · 연결" : "다시 실행했습니다 · 파라미터 · 프리셋 · 연결"
+        );
+      else {
+        dirty = true; // 코드는 아직 적용 전(컴파일 중) — 적용되면 apply가 푼다
+        applyWhenReady();
+      }
+    }
     return true;
   };
   // Panel batches are one Studio history entry, including all passes and values.
@@ -1558,7 +1606,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const shift = current.filter(at => at < head).length * (to.length - from.length);
     renderEditor();
     $("studioCode").setSelectionRange(head + shift, head + shift);
-    apply();
+    applyWhenReady();
     if (same(before, project)) return null;
     recordEdit(false, true);
     if (skipped.length)
@@ -1925,13 +1973,34 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (data.version === 3 && !state) throw new Error("설정 복원 API를 사용할 수 없습니다.");
     const { ids, decoded } = Pack.decodeTextures(data.textures);
     Pack.checkReferences(next, ids);
-    // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
-    if (state) renderer.validatePortable(Pack.withoutTextures(next), state.user);
-    else {
-      renderer.validateFragment(next.image, next, next.imageChannels);
-      for (const pass of next.passes) renderer.validateFragment(pass.fragment, next, pass.channels);
+    // 컴파일을 GPU에 먼저 맡기고 끝날 때까지 기다린다(그사이 화면이 멈추지 않게). 아래 검사가 그 프로그램을 꺼내
+    // 확인하고, 적용이 다시 그대로 쓴다. 확장이 없으면 null — 검사가 바로 컴파일한다(그래도 적용은 다시 컴파일하지 않는다).
+    const ready = renderer.prepareProject?.(next, { all: true });
+    if (ready) {
+      setStatus("프로젝트 컴파일 중… · 화면은 계속 움직입니다", "is-dirty");
+      await ready;
+      try {
+        check();
+      } catch (error) {
+        renderer.discardPrepared?.(); // 기다리는 사이 작업이 바뀌었다 — 열지 않는다
+        throw error;
+      }
     }
-    if (!(await confirmReplace())) return false;
+    try {
+      // Pack의 이미지 ID는 등록 전에는 존재하지 않으므로 사전 검사에서만 이미지 참조를 제외한다.
+      if (state) renderer.validatePortable(Pack.withoutTextures(next), state.user);
+      else {
+        renderer.validateFragment(next.image, next, next.imageChannels);
+        for (const pass of next.passes) renderer.validateFragment(pass.fragment, next, pass.channels);
+      }
+    } catch (error) {
+      renderer.discardPrepared?.();
+      throw error;
+    }
+    if (!(await confirmReplace())) {
+      renderer.discardPrepared?.(); // 바꾸지 않았다 — 미리 만든 프로그램을 정리한다
+      return false;
+    }
     check();
     const added = [],
       map = new Map(),
@@ -1995,6 +2064,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
           console.error("Pack 복원 실패 후 롤백 오류:", rollback);
         }
       }
+      renderer.discardPrepared?.(); // 적용하기 전에 실패했으면 미리 만든 프로그램이 남아 있다
       for (const id of added.reverse())
         try {
           await renderer.removeTexture(id);
@@ -2200,8 +2270,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     } else if (event.key === "Enter" && !event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey) {
       // 실행: Alt+Enter. Ctrl+Enter는 편집기의 '아래에 줄 삽입'으로 남겨 둔다.
       event.preventDefault();
-      rememberEditor();
-      apply();
+      applyWhenReady();
     } else if (
       event.key.toLowerCase() === "s" &&
       (event.ctrlKey || event.metaKey) &&
@@ -2213,8 +2282,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
   });
   on($("studioRun"), "click", () => {
-    rememberEditor();
-    apply();
+    applyWhenReady();
   });
   on($("studioChangeUndo"), "click", () => historyMove(true));
   on($("studioUndo"), "click", () => historyMove(true));
@@ -2252,7 +2320,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     p.format = event.target.value;
     if (p.filter === (p.format === "rgba32f" ? "nearest" : "linear")) delete p.filter;
     schedule();
-    apply();
+    applyWhenReady();
   });
   on($("studioScale"), "change", event => {
     const p = find(selected),
@@ -2266,7 +2334,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       p.scale = Number(value);
     }
     schedule();
-    apply();
+    applyWhenReady();
   });
   on($("studioOutputs"), "change", event => {
     const p = find(selected),
@@ -2283,24 +2351,24 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderChannels();
     renderGraph();
     schedule();
-    apply();
+    applyWhenReady();
     if (fixed.length) showChange(`출력 수 변경 · 0번 출력으로 되돌린 연결: ${fixed.join(", ")}`);
   });
   on($("studioFilter"), "change", event => {
     const p = find(selected);
     setPassOption("filter", event.target.value, p.format === "rgba32f" ? "nearest" : "linear");
     schedule();
-    apply();
+    applyWhenReady();
   });
   on($("studioWrap"), "change", event => {
     setPassOption("wrap", event.target.value, "clamp");
     schedule();
-    apply();
+    applyWhenReady();
   });
   on($("studioMip"), "change", event => {
     setPassOption("mipmap", event.target.checked, false);
     schedule();
-    apply();
+    applyWhenReady();
   });
   on($("studioLive"), "change", () => {
     if (!$("studioLive").checked && timer) {
@@ -2468,10 +2536,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 프로젝트 이름 옆 '저장' 버튼(바뀐 내용이 있을 때만 보인다) = Ctrl+S
   if ($("projectMenuState")) on($("projectMenuState"), "click", saveProject);
   const saveShortcut = () => {
-    if (ctrlSRuns()) {
-      rememberEditor();
-      apply();
-    } else saveProject();
+    if (ctrlSRuns()) applyWhenReady();
+    else saveProject();
   };
   if ($("studioCtrlSRuns")) on($("studioCtrlSRuns"), "click", () => setCtrlSRuns(!ctrlSRuns()));
   syncCtrlS();
@@ -2571,7 +2637,28 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const removeAllPasses = () =>
     proceed(confirmReplace(), () => setProject({ image: renderer.getFragmentSource(), passes: [], imageChannels: {} }));
   // 갤러리 등 외부 예제: 미적용 변경 확인 → 코드·버퍼·파라미터 일괄 교체(Undo 가능).
-  const loadExample = (next, users = []) => startProject(next, users);
+  // 갤러리 · 가이드에서 여는 예제: 새 프로젝트의 프로그램을 모두 뒤에서 컴파일한 뒤에 바꾼다(그사이 화면이 멈추지 않게).
+  // 부르는 쪽은 결과를 await한다. 확장이 없으면 이전과 같이 바로 바꾼다. 기다리는 사이 다른 적용이 일어나면 바꾸지 않는다.
+  const loadExample = (next, users = []) =>
+    proceed(confirmReplace(), () => {
+      const ticket = ++warming;
+      let ready = null;
+      try {
+        ready = renderer.prepareProject?.(next, { all: true });
+      } catch (_) {
+        // 잘못된 프로젝트는 아래 바로 바꾸기가 평소처럼 알린다
+      }
+      if (!ready) return replaceProject(next, users);
+      setStatus("예제 컴파일 중… · 화면은 계속 움직입니다", "is-dirty");
+      return ready.then(finished => {
+        if (ticket !== warming || disposed) return false;
+        if (finished === false) {
+          setStatus("WebGL 컨텍스트를 잃어 예제를 열지 못했습니다 · 복구된 뒤 다시 여세요", "is-error");
+          return false;
+        }
+        return replaceProject(next, users);
+      });
+    });
   // 가이드 코드 예시 삽입. replace=true면 현재 패스 전체를 교체한다(Undo로 복원 가능).
   // 커서가 #version/precision 줄보다 앞에 있으면 컴파일이 깨지므로 precision 줄 다음으로 옮겨 넣는다(code-insert.js).
   const insertSnippet = (text, replace = false) => {

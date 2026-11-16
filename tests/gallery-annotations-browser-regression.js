@@ -5,7 +5,8 @@
   const $ = id => document.getElementById(id);
   const check = (ok, label) => { if (!ok) throw new Error(label); console.log(`PASS ${label}`); };
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-  const until = async (fn, label) => { for (const end = Date.now()+8000; Date.now()<end; await wait(25)) if(fn()) return; throw new Error(`시간 초과: ${label}: ${$('studioError')?.textContent}`); };
+  // 무거운 예제는 소프트웨어 렌더 · 동시 실행에서 컴파일이 8초를 넘기도 한다 — 넉넉히 기다린다(정상이면 바로 끝난다)
+  const until = async (fn, label) => { for (const end = Date.now()+20000; Date.now()<end; await wait(25)) if(fn()) return; throw new Error(`시간 초과: ${label}: ${$('studioError')?.textContent}`); };
   const before = studio.getProject(), beforeUsers = r.getUserUniforms(), beforeScale=r.getStats().resolutionScale;
   r.setResolutionScale(0.25);
   const autoAnswer = setInterval(() => { if($('studioPromptDialog')?.open) ($('studioDialogAlt').hidden ? $('studioDialogOK') : $('studioDialogAlt')).click(); }, 25);

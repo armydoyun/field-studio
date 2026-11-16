@@ -146,7 +146,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     gl.compileShader(shader);
     return shader;
   };
-  // 컴파일 결과를 확인한다. 실패하면 셰이더를 지우고 줄 번호를 붙인 원문과 함께 던진다.
+  // 컴파일 결과를 확인한다. 실패하면 줄 번호를 붙인 원문과 함께 던진다. 셰이더는 지우지 않는다 — 가진 쪽이 지운다
+  // (여기서도 지우면 프로그램 정리(dropEntry)가 같은 셰이더를 한 번 더 지웠다).
   const checkShader = (shader, type, source) => {
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       const error = gl.getShaderInfoLog(shader),
@@ -155,13 +156,17 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
         .split("\n")
         .map((line, i) => `${String(i + 1).padStart(3)} | ${line}`)
         .join("\n");
-      gl.deleteShader(shader);
       throw new Error(`${typeName} Shader 컴파일 실패:\n${error || "로그 없음"}\n\n${numbered}`);
     }
   };
   const createShader = (type, source) => {
     const shader = startShader(type, source);
-    checkShader(shader, type, source);
+    try {
+      checkShader(shader, type, source);
+    } catch (error) {
+      gl.deleteShader(shader);
+      throw error;
+    }
     return shader;
   };
   // GPU 프로그램 만들기는 두 단계: start는 컴파일 · 링크를 GPU에 맡기기만 하고(바로 돌아온다), finish가 결과를 확인한다.
@@ -1593,13 +1598,13 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       swapUsers(next);
       const context = sharedOf(scene);
+      // 검사한 프로그램은 버리지 않고 warm에 남긴다 — 곧 이어지는 applyPortable이 그대로 쓴다(Pack · 보관함 열기에서
+      // 모든 셰이더를 두 번 컴파일하던 것). 적용하지 않고 끝나면 부른 쪽이 discardPrepared()로 정리한다.
       for (const [source, channels] of [
         [scene.image, scene.imageChannels],
         ...scene.passes.map(p => [p.fragment, p.channels]),
-      ]) {
-        const candidate = compileFragment(source, context, typesOf(channels));
-        gl.deleteProgram(candidate);
-      }
+      ])
+        compileFragment(source, context, typesOf(channels), { park: true });
     } finally {
       swapUsers(old);
     }
@@ -1655,11 +1660,24 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       throw error;
     }
   };
-  const applyProject = scene => {
+  // users(선택): 파라미터 구성도 함께 바꾼다(되돌리기 · 다시 실행). 파라미터는 셰이더를 바꾸지 않으므로
+  // applyPortable처럼 모든 패스를 새로 만들지 않고, 코드가 바뀐 패스만 다시 컴파일한다(버퍼 내용도 유지).
+  // 실패하면 파라미터 구성도 이전으로 되돌린다.
+  const applyProject = (scene, users = null) => {
     if (disposed || lost) throw new Error("현재 프로젝트를 적용할 수 없습니다.");
     assertOnline();
+    const old = users ? new Map(userUniforms) : null;
     try {
-      return applyScene(scene);
+      if (users) swapUsers(prepareUsers(users));
+      const touched = applyScene(scene);
+      if (users) {
+        pruneRamps();
+        scheduleFrame();
+      }
+      return touched || !!users;
+    } catch (error) {
+      if (old) swapUsers(old);
+      throw error;
     } finally {
       dropWarm(); // 쓰지 않은 미리 컴파일(그새 코드가 또 바뀌었거나 실패) 정리
     }
@@ -1668,7 +1686,8 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
   // 모두 끝나면 풀리는 Promise를 돌려준다. 그동안 메인 스레드는 멈추지 않는다(입력 · 애니메이션이 계속된다).
   // 확장이 없거나 다시 만들 것이 없으면 null — 부르는 쪽은 그때 바로 적용한다(이전과 같은 동작).
   // 컴파일 오류는 여기서 알리지 않는다. 적용이 같은 프로그램을 꺼내 확인하면서 평소와 같은 오류를 던진다.
-  const prepareProject = scene => {
+  // all: 모든 프로그램을 미리 만든다(새 프로젝트를 통째로 여는 applyPortable 앞에서).
+  const prepareProject = (scene, { all = false } = {}) => {
     if (!parallel || disposed || lost || offline || !scene || typeof scene.image !== "string") return null;
     dropWarm();
     let context;
@@ -1677,7 +1696,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     } catch (_) {
       return null;
     }
-    const rebuild = !sameShared(context, shared),
+    const rebuild = all || !sameShared(context, shared) || passManager.isStructural(scene.passes, scene.imageChannels),
       current = new Map(passManager.getSpecs().map(spec => [spec.name, spec])),
       jobs = [];
     const types = typesOf(scene.imageChannels);
@@ -2047,6 +2066,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     applyPortable,
     applyProject,
     prepareProject,
+    discardPrepared: () => dropWarm(),
     setUserUniforms,
     sampleRamp,
     setPasses,

@@ -88,6 +88,7 @@ js/
   value-editor.js     # 실수 · 벡터 정밀 입력 대화상자(적용 전까지 렌더러에 닿지 않음)
   matrix-control.js   # 행렬 파라미터 편집기(행/열로 보여 주고 값은 GLSL 열 우선 순서로 보관)
   presets.js          # 파라미터 프리셋: 값 묶음 저장 · 호환성 검사 · 즉시/부드러운 전환(순수 함수)
+  preset-panel.js     # 파라미터 탭의 프리셋 막대: 저장 · 적용(즉시/부드럽게) · 호환성 결과 · ⋯ 메뉴
   links.js            # 파라미터 연결: 소리 · MIDI · 흔들기(LFO) · 키프레임이 값을 정함(순수 함수)
   link-sheet.js       # 연결 시트 · 연결 미터(소스 → 입력 → 출력 → 반응 → 결과)
   timeline.js         # 키프레임 타임라인 도크(미리보기 아래): 재생 위치 · 키 끌기 · 확대 · 스냅 · 다중 선택
@@ -157,6 +158,7 @@ node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 �
 
 - 콘솔용 테스트는 던진 오류뿐 아니라 실행 중 `console.error`나 잡히지 않은 오류가 한 번이라도 나와도 FAIL입니다. 그러니 `.catch(console.error)`로 실패를 삼키지 말고, 일부러 남기는 경고는 `console.warn`을 씁니다.
 - browser 묶음은 기본 3개씩 병렬로 돌리지만, 영상을 인코딩하는 테스트(`tests/run.mjs`의 `MEDIA_BROWSER_TESTS`: 녹화·영상 렌더링)는 미디어 인코더를 서로 빼앗지 않게 나머지가 끝난 뒤 하나씩 돌립니다.
+- browser 테스트가 실패하면 `test-results/browser/<테스트>-<시각>/`에 그 순간의 `screenshot.png` · 앱 상태 `state.json` · 전체 콘솔 기록 `console.log`(녹화 테스트는 영상도)를 남깁니다. 가끔만 실패하는 테스트도 한 번 실패하면 원인을 볼 수 있게 하려는 것이고, CI는 이 폴더를 실행 페이지의 Artifacts(`field-studio-browser-failure-<SHA>`)로 올립니다.
 - 준비되지 않은 묶음(playwright·Python 없음)은 SKIP으로 표시하고 계속합니다. `--strict`(=`npm run test:ci`)는 SKIP도 실패로 칩니다.
 - GitHub Actions(`.github/workflows/test.yml`)는 push·PR마다 `lint` → `test (node)` · `test (browser)` · `test (py)` 세 작업을 나란히 돌리고(각각 `node tests/run.mjs <묶음> --strict`), 모두 통과하면 `build`가 배포본을 올립니다. 의존성은 `package-lock.json` 기준으로 `npm ci`로 설치하고, npm·pip·Playwright Chromium은 캐시합니다.
 - 개발 도구를 추가·변경할 때는 `npm install -D <패키지>@<버전>`으로 `package-lock.json`도 함께 갱신해 커밋합니다.

@@ -58,6 +58,7 @@
       "검사 장면(바로 적용하는 길은 그대로)"
     );
     await until(() => r.getUserUniforms().length === 2, "파라미터 등록");
+    test(/걸린 시간 [\d.]+(ms|초)/.test($("studioMessage").textContent) && !$("studioMessage").textContent.includes("뒤에서"), "바로 적용한 길: 걸린 시간만");
     studio.open();
     await until(() => !$("studioDock").hidden, "편집기 열림");
     $("studioLive").checked = true;
@@ -81,6 +82,7 @@
     ready = true;
     await until(() => r.getFragmentSource().includes("uGain * 0.25"), "끝나면 적용");
     test(!$("studioMessage").textContent.includes("컴파일 중"), "적용 뒤 상태 줄 갱신");
+    test(/걸린 시간 [\d.]+(ms|초)\(뒤에서 컴파일/.test($("studioMessage").textContent), "상태 줄: 걸린 시간과 뒤에서 컴파일했다는 표시");
     test(studio.getProject().image.includes("uGain * 0.25"), "마지막 수정이 남는다");
 
     // 2) 파라미터 삭제: 선언을 지운 코드는 GPU가 끝낸 뒤 적용하고, 알림도 그때 결과로 바뀐다
@@ -111,6 +113,93 @@
     ready = true;
     await until(() => r.getFragmentSource().includes("uniform float uExtra"), "추가: 끝나면 적용");
     test(r.getUserUniforms().some(u => u.name === "uExtra"), "추가: 파라미터 등록 유지");
+
+    // 4) 실행(Alt+Enter): 자동 적용을 끄고 손으로 실행해도 같은 길
+    $("studioLive").checked = false;
+    ready = false;
+    edit("c = vec4(uGain * 0.125);");
+    $("studioCode").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", altKey: true, bubbles: true, cancelable: true }));
+    if (!$("studioMessage").textContent.includes("컴파일 중")) $("studioRun").click();
+    await until(() => $("studioMessage").textContent.includes("컴파일 중"), "실행: 컴파일 중 표시", 3000);
+    await wait(100);
+    test(!r.getFragmentSource().includes("uGain * 0.125"), "실행: 끝나기 전에는 이전 프로그램");
+    ready = true;
+    await until(() => r.getFragmentSource().includes("uGain * 0.125"), "실행: 끝나면 적용");
+
+    // 5) 버퍼 패스 추가: 구조가 바뀌어도 새 패스를 미리 컴파일하고 적용한다
+    ready = false;
+    $("studioAdd").click();
+    test(r.getPasses().length === 0, "패스 추가: 끝나기 전에는 이전 구성");
+    ready = true;
+    await until(() => r.getPasses().length === 1, "패스 추가: 끝나면 적용");
+
+    // 6) 예제 열기(갤러리 · 가이드 길): 새 프로젝트를 다 컴파일한 뒤에 바꾼다
+    ready = false;
+    const opened = studio.loadExample(image("void mainImage(out vec4 c, in vec2 p) { c = vec4(0.75 * uGain); }"), []);
+    // 저장하지 않은 작업이 있으면 바꾸기 전에 묻는다 — '저장하지 않고 계속'(없으면 '계속')
+    await until(() => $("studioPromptDialog").open, "바꾸기 확인");
+    ($("studioDialogAlt").hidden ? $("studioDialogOK") : $("studioDialogAlt")).click();
+    await wait(100);
+    test(!r.getFragmentSource().includes("0.75 * uGain"), "예제: 끝나기 전에는 이전 프로젝트");
+    ready = true;
+    test((await opened) === true, "예제: 끝나면 바꾸고 성공을 알린다");
+    test(r.getFragmentSource().includes("0.75 * uGain") && r.getPasses().length === 0, "예제: 새 프로젝트 적용");
+
+    // 8) 되돌리기 · 다시 실행: 파라미터는 바로 되돌리고, 코드는 뒤에서 컴파일한 뒤 적용한다
+    $("studioLive").checked = false;
+    ready = true;
+    edit("c = vec4(uGain * 0.03);");
+    $("studioRun").click();
+    await until(() => r.getFragmentSource().includes("uGain * 0.03"), "되돌리기 준비: 코드 A");
+    const gainOf = () => r.getUserUniforms().find(u => u.name === "uGain").value;
+    const gainBefore = gainOf();
+    studio.setParameterValues([{ ...r.getUserUniforms().find(u => u.name === "uGain"), value: gainBefore === 0.9 ? 0.1 : 0.9 }]);
+    const gainChanged = gainOf();
+    ready = false;
+    edit("c = vec4(uGain * 0.07);");
+    $("studioRun").click();
+    ready = true;
+    await until(() => r.getFragmentSource().includes("uGain * 0.07"), "되돌리기 준비: 코드 B");
+    ready = false;
+    studio.undo(); // 코드 B → A
+    test(studio.getProject().image.includes("uGain * 0.03"), "되돌리기: 편집기 코드는 바로 이전 것");
+    test($("studioMessage").textContent.includes("컴파일 중"), "되돌리기: 코드는 뒤에서 컴파일");
+    test(r.getFragmentSource().includes("uGain * 0.07"), "되돌리기: 끝나기 전에는 화면이 이전 프로그램");
+    // 기다리는 중 다시 실행 → 마지막 상태(B)만 적용
+    studio.redo();
+    test(studio.getProject().image.includes("uGain * 0.07"), "기다리는 중 다시 실행: 편집기는 B");
+    ready = true;
+    await wait(200);
+    test(r.getFragmentSource().includes("uGain * 0.07") && !$("studioMessage").textContent.includes("컴파일 중"), "마지막 상태만 적용");
+    // 파라미터 값만 바뀐 칸 되돌리기: 컴파일 없이 바로
+    studio.undo(); // B → A (코드)
+    await until(() => r.getFragmentSource().includes("uGain * 0.03"), "코드 A로");
+    ready = false;
+    studio.undo(); // 값 되돌리기
+    test(gainOf() === gainBefore && gainOf() !== gainChanged, "값 되돌리기는 바로 제자리");
+    test(!$("studioMessage").textContent.includes("컴파일 중"), "코드가 같으면 컴파일하지 않는다");
+    ready = true;
+
+    // 7) 기다리는 사이 WebGL 컨텍스트를 잃으면: 적용하지 않고(컴파일 오류로 보이지 않게) 복구 뒤 실행을 안내한다
+    $("studioLive").checked = false;
+    ready = false;
+    edit("c = vec4(uGain * 0.0625);");
+    $("studioRun").click();
+    await until(() => $("studioMessage").textContent.includes("컴파일 중"), "손실 전: 컴파일 중", 3000);
+    const lostEvent = once($("screen"), "webglcontextlost");
+    lose.loseContext();
+    await lostEvent;
+    await until(() => $("studioMessage").textContent.includes("컨텍스트를 잃어"), "컨텍스트 손실 안내", 3000);
+    test($("studioState").dataset.state !== "error", "컨텍스트 손실은 컴파일 오류로 표시하지 않는다");
+    test(studio.getProject().image.includes("uGain * 0.0625"), "코드는 그대로 남는다");
+    await wait(50);
+    const restored = once($("screen"), "webglcontextrestored");
+    lose.restoreContext();
+    await restored;
+    await wait(200);
+    ready = true;
+    $("studioRun").click();
+    await until(() => r.getFragmentSource().includes("uGain * 0.0625"), "복구 뒤 실행하면 적용");
   } finally {
     gl.getExtension = realExtension;
     gl.getProgramParameter = realProgramParameter;
