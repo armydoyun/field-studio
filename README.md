@@ -79,6 +79,7 @@ js/
   cm-glsl-features.js # 시그니처 도움말 · 숫자 조절 · 색 견본 · 정의로 이동 · 이름 바꾸기 · 들여쓰기 안내선 · 줄 끝 오류
   glsl-language.js    # GLSL 언어 정보(키워드·타입·앱 Uniform·심볼 표·자동 완성 후보)
   glsl-scope.js       # GLSL 범위 분석(이름이 가리키는 선언) — 이름 바꾸기(F2)·정의로 이동 (순수 함수)
+  glsl-fix.js         # 컴파일 오류 빠른 수정(Ctrl+.): 오류 문구 · 코드 줄로 고친 줄 제안 — 정수 리터럴 · 세미콜론 · 오타 이름 · 벡터 크기(순수 함수)
   glsl-format.js      # 코드 정리(Shift+Alt+F): 들여쓰기 · 띄어쓰기 · 빈 줄만 맞춘다(토큰 · 주석 · 줄 나눔 그대로, 순수 함수)
   glsl-highlight.js   # GLSL 강조 (편집기·가이드 공용)
   codemirror.js       # CodeMirror 6 (MIT, 미리 번들링 · tools/codemirror에서 재생성) — 손으로 고치지 않는다

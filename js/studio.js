@@ -368,6 +368,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         });
       row.type = "button";
       row.textContent = `${pass} · ${generated ? "Auto Uniform" : `Line ${line}`} · ${message}`;
+      row.dataset.pass = pass;
+      row.dataset.line = String(line);
       if (generated) {
         row.disabled = true;
         row.title = "자동 생성된 Uniform 선언에서 발생한 오류입니다.";
@@ -383,7 +385,22 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     }
     panel.hidden = !matches.length;
     syncDiagnostics();
-    setStatus(`${error?.passName ? `${error.passName} 컴파일 오류` : "작업 오류"}: ${text.split("\n")[0]}`, "is-error");
+    // 빠른 수정(glsl-fix.js)이 있는 오류 줄에는 꼬리표를 단다 — 줄을 눌러 그 줄로 간 뒤 Ctrl+. (편집기 오류 말풍선에는 고치기 버튼)
+    let fixable = 0;
+    for (const row of panel.children) {
+      const fixes = row.dataset.pass === selected ? editor.quickFixesAt?.(Number(row.dataset.line)) || [] : [];
+      if (!fixes.length) continue;
+      fixable++;
+      const tag = element("span");
+      tag.className = "ui-tag ui-tag--accent studio-diagnostic-fix";
+      tag.textContent = "빠른 수정 · Ctrl+.";
+      row.title = `원본 GLSL 줄로 이동 · 빠른 수정: ${fixes.map(fix => fix.label).join(" / ")}`;
+      row.append(" ", tag);
+    }
+    setStatus(
+      `${error?.passName ? `${error.passName} 컴파일 오류` : "작업 오류"}: ${text.split("\n")[0]}${fixable ? " · Ctrl+.로 빠른 수정" : ""}`,
+      "is-error"
+    );
   };
   const clearDraft = () => {
     if (draftTimer) clearTimeout(draftTimer);
