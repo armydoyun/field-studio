@@ -1246,7 +1246,7 @@ const mount = (renderer, input, settings) => {
                   ? step.split(".")[1].length
                   : Math.max(2, 3 - Math.floor(Math.log10(Math.max(1e-6, Math.abs(span)))))
               );
-        watchLink(item.name, value => {
+        const follow = value => {
           nav.update();
           // 값 칸(숫자 · 슬라이더 · 위젯)을 만지는 중일 때만 멈춘다 — 줄의 다른 곳(연결 시트 · 키 설정)에 초점이 있어도 값은 따라간다
           const active = document.activeElement,
@@ -1268,6 +1268,12 @@ const mount = (renderer, input, settings) => {
           }
           if (slider) slider.value = String(value);
           if (!number && !slider) playViews.get(item.name)?.(value);
+        };
+        watchLink(item.name, follow);
+        // 행을 새로 그린 직후 첫 프레임에는 숫자 칸이 일반 형식(뒤 0을 지운 자릿수)이라, 다음 연결 갱신까지 자릿수가 바뀌어
+        // 보였다(시트를 열고 닫을 때마다 깜빡임). 행이 다 만들어진 뒤 지금 값을 같은 고정 자릿수로 한 번 채운다.
+        queueMicrotask(() => {
+          if (row.isConnected) follow(liveValue(item));
         });
       }
       // 값 편집기(위젯). 배열이면 원소마다 하나씩 그린다: 원소 몫만 읽고(read) 바꾸면 전체 배열을 고쳐 올린다.

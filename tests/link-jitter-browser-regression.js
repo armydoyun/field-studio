@@ -72,6 +72,13 @@
     document.querySelector('.uniform-row[data-name="uGain"] .link-uniform').click();
     await audit("흔들기 시트");
     document.querySelector('.uniform-row[data-name="uSpeed"] .link-uniform').click();
+    // 다시 그린 행의 숫자 칸은 화면에 그려지기 전(마이크로태스크 뒤)부터 고정 자릿수여야 한다 — 첫 프레임 깜빡임 없음
+    await Promise.resolve(); await Promise.resolve();
+    const decimals = text => (/\.(\d+)$/.exec(text)?.[1].length ?? 0);
+    const speed = () => document.querySelector('.uniform-row[data-name="uSpeed"] .uniform-pair > input[type="number"]').value;
+    const firstText = speed();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    test(decimals(firstText) === decimals(speed()), `다시 그린 직후에도 같은 자릿수 (${firstText} → ${speed()})`);
     await audit("키프레임(반복) 시트");
     $("timelineToggle").click();
     await audit("타임라인 도크");
