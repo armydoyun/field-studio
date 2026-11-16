@@ -120,6 +120,23 @@ const withTimeout = (promise, ms, label) => {
 };
 
 const MEDIA_BROWSER_TESTS = new Set(["toolbar-browser-regression.js", "video-render-browser-regression.js", "recorder-audio-browser-regression.js", "video-render-media-browser-regression.js", "links-browser-regression.js"]);
+// 실패한 순간의 앱 상태(페이지 안에서 실행). 어떤 값을 읽다 실패해도 나머지는 남긴다.
+const snapshotState = () => {
+  const $ = id => document.getElementById(id), safe = read => { try { return read(); } catch(error) { return `읽기 실패: ${error.message}`; } };
+  const describe = el => el && el !== document.body ? `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}${[...el.classList].slice(0, 3).map(c => `.${c}`).join("")}${el.getAttribute("aria-label") ? `[${el.getAttribute("aria-label")}]` : ""}` : "body";
+  return {
+    time:Math.round(performance.now()), viewport:[innerWidth, innerHeight], bodyClasses:document.body.className,
+    focus:describe(document.activeElement), dialogs:[...document.querySelectorAll("dialog[open]")].map(describe),
+    popovers:[...document.querySelectorAll(".ui-popover:not([hidden]), .ui-menu:not([hidden])")].map(describe),
+    studio:safe(() => ({message:$("studioMessage")?.textContent, state:$("studioState")?.dataset.state, editorOpen:!$("studioDock")?.hidden,
+      project:(p => ({imageLength:p.image.length, passes:p.passes.map(x => x.name), imageChannels:p.imageChannels}))(window.shaderStudio.getProject())})),
+    panel:safe(() => ({tab:document.querySelector("#panelTabs [aria-selected=true]")?.dataset.tab, rows:document.querySelectorAll("#uniformList .uniform-row").length,
+      notice:$("uniformNotice")?.textContent, search:$("uniformSearch")?.value, timelineOpen:!$("timelineDock")?.hidden})),
+    renderer:safe(() => window.shaderPlayground.getStats()),
+    users:safe(() => window.shaderPlayground.getUserUniforms()),
+    links:safe(() => window.shaderSettings?.getLinks?.()), presets:safe(() => window.shaderSettings?.getPresets?.()?.map(p => p.name)),
+  };
+};
 const runBrowser = async () => {
   let chromium;
   try { ({chromium} = await import("playwright")); }
@@ -166,6 +183,20 @@ const runBrowser = async () => {
         }
         record("browser", name, "PASS", Date.now() - started);
       } catch(error) {
+        // 실패 진단: 그 순간의 스크린샷 · 전체 콘솔 기록 · 앱 상태를 test-results/browser/<테스트>-<시각>/에 남긴다.
+        // 가끔만 실패하는 테스트도 한 번 실패하면 원인을 볼 수 있게(CI는 이 폴더를 Artifacts로 올린다).
+        const directory = path.join(ROOT, "test-results", "browser", `${path.basename(name, path.extname(name))}-${Date.now()}`);
+        try {
+          fs.mkdirSync(directory, {recursive:true});
+          try { await withTimeout(page.screenshot({path:path.join(directory, "screenshot.png")}), 10_000, "실패 스크린샷"); }
+          catch(shotError) { logs.push(`실패 스크린샷 저장 실패: ${shotError.message}`); }
+          let state = null;
+          try { state = await withTimeout(page.evaluate(snapshotState), 5000, "실패 상태"); }
+          catch(stateError) { state = {error:`상태를 읽지 못함: ${stateError.message}`}; }
+          fs.writeFileSync(path.join(directory, "state.json"), JSON.stringify({test:name, browser:browser.version(), error:error.message, state}, null, 2));
+          fs.writeFileSync(path.join(directory, "console.log"), `${logs.join("\n")}\n\n${error.stack || error.message}\n`);
+          logs.push(`실패 진단: ${path.relative(ROOT, directory)} (screenshot.png · state.json · console.log)`);
+        } catch(diagnosticError) { logs.push(`실패 진단 저장 실패: ${diagnosticError.message}`); }
         // 녹화 검사 실패는 영상 파일 자체를 남겨 외부 디코더로도 확인할 수 있게 한다.
         try {
           const recordings = await withTimeout(page.evaluate(async () => Promise.all((window.__recordingTestArtifacts || []).map(async ({blob, ...metadata}) => {
@@ -174,11 +205,9 @@ const runBrowser = async () => {
             return {...metadata, type:blob.type, size:blob.size, base64:btoa(binary)};
           }))), 5000, "녹화 진단 저장");
           if(recordings.length) {
-            const directory = path.join(ROOT, "test-results", "browser", `${path.basename(name, ".js")}-${Date.now()}`);
             fs.mkdirSync(directory, {recursive:true});
             recordings.forEach(({base64, type}, i) => fs.writeFileSync(path.join(directory, `recording-${i}.${type.startsWith("video/mp4") ? "mp4" : "webm"}`), Buffer.from(base64, "base64")));
-            fs.writeFileSync(path.join(directory, "diagnostics.json"), JSON.stringify({test:name, browser:browser.version(), error:error.message,
-              recordings:recordings.map(({base64: _base64, ...metadata}) => metadata)}, null, 2));
+            fs.writeFileSync(path.join(directory, "recordings.json"), JSON.stringify({test:name, recordings:recordings.map(({base64: _base64, ...metadata}) => metadata)}, null, 2));
             logs.push(`녹화 진단 파일: ${path.relative(ROOT, directory)}`);
           }
         } catch(diagnosticError) { logs.push(`녹화 진단 저장 실패: ${diagnosticError.message}`); }

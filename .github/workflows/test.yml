@@ -96,7 +96,8 @@ jobs:
       - name: Run ${{ matrix.suite }} tests
         run: node tests/run.mjs ${{ matrix.suite }} --strict
 
-      - name: Preserve failed browser recordings
+      # 실패한 브라우저 테스트마다 스크린샷 · 앱 상태 · 전체 콘솔 기록(녹화 테스트는 영상도)을 남긴다(tests/run.mjs).
+      - name: Preserve failed browser diagnostics
         if: failure() && matrix.suite == 'browser'
         uses: actions/upload-artifact@v6
         with:
