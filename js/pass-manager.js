@@ -299,6 +299,16 @@ const createPassManager = (gl, createProgram, textureStore, keyboard = null, med
   const STRUCTURAL = ["name", "scale", "format", "outputs", "mipmap"];
   const sameShape = (a, b) =>
     STRUCTURAL.every(key => a[key] === b[key]) && JSON.stringify(a.size) === JSON.stringify(b.size);
+  // updatePasses가 구조를 바꿔 모든 패스를 새로 만들지(true), 바뀐 패스만 다시 만들지(false). 정의가 틀리면 false —
+  // 그 오류는 실제 적용이 알린다. 렌더러의 미리 컴파일이 무엇을 미리 만들어 둘지 고를 때 쓴다.
+  const isStructural = (specs, image = {}) => {
+    try {
+      const { normalized } = validateDefinition(specs, image);
+      return normalized.length !== passes.length || normalized.some((p, i) => !sameShape(p, passes[i]));
+    } catch (_) {
+      return false;
+    }
+  };
   // 구조가 같으면 변경 프로그램만 준비한다. 전부 성공한 뒤 소스/채널을 함께 교체한다.
   const updatePasses = (specs, image = {}) => {
     const { normalized, nextImage } = validateDefinition(specs, image);
@@ -862,6 +872,7 @@ void main(){
     preview = previewLocations = maxTextureSize = null;
   };
   return {
+    isStructural,
     setPasses,
     stashTargets,
     restoreTargets,

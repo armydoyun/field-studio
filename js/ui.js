@@ -906,13 +906,24 @@ const mount = (renderer, input, settings) => {
       const round = v => (typeof v === "number" ? Number(v.toFixed(places.get(name) ?? 3)) : v);
       return Array.isArray(value) ? value.map(round) : round(value);
     };
+    // 전환 중 값은 @anim 재생처럼 행이 등록한 갱신 함수로 바로 보여 준다. 바뀐 파라미터가 모두 그런 함수를 가졌으면
+    // 목록 전체를 다시 그리지 않는다(0.5초마다 목록을 새로 만들어 깜빡이고 눌러 둔 곳을 잃던 것). 하나라도 없으면
+    // (색 · 벡터 등) 이전처럼 updateStats가 목록을 다시 그려 값을 맞춘다.
     const write = t => {
+      let live = true;
       for (const [name, value] of Presets.blend(result.applied, from, target, Presets.ease(t)))
         try {
-          renderer.setUniform(name, tidy(name, value, t));
+          const next = tidy(name, value, t);
+          renderer.setUniform(name, next);
+          const view = playViews.get(name);
+          if (view) view(next);
+          else live = false;
+          resetSyncs.get(name)?.(next);
+          changeSyncs.get(name)?.(next);
         } catch (error) {
           console.warn(`프리셋 값 무시 (${name}):`, error.message);
         }
+      if (live) uniformSnapshot = snapshotOf(renderer.getUserUniforms());
     };
     const finish = () => {
       commit();
