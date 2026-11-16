@@ -22,6 +22,9 @@
 .preset-chip>button { min-height:calc(var(--control-sm) - 2px);border:0;border-radius:0;background:transparent; }
 .preset-apply { max-width:160px;padding:0 10px;overflow:hidden;color:var(--text-soft);text-overflow:ellipsis;white-space:nowrap; }
 .preset-apply:hover { color:var(--text); }
+/* 칩의 작은 그림(preset-thumbs.js): 그 값으로 그린 화면. 저장 · 덮어쓰기 · 적용을 마친 뒤 생긴다(없으면 이름만) */
+.preset-apply:has(.preset-thumb) { display:inline-flex;align-items:center;gap:var(--space-3);padding-left:var(--space-2); }
+.preset-thumb { flex:none;width:calc(var(--space-8) * 1.8);height:var(--space-8);border-radius:var(--radius-xs);object-fit:cover;border:1px solid var(--line); }
 .preset-apply[aria-pressed="true"] { background:var(--accent-soft);color:var(--accent-strong); }
 /* ⋯: 칩을 누르려다 잘못 누르지 않게 고치는 일은 이 메뉴 안에만 */
 .preset-chip>.preset-more { width:26px;padding:0;border-left:1px solid var(--line-strong);color:var(--faint); }

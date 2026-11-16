@@ -196,6 +196,10 @@
   studio.open();
   await until(() => !$("studioDock").hidden, "편집기 열림");
   await audit("편집기");
+  const editorMenu = document.querySelector(".studio-menu-panel").closest("details");
+  editorMenu.open = true;
+  await audit("편집기 ⋯ 메뉴(코드 정리 포함)");
+  editorMenu.open = false;
   $("studioAdd").click();
   await until(() => !$("studioPassTools").hidden && document.querySelectorAll("#studioPassTabs button").length >= 2, "버퍼 추가");
   $("studioPassTools").open = true;
@@ -217,6 +221,17 @@
   await until(() => $("videoRenderDialog").open, "영상 렌더링 대화상자");
   await audit("영상 렌더링 대화상자");
   $("videoRenderCancel").click();
+  // 버전 기록: 두 버전(값만 다름)을 남겨 목록 · 비교를 잰다
+  await studio.keepVersion("직접 남김");
+  r.setUniform("uGain", r.getUserUniforms().find(u => u.name === "uGain").value === 0.3 ? 0.7 : 0.3);
+  await studio.keepVersion("직접 남김");
+  $("versionOpen").click();
+  await until(() => $("versionDialog").open && document.querySelectorAll(".version-item").length >= 2, "버전 기록");
+  await audit("버전 기록 대화상자");
+  document.querySelectorAll(".version-compare-button")[1].click();
+  await until(() => !$("versionCompare").hidden, "버전 비교");
+  await audit("버전 기록: 비교");
+  $("versionDone").click();
   $("galleryToggle").click();
   await until(() => $("gallery").open, "갤러리");
   await wait(400);

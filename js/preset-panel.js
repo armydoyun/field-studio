@@ -6,6 +6,7 @@
 import * as ContextMenu from "./context-menu.js";
 import * as Presets from "./presets.js";
 import * as ParameterTools from "./parameter-tools.js";
+import * as Thumbs from "./preset-thumbs.js";
 
 const create = ctx => {
   const {
@@ -28,6 +29,8 @@ const create = ctx => {
     renderUniforms,
     displayNumber,
   } = ctx;
+  // 칩의 작은 그림(preset-thumbs.js): 저장 · 덮어쓰기 · 적용을 마친 뒤 그 화면을 찍어 둔다. 새 그림이 생기면 칩을 다시 그린다.
+  const thumbs = Thumbs.create({ renderer, onChange: () => renderPresets() });
   // ---- 파라미터 프리셋(presets.js · settings.getPresets/setPresets) ----
   // 칩을 누르면 그 값 묶음으로 바꾼다(전환 시간만큼 부드럽게). 지금 값이 프리셋과 같으면 그 칩이 눌린 상태로 보인다.
   // 고치는 일(지금 값으로 덮어쓰기 · 이름 바꾸기 · 삭제)은 칩 옆 ⋯ 메뉴 안에만 둔다 — 칩을 누르려다 잘못 누르지 않게.
@@ -137,6 +140,7 @@ const create = ctx => {
       settings.setPresets(
         settings.getPresets().map((item, i) => (i === index ? Presets.capture(item.name, users) : item))
       );
+      thumbs.remember(Presets.capture(preset.name, users).values);
       presetNotice(`'${preset.name}'을 지금 값으로 덮어썼습니다(값 ${changes.length}개)`, presets);
       $("presetUndo").focus();
     });
@@ -348,6 +352,7 @@ const create = ctx => {
       settings.save();
       renderUniforms();
       showPresetReport(preset, result, from);
+      thumbs.remember(preset.values); // 지금 코드로 그린 모습으로 썸네일을 새로 찍는다
     };
     const seconds = Number($("presetBlend").value) || 0;
     if (!seconds) {
@@ -421,6 +426,15 @@ const create = ctx => {
       apply.type = more.type = "button";
       apply.className = "preset-apply";
       apply.textContent = preset.name;
+      const thumb = thumbs.get(preset.values);
+      if (thumb) {
+        const image = element("img");
+        image.className = "preset-thumb";
+        image.src = thumb;
+        image.alt = ""; // 이름이 버튼의 이름이다
+        image.decoding = "async";
+        apply.prepend(image);
+      }
       apply.setAttribute("aria-pressed", String(matchesPreset(preset, users)));
       const compatible = Presets.plan(users, preset, settings.getLinks?.() || []);
       apply.title = `적용 가능 ${compatible.applied.length}개 · 건너뜀 ${compatible.skipped.length}개`;
@@ -472,7 +486,9 @@ const create = ctx => {
     // 이름을 묻지 않고 바로 저장한다(한 번에 끝). 이름은 칩을 두 번 누르거나 ⋯에서 바꾼다.
     const name = `프리셋 ${n}`;
     attempt(() => {
-      settings.setPresets([...presets, Presets.capture(name, renderer.getUserUniforms())]);
+      const saved = Presets.capture(name, renderer.getUserUniforms());
+      settings.setPresets([...presets, saved]);
+      thumbs.remember(saved.values);
       presetNotice(`'${name}' 저장 · 이름은 칩을 두 번 눌러 바꿉니다`, presets);
     });
   });

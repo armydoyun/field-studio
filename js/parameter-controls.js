@@ -988,6 +988,8 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
     stops = read();
     selected = stops[0];
     sync(false);
+    // 밖에서 바뀐 값(프리셋 · 되돌리기)을 다시 읽어 보여 준다 — 고른 정지점 자리는 그대로
+    wrap.refresh = () => sync();
     return wrap;
   };
   // 곡선: 캔버스에서 점을 끌어 모양을 만든다. 빈 곳을 누르면 점 추가, 점을 더블클릭하면 삭제.
@@ -1260,6 +1262,7 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
     curveRedraws.set(pad, draw);
     curveResizeObserver?.observe(pad);
     sync();
+    wrap.refresh = () => sync(); // 밖에서 바뀐 값을 다시 읽어 보여 준다 — 고른 점 자리는 그대로
     return wrap;
   };
   listen(document, "theme-changed", () => directionRedraws.forEach((_, draw) => draw()));

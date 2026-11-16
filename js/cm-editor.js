@@ -9,6 +9,8 @@ import * as Features from "./cm-glsl-features.js";
 import * as Store from "./storage.js";
 import * as SearchPanel from "./cm-search-panel.js";
 import * as ContextMenu from "./context-menu.js";
+import * as Format from "./glsl-format.js";
+import * as Fix from "./glsl-fix.js";
 // 선택 영역을 줄 높이에 맞춰 그린다.
 // drawSelection은 줄 일부만 선택된 첫·마지막 줄을 글자 상자 높이(coordsAtPos)로 칠하고, 가운데 줄은 그 사이를 꽉 채운다.
 // 이 편집기는 줄 간격이 1.65라서 첫·마지막 줄의 띠만 얇고 위치도 어긋나 보였다.
@@ -878,6 +880,34 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { key, run: command },
     { key: key.replace(/-([a-z])$/, (_, c) => `-${c.toUpperCase()}`), run: command },
   ];
+  // 코드 정리(Shift+Alt+F · glsl-format.js): 들여쓰기 · 띄어쓰기 · 빈 줄만 맞춘다(뜻 · 줄 나눔 · 주석은 그대로).
+  // 문서 전체를 한 번에 바꿔 Ctrl+Z 한 번으로 돌아가고, 커서는 '앞에 있는 공백이 아닌 글자 수'로 같은 코드 자리에 둔다.
+  const formatDocument = editorView => {
+    if (editorView.state.readOnly) return false;
+    const before = editorView.state.doc.toString();
+    let after;
+    try {
+      after = Format.format(before, { indent: " ".repeat(tabSize) });
+    } catch (_) {
+      notify("코드를 정리하지 못했습니다");
+      return true;
+    }
+    if (after === before) {
+      notify("이미 정리된 코드입니다");
+      return true;
+    }
+    const solid = before.slice(0, editorView.state.selection.main.head).replace(/\s+/g, "").length;
+    let head = 0;
+    for (let count = 0; head < after.length && count < solid; head++) if (!/\s/.test(after[head])) count++;
+    editorView.dispatch({
+      changes: { from: 0, to: before.length, insert: after },
+      selection: { anchor: head },
+      userEvent: "input.format",
+      scrollIntoView: true,
+    });
+    notify("코드를 정리했습니다(들여쓰기 · 띄어쓰기 · 빈 줄) · Ctrl+Z로 되돌리기");
+    return true;
+  };
   const editorKeys = [
     ...(acceptCompletion ? [{ key: "Tab", run: acceptCompletion }] : []),
     // 탐색: 명령(>) · 패스(파일) · 함수·변수(@) · 줄(:)
@@ -908,6 +938,8 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { key: "Shift-Alt-ArrowRight", run: expandSelection },
     { key: "Shift-Alt-ArrowLeft", run: shrinkSelection },
     // 편집
+    ...both("Shift-Alt-f", formatDocument),
+    { key: "Mod-.", run: editorView => quickFix(editorView) },
     { key: "Mod-Enter", run: CM.insertBlankLine },
     { key: "Mod-Shift-Enter", run: insertLineAbove },
     { key: "Mod-k Mod-c", run: lineComment(true) },
@@ -1178,22 +1210,72 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       0
     );
   };
+  // 빠른 수정(glsl-fix.js): 오류마다 고친 줄을 제안해 오류 말풍선 · 오류 목록의 버튼(CodeMirror actions)과 Ctrl+.로 적용한다.
+  // 제안은 오류를 받은 때의 줄 글자를 기억해, 그사이 그 줄이 바뀌었으면 적용하지 않는다(엉뚱한 줄을 고치지 않게).
+  let lineFixes = new Map(); // 줄 번호(1부터) → [{ label, line, from, text }]
+  const knownNames = () => {
+    const symbols = symbolsOf(view.state.doc.toString());
+    return [
+      ...symbols.functions.map(item => item.name),
+      ...symbols.variables.map(item => item.name),
+      ...language.APP_UNIFORMS.map(([name]) => name),
+      ...language.SHADERTOY_UNIFORMS.map(([name]) => name),
+      ...Object.keys(language.BUILTIN_VARS),
+      ...(options.builtins || []).map(item => item.name),
+      ...uniformNames(),
+    ];
+  };
+  const applyFix = (editorView, fix) => {
+    const doc = editorView.state.doc;
+    if (fix.line + 1 > doc.lines) return false;
+    const row = doc.line(fix.line + 1);
+    if (row.text !== fix.from) {
+      notify("코드가 바뀌어 이 수정을 적용하지 않았습니다 · 다시 실행하면 새로 제안합니다");
+      return false;
+    }
+    editorView.dispatch({
+      changes: { from: row.from, to: row.to, insert: fix.text },
+      userEvent: "input.quickfix",
+      scrollIntoView: true,
+    });
+    notify(`빠른 수정: ${fix.label} · Ctrl+Z로 되돌리기`);
+    return true;
+  };
+  // Ctrl+. : 커서가 있는 줄(없으면 가장 가까운 오류 줄)의 첫 번째 수정을 적용한다
+  const quickFix = editorView => {
+    if (!lineFixes.size) {
+      notify("고칠 수 있는 오류가 없습니다");
+      return true;
+    }
+    const here = editorView.state.doc.lineAt(editorView.state.selection.main.head).number;
+    const line = lineFixes.has(here)
+      ? here
+      : [...lineFixes.keys()].sort((a, b) => Math.abs(a - here) - Math.abs(b - here))[0];
+    applyFix(editorView, lineFixes.get(line)[0]);
+    return true;
+  };
   const setDiagnostics = list => {
     const doc = view.state.doc,
       items = (Array.isArray(list) ? list : []).filter(
         item =>
           Number.isInteger(item?.line) && item.line >= 1 && item.line <= doc.lines && typeof item.message === "string"
       );
+    const lines = doc.toString().split("\n"),
+      names = items.length ? knownNames() : [];
+    lineFixes = new Map();
     view.dispatch(
       CM.setDiagnostics(
         view.state,
         items.map(item => {
-          const row = doc.line(item.line);
+          const row = doc.line(item.line),
+            fixes = Fix.quickFixes({ message: item.message, lines, index: item.line - 1, names });
+          if (fixes.length) lineFixes.set(item.line, [...(lineFixes.get(item.line) || []), ...fixes]);
           return {
             from: row.from,
             to: row.to,
             severity: item.severity === "warning" ? "warning" : "error",
             message: item.message,
+            actions: fixes.map(fix => ({ name: fix.label, apply: editorView => applyFix(editorView, fix) })),
           };
         })
       )
@@ -1237,6 +1319,8 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "위에 줄 삽입", key: "Ctrl+Shift+Enter", run: () => insertLineAbove(view) },
     { label: "줄 삭제", key: "Ctrl+Shift+K", run: () => CM.deleteLine(view) },
     { label: "짝 괄호로 이동", key: "Ctrl+Shift+\\", run: () => jumpToBracket(view) },
+    { label: "코드 정리 (들여쓰기 · 띄어쓰기 · 빈 줄)", key: "Shift+Alt+F", run: () => formatDocument(view) },
+    { label: "빠른 수정 (커서 줄 오류의 첫 번째 제안 적용)", key: "Ctrl+.", run: () => quickFix(view) },
     { label: "들여쓰기", key: "Ctrl+]", run: () => CM.indentMore(view) },
     { label: "내어쓰기", key: "Ctrl+[", run: () => CM.indentLess(view) },
     { label: "정의로 이동", key: "F12 · Ctrl+클릭", run: () => features.goToDefinition(view) },
@@ -1589,6 +1673,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
             onSelect: () => $("studioSnippets")?.click(),
           },
           { label: "찾아 바꾸기", icon: "search", kbd: "Ctrl+H", onSelect: () => showFind(true) },
+          { label: "코드 정리", kbd: "Shift+Alt+F", disabled: readOnly, onSelect: () => formatDocument(view) },
           { separator: true },
           { label: "명령 팔레트…", kbd: "F1", onSelect: () => openPalette(">") },
         ],
@@ -1612,6 +1697,10 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   });
   listen($("studioLintPanel"), "click", () => CM.openLintPanel(view));
   listen($("studioRename"), "click", () => features.renameSymbol(view));
+  listen($("studioTidy"), "click", () => {
+    formatDocument(view);
+    view.focus();
+  });
   listen($("studioDefinition"), "click", () => features.goToDefinition(view));
   listen(symbols, "click", () => (palette.hidden ? openPalette("@") : closePalette()));
   listen(symbols, "mousedown", event => {
@@ -1657,6 +1746,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     goToLine,
     showFind,
     setDiagnostics,
+    quickFixesAt: line => lineFixes.get(line) || [],
     registerCommands,
     setFiles,
     openPalette,
