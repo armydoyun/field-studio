@@ -687,10 +687,29 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   const activeChannels = () => (selected === "Image" ? project.imageChannels : find(selected)?.channels);
   // Common에는 입력 채널이 없다(채널은 그것을 붙여 쓰는 각 패스에 연결한다).
   const freeChannel = () => (activeChannels() ? [0, 1, 2, 3].find(index => !activeChannels()[index]) : undefined);
+  // 이 이미지가 지금 탭에 연결된 채널 번호들
+  const textureSlots = id => {
+    const channels = activeChannels() || {};
+    return Object.keys(channels)
+      .filter(key => Model.imageOf(channels[key]) === id)
+      .map(Number)
+      .sort((a, b) => a - b);
+  };
+  // 이미지 항목의 연결 버튼: 이미 연결된 이미지는 '연결됨'(누르면 해제), 아니면 다음 빈 채널에 연결.
+  // 같은 이미지를 누를 때마다 다음 채널에 또 연결하던 것을 막는다(두 채널에 넣으려면 입력 채널 칩에서 고른다).
   const syncTextureTargets = () => {
     const slot = freeChannel(),
       target = tabLabel(selected);
     for (const button of textureButtons) {
+      const slots = textureSlots(button.dataset.assetId);
+      button.setAttribute("aria-pressed", String(slots.length > 0));
+      if (slots.length) {
+        button.disabled = false;
+        button.textContent = `${target} · iChannel${slots.join(" · ")}에 연결됨`;
+        button.title = `${target}.iChannel${slots.join(", ")}에 연결되어 있습니다 · 누르면 연결 해제(Ctrl+Z로 되돌리기)`;
+        button.setAttribute("aria-label", `${button.dataset.assetName} · ${button.textContent} · 누르면 해제`);
+        continue;
+      }
       button.disabled = slot === undefined;
       button.textContent = slot === undefined ? `${target} · 빈 채널 없음` : `${target} · iChannel${slot}에 연결`;
       button.title =
@@ -962,6 +981,28 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderGraph();
     return false;
   };
+  // 지금 탭에서 이 이미지의 연결을 모두 해제한다(한 번의 적용 · Ctrl+Z 한 칸). 적용에 실패하면 원래대로.
+  const disconnectTexture = id => {
+    rememberEditor();
+    const channels = activeChannels(),
+      slots = textureSlots(id),
+      before = slots.map(slot => [slot, channels[slot]]);
+    if (!slots.length) return false;
+    for (const slot of slots) delete channels[slot];
+    renderChannels();
+    renderGraph();
+    schedule();
+    if (apply()) {
+      setStatus(
+        `${inputInfo({ texture: id }, renderer.getTextures()).source} — ${selected}.iChannel${slots.join(", ")} 연결 해제 · Ctrl+Z로 되돌리기`
+      );
+      return true;
+    }
+    for (const [slot, ref] of before) channels[slot] = ref;
+    renderChannels();
+    renderGraph();
+    return false;
+  };
   // ---- 이미지 자원 ----
   // 쓰는 이미지: 지금 작업 · 되돌리기/다시 실행 기록 · 이 탭의 자동 복구본이 연결한 이미지. 보관함 프로젝트와 내보낸 파일은
   // 이미지 원본을 따로 담고 있으므로(열 때 다시 등록) 여기서 지워도 잃지 않는다.
@@ -1111,8 +1152,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       use.type = "button";
       use.className = "ui-btn--ghost ui-btn--sm glyph-icon icon-link texture-connect";
       use.dataset.assetName = asset.name;
+      use.dataset.assetId = asset.id;
       textureButtons.push(use);
-      use.addEventListener("click", () => connectTexture(asset.id));
+      use.addEventListener("click", () =>
+        textureSlots(asset.id).length ? disconnectTexture(asset.id) : connectTexture(asset.id)
+      );
       const controls = element("div");
       controls.className = "ui-dense studio-sampling";
       for (const [key, title, values] of [
