@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="../css/components/segmented.css">
     <link rel="stylesheet" href="../css/components/tag.css">
     <link rel="stylesheet" href="../css/components/menu.css">
+    <link rel="stylesheet" href="../css/components/menubar.css">
     <link rel="stylesheet" href="../css/components/select.css">
     <link rel="stylesheet" href="../css/components/matrix.css">
     <link rel="stylesheet" href="../css/components/value-editor.css">
@@ -162,6 +163,9 @@
         <h2>메뉴 · 팝오버</h2>
         <p>새 메뉴는 <code>UI.menu({ anchor, items })</code>로 연다(바깥 클릭 · Esc · 방향키 처리 포함). 아래 버튼을 눌러 본다.</p>
         <div class="ui-card">
+            <div class="ds-row"><code>ui-menubar<br>ui-menubar-item</code><div class="ds-demo">
+                <nav class="ui-menubar" role="menubar" aria-label="메뉴 바 예시"><button type="button" class="ui-menubar-item" role="menuitem">파일</button><button type="button" class="ui-menubar-item" role="menuitem" aria-expanded="true">편집</button><button type="button" class="ui-menubar-item" role="menuitem">보기</button></nav>
+            </div></div>
             <div class="ds-row"><code>ui-popover ui-menu<br>ui-menu-item · -title · -sep · -row · -note</code><div class="ds-demo" style="align-items:flex-start">
                 <div class="ui-popover ui-menu ds-static">
                     <p class="ui-menu-title">편집</p>

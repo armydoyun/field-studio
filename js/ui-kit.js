@@ -6,6 +6,7 @@
 //   UI.iconButton({ icon: "close", label: "닫기", size: "xs", onClick })
 //   UI.segmented({ label: "방식", options: [{ value: "a", label: "A" }], value: "a", onChange })
 //   UI.select({ options: [["1", "하나"]], value: "1", size: "sm", onChange })
+//   UI.menu({ anchor: button, items: … , onSideKey }) — onSideKey: 메뉴 바처럼 ←/→로 옆 메뉴를 열 때
 //   UI.menu({ anchor: button, items: [{ label: "이름 바꾸기", onSelect }, { separator: true }, { label: "삭제", danger: true, onSelect }] })
 
 // 클래스 이름 잇기: 빈 값은 건너뛴다.
@@ -186,6 +187,7 @@ const menu = ({
   label = "",
   align = "start",
   onClose,
+  onSideKey, // ←/→를 받을 함수(메뉴 바: 옆 메뉴로 옮기기). 없으면 좌우 키는 그대로 둔다
 } = {}) => {
   const doc = anchor?.ownerDocument || at?.doc || document;
   const view = doc.defaultView || window;
@@ -214,6 +216,12 @@ const menu = ({
       event.preventDefault();
       event.stopPropagation();
       close();
+      return;
+    }
+    if (onSideKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      event.preventDefault();
+      event.stopPropagation();
+      onSideKey(event.key === "ArrowLeft" ? -1 : 1);
       return;
     }
     const list = enabled();

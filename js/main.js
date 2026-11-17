@@ -1,6 +1,7 @@
 import * as CustomSelect from "./custom-select.js";
 import * as ContextMenu from "./context-menu.js";
 import * as AppMenus from "./app-menus.js";
+import * as MenuBar from "./menu-bar.js";
 import * as Kit from "./ui-kit.js";
 // 앱 조립 진입점. 범용 기본 GLSL과 Ray Marching 프리셋은 shader.js, GPU 렌더링은 renderer.js가 담당한다.
 import * as Renderer from "./renderer.js";
@@ -57,10 +58,12 @@ let renderer = null,
   profiler = null,
   gallery = null,
   guide = null,
-  versionHistory = null;
+  versionHistory = null,
+  menuBar = null;
 // 만든 순서의 반대로 정리한다(아직 만들지 않은 것은 건너뛴다). 창을 닫을 때와 시작에 실패했을 때 함께 쓴다.
 const disposeAll = () => {
-  for (const part of [guide, versionHistory, gallery, profiler, studio, settings, ui, input, renderer]) part?.dispose();
+  for (const part of [menuBar, guide, versionHistory, gallery, profiler, studio, settings, ui, input, renderer])
+    part?.dispose();
 };
 const initialize = async () => {
   try {
@@ -105,6 +108,8 @@ const initialize = async () => {
     versionHistory = VersionHistory.mount({ studio, renderer });
     // 우클릭 메뉴: 바탕 · 뷰포트(여기) + 각 기능 모듈이 등록한 영역 메뉴
     AppMenus.mount({ studio: () => studio });
+    // 창 맨 위 메뉴 바: 항목은 위에서 만든 화면의 버튼을 누른다
+    menuBar = MenuBar.mount();
     ContextMenu.mount(document);
     renderer.start();
     status.textContent = "";

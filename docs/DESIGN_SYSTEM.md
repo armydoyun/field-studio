@@ -41,10 +41,11 @@ css/
     segmented.css       ui-seg · ui-tabs
     tag.css             ui-tag · ui-chip · ui-dot · ui-count · kbd
     menu.css            ui-popover · ui-menu · ui-menu-item …
+    menubar.css         ui-menubar · ui-menubar-item (창 맨 위 메뉴 바)
     dialog.css          ui-dialog · ui-dialog-head · -body · -foot …
     notice.css          ui-notice · ui-empty
     surface.css         ui-card · ui-section · ui-disclosure · ui-resizer · ui-hud · ui-stack · ui-readout
-  layout/               화면의 큰 틀: workspace(격자) · panel(설정 패널) · stage(뷰포트 · HUD) · dock(자리 옮기기)
+  layout/               화면의 큰 틀: app-bar(앱 막대 · 메뉴 바 자리) · workspace(격자) · panel(설정 패널) · stage(뷰포트 · HUD) · dock(자리 옮기기)
   features/             기능별: parameters · presets · links · timeline · project-menu · channels · editor ·
                         editor-codemirror · video-dialog · gallery · guide · profiler · popout
 js/ui-kit.js            컴포넌트를 JS로 만드는 함수(UI.button · UI.segmented · UI.menu …)
@@ -108,6 +109,7 @@ js/studio-dialog.js     묻기 · 확인 대화상자(ask · confirm)
 | 누르는 칩 | `ui-chip` | 켜짐 `aria-pressed` · `.is-active` · 안의 체크박스. `--pill · --lg` |
 | 상태 점 · 개수 | `ui-dot`(`--success …`) · `ui-count` | |
 | 메뉴 | `ui-popover ui-menu` > `ui-menu-item` | `ui-menu-title · -sep · -row · -note`. 위험 항목 `.is-danger`, 토글 항목 `aria-pressed` |
+| 메뉴 바 | `ui-menubar`(role=menubar) > `ui-menubar-item` | 펼침 메뉴는 `UI.menu({ anchor, items, onSideKey })` — ←→로 옆 메뉴. 열린 메뉴 이름은 `aria-expanded="true"` (js/menu-bar.js) |
 | 떠 있는 면 | `ui-popover` | 자리(position)는 쓰는 쪽에서 |
 | 대화상자 | `<dialog class="ui-dialog">` | 폭 `--md · --lg · --xl · --2xl`, 세로 구성 `--column`. 뼈대 `ui-dialog-head / -body / -foot` |
 | 알림 | `ui-notice` | `--accent · --success · --warning · --danger`, 띠 `--bar` |

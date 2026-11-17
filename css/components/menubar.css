@@ -1,0 +1,7 @@
+/* 메뉴 바 — 창 맨 위의 글자 메뉴 줄(파일 · 편집 · 보기 …). js/menu-bar.js가 펼침 메뉴를 ui-menu로 연다.
+     ui-menubar       메뉴 이름이 가로로 놓인 줄(role=menubar)
+     ui-menubar-item  메뉴 이름 하나(<button role=menuitem>). 열린 메뉴는 aria-expanded="true" */
+.ui-menubar { display:flex;align-items:center;gap:var(--space-1);min-width:0; }
+.ui-menubar-item { min-height:var(--control-xs);padding:0 var(--space-4);border-color:transparent;border-radius:4px;background:transparent;color:var(--text-soft);font:500 var(--text-sm)/1 var(--sans);white-space:nowrap; }
+.ui-menubar-item:hover,.ui-menubar-item[aria-expanded="true"] { border-color:transparent;background:var(--surface-hover);color:var(--text); }
+.ui-menubar-item:focus-visible { outline-offset:-2px; }

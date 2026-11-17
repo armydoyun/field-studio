@@ -21,12 +21,14 @@
     <link rel="stylesheet" href="./css/components/segmented.css">
     <link rel="stylesheet" href="./css/components/tag.css">
     <link rel="stylesheet" href="./css/components/menu.css">
+    <link rel="stylesheet" href="./css/components/menubar.css">
     <link rel="stylesheet" href="./css/components/select.css">
     <link rel="stylesheet" href="./css/components/matrix.css">
     <link rel="stylesheet" href="./css/components/value-editor.css">
     <link rel="stylesheet" href="./css/components/dialog.css">
     <link rel="stylesheet" href="./css/components/notice.css">
     <link rel="stylesheet" href="./css/components/surface.css">
+    <link rel="stylesheet" href="./css/layout/app-bar.css">
     <link rel="stylesheet" href="./css/layout/workspace.css">
     <link rel="stylesheet" href="./css/layout/panel.css">
     <link rel="stylesheet" href="./css/layout/stage.css">
@@ -48,25 +50,32 @@
 </head>
 <body>
     <!-- UI는 Renderer의 공개 API만 사용한다. Stage와 Panel은 서로 독립적인 영역이다. -->
+    <!-- 앱 막대: 브랜드 + 메뉴 바(js/menu-bar.js). 항목은 이미 있는 버튼을 누른다 -->
+    <header id="appBar" class="app-bar">
+        <div class="app-brand" aria-label="FIELD studio"><span class="app-brand-mark" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 32 32"><path fill="currentColor" fill-rule="evenodd" d="M10 3h12a7 7 0 0 1 7 7v12a7 7 0 0 1-7 7H10a7 7 0 0 1-7-7V10a7 7 0 0 1 7-7Zm6 7.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></svg></span><strong aria-hidden="true">FIELD<span>studio</span></strong></div>
+        <nav id="menuBar" class="ui-menubar" role="menubar" aria-label="메뉴">
+            <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="file">파일</button>
+            <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="edit">편집</button>
+            <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="view">보기</button>
+            <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="play">재생</button>
+            <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="help">도움말</button>
+        </nav>
+    </header>
     <div id="workspace">
         <aside id="panel" aria-label="셰이더 설정 패널">
-            <header class="panel-header">
-                <div class="brand-lockup">
-                    <div class="brand-mark" aria-hidden="true">
-                        <svg aria-hidden="true" focusable="false" viewBox="0 0 32 32"><path fill="currentColor" fill-rule="evenodd" d="M10 3h12a7 7 0 0 1 7 7v12a7 7 0 0 1-7 7H10a7 7 0 0 1-7-7V10a7 7 0 0 1 7-7Zm6 7.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></svg>
-                    </div>
-                    <div class="brand-text"><strong>FIELD<span>studio</span></strong><small>SHADER WORKSPACE</small></div>
-                </div>
-                <button id="panelGrip" class="dock-grip" type="button" aria-label="설정 패널 위치 옮기기" title="패널 위치 이동 · ←→"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
-                <button id="panelClose" class="ui-icon-btn close-panel glyph-icon icon-close" type="button" aria-label="설정 패널 숨기기" title="패널 숨기기 (H)"></button>
-            </header>
 
-            <nav id="panelTabs" class="ui-tabs ui-seg--lg panel-tabs" role="tablist" aria-label="설정 종류">
+
+            <!-- 패널 머리: 탭 + 위치 옮기기 손잡이 · 닫기(좁은 화면). 브랜드는 창 맨 위 앱 막대에 있다 -->
+            <header class="panel-header">
+    <nav id="panelTabs" class="ui-tabs ui-seg--lg panel-tabs" role="tablist" aria-label="설정 종류">
                 <button type="button" role="tab" id="tab-uniforms" aria-controls="view-uniforms" aria-selected="true" data-tab="uniforms" class="is-active">파라미터</button>
                 <button type="button" role="tab" id="tab-render" aria-controls="view-render" aria-selected="false" data-tab="render" tabindex="-1">렌더링</button>
                 <button type="button" role="tab" id="tab-profile" tabindex="-1" aria-controls="view-profile" aria-selected="false" data-tab="profile">성능</button>
                 <button type="button" role="tab" id="tab-input" tabindex="-1" aria-controls="view-input" aria-selected="false" data-tab="input">작업공간</button>
             </nav>
+                <button id="panelGrip" class="dock-grip" type="button" aria-label="설정 패널 위치 옮기기" title="패널 위치 이동 · ←→"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
+                <button id="panelClose" class="ui-icon-btn close-panel glyph-icon icon-close" type="button" aria-label="설정 패널 숨기기" title="패널 숨기기 (H)"></button>
+            </header>
 
             <div class="panel-scroll">
                 <div id="view-render" class="panel-view" role="tabpanel" aria-labelledby="tab-render" data-panel="render" hidden>
@@ -294,8 +303,9 @@
                         <button id="videoRenderOpen" type="button" class="ui-menu-item" title="영상 렌더링 설정" aria-label="영상 렌더링" aria-haspopup="dialog" aria-controls="videoRenderDialog"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></svg><span>영상 렌더링…</span><kbd>고급</kbd></button>
                         <button id="recordButton" type="button" class="ui-menu-item" title="뷰포트를 영상으로 녹화" aria-label="녹화 시작"><span class="record-dot" aria-hidden="true"></span><span id="recordButtonLabel">녹화 시작</span><kbd id="recordFormat">WebM</kbd></button>
                     </div>
-                    <!-- ⋯ 더보기 메뉴: 자주 쓰지 않는 도구. 단축키(X ? H G)는 그대로 동작한다. -->
+                    <!-- ⋯ 더보기 메뉴: 메뉴 바가 보이는 메인 창에서는 숨는다(메뉴 바의 보기 · 도움말에 같은 항목). 메뉴 바를 끄거나 미리보기 분리 창에서는 나타난다. 단축키(X ? H G)는 그대로 동작한다. -->
                     <div id="moreMenu" class="ui-popover ui-menu stage-menu" role="group" aria-label="더보기" hidden>
+                        <button id="menuBarShow" type="button" class="ui-menu-item" title="창 맨 위 메뉴 바(파일 · 편집 · 보기 · 재생 · 도움말)를 다시 보이기" hidden><span>메뉴 바 보이기</span><kbd>F10</kbd></button>
                         <button id="galleryToggle" type="button" class="ui-menu-item" title="예제 갤러리 (X)" aria-label="예제 갤러리 열기" aria-haspopup="dialog" aria-controls="gallery"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg><span>예제 갤러리</span><kbd>X</kbd></button>
                         <button id="helpToggle" type="button" class="ui-menu-item glyph-icon icon-help" title="사용법과 단축키 (?)" aria-label="사용법 및 단축키 도움말" aria-haspopup="dialog" aria-controls="quickHelp"><span>가이드 · 단축키</span><kbd>?</kbd></button>
                         <hr class="ui-menu-sep">
