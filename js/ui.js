@@ -4,7 +4,7 @@ import * as ParameterControls from "./parameter-controls.js";
 import * as PresetPanel from "./preset-panel.js";
 import * as ParameterRow from "./parameter-row.js";
 // Renderer의 공개 API만 호출하는 설정 패널. WebGL 리소스를 소유하지 않는다.
-import * as StageMenu from "./stage-menu.js";
+import * as WorkspaceView from "./workspace-view.js";
 import * as Recorder from "./recorder.js";
 import * as Annotations from "./annotations.js";
 import * as VideoDialog from "./video-dialog.js";
@@ -1533,6 +1533,14 @@ const mount = (renderer, input, settings) => {
     tabScroll = new Map();
   // 처음 여는 탭은 파라미터: 작품을 만지는 사람이 가장 자주 쓰는 곳(렌더링 · 성능 · 작업공간은 가끔 여는 설정).
   let activeTab = "uniforms";
+  const { syncPanel, setPanelHidden, togglePanel, setHud, toggleHud, toggleFullscreen } = WorkspaceView.create({
+    $,
+    on: listen,
+    signal,
+    activeTab: () => activeTab,
+    savePanel: () => settings.save(),
+    showError,
+  });
   const setActiveTab = tab => {
     const scroll = $("panel").querySelector(".panel-scroll");
     tabScroll.set(activeTab, scroll.scrollTop);
@@ -1553,8 +1561,7 @@ const mount = (renderer, input, settings) => {
   };
   listen($("studioParameters"), "click", () => {
     // 좁은 화면에서 패널은 편집기 위에 겹쳐 열리므로 편집기를 닫지 않는다. 패널을 닫으면 편집하던 화면으로 그대로 돌아간다.
-    document.body.classList.remove("panel-hidden");
-    syncPanel();
+    setPanelHidden(false);
     setActiveTab("uniforms");
     focusSearch();
   });
@@ -1578,44 +1585,6 @@ const mount = (renderer, input, settings) => {
     setActiveTab(tabButtons[index].dataset.tab);
     tabButtons[index].focus();
   });
-  const syncPanel = () => {
-    const hidden = document.body.classList.contains("panel-hidden");
-    stage.inert = !hidden && window.matchMedia("(max-width:820px)").matches;
-    $("panelToggle").setAttribute("aria-label", hidden ? "설정 패널 열기" : "설정 패널 숨기기");
-    $("panelToggle").setAttribute("aria-pressed", String(!hidden));
-    $("panelClose").title = hidden ? "패널 열기" : "패널 숨기기";
-  };
-  const togglePanel = () => {
-    document.body.classList.toggle("panel-hidden");
-    syncPanel();
-    if (!document.body.classList.contains("panel-hidden"))
-      $("panelTabs").querySelector(`[data-tab="${activeTab}"]`)?.focus();
-    else focusToolbar("panelToggle");
-  };
-  // HUD 숨기기(G · ⋯ 메뉴의 HUD): 위쪽 도구 막대·프로젝트 이름·안내와 아래쪽 미리보기 정보·FPS까지 모두 숨기고 셰이더만 남긴다.
-  // 포인터를 움직이면 오른쪽 위에 'HUD 다시 보기' 버튼이 잠깐 나타난다. G · Esc로도 되돌린다. 분리 창에도 따라간다(popout.js).
-  let revealTimer = 0;
-  const showReveal = () => {
-    if (!stage.classList.contains("hud-hidden")) return;
-    $("hudReveal").classList.add("is-visible");
-    clearTimeout(revealTimer);
-    revealTimer = setTimeout(() => $("hudReveal").classList.remove("is-visible"), 1600);
-  };
-  const setHud = visible => {
-    const hidden = !visible;
-    stage.classList.toggle("hud-hidden", hidden);
-    $("hudToggle").setAttribute("aria-label", hidden ? "HUD 표시" : "HUD 숨기기");
-    $("hudToggle").setAttribute("aria-pressed", String(!hidden));
-    $("hudReveal").classList.remove("is-visible");
-    clearTimeout(revealTimer);
-    if (hidden) {
-      for (const id of ["moreMenu", "captureMenu"]) if ($(id) && !$(id).hidden) $(id).hidden = true;
-      showReveal();
-    }
-  };
-  const toggleHud = () => setHud(stage.classList.contains("hud-hidden"));
-  listen($("hudReveal"), "click", () => setHud(true));
-  listen($("screen"), "pointermove", showReveal);
   const syncTimeScale = scale => {
     for (const button of document.querySelectorAll("[data-time-scale]")) {
       const active = Number(button.dataset.timeScale) === scale;
@@ -1660,18 +1629,6 @@ const mount = (renderer, input, settings) => {
       $("fpsLimit").focus();
       $("fpsLimit").select?.();
     });
-  const toggleFullscreen = async () => {
-    try {
-      const doc = $("screen").ownerDocument || document,
-        surface = doc === document ? stage : doc.body;
-      if (doc.fullscreenElement) await doc.exitFullscreen();
-      else await surface.requestFullscreen();
-      showError("");
-    } catch (error) {
-      showError(`전체화면 전환 실패: ${error.message}`);
-    }
-  };
-  listen($("panelClose"), "click", togglePanel);
   // 가이드(guide.js)가 있으면 그쪽에서 목록을 채운 뒤 연다. <dialog>의 toggle 이벤트는 구형 브라우저에서 발생하지 않으므로 그것에 기대지 않는다.
   const helpDialog = $("quickHelp"),
     toggleHelp = () => {
@@ -1687,21 +1644,6 @@ const mount = (renderer, input, settings) => {
   listen(helpDialog, "keydown", event => {
     if (!["Escape", "?"].includes(event.key)) event.stopPropagation();
   });
-  listen(document, "shader-panel-changed", syncPanel);
-  listen($("panelBackdrop"), "click", togglePanel);
-  listen(window, "resize", syncPanel);
-  listen($("panelToggle"), "click", togglePanel);
-  listen($("hudToggle"), "click", toggleHud);
-  listen($("fullscreenToggle"), "click", toggleFullscreen);
-  // ---- 뷰포트 툴바 메뉴: 캡처 펼치기 · ⋯ 더보기 (stage-menu.js) ----
-  const captureMenu = StageMenu.create({ toggle: $("captureToggle"), menu: $("captureMenu"), signal }),
-    moreMenu = StageMenu.create({ toggle: $("moreToggle"), menu: $("moreMenu"), signal });
-  // 메뉴 안으로 옮긴 버튼(패널·가이드)은 닫힌 메뉴 속에 있어 초점을 받을 수 없다. 그럴 때는 메뉴 버튼으로 돌려준다.
-  const focusToolbar = id => {
-    const node = $(id);
-    if (node?.offsetParent) node.focus();
-    else (node?.closest("#moreMenu") ? moreMenu : captureMenu).toggle.focus();
-  };
   const download = (blob, name) => {
     const url = URL.createObjectURL(blob),
       a = element("a");
@@ -1831,31 +1773,6 @@ const mount = (renderer, input, settings) => {
   }
   listen($("screen"), "pointerdown", () => stage.classList.add("has-interacted"));
   listen($("screen"), "wheel", () => stage.classList.add("has-interacted"));
-  const syncFullscreen = () => {
-    const doc = $("screen").ownerDocument || document,
-      active = !!doc.fullscreenElement,
-      pip = !!window.documentPictureInPicture?.window && window.documentPictureInPicture.window === doc.defaultView;
-    $("fullscreenToggle").disabled = pip;
-    $("fullscreenToggle").setAttribute("aria-label", active ? "전체화면 종료" : "전체화면");
-    $("fullscreenToggle").title = pip
-      ? "항상 위에 표시되는 분리 창에서는 전체화면을 지원하지 않습니다"
-      : active
-        ? "전체화면 종료 (F)"
-        : "전체화면 (F)";
-  };
-  const fullscreenDocs = new WeakSet();
-  const bindFullscreen = () => {
-    const doc = $("screen").ownerDocument || document;
-    if (!fullscreenDocs.has(doc)) {
-      fullscreenDocs.add(doc);
-      listen(doc, "fullscreenchange", syncFullscreen);
-    }
-    syncFullscreen();
-  };
-  bindFullscreen();
-  listen(document, "preview-popout-changed", () => {
-    bindFullscreen();
-  });
   listen(document, "keydown", event => {
     if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     if (
@@ -1891,8 +1808,7 @@ const mount = (renderer, input, settings) => {
       attempt(stepFrame);
     } else if (key === "/") {
       event.preventDefault();
-      document.body.classList.remove("panel-hidden");
-      syncPanel();
+      setPanelHidden(false);
       setActiveTab("uniforms");
       $("uniformSearch").focus();
     }

@@ -2026,7 +2026,13 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     $("stage").classList.remove("studio-maximized");
     $("studioToggle").setAttribute("aria-label", "셰이더 편집기 열기");
     $("studioToggle").setAttribute("aria-expanded", "false");
-    $("studioToggle").focus();
+    PreviewDOM.focusVisible([
+      $("studioToggle"),
+      document.querySelector('#menuBar [data-menu="view"]'),
+      $("hudReveal"),
+      $("screen"),
+      $("panelTabs")?.querySelector('[aria-selected="true"]'),
+    ]);
     workspace.saveWorkspace();
   };
   const toggle = () => (openState ? close() : open());

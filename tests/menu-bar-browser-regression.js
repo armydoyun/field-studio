@@ -159,6 +159,34 @@
     await until(() => openMenu() && document.activeElement === items().find(node => !node.disabled), "↓로 열고 첫 항목(꺼진 항목은 건너뜀)");
     key("Escape");
     await until(() => !openMenu(), "닫기");
+    // 숨긴 상태에서도 복구: HUD가 없어 더보기 버튼을 누를 수 없어도 F10은 동작한다.
+    const hideBar = () => { top("view").click(); item("메뉴 바").click(); };
+    const restored = () => !document.body.classList.contains("menubar-hidden") && $("appBar").getClientRects().length > 0;
+    hideBar();
+    test(document.body.classList.contains("menubar-hidden") && document.activeElement === $("moreToggle"), "메뉴 바 숨기기 뒤 더보기 버튼에 초점");
+    const hudWasHidden = $("stage").classList.contains("hud-hidden");
+    try {
+      if (!hudWasHidden) $("hudToggle").click();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
+      test(!restored(), "Shift+F10은 메뉴 바를 복구하지 않음");
+      const event = new KeyboardEvent("keydown", { key: "F10", bubbles: true, cancelable: true });
+      document.dispatchEvent(event);
+      test(event.defaultPrevented && restored(), "HUD와 메뉴 바를 모두 숨겨도 F10으로 메뉴 바 복구");
+      test(document.activeElement?.classList.contains("ui-menubar-item"), "복구 뒤 메뉴 바에 초점");
+      test(localStorage.getItem("field.menubar-hidden.v1") === "0" && $("menuBarShow").hidden, "복구 상태 저장 및 보이기 항목 숨김");
+      // 마우스만으로도 바탕과 뷰포트에서 복구할 수 있다.
+      for (const target of [document.body, $("screen")]) {
+        hideBar();
+        target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 100, clientY: 100 }));
+        const show = [...document.querySelectorAll('.ui-context-menu [role="menuitem"]')].find(node => node.textContent.startsWith("메뉴 바 보이기"));
+        test(!!show, `${target.id || "바탕"} 우클릭에 메뉴 바 보이기`);
+        show.click();
+        test(restored() && document.activeElement?.classList.contains("ui-menubar-item"), "우클릭 메뉴로 복구하고 메뉴 바에 초점");
+      }
+    } finally {
+      if (document.body.classList.contains("menubar-hidden")) $("menuBarShow").click();
+      if ($("stage").classList.contains("hud-hidden") !== hudWasHidden) $("hudToggle").click();
+    }
   } finally {
     openMenu()?.remove();
     if ($("quickHelp").open) $("quickHelp").close();

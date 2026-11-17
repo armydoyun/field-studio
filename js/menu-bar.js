@@ -2,7 +2,7 @@
 // 항목은 이미 있는 버튼을 누른다(app-menus.js의 우클릭 메뉴와 같은 방식) — 동작 · 꺼짐 · 켜짐 상태 · 단축키가
 // 툴바 · 프로젝트 메뉴 · 편집기 버튼과 늘 같다. 메뉴를 열 때마다 그 순간의 버튼 상태로 항목을 만든다.
 //  · 누르면 열림 · 하나가 열린 동안 옆 메뉴에 마우스를 올리면 그 메뉴로 · ←→ 옆 메뉴 · ↑↓ 항목 · Esc 닫기(UI.menu)
-//  · F10: 메뉴 바로 초점(Alt는 브라우저 메뉴와 부딪혀 쓰지 않는다) · 메뉴 바에서 ←→ 이동 · ↓/Enter 열기
+//  · F10: 숨긴 메뉴 바를 다시 보이고 초점(Alt는 브라우저 메뉴와 부딪혀 쓰지 않는다) · 메뉴 바에서 ←→ 이동 · ↓/Enter 열기
 //  · document에 'menubar-open'(detail: 메뉴 이름) 이벤트를 보내면 그 메뉴를 연다(프로젝트 메뉴의 '파일 메뉴로')
 //  · 보기 > 메뉴 바: 끄면 숨기고 툴바의 ⋯ 더보기가 다시 나타난다(⋯ 안의 '메뉴 바 보이기'로 되돌림). 이 브라우저에 기억한다.
 //  · 좁은 화면(600px 이하): 메뉴 이름 대신 '메뉴' 버튼 하나(data-menu="all") — 다섯 메뉴를 묶음 제목과 함께 한 목록으로
@@ -11,16 +11,20 @@
 //   mount({ studio, guide, signal }) → { open(name), close, dispose }
 import * as UI from "./ui-kit.js";
 import * as Store from "./storage.js";
+import * as PreviewDOM from "./preview-dom.js";
 
 const HIDDEN_KEY = "field.menubar-hidden.v1";
 
 const TITLES = { file: "파일", edit: "편집", view: "보기", play: "재생", help: "도움말" };
 const RECENT = 5;
 
-const mount = ({ studio, guide, signal } = {}) => {
-  const $ = id => document.getElementById(id),
+const mount = ({ studio, guide, signal: parentSignal } = {}) => {
+  const $ = PreviewDOM.createLookup(),
     bar = $("menuBar");
-  if (!bar) return { open() {}, dispose() {} };
+  if (!bar || parentSignal?.aborted) return { open() {}, dispose() {} };
+  const controller = new AbortController(),
+    signal = controller.signal;
+  parentSignal?.addEventListener("abort", () => controller.abort(), { once: true, signal });
   const on = (target, type, fn, options = {}) => target?.addEventListener(type, fn, { ...options, signal });
   const buttons = [...bar.querySelectorAll(".ui-menubar-item")];
 
@@ -127,7 +131,7 @@ const mount = ({ studio, guide, signal } = {}) => {
       press("previewPopout", { label: "미리보기를 별도 창으로", keepHidden: true }),
       press("themeToggle", { command: "테마 바꾸기 (라이트 · 다크)", keepHidden: true }),
       separator,
-      { label: "메뉴 바", pressed: true, onSelect: () => setHidden(true) },
+      { label: "메뉴 바", kbd: "F10", pressed: true, onSelect: () => setHidden(true, { focus: true }) },
     ],
     play: () => [
       press("previewPause", { command: "재생 / 일시정지", kbd: "Space" }),
@@ -259,26 +263,37 @@ const mount = ({ studio, guide, signal } = {}) => {
     if (!buttons.includes(event.target)) return;
     for (const button of buttons) button.tabIndex = button === event.target ? 0 : -1;
   });
-  on(document, "keydown", event => {
+  const focusBar = event => {
     if (event.key !== "F10" || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-    if (document.body.classList.contains("menubar-hidden")) return;
     event.preventDefault();
+    if (document.body.classList.contains("menubar-hidden")) setHidden(false);
     close();
+    if (event.currentTarget !== document) window.focus();
     const visible = buttons.filter(button => button.offsetParent !== null);
     (visible.find(button => button.tabIndex === 0) || visible[0])?.focus();
-  });
+  };
+  on(document, "keydown", focusBar);
+  on(document, "preview-popout-window", event => on(event.detail.document, "keydown", focusBar));
 
   // 보이기 · 숨기기(이 브라우저에 기억). 숨기면 툴바의 ⋯ 더보기가 대신 나타난다(CSS).
-  const setHidden = hidden => {
+  const setHidden = (hidden, { focus = false } = {}) => {
     close();
     document.body.classList.toggle("menubar-hidden", hidden);
     Store.write(HIDDEN_KEY, hidden ? "1" : "0");
     const show = $("menuBarShow");
     if (show) show.hidden = !hidden;
+    document.dispatchEvent(new Event("menubar-visibility-changed"));
     window.dispatchEvent(new Event("resize")); // 뷰포트 크기가 바뀌었다
+    if (focus) {
+      if (hidden) $("moreToggle")?.focus();
+      else {
+        const visible = buttons.filter(button => button.offsetParent !== null);
+        (visible.find(button => button.tabIndex === 0) || visible[0])?.focus();
+      }
+    }
   };
   setHidden(Store.read(HIDDEN_KEY) === "1");
-  on($("menuBarShow"), "click", () => setHidden(false));
+  on($("menuBarShow"), "click", () => setHidden(false, { focus: true }));
   // 다른 화면이 메뉴를 열어 달라고 할 때(프로젝트 메뉴의 '파일 메뉴로' 항목): detail = 메뉴 이름
   on(document, "menubar-open", event => {
     if (document.body.classList.contains("menubar-hidden")) return;
@@ -306,7 +321,8 @@ const mount = ({ studio, guide, signal } = {}) => {
   collecting = false;
   studio?.registerCommands?.(commands);
 
-  return { open, close, commands: () => commands, dispose: () => close() };
+  signal.addEventListener("abort", () => close(), { once: true });
+  return { open, close, commands: () => commands, dispose: () => controller.abort() };
 };
 
 export { mount };

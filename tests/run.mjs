@@ -23,6 +23,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
+import Browser from "./helpers/browser.cjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TESTS = path.join(ROOT, "tests");
@@ -64,7 +65,7 @@ const record = (suite, name, status, ms, output = "") => {
   results.push({suite, name, status, ms, output});
   const time = ms == null ? "" : ` (${(ms / 1000).toFixed(1)}s)`;
   console.log(`  ${status} ${name}${time}`);
-  if(status === "FAIL" && output) console.log(indent(tail(output, 40)));
+  if((status === "FAIL" || status === "SKIP") && output) console.log(indent(tail(output, 40)));
 };
 const tail = (text, lines) => { const rows = text.trimEnd().split(/\r?\n/); return (rows.length > lines ? ["…", ...rows.slice(-lines)] : rows).join("\n"); };
 const indent = text => text.split("\n").map(line => `      ${line}`).join("\n");
@@ -94,7 +95,8 @@ const run = (command, args, {timeout = 180_000, env = {}} = {}) => new Promise(r
 const runNode = async () => {
   await pool(plan.node, jobs || Math.min(os.cpus().length, 8), async name => {
     const {code, output, ms} = await run(process.execPath, [path.join("tests", name)]);
-    record("node", name, code === 0 ? "PASS" : "FAIL", ms, output);
+    const status = code !== 0 ? "FAIL" : /^SKIP(?:[:\s]|$)/m.test(output) ? "SKIP" : "PASS";
+    record("node", name, status, ms, output);
   });
 };
 
@@ -143,9 +145,10 @@ const runBrowser = async () => {
   catch { skipSuite("browser", "playwright가 없습니다. `npm install` 후 `npx playwright install chromium`"); return; }
   let browser;
   try {
-    browser = await chromium.launch({headless:true, executablePath:process.env.CHROMIUM_PATH || undefined,
+    const options = Browser.launchOptions(chromium);
+    browser = await chromium.launch({...options,
       // 가짜 카메라 · 마이크(권한 창 없이 허용)와 사용자 동작 없는 재생: 미디어 입력 채널 테스트용(media-browser-regression.js)
-      args:["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
+      args:[...options.args,
         "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--autoplay-policy=no-user-gesture-required"]});
   } catch(error) { skipSuite("browser", `Chromium을 띄우지 못했습니다(\`npx playwright install chromium\`): ${String(error.message).split("\n")[0]}`); return; }
   const server = await serve(), base = `http://127.0.0.1:${server.address().port}/`;
@@ -181,7 +184,8 @@ const runBrowser = async () => {
           await page.waitForTimeout(50);
           if(errors.length) throw new Error(`테스트 중 오류 출력 ${errors.length}건:\n${errors.join("\n")}`);
         }
-        record("browser", name, "PASS", Date.now() - started);
+        const skips = logs.filter(line => /^\[log\] SKIP(?:[:\s]|$)/.test(line));
+        record("browser", name, skips.length ? "SKIP" : "PASS", Date.now() - started, skips.join("\n"));
       } catch(error) {
         // 실패 진단: 그 순간의 스크린샷 · 전체 콘솔 기록 · 앱 상태를 test-results/browser/<테스트>-<시각>/에 남긴다.
         // 가끔만 실패하는 테스트도 한 번 실패하면 원인을 볼 수 있게(CI는 이 폴더를 Artifacts로 올린다).
@@ -247,13 +251,22 @@ const runPy = async () => {
   const env = {PYTHONUTF8:"1", PYTHONIOENCODING:"utf-8"};
   await pool(plan.py, jobs || 3, async name => {
     const {code, output, ms} = await run(python.command, [path.join("tests", name)], {timeout:300_000, env});
-    record("py", name, code === 0 ? "PASS" : "FAIL", ms, output);
+    const status = code !== 0 ? "FAIL" : /^SKIP(?:[:\s]|$)/m.test(output) ? "SKIP" : "PASS";
+    record("py", name, status, ms, output);
   });
 };
 
 // ---- 실행 ----
 const runners = {node:runNode, browser:runBrowser, py:runPy};
 const started = Date.now();
+// Node 빌드 검사와 Python 묶음도 같은 브라우저를 쓴다. --list는 브라우저 설치가 필요 없다.
+if (!process.env.CHROMIUM_PATH) {
+  try {
+    const {chromium} = await import("playwright");
+    const executable = Browser.chromiumPath(chromium);
+    if (executable) process.env.CHROMIUM_PATH = executable;
+  } catch { /* 각 묶음이 누락된 의존성을 SKIP/FAIL로 보고한다. */ }
+}
 for(const suite of suites) {
   if(!plan[suite].length) continue;
   console.log(`\n[${suite}] (${plan[suite].length})`);

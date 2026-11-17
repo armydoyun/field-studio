@@ -15,4 +15,14 @@ const createLookup = (doc = document) => {
   };
 };
 
-export { createLookup };
+// 문서가 달라지거나 HUD·도크를 숨겨도 보이는 조작에 초점을 돌린다.
+const focusVisible = nodes => {
+  const node = nodes.find(
+    node =>
+      node && !node.hidden && !node.closest?.("[inert]") && (!node.getClientRects || node.getClientRects().length > 0)
+  );
+  node?.focus({ preventScroll: true });
+  return node;
+};
+
+export { createLookup, focusVisible };

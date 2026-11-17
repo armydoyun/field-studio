@@ -16,6 +16,11 @@ const create = ({ toggle, menu, signal }) => {
   const items = () =>
     [...menu.querySelectorAll("button")].filter(item => !item.disabled && !item.hidden && item.offsetParent !== null);
   const place = () => {
+    // 메뉴 바 복구 등으로 트리거가 사라졌으면 열린 메뉴도 함께 닫는다.
+    if (toggle.hidden || toggle.getClientRects?.().length === 0) {
+      close();
+      return;
+    }
     const rect = toggle.getBoundingClientRect(),
       view = owner().defaultView || window,
       width = menu.offsetWidth,
