@@ -451,9 +451,10 @@ const mount = (renderer, input, settings) => {
   );
   // ---- 우클릭 메뉴(context-menu.js) ----
   // 파라미터 줄: 줄에 있는 버튼(되돌리기 · 코드 반영 · 잠금 · 재생 · 연결 · 크게 편집 · 삭제)을 그대로 누르고, 이름 · 값 복사를 더한다.
+  // 클립보드 API가 없는 곳(보안 연결이 아닌 http 주소 등)에서도 조용히 넘어가지 않고 실패를 알린다.
   const copyText = text =>
-    navigator.clipboard
-      ?.writeText(text)
+    Promise.resolve()
+      .then(() => navigator.clipboard.writeText(text))
       .catch(() => showError("클립보드에 복사하지 못했습니다. 브라우저 권한을 확인하세요."));
   const rowButton = (row, selector, label, extra = {}) => {
     const node = row.querySelector(selector);

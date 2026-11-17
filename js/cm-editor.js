@@ -1752,6 +1752,11 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   // ---- 우클릭 메뉴(context-menu.js) ----
   // 누른 자리가 선택 영역 밖이면 커서를 그 자리로 옮긴 뒤(VS Code처럼) 그 자리에 대한 명령을 보인다.
   const clipboardFailed = key => notify(`클립보드에 접근하지 못했습니다. ${key}를 쓰세요`);
+  // 클립보드 API가 없는 곳(보안 연결이 아닌 http 주소 등)에서는 거부된 약속으로 바꿔 실패 안내가 나오게 한다.
+  const clipboard = {
+    writeText: text => Promise.resolve().then(() => navigator.clipboard.writeText(text)),
+    readText: () => Promise.resolve().then(() => navigator.clipboard.readText()),
+  };
   ContextMenu.register(
     ".studio-cm-host .cm-editor",
     (node, event) => {
@@ -1781,8 +1786,8 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
             kbd: "Ctrl+X",
             disabled: readOnly || !text,
             onSelect: () =>
-              navigator.clipboard
-                ?.writeText(text)
+              clipboard
+                .writeText(text)
                 .then(() => view.dispatch(view.state.replaceSelection("")))
                 .catch(() => clipboardFailed("Ctrl+X")),
           },
@@ -1791,15 +1796,15 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
             icon: "copy",
             kbd: "Ctrl+C",
             disabled: !text,
-            onSelect: () => navigator.clipboard?.writeText(text).catch(() => clipboardFailed("Ctrl+C")),
+            onSelect: () => clipboard.writeText(text).catch(() => clipboardFailed("Ctrl+C")),
           },
           {
             label: "붙여넣기",
             kbd: "Ctrl+V",
             disabled: readOnly,
             onSelect: () =>
-              navigator.clipboard
-                ?.readText()
+              clipboard
+                .readText()
                 .then(clip => {
                   view.dispatch(view.state.replaceSelection(clip));
                   view.focus();
