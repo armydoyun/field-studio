@@ -157,6 +157,8 @@ const create = ctx => (item, defaults) => {
     const restore = () => {
       if (ParameterTools.equalValue(liveValue(item), fallback)) return;
       if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
+      // 되돌리기 버튼은 행의 조작(정지점 · 곡선 점 · 슬라이더) 밖에서 값을 바꾼다 — 행을 반드시 다시 맞추게 한다
+      ctx.rowShows?.(item.name, undefined);
       renderUniforms();
       $("uniformNotice").textContent = `${item.name} 기본값으로 되돌림`;
       [...userList.querySelectorAll(".uniform-row")]
@@ -290,6 +292,9 @@ const create = ctx => (item, defaults) => {
     try {
       renderer.setUniform(item.name, value);
       item.value = value;
+      // 목록이 기억하는 '이 행이 보여 주는 값'도 갱신한다(렌더러가 정리한 값으로). 그래야 나중에 다른 길로(되돌리기 ·
+      // 프리셋) 처음 값에 돌아왔을 때 목록이 '바뀐 것 없음'으로 보지 않고 이 행의 조작을 다시 맞춘다.
+      ctx.rowShows?.(item.name, liveValue(item));
       if (keyed) recordKey(item.name, value);
       syncReset?.();
       syncChanged();

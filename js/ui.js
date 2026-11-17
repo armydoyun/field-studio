@@ -958,6 +958,11 @@ const mount = (renderer, input, settings) => {
     get playButtons() {
       return playButtons;
     },
+    // 행이 보여 주는 값을 목록에 알린다(값 = 그 값, undefined = 다음 renderUniforms에서 반드시 다시 맞춤)
+    rowShows: (name, value) => {
+      const entry = rowCache.get(name);
+      if (entry) entry.value = value === undefined ? null : JSON.stringify(value);
+    },
     get resetSyncs() {
       return resetSyncs;
     },
