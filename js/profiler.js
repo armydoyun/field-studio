@@ -197,7 +197,7 @@ const mount = renderer => {
     try {
       renderer.defineUniform(name, type, initialValue(type), type === "sampler2D" ? { gradient: "linear" } : {});
       document.dispatchEvent(new Event("shader-settings-applied"));
-      status.textContent = `${name} (${type})를 파라미터로 등록했습니다. 파라미터 탭에서 값을 조절하세요.`;
+      status.textContent = `${name}(${type})을(를) 파라미터로 등록했습니다. 파라미터 탭에서 값을 조절하세요.`;
       status.dataset.state = "ok";
     } catch (error) {
       status.textContent = `${name}: ${error.message}`;
@@ -248,7 +248,7 @@ const mount = renderer => {
         if (item.source === "unregistered" && item.size === 1 && types.has(item.type)) {
           const button = element("button", "ui-btn--primary ui-btn--xs profile-promote", "등록");
           button.type = "button";
-          button.title = `${item.name}을 파라미터 패널에서 조절할 수 있게 등록`;
+          button.title = `${item.name}을(를) 파라미터 패널에서 조절할 수 있게 등록`;
           button.addEventListener("click", () => promote(item.name, item.type));
           row.append(button);
         }
