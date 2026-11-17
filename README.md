@@ -164,6 +164,7 @@ npm run test:list     # 어떤 파일이 어느 묶음인지
 node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 실행
 node tests/run.mjs browser --grep=workspace-view --strict # 화면 상태·메뉴·포커스
 node tests/run.mjs py --grep=workspace-state --strict     # 새로고침·전체화면·분리 창 복귀
+node tests/run.mjs browser --coverage    # browser 묶음이 js/ 파일·함수를 얼마나 지나가는지 → test-results/coverage/summary.txt
 ```
 
 Chromium은 `CHROMIUM_PATH`로 지정한 경로, Playwright 설치본, 시스템 Chromium 순서로 선택합니다.
@@ -183,6 +184,8 @@ HTTP 검사 통과는 `file://` 정책·저장소 차이까지 검증했다는 �
 - 콘솔용 테스트는 던진 오류뿐 아니라 실행 중 `console.error`나 잡히지 않은 오류가 한 번이라도 나와도 FAIL입니다. 그러니 `.catch(console.error)`로 실패를 삼키지 말고, 일부러 남기는 경고는 `console.warn`을 씁니다.
 - browser 묶음은 기본 3개씩 병렬로 돌리지만, 영상을 인코딩하는 테스트(`tests/run.mjs`의 `MEDIA_BROWSER_TESTS`: 녹화·영상 렌더링)는 미디어 인코더를 서로 빼앗지 않게 나머지가 끝난 뒤 하나씩 돌립니다.
 - browser 테스트가 실패하면 `test-results/browser/<테스트>-<시각>/`에 그 순간의 `screenshot.png` · 앱 상태 `state.json` · 전체 콘솔 기록 `console.log`(녹화 테스트는 영상도)를 남깁니다. 가끔만 실패하는 테스트도 한 번 실패하면 원인을 볼 수 있게 하려는 것이고, CI는 이 폴더를 실행 페이지의 Artifacts(`field-studio-browser-failure-<SHA>`)로 올립니다.
+- `--coverage`는 browser 묶음의 V8 커버리지를 파일별로 합쳐 비율과 **한 번도 안 불린 이름 있는 함수**를 남깁니다(`tests/helpers/coverage.mjs`). 비율은 파일끼리 비교하는 용도이고, 확인되지 않은 기능을 찾을 때는 함수 목록을 봅니다. py 묶음이 지나가는 코드는 세지 않습니다.
+- 시스템 Python에 pip로 설치할 수 없는 환경(외부 관리 Python)에서는 가상 환경을 만들어 `PYTHON=<venv>/bin/python`으로 지정합니다. 브라우저는 `CHROMIUM_PATH`의 것을 쓰므로 `playwright install`은 필요 없습니다.
 - 준비되지 않은 묶음(playwright·Python 없음)은 SKIP으로 표시하고 계속합니다. `--strict`(=`npm run test:ci`)는 SKIP도 실패로 칩니다.
 - 개별 검사에서 `SKIP`을 보고해도 PASS로 집계하지 않습니다. 건너뛴 이유를 출력하고 `--strict`에서는 실패로 처리합니다.
 - GitHub Actions(`.github/workflows/test.yml`)는 push·PR마다 `lint` → `test (node)` · `test (browser)` · `test (py)` 세 작업을 나란히 돌리고(각각 `node tests/run.mjs <묶음> --strict`), 모두 통과하면 `build`가 배포본을 올립니다. 의존성은 `package-lock.json` 기준으로 `npm ci`로 설치하고, npm·pip·Playwright Chromium은 캐시합니다.
