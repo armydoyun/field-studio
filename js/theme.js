@@ -22,6 +22,8 @@ const writeChoice = value => {
 };
 
 const mount = (doc = document) => {
+  const controller = new AbortController(),
+    signal = controller.signal;
   const root = doc.documentElement,
     view = doc.defaultView;
   const media = typeof view?.matchMedia === "function" ? view.matchMedia("(prefers-color-scheme: light)") : null;
@@ -53,17 +55,21 @@ const mount = (doc = document) => {
     doc.dispatchEvent(new CustomEvent("theme-changed", { detail: { choice, theme } }));
   };
   const set = value => {
-    if (!CHOICES.includes(value)) return;
+    if (signal.aborted || !CHOICES.includes(value)) return;
     choice = value;
     writeChoice(value);
     apply();
   };
 
-  toggle?.addEventListener("click", () => set(resolved() === "dark" ? "light" : "dark"));
-  for (const button of options) button.addEventListener("click", () => set(button.dataset.themeChoice));
-  media?.addEventListener?.("change", () => {
-    if (choice === "system") apply();
-  });
+  toggle?.addEventListener("click", () => set(resolved() === "dark" ? "light" : "dark"), { signal });
+  for (const button of options) button.addEventListener("click", () => set(button.dataset.themeChoice), { signal });
+  media?.addEventListener?.(
+    "change",
+    () => {
+      if (choice === "system") apply();
+    },
+    { signal }
+  );
   apply();
   return {
     get choice() {
@@ -73,6 +79,7 @@ const mount = (doc = document) => {
       return resolved();
     },
     set,
+    dispose: () => controller.abort(),
   };
 };
 

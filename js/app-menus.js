@@ -5,9 +5,15 @@ import * as ContextMenu from "./context-menu.js";
 import * as MenuCommands from "./menu-commands.js";
 import * as PreviewDOM from "./preview-dom.js";
 
-const mount = ({ studio = () => window.shaderStudio, signal } = {}) => {
+const mount = ({ studio = () => window.shaderStudio, signal: parentSignal } = {}) => {
+  const controller = new AbortController(),
+    signal = controller.signal;
+  if (parentSignal?.aborted) return { dispose() {} };
+  parentSignal?.addEventListener("abort", () => controller.abort(), { signal, once: true });
   // 미리보기 분리 창(popout.js)도 같은 우클릭 메뉴를 쓴다.
-  document.addEventListener("preview-popout-window", event => ContextMenu.mount(event.detail?.document), { signal });
+  document.addEventListener("preview-popout-window", event => ContextMenu.mount(event.detail?.document, { signal }), {
+    signal,
+  });
   // 분리 창으로 옮긴 미리보기의 버튼은 그 창 문서에 있으므로, 누른 자리의 문서부터 찾는다.
   const mainLookup = PreviewDOM.createLookup();
   const find = (doc, id) => doc.getElementById(id) || mainLookup(id);
@@ -93,6 +99,7 @@ const mount = ({ studio = () => window.shaderStudio, signal } = {}) => {
     },
     { signal }
   );
+  return { dispose: () => controller.abort() };
 };
 
 export { mount };

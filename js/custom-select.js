@@ -2,7 +2,8 @@
 function mount(root = document) {
   const controls = new Map();
   const known = new WeakMap();
-  const documents = new Set();
+  const documents = new Map();
+  let disposed = false;
   let opened = null,
     serial = 0;
   const close = (restore = false) => {
@@ -17,6 +18,7 @@ function mount(root = document) {
     if (restore) button.focus();
   };
   const enhance = select => {
+    if (disposed) return;
     if (select.multiple || select.size > 1) return;
     if (controls.has(select)) {
       // 원본 select만 다른 부모로 옮겨진 경우(타임라인이 다시 그릴 때 '+ 파라미터' 칸): 보이는 버튼을 따라 옮긴다.
@@ -32,9 +34,15 @@ function mount(root = document) {
       const control = known.get(select);
       select.after(control.button);
       controls.set(select, control);
+      control.connect();
       control.sync();
       return;
     }
+    const original = { tabindex: select.getAttribute("tabindex"), hidden: select.getAttribute("aria-hidden") };
+    const handlers = [],
+      properties = [];
+    let connected = false;
+    const on = (target, type, fn) => handlers.push({ target, type, fn });
     const document = select.ownerDocument;
     const button = document.createElement("button");
     button.type = "button";
@@ -45,10 +53,9 @@ function mount(root = document) {
     const text = document.createElement("span");
     button.append(text);
     select.after(button);
-    select.classList.add("ui-select-source");
-    select.tabIndex = -1;
-    select.setAttribute("aria-hidden", "true");
+
     const sync = () => {
+      if (disposed || !connected) return;
       const label = select.selectedOptions[0]?.label || "선택";
       if (text.textContent !== label) text.textContent = label;
       button.className = `${select.className.replace("ui-select-source", "")} ui-input ui-select`;
@@ -188,14 +195,14 @@ function mount(root = document) {
         )
       );
     };
-    button.addEventListener("click", event => {
+    on(button, "click", event => {
       event.preventDefault();
       if (opened?.button === button) close();
       else open();
     });
     let query = "",
       lastTyped = 0;
-    button.addEventListener("keydown", event => {
+    on(button, "keydown", event => {
       const key = event.key;
       event.stopPropagation();
       if (event.isComposing) return;
@@ -239,41 +246,79 @@ function mount(root = document) {
         if (index >= 0) opened.activate(index);
       }
     });
-    select.addEventListener("change", sync);
-    select.addEventListener("focus", () => button.focus());
-    select.addEventListener("invalid", event => {
+    on(select, "change", sync);
+    on(select, "focus", () => button.focus());
+    on(select, "invalid", event => {
       event.preventDefault();
       button.focus();
     });
     for (const property of ["value", "selectedIndex"]) {
       const descriptor = Object.getOwnPropertyDescriptor(document.defaultView.HTMLSelectElement.prototype, property);
-      Object.defineProperty(select, property, {
-        configurable: true,
-        get() {
-          return descriptor.get.call(this);
-        },
-        set(value) {
-          descriptor.set.call(this, value);
-          sync();
+      properties.push({
+        property,
+        original: Object.getOwnPropertyDescriptor(select, property),
+        descriptor: {
+          configurable: true,
+          get() {
+            return descriptor.get.call(this);
+          },
+          set(value) {
+            descriptor.set.call(this, value);
+            sync();
+          },
         },
       });
     }
-    const control = { button, sync };
+    const control = {
+      button,
+      sync,
+      connect() {
+        if (connected || disposed) return;
+        connected = true;
+        select.classList.add("ui-select-source");
+        select.tabIndex = -1;
+        select.setAttribute("aria-hidden", "true");
+        for (const { target, type, fn } of handlers) target.addEventListener(type, fn);
+        for (const { property, descriptor } of properties) Object.defineProperty(select, property, descriptor);
+      },
+      disconnect() {
+        if (!connected) return;
+        connected = false;
+        if (opened?.select === select) close();
+        for (const { target, type, fn } of handlers) target.removeEventListener(type, fn);
+        for (const { property, original } of properties) {
+          if (original) Object.defineProperty(select, property, original);
+          else delete select[property];
+        }
+        select.classList.remove("ui-select-source");
+        for (const [name, value] of [
+          ["tabindex", original.tabindex],
+          ["aria-hidden", original.hidden],
+        ]) {
+          if (value === null) select.removeAttribute(name);
+          else select.setAttribute(name, value);
+        }
+        button.remove();
+      },
+    };
+    control.connect();
     known.set(select, control);
     controls.set(select, control);
     sync();
   };
   const refresh = () => {
+    if (disposed) return;
     for (const [select, control] of controls) {
       if (!select.isConnected) {
         if (opened?.select === select) close();
-        control.button.remove();
+        control.disconnect();
         controls.delete(select);
       } else control.sync();
     }
-    for (const doc of documents) doc.querySelectorAll("select").forEach(enhance);
+    for (const doc of documents.keys()) doc.querySelectorAll("select").forEach(enhance);
   };
-  const observer = new MutationObserver(records => {
+  const mutations = records => {
+    if (disposed) return;
     let removed = false;
     for (const record of records) {
       if (record.target.closest?.(".ui-select, .ui-select-menu")) continue;
@@ -298,14 +343,29 @@ function mount(root = document) {
       for (const [select, control] of controls) {
         if (!select.isConnected) {
           if (opened?.select === select) close();
-          control.button.remove();
+          control.disconnect();
           controls.delete(select);
         }
       }
-  });
+  };
+  const unwatch = doc => {
+    const entry = documents.get(doc);
+    if (!entry) return;
+    entry.observer.disconnect();
+    entry.controller.abort();
+    documents.delete(doc);
+    for (const [select, control] of controls)
+      if (select.ownerDocument === doc) {
+        control.disconnect();
+        controls.delete(select);
+      }
+  };
   const watch = doc => {
-    if (documents.has(doc)) return;
-    documents.add(doc);
+    if (disposed || documents.has(doc)) return;
+    const controller = new AbortController(),
+      signal = controller.signal;
+    const observer = new MutationObserver(mutations);
+    documents.set(doc, { controller, observer });
     observer.observe(doc, {
       childList: true,
       subtree: true,
@@ -331,33 +391,56 @@ function mount(root = document) {
       event => {
         if (opened && !opened.menu.contains(event.target) && !opened.button.contains(event.target)) close();
       },
-      true
+      { capture: true, signal }
     );
     doc.addEventListener(
       "scroll",
       event => {
         if (opened && !opened.menu.contains(event.target)) close();
       },
-      true
+      { capture: true, signal }
     );
-    (doc.defaultView || window).addEventListener("resize", () => close());
-    doc.addEventListener("reset", () => queueMicrotask(refresh));
-    doc.addEventListener("click", event => {
-      const label = event.target.closest?.("label");
-      const control = label && controls.get(label.control);
-      if (control && !control.button.contains(event.target)) {
-        event.preventDefault();
-        control.button.focus();
-        control.button.click();
-      }
-    });
+    const view = doc.defaultView || window;
+    view.addEventListener("resize", () => close(), { signal });
+    view.addEventListener(
+      "pagehide",
+      event => {
+        if (!event.persisted) unwatch(doc);
+      },
+      { signal }
+    );
+    doc.addEventListener("reset", () => queueMicrotask(refresh), { signal });
+    doc.addEventListener(
+      "click",
+      event => {
+        const label = event.target.closest?.("label");
+        const control = label && controls.get(label.control);
+        if (control && !control.button.contains(event.target)) {
+          event.preventDefault();
+          control.button.focus();
+          control.button.click();
+        }
+      },
+      { signal }
+    );
     // Refresh presentation when application code focuses a field.
-    doc.addEventListener("focusin", refresh, true);
+    doc.addEventListener("focusin", refresh, { capture: true, signal });
     doc.querySelectorAll("select").forEach(enhance);
   };
   watch(root);
   refresh();
-  return { refresh, close };
+  return {
+    refresh,
+    close,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      close();
+      for (const doc of [...documents.keys()]) unwatch(doc);
+      for (const control of controls.values()) control.disconnect();
+      controls.clear();
+    },
+  };
 }
 
 export { mount };
