@@ -150,5 +150,22 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord){
   check(by('pair').remove===null,'쉼표로 여럿 선언한 문장은 지우지 않는다');
   check(U.slice(by('uv').remove.from,by('uv').remove.to)==='vec2 uv = fragCoord/iResolution.xy;','한 줄 선언 범위');
   check(S.unusedLocals('void main(){ float a = 1.0; ').length===0,'괄호 짝이 안 맞으면(작성 중) 알리지 않는다');
+  // 쓰인 곳(같은 기호 강조 · 참조 찾기)
+  const R=`#define K 2.0
+float f(float x){ return x*K; }
+void mainImage(out vec4 c, in vec2 p){
+  float x = f(1.0) + K;
+  { float x = 3.0; x += 1.0; }
+  c = vec4(x * iTime, iTime, 0., 1.);
+}`;
+  const ref=(t,o=0)=>S.referencesAt(R,R.indexOf(t)+o,{macros:['K']});
+  const local=ref('float x = f',6);
+  check(local.spots.length===2&&local.spots[0].decl&&local.label==='mainImage 함수의 지역 변수','지역 변수 x: 선언 + 쓰인 곳 한 번(안쪽 블록의 다른 x는 빼고)');
+  check(ref('x*K').label==='f 함수의 매개변수'&&ref('x*K').spots.length===2,'같은 이름의 매개변수는 따로');
+  const macro=ref('K;');
+  check(macro.label==='#define 매크로'&&macro.spots.length===3&&macro.spots[0].decl&&macro.spots[0].at===R.indexOf('K 2.0'),'매크로: #define 줄(선언) 포함 세 곳');
+  check(ref('iTime',1).spots.length===2&&ref('iTime',1).spots.every(s=>!s.decl),'선언 없는 이름(iTime)은 같은 이름 전부');
+  check(ref('f(1.0)').label==='함수'&&ref('f(1.0)').spots.length===2,'함수: 정의 + 호출');
+  check(ref('vec4(x').reason==='none','타입 이름은 찾지 않는다');
   console.log(`GLSL scope: ${passed} checks passed`);
 })().catch(error=>{console.error(error);process.exit(1);});

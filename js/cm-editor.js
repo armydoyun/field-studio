@@ -941,6 +941,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       run(() => openPalette("@"))
     ),
     { key: "Mod-g", run: run(() => openPalette(":")) },
+    { key: "Shift-F12", run: () => showReferences() },
     // 찾기만(Ctrl+F) · 찾아 바꾸기(Ctrl+H). CodeMirror 기본 Mod-f보다 먼저 받아 창의 모드를 정한다.
     { key: "Mod-f", run: run(() => showFind(false)) },
     { key: "Mod-h", run: run(() => showFind(true)) },
@@ -1350,6 +1351,9 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   paletteList.setAttribute("role", "listbox");
   palette.append(paletteInput, paletteList);
   pane?.append(palette);
+  const PALETTE_PLACEHOLDER = paletteInput.placeholder;
+  // 참조 찾기(Shift+F12) 목록: 열려 있는 동안 팔레트가 이 목록을 보인다(입력은 줄 내용으로 거르기). 닫으면 비운다.
+  let paletteRefs = null;
   let paletteItems = [],
     paletteChoice = 0;
   const builtInCommands = () => [
@@ -1378,6 +1382,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     { label: "들여쓰기", key: "Ctrl+]", run: () => CM.indentMore(view) },
     { label: "내어쓰기", key: "Ctrl+[", run: () => CM.indentLess(view) },
     { label: "정의로 이동", key: "F12 · Ctrl+클릭", run: () => features.goToDefinition(view) },
+    { label: "참조 찾기 (커서 자리 이름이 쓰인 곳)", key: "Shift+F12", run: () => showReferences() },
     {
       label: "이름 바꾸기 (그 변수·함수·필드만 · Uniform은 모든 패스)",
       key: "F2",
@@ -1424,6 +1429,21 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   ];
   const paletteEntries = () => {
     const value = paletteInput.value;
+    if (paletteRefs) {
+      const { name, items } = paletteRefs;
+      return {
+        items: items.map(item => ({
+          label: item.text || "(빈 줄)",
+          hint: `Ln ${item.line}${item.decl ? " · 선언" : ""}`,
+          kind: item.decl ? "definition" : "reference",
+          offset: item.at,
+          length: name.length,
+          symbol: true,
+          run: () => jumpTo(item.at, name.length),
+        })),
+        query: value.trim(),
+      };
+    }
     // VS Code와 같은 접두어: 없음 = 패스(파일)로 이동(Ctrl+P) · > 명령(Ctrl+Shift+P) · @ 함수·변수(Ctrl+Shift+O) · : 줄 번호(Ctrl+G)
     if (value.startsWith(">"))
       return {
@@ -1508,6 +1528,8 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       output: "출력",
       define: "#define",
       file: "패스",
+      definition: "선언",
+      reference: "쓰인 곳",
     };
     paletteList.replaceChildren(
       ...paletteItems.map((item, i) => {
@@ -1558,7 +1580,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     const item = paletteItems[paletteChoice];
     if (!paletteOrigin || !item?.symbol) return;
     view.dispatch({
-      selection: { anchor: item.offset, head: item.offset + item.label.length },
+      selection: { anchor: item.offset, head: item.offset + (item.length ?? item.label.length) },
       effects: CM.EditorView.scrollIntoView(item.offset, { y: "center" }),
       annotations: External.of(true),
     });
@@ -1576,6 +1598,18 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     paletteInput.value = prefix;
     paletteChoice = 0;
     paletteOrigin = { selection: view.state.selection, top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
+    paletteInput.placeholder = paletteRefs
+      ? `${paletteRefs.name} — ${paletteRefs.label} · ${paletteRefs.items.length}곳 (줄 내용으로 거르기)`
+      : PALETTE_PLACEHOLDER;
+    if (paletteRefs) {
+      // 커서가 들어 있는 자리를 먼저 고른다
+      const head = view.state.selection.main.head,
+        { name, items } = paletteRefs;
+      paletteChoice = Math.max(
+        0,
+        items.findIndex(item => item.at <= head && head <= item.at + name.length)
+      );
+    }
     if (prefix === "@") {
       // 지금 커서가 들어 있는 함수(없으면 커서 바로 앞의 항목)를 먼저 고른다
       const head = view.state.selection.main.head,
@@ -1591,10 +1625,23 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     paletteInput.focus();
     paletteInput.setSelectionRange(paletteInput.value.length, paletteInput.value.length);
   };
+  // 참조 찾기(Shift+F12 · 우클릭 · 팔레트): 커서 자리 이름이 이 탭에서 쓰인 곳을 팔레트에 — 고르는 동안 그 자리를 미리 보여 준다.
+  const showReferences = (pos = view.state.selection.main.head) => {
+    const found = features.findReferences(view, pos);
+    if (!found.items) {
+      notify(found.message);
+      return true;
+    }
+    paletteRefs = found;
+    openPalette("");
+    return true;
+  };
   const closePalette = (refocus = true) => {
     if (palette.hidden) return;
     palette.hidden = true;
     paletteOrigin = null;
+    paletteRefs = null;
+    paletteInput.placeholder = PALETTE_PLACEHOLDER;
     symbols?.setAttribute("aria-expanded", "false");
     if (refocus) view.focus();
   };
@@ -1679,6 +1726,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
         label: "코드 편집기",
         items: [
           { label: "정의로 이동", icon: "goto", kbd: "F12", onSelect: () => features.goToDefinition(view) },
+          { label: "참조 찾기", kbd: "Shift+F12", onSelect: () => showReferences() },
           {
             label: "이름 바꾸기…",
             icon: "edit",
@@ -1808,6 +1856,7 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     quickFixesAt: line => lineFixes.get(line) || [],
     quickFixAll: () => quickFixAll(view),
     removeUnused: () => features.removeUnused(view),
+    showReferences: pos => showReferences(pos),
     registerCommands,
     setFiles,
     openPalette,
