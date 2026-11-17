@@ -54,6 +54,13 @@ const writeDefaults = (source, items) => {
 const canVary = item => item.type !== "sampler2D";
 // Jitter stays within 10% of the current magnitude (zero uses the range/1).
 // All numeric controls respect their bounds, steps, and direction normalization.
+// 칸(step)이 없는 실수를 무작위로 정할 때 쓸 자릿수: 바뀔 수 있는 폭의 1/1000 단위까지만(폭 1 → 0.001, 폭 1000 → 1).
+// 폭을 모르거나 로그 눈금이면 유효 숫자 4자리. 그래야 '코드에 반영'이 570.874579536 같은 긴 숫자를 쓰지 않는다.
+const tidy = (value, width) => {
+  if (!Number.isFinite(value) || value === 0) return value;
+  const exponent = Math.floor(Math.log10(width > 0 && Number.isFinite(width) ? width : Math.abs(value))) - 3;
+  return Number((Math.round(value / 10 ** exponent) * 10 ** exponent).toFixed(Math.max(0, -exponent)));
+};
 const varyValue = (item, jitter = false, random = Math.random) => {
   const opts = item.options || {},
     base = item.type.replace(/\[\d+\]$/, ""),
@@ -79,6 +86,7 @@ const varyValue = (item, jitter = false, random = Math.random) => {
     const min = range?.[0] ?? opts.min ?? (unsigned || opts.color ? 0 : opts.dir ? -1 : -Infinity),
       max = range?.[1] ?? opts.max ?? (opts.color ? colorMax : opts.dir ? 1 : Infinity);
     if (step > 0) value = low + Math.round((value - low) / step) * step;
+    else if (!integer) value = tidy(value, opts.log ? 0 : jitter ? span * 0.2 : high - low);
     if (integer) value = Math.round(value);
     return Math.min(jitter ? max : high, Math.max(jitter ? min : low, Number(value.toPrecision(12))));
   };
