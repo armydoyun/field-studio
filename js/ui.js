@@ -1774,6 +1774,22 @@ const mount = (renderer, input, settings) => {
   }
   listen($("screen"), "pointerdown", () => stage.classList.add("has-interacted"));
   listen($("screen"), "wheel", () => stage.classList.add("has-interacted"));
+  // Ctrl+Z · Ctrl+Y(Ctrl+Shift+Z): 편집기 밖(파라미터 · 프리셋 · 뷰포트 · 바탕)에서도 앱의 되돌리기 기록을 쓴다.
+  // 파라미터 값 · 곡선 점 · 무작위 바꾸기도 같은 기록에 있고, 안내 문구와 메뉴(편집 › 되돌리기 Ctrl+Z)가 이 키를 알려 준다.
+  // 글 입력 칸 · 편집기(자기 기록) · 열린 대화상자 · 타임라인(같은 기록을 자기 키 처리로 부른다)은 건드리지 않는다.
+  listen(document, "keydown", event => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing || event.defaultPrevented) return;
+    const key = event.key.toLowerCase();
+    if (key !== "z" && key !== "y") return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("input, textarea, select, .ui-select, [contenteditable], dialog, #timelineDock")
+    )
+      return;
+    event.preventDefault();
+    if (key === "y" || event.shiftKey) window.shaderStudio?.redo?.();
+    else window.shaderStudio?.undo?.();
+  });
   listen(document, "keydown", event => {
     if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     if (
