@@ -314,6 +314,12 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     if (name.length > 1024) return "이름이 너무 깁니다(최대 1024자).";
     return "";
   };
+  // 한국어 이름 뒤 목적격 조사: 마지막 글자에 받침이 있으면 '을', 없으면 '를'(함수를 · 지역 변수를 · 매개변수를)
+  const objectParticle = noun => {
+    const code = String(noun).trim().slice(-1).charCodeAt(0) - 0xac00;
+    if (!(code >= 0 && code < 11172)) return `${noun}을(를)`;
+    return `${noun}${code % 28 ? "을" : "를"}`;
+  };
   const askNewName = (title, message, word) =>
     ask({ title, message, value: word, label: "새 이름", ok: "바꾸기", validate: next => nameProblem(next, word) });
   // 대화상자가 검사를 못 했을 때(다른 ask 구현)를 위한 마지막 확인. 문제가 있으면 상태 줄에 알리고 바꾸지 않는다.
@@ -438,7 +444,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     const uniform = symbol.uniform && symbol.global && typeof options.renameUniform === "function";
     const next = await askNewName(
       `'${word}' 이름 바꾸기 · ${plan.label}`,
-      `이 ${plan.label}을(를) 가리키는 ${plan.spots.length}곳(${lineList(src, plan.spots)}번째 줄)만 바꿉니다. ${symbol.kind === "field" ? "다른 구조체의 같은 이름 필드와 벡터 성분(.xyz)은 그대로 둡니다." : "다른 함수의 같은 이름이나 안쪽에서 가린 같은 이름은 그대로 둡니다."}${uniform ? " 다른 패스의 같은 Uniform과 파라미터 값도 함께 바뀝니다." : ""}${plan.warnings.length ? ` ${plan.warnings.join(" ")}` : ""}`,
+      `이 ${objectParticle(plan.label)} 가리키는 ${plan.spots.length}곳(${lineList(src, plan.spots)}번째 줄)만 바꿉니다. ${symbol.kind === "field" ? "다른 구조체의 같은 이름 필드와 벡터 성분(.xyz)은 그대로 둡니다." : "다른 함수의 같은 이름이나 안쪽에서 가린 같은 이름은 그대로 둡니다."}${uniform ? " 다른 패스의 같은 Uniform과 파라미터 값도 함께 바뀝니다." : ""}${plan.warnings.length ? ` ${plan.warnings.join(" ")}` : ""}`,
       word
     );
     if (next === null || next === undefined || badName(next, word)) return true;

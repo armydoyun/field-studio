@@ -1,6 +1,7 @@
 // 코드 편집기 명령(cm-editor.js)의 결과 — 실제 앱에서 키를 눌러 문서가 어떻게 바뀌는지 본다.
 //  · Ctrl+Shift+L / Ctrl+F2: 선택이 비어 있으면 커서 아래 단어와 단어 전체가 같은 곳만 고른다(float · main 안의 a는 빼고)
 //  · 선택이 있으면 그 글자가 들어간 곳을 모두 고른다
+//  · 이름 바꾸기(F2) 안내문의 조사: '지역 변수를 가리키는'(받침 없음), '함수를'
 //  · 찾기 창: '결과 없음' 뒤에 정규식이 틀리면 개수 글자가 빨갛고, 일치가 생기면 다시 보통 색이다(앞 상태 색이 남지 않는다)
 (async () => {
   const studio = window.shaderStudio,
@@ -51,6 +52,20 @@
     await frames(1);
     await type("OAT");
     test((area.value.match(/flOAT/g) || []).length === 3, "선택한 글자 oat가 들어간 곳 모두 바뀐다");
+    // 이름 바꾸기 안내문
+    const renameText = async at => {
+      await setDoc(src, src.indexOf(at));
+      key("F2", { code: "F2" });
+      for (let i = 0; i < 20 && !$("studioPromptDialog").open; i++) await frames(1);
+      const text = $("studioPromptDialog").textContent.replace(/\s+/g, " ");
+      $("studioDialogCancel").click();
+      await frames(2);
+      return text;
+    };
+    let text = await renameText("a = 1");
+    test(/지역 변수를 가리키는/.test(text) && !/을\(를\)/.test(text), `지역 변수 이름 바꾸기 안내의 조사(${text.slice(0, 60)}…)`);
+    text = await renameText("main()");
+    test(/함수를 가리키는/.test(text), "함수 이름 바꾸기 안내의 조사");
     // 찾기 창의 개수 색
     await setDoc(src, 0);
     key("f", { code: "KeyF", ctrlKey: true });
