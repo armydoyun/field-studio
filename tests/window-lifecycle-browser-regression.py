@@ -77,7 +77,7 @@ try:
             for _ in range(3):
                 page.locator('#menuBar [data-menu="view"]').click()
                 with page.expect_popup() as opened:
-                    page.locator('.ui-menu [role="menuitem"]').filter(has_text=re.compile("^미리보기를 별도 창으로")).click()
+                    page.locator('.ui-menu [role^="menuitem"]').filter(has_text=re.compile("^미리보기를 별도 창으로")).click()
                 popup = opened.value
                 popup.wait_for_selector("#stageHeader")
                 # 상단 도구와 옮긴 선택 상자가 문서별 구독을 실제로 만든다.

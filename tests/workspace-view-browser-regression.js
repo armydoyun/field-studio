@@ -6,7 +6,7 @@
   const visible = node => !!node && !node.hidden && node.getClientRects().length > 0;
   const hiddenPanel = () => document.body.classList.contains("panel-hidden");
   const view = () => document.querySelector('#menuBar [data-menu="view"]');
-  const item = label => [...document.querySelectorAll('.ui-menu[role="menu"] [role="menuitem"]')].find(node => node.textContent.startsWith(label));
+  const item = label => [...document.querySelectorAll('.ui-menu[role="menu"] [role^="menuitem"]')].find(node => node.textContent.startsWith(label));
   const assertPanel = hidden => {
     check(hiddenPanel() === hidden && $("panelToggle").getAttribute("aria-pressed") === String(!hidden), "패널 표시와 버튼 상태 일치");
     check(JSON.parse(localStorage.getItem("webgl.raymarch-template.settings.v1")).panelHidden === hidden, "패널 변경 즉시 저장");

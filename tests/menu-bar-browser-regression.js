@@ -15,7 +15,7 @@
   };
   const top = name => document.querySelector(`#menuBar [data-menu="${name}"]`);
   const openMenu = () => document.querySelector('.ui-menu[role="menu"]');
-  const items = () => [...(openMenu()?.querySelectorAll('[role="menuitem"]') || [])];
+  const items = () => [...(openMenu()?.querySelectorAll('[role^="menuitem"]') || [])];
   const item = text => items().find(node => node.textContent.startsWith(text));
   const key = (name, target = document.activeElement) =>
     target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
@@ -41,20 +41,21 @@
     // 열린 동안 옆 이름에 올리면 그 메뉴로
     top("view").dispatchEvent(new PointerEvent("pointerenter"));
     await until(() => top("view").getAttribute("aria-expanded") === "true", "올리기만 해도 보기 메뉴로");
-    test(item("설정 패널")?.getAttribute("aria-pressed") === "true", "보기 > 설정 패널: 켜짐 표시");
-    test(item("파라미터")?.getAttribute("aria-pressed") === "true" && item("렌더링")?.getAttribute("aria-pressed") === "false", "지금 패널 탭에 체크");
+    test(item("설정 패널")?.getAttribute("aria-checked") === "true", "보기 > 설정 패널: 켜짐 표시");
+    test(item("설정 패널")?.getAttribute("role") === "menuitemcheckbox" && !item("설정 패널").hasAttribute("aria-pressed"), "켜고 끄는 항목은 체크 상자 메뉴 항목(화면 낭독기가 켜짐을 읽는다)");
+    test(item("파라미터")?.getAttribute("aria-checked") === "true" && item("렌더링")?.getAttribute("aria-checked") === "false", "지금 패널 탭에 체크");
     // 항목은 기존 버튼을 누른다: 렌더링 탭 · 타임라인
     item("렌더링").click();
     await until(() => $("tab-render").getAttribute("aria-selected") === "true", "렌더링 탭으로");
     test(!openMenu(), "항목을 누르면 메뉴가 닫힘");
     top("view").click();
     await until(() => openMenu(), "보기 다시");
-    const timelineBefore = item("타임라인").getAttribute("aria-pressed");
+    const timelineBefore = item("타임라인").getAttribute("aria-checked");
     item("타임라인").click();
     await until(() => !$("timelineDock").hidden === (timelineBefore !== "true"), "타임라인 켜고 끄기");
     top("view").click();
     await until(() => openMenu(), "보기 다시");
-    test(item("타임라인").getAttribute("aria-pressed") !== timelineBefore, "다시 열면 타임라인 표시가 바뀜");
+    test(item("타임라인").getAttribute("aria-checked") !== timelineBefore, "다시 열면 타임라인 표시가 바뀜");
     item("타임라인").click();
     $("tab-uniforms").click();
     // Esc로 닫고 메뉴 이름에 초점
@@ -132,7 +133,7 @@
     savedId = P.current()?.id;
     top("file").click();
     await until(() => item(name), "파일 › 최근 프로젝트에 저장한 이름");
-    test([...openMenu().querySelectorAll(".ui-menu-title")].some(n => n.textContent === "최근 프로젝트") && item(name).getAttribute("aria-pressed") === "true", "최근 프로젝트 제목 · 지금 작업에 체크");
+    test([...openMenu().querySelectorAll(".ui-menu-title")].some(n => n.textContent === "최근 프로젝트") && item(name).getAttribute("aria-checked") === "true", "최근 프로젝트 제목 · 지금 작업에 체크");
     key("Escape");
     await until(() => !openMenu(), "파일 닫기");
     // 창보다 긴 메뉴: 놓인 자리부터 창 아래까지만 차지하고 안에서 스크롤한다(창이 낮으면 아래 항목이 잘리던 것)
@@ -142,7 +143,7 @@
       const box = tall.element.getBoundingClientRect();
       test(box.top >= top("view").getBoundingClientRect().bottom && box.bottom <= innerHeight - 8 + 0.5, `긴 메뉴도 창 안에(아래 ${Math.round(box.bottom)} / 창 ${innerHeight})`);
       test(tall.element.scrollHeight > tall.element.clientHeight, "넘치는 항목은 메뉴 안에서 스크롤");
-      const last = [...tall.element.querySelectorAll('[role="menuitem"]')].at(-1);
+      const last = [...tall.element.querySelectorAll('[role^="menuitem"]')].at(-1);
       last.focus();
       const lastBox = last.getBoundingClientRect();
       test(lastBox.bottom <= tall.element.getBoundingClientRect().bottom + 0.5, "마지막 항목으로 가면 스크롤되어 보임");
@@ -178,7 +179,7 @@
       for (const target of [document.body, $("screen")]) {
         hideBar();
         target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 100, clientY: 100 }));
-        const show = [...document.querySelectorAll('.ui-context-menu [role="menuitem"]')].find(node => node.textContent.startsWith("메뉴 바 보이기"));
+        const show = [...document.querySelectorAll('.ui-context-menu [role^="menuitem"]')].find(node => node.textContent.startsWith("메뉴 바 보이기"));
         test(!!show, `${target.id || "바탕"} 우클릭에 메뉴 바 보이기`);
         show.click();
         test(restored() && document.activeElement?.classList.contains("ui-menubar-item"), "우클릭 메뉴로 복구하고 메뉴 바에 초점");

@@ -22,7 +22,7 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
     settings.setLinks([{name:'uLinked',source:'keys',keys:[[0,0.4]],loop:0,ease:'linear',smooth:0}]);
     $('tab-uniforms').click();$('presetBlend').value='0';
     // '무작위 · 프리셋 뒤 자동으로 비교'는 기본으로 꺼져 있다 — 이 검사에서는 켜고 적용 직전 값 기억을 확인한다
-    const setAuto=on=>{$('uniformMore').click();const item=document.getElementById('compareAuto');if((item.getAttribute('aria-pressed')==='true')!==on)item.click();else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));};setAuto(true);
+    const setAuto=on=>{$('uniformMore').click();const item=document.getElementById('compareAuto');if((item.getAttribute('aria-checked')==='true')!==on)item.click();else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));};setAuto(true);
     const untouched=JSON.stringify(r.getUserUniforms().filter(item=>item.name!=='uGain'));
     click('old');
     check(value('uGain')===0.8,'호환되는 값만 적용');
@@ -98,7 +98,7 @@ void mainImage(out vec4 c,in vec2 p){c=vec4(uGain);}`;
     check(settings.getPresets()[0].schema.uRenamed.type==='float'&&settings.getPresets()[0].values.uRenamed===0.8,'이름 변경 시 값과 타입 정보 함께 이동');
     settings.renameParameter('uRenamed','uGain');
   } finally {
-    try{const item=($('uniformMore').click(),document.getElementById('compareAuto'));if(item?.getAttribute('aria-pressed')==='true')item.click();else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));}catch{/* 정리 중 실패는 원래 검사 결과를 가리지 않는다 */}
+    try{const item=($('uniformMore').click(),document.getElementById('compareAuto'));if(item?.getAttribute('aria-checked')==='true')item.click();else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));}catch{/* 정리 중 실패는 원래 검사 결과를 가리지 않는다 */}
     $('presetFinish').click();settings.setLinks([]);studio.setProject(before);r.setUserUniforms(users);settings.setPresets(presets);settings.setLinks(links);
     document.dispatchEvent(new Event('shader-settings-applied'));
   }
