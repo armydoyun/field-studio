@@ -55,7 +55,8 @@ const create = ({
     items = [],
     busy = false,
     opening = false,
-    available = true;
+    available = true,
+    removedName = null; // 보관함에서 지워진 프로젝트를 이어서 작업 중이면, 다시 저장할 때 그 이름을 먼저 권한다
   if (!current || typeof current.id !== "string" || typeof current.name !== "string") current = null;
   else if (!Number.isInteger(current.revision)) current.revision = null; // 예전 버전에서 저장: 비교 없이 덮어쓴다
 
@@ -183,6 +184,7 @@ const create = ({
     if (serial !== renderSerial) return;
     // 다른 탭에서 지운 프로젝트는 더 이상 덮어쓸 대상이 아니다. 지금 작업은 이름 없는 작업으로 남고, 저장한 적이 없으므로 '저장 안 됨'이다.
     if (available && current && !items.some(item => item.id === current.id)) {
+      removedName = current.name;
       current = null;
       cleanWork = REMOVED;
       remember();
@@ -210,6 +212,7 @@ const create = ({
     });
   const suggestName = () => {
     const names = new Set(items.map(item => item.name));
+    if (removedName && !names.has(removedName)) return removedName;
     for (let i = items.length + 1; ; i++) if (!names.has(`프로젝트 ${i}`)) return `프로젝트 ${i}`;
   };
   // 보관함에 쓴 뒤 지금 작업과 잇는다. pack.epoch가 지금 작업 번호와 다르면(저장하는 동안 다른 작업을 열었다) 잇지 않는다.
@@ -226,6 +229,7 @@ const create = ({
       revision: record.revision,
     };
     cleanWork = null;
+    removedName = null;
     remember();
     setStatus(
       pack.fingerprint && pack.fingerprint !== fingerprint()
@@ -347,6 +351,7 @@ const create = ({
       await store.remove(item.id);
       announce({ type: "removed", id: item.id });
       if (current?.id === item.id) {
+        removedName = current.name;
         current = null;
         cleanWork = REMOVED;
         remember();
@@ -383,6 +388,7 @@ const create = ({
     // 예제·새 프로젝트·파일 열기처럼 다른 작업으로 바뀌면 부른다. 다음 저장은 새 항목이 된다.
     forget: () => {
       cleanWork = null;
+      removedName = null;
       if (current) setCurrent(null);
       else remember();
     },

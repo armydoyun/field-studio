@@ -71,6 +71,11 @@
     check($('studioPromptDialog').dataset.danger === 'true', '삭제는 위험 확인'); await answer(); check(await pending, '삭제');
     created.delete(d.id);
     check(!(await find(`${tag} E`)) && P.current() === null, '삭제 후 목록·작업 중 표시에서 빠짐');
+    // 9) 지운 프로젝트를 이어서 작업하다 다시 저장하면 원래 이름을 먼저 권한다('프로젝트 N'이 아니라).
+    pending = P.save(false); for(let i = 0; i < 50 && !$('studioPromptDialog').open; i++) await tick(20);
+    check($('studioDialogInput').value === `${tag} E`, `지운 프로젝트를 다시 저장할 때 원래 이름을 권함(${$('studioDialogInput').value})`);
+    await answer(); check(await pending, '지운 프로젝트 다시 저장');
+    const e2 = await find(`${tag} E`); created.add(e2.id);
   } finally {
     // 정리: 만든 프로젝트를 지우고, 처음 장면으로 돌린 뒤 테스트 이미지를 지운다.
     if($('studioPromptDialog').open) $('studioDialogCancel').click();
