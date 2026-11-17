@@ -22,7 +22,7 @@
 .stage-header:has(.project-menu:not([hidden])) { z-index:calc(var(--z-toast) + 1); }
 .project-menu-section { display:grid;gap:10px;padding:14px; }
 .project-menu-section+.project-menu-section { border-top:1px solid var(--line); }
-.project-menu-section>h2 { margin:0;color:var(--text);font-size:var(--text-sm);font-weight:650; }
+.project-menu-section>h2 { margin:0;color:var(--muted);font:600 var(--text-xs)/1.4 var(--sans); }
 .project-menu-section>* { min-width:0;margin:0; }
 .project-menu-section>button { width:100%; }
 .studio-file-actions { display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:0; }
@@ -32,10 +32,15 @@
 .project-current-text { display:grid;gap:2px;min-width:0; }
 .project-current-text>h2 { margin:0;color:var(--muted);font:600 var(--text-xs)/1.4 var(--sans); }
 .project-current-actions { display:flex;gap:var(--space-3); }
-.studio-projects>h2 { color:var(--muted);font-size:var(--text-xs);font-weight:600; }
 /* 파일 · 기록: 메뉴 항목(ui-menu-item). 팝오버 안이라 면 · 그림자 없이 구분선만 */
 .project-actions { padding:var(--space-2) var(--space-3);border-top:1px solid var(--line);overflow:visible; }
-.project-advanced { display:grid;gap:8px;padding:var(--space-2) var(--space-4) var(--space-3); }
+.project-advanced { display:grid;gap:1px; }
+/* 고급 · 코드만 주고받기: 접는 제목도 메뉴 항목처럼(같은 높이 · 왼쪽 줄 · 눌렀을 때 배경) */
+.project-advanced>summary { width:100%;min-height:var(--control-md);padding:4px 8px;border-radius:4px;gap:10px;color:var(--text-soft);font-size:var(--text-sm); }
+.project-advanced>summary::before { flex-basis:16px;width:16px; }
+.project-advanced>summary:hover { background:var(--surface-hover); }
+/* 이미지: 불러오기는 메뉴 항목 — 위 항목들과 아이콘 줄을 맞추려고 칸 안쪽 여백만큼 밖으로 넓힌다 */
+.project-images>.project-image-add { width:calc(100% + var(--space-8));margin:0 calc(var(--space-4) * -1); }
 .project-actions~.project-menu-section { border-top:1px solid var(--line); }
 /* 프로젝트 보관함: 지금 작업 이름 · 저장 버튼 · 저장한 프로젝트 목록(열기 · 이름 바꾸기 · 삭제) */
 .studio-projects { display:grid;gap:8px;min-width:0; }

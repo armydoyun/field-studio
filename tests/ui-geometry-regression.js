@@ -47,5 +47,5 @@ console.log('PASS Font-independent icon boxes / accessible icon buttons / state 
 // (칸 너비가 내용이 아니라 편집기 폭으로 정해져, 칩 글자가 길어져도 줄 수가 바뀌지 않는다).
 assert.equal(base('.studio-channel-help').get('display'),'none');assert.equal(base('.studio-channel-bar').get('display'),'grid');assert(/repeat\(auto-fill,/.test(base('.studio-channel-bar').get('grid-template-columns')));
 assert.equal(base('.studio-graph-input').get('grid-template-columns'),'54px minmax(0,1fr)');
-assert.equal(base('.studio-texture').get('grid-template-columns'),'minmax(0,1fr) 28px');assert.equal(base('.studio-texture .texture-connect').get('grid-column'),'1/-1');
-console.log('PASS Channel chips / source and frame columns / full-width image connection action');
+assert.equal(base('.studio-texture').get('grid-template-columns'),'32px minmax(0,1fr) 28px');assert.equal(base('.studio-texture .texture-connect').get('grid-column'),'2/-1');
+console.log('PASS Channel chips / source and frame columns / image row: thumbnail · name · delete, connection under the name');

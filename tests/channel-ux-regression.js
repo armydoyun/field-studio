@@ -14,7 +14,8 @@ const open=async(n,i,frame)=>{if(picker(n).hidden||channel(n,i).attrs?.['aria-ex
 const change=async(n,i,value)=>{const frame=value&&!value.startsWith('tex:')?value.split(':')[1]:undefined;const opts=await open(n,i,frame);const o=opts.find(x=>x.value===value);assert(o&&!o.disabled,'selectable: '+value);await o.click();};
 const text=node=>[node.textContent||'',...node.children.map(text)].join(' ');
 const upload=async(n,name='art.png')=>{n('studioTextureFile').files=[new File(['x'],name,{type:'image/png'})];await n('studioTextureFile').dispatchEvent({type:'change'});};
-const connect=n=>n('studioTextureList').children[0].children[1];
+// 이미지 항목의 연결 버튼(자리가 아니라 클래스로 찾는다 — 항목 배치가 바뀌어도 같은 버튼)
+const connect=n=>n('studioTextureList').children[0].children.find(child=>String(child.className).includes('texture-connect'));
 (async()=>{
 // 입력 채널 줄 접기: 연결 없는 패스는 접힌 채 시작하고, 코드 머리줄의 입력 버튼이 연결 수 · 빈 채널 경고를 보여 준다.
 await test('Input row starts collapsed without connections and the toolbar button toggles it',async(f,n)=>{f.studio.setProject(project());assert.equal(n('studioInputs').hidden,true);assert.equal(n('studioInputsToggle').attrs['aria-expanded'],'false');assert.equal(n('studioInputsCount').hidden,true);await n('studioInputsToggle').click();assert.equal(n('studioInputs').hidden,false);assert.equal(n('studioInputsToggle').attrs['aria-expanded'],'true');await n('studioInputsToggle').click();assert.equal(n('studioInputs').hidden,true);});

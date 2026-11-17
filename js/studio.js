@@ -1009,7 +1009,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     renderChannels();
     setStatus(`쓰지 않는 이미지 ${removed}개를 정리했습니다`);
   };
+  let textureThumbs = []; // 목록 썸네일의 객체 URL(다시 그릴 때 놓아준다)
   const renderTextures = () => {
+    for (const url of textureThumbs) URL.revokeObjectURL?.(url);
+    textureThumbs = [];
     const holder = $("studioTextureList"),
       assets = renderer.getTextures(),
       usage = textureUsage();
@@ -1019,7 +1022,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!assets.length) {
       const hint = element("p");
       hint.className = "ui-hint";
-      hint.textContent = "등록된 이미지가 없습니다. PNG·JPEG·WebP 파일을 추가하고 입력 채널에 연결하세요.";
+      hint.textContent = "아직 없습니다. 불러온 이미지는 편집기의 입력 채널(iChannel)에 연결해 씁니다.";
       holder.append(hint);
     } else {
       // 전체 용량: 이 브라우저에 보관한 원본 파일과 GPU 메모리 어림값. 쓰지 않는 이미지가 있으면 정리 버튼을 보인다.
@@ -1045,16 +1048,32 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       footer = summary;
     }
     for (const asset of assets) {
+      // 한 줄 항목: [썸네일] 이름 · 크기 · 쓰임 [삭제] / 연결 / 샘플링(접힘)
       const row = element("div"),
-        name = element("span"),
+        thumb = element("img"),
+        info = element("div"),
+        name = element("strong"),
+        meta = element("small"),
         del = element("button");
-      row.className = "ui-card studio-texture";
+      row.className = "studio-texture";
+      row.setAttribute("role", "listitem");
       const state = usage.current.has(asset.id) ? "current" : usage.kept.has(asset.id) ? "history" : "unused";
       row.dataset.usage = state;
-      const size = renderer.getTextureFile(asset.id)?.size || 0;
-      name.textContent = `${asset.name} · ${asset.width}×${asset.height}${size ? ` · ${megabytes(size)}` : ""} · ${{ current: "사용 중", history: "되돌리기 기록에서 씀", unused: "쓰지 않음" }[state]}`;
+      const file = renderer.getTextureFile(asset.id),
+        size = file?.size || 0;
+      thumb.className = "studio-texture-thumb";
+      thumb.alt = "";
+      if (file && typeof URL.createObjectURL === "function") {
+        thumb.src = URL.createObjectURL(file);
+        textureThumbs.push(thumb.src);
+      }
+      info.className = "studio-texture-info";
+      name.textContent = asset.name;
+      name.title = asset.name;
+      meta.textContent = `${asset.width}×${asset.height}${size ? ` · ${megabytes(size)}` : ""} · ${{ current: "사용 중", history: "되돌리기 기록에서 씀", unused: "쓰지 않음" }[state]}`;
+      info.append(name, meta);
       del.type = "button";
-      del.className = "ui-icon-btn ui-icon-btn--sm glyph-icon icon-close";
+      del.className = "ui-icon-btn ui-icon-btn--sm glyph-icon icon-trash";
       del.title = `${asset.name} 삭제`;
       del.setAttribute("aria-label", del.title);
       del.addEventListener("click", async () => {
@@ -1090,7 +1109,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       });
       const use = element("button");
       use.type = "button";
-      use.className = "ui-btn--sm texture-connect";
+      use.className = "ui-btn--ghost ui-btn--sm glyph-icon icon-link texture-connect";
       use.dataset.assetName = asset.name;
       textureButtons.push(use);
       use.addEventListener("click", () => connectTexture(asset.id));
@@ -1148,7 +1167,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         label.append(select);
         controls.append(label);
       }
-      row.append(name, use, del, controls);
+      // 샘플링은 자주 바꾸지 않으므로 접어 두고, 제목에 지금 값을 보인다
+      const sampling = element("details"),
+        samplingTitle = element("summary");
+      sampling.className = "ui-disclosure studio-texture-sampling";
+      const { filter, wrapS, wrapT } = asset.sampling,
+        cap = text => text[0].toUpperCase() + text.slice(1);
+      samplingTitle.textContent = `샘플링 · ${cap(filter)} · ${wrapS === wrapT ? cap(wrapS) : `${cap(wrapS)}/${cap(wrapT)}`}`;
+      sampling.append(samplingTitle, controls);
+      row.append(thumb, info, del, use, sampling);
       holder.append(row);
     }
     if (footer) holder.append(footer);
