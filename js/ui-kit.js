@@ -312,7 +312,7 @@ const bindSearchClear = (doc = document) => {
 
 // 팝오버 메뉴(position:fixed)의 공통 닫기 동작: 바깥을 누르면 닫기 · 창 크기가 바뀌면 다시 놓기 ·
 // 미리보기 분리 창이 열리고 닫히면(문서가 바뀌면) 닫고 그 문서에 다시 연결한다. 이미 연결한 문서는 건너뛴다.
-//   dismissPopover({ menu, toggle, owner, isOpen, close, place, on, ignore?(target), bindExtra?(doc) }) → bind()
+//   dismissPopover({ menu, toggle, owner, isOpen, close, place, on, ignore?(target), bindExtra?(doc, listen) }) → bind()
 //   bind: 메뉴를 다른 문서로 옮긴 뒤 부르면 그 문서에도 연결한다.
 const dismissPopover = ({
   menu,
@@ -336,10 +336,22 @@ const dismissPopover = ({
     const doc = owner();
     if (bound.has(doc)) return;
     bound.add(doc);
-    on(doc, "pointerdown", outside);
-    bindExtra(doc);
-    on(doc.defaultView || window, "resize", () => {
+    const callbacks = [];
+    const listen = (target, type, fn, options) => {
+      on(target, type, fn, options);
+      callbacks.push(() => target.removeEventListener(type, fn, options));
+    };
+    const view = doc.defaultView || window;
+    listen(doc, "pointerdown", outside);
+    bindExtra(doc, listen);
+    listen(view, "resize", () => {
       if (isOpen()) place();
+    });
+    listen(view, "pagehide", event => {
+      if (event.persisted) return;
+      if (owner() === doc) close();
+      for (const remove of callbacks.splice(0)) remove();
+      bound.delete(doc);
     });
   };
   bind();

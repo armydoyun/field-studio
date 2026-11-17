@@ -173,17 +173,19 @@ const mount = ({ studio, guide, signal: parentSignal } = {}) => {
   let current = null, // { name, menu }
     ticket = 0; // 늦게 끝난 '최근 프로젝트' 읽기가 그 사이 연 다른 메뉴를 덮지 않게
   const close = ({ focus = false } = {}) => {
+    ticket++;
     const open = current;
     current = null;
     open?.menu.close({ focus });
   };
   const open = async (name, { focusFirst = true } = {}) => {
+    if (signal.aborted) return;
     const anchor = buttons.find(button => button.dataset.menu === name);
     if (!anchor || !MENUS[name]) return;
     if (current?.name === name) return;
     const mine = ++ticket;
     if (name === "file" || name === "all") await loadRecent();
-    if (mine !== ticket) return;
+    if (signal.aborted || mine !== ticket) return;
     close();
     const items = MENUS[name]()
       .filter(Boolean)
@@ -247,7 +249,17 @@ const mount = ({ studio, guide, signal: parentSignal } = {}) => {
     (visible.find(button => button.tabIndex === 0) || visible[0])?.focus();
   };
   on(document, "keydown", focusBar);
-  on(document, "preview-popout-window", event => on(event.detail.document, "keydown", focusBar));
+  on(document, "preview-popout-window", event => {
+    const doc = event.detail.document,
+      view = doc.defaultView;
+    on(doc, "keydown", focusBar);
+    const release = event => {
+      if (event.persisted) return;
+      doc.removeEventListener("keydown", focusBar);
+      view.removeEventListener("pagehide", release);
+    };
+    on(view, "pagehide", release);
+  });
 
   // 보이기 · 숨기기(이 브라우저에 기억). 숨기면 툴바의 ⋯ 더보기가 대신 나타난다(CSS).
   const setHidden = (hidden, { focus = false } = {}) => {
@@ -286,6 +298,7 @@ const mount = ({ studio, guide, signal: parentSignal } = {}) => {
         label: `${TITLES[name]} › ${item.command || item.label}`,
         key: item.kbd || "",
         run: () => {
+          if (signal.aborted) return;
           const node = item.button ? $(item.button) : null;
           if (node && (node.disabled || node.hidden)) return;
           item.onSelect();
