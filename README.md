@@ -63,6 +63,8 @@ js/
   dock-drag.js        # 설정 패널 · 편집기를 끌어 정해진 자리(왼쪽·오른쪽·위·아래)에 놓는 공용 손잡이
   studio-pack.js      # Pack 파일 형식 (순수 함수)
   studio-projects.js  # 프로젝트 보관함 화면
+  studio-versions.js  # 버전 기록의 흐름: 언제 남길지 · 목록 · 이름 붙이기 · 지우기 · 되돌리기 순서(작업 바꾸기는 studio.js)
+  studio-symbols.js   # 여러 탭에 걸친 이름: 참조 찾기 · Common · Uniform 이름 바꾸기 계획 · 편집기 값 표시 글자(순수 함수)
   project-menu.js     # 머리줄 프로젝트 메뉴(팝오버) — 저장·열기·프로젝트 파일·이미지 (Ctrl+O · 저장 Ctrl+S · 다른 이름 Ctrl+Shift+S)
   channel-picker.js   # 입력 채널 칩(iChannel0–3)과 고르기 팝오버 · 코드 사용 여부 표시
   studio-examples.js  # Studio가 만드는 예제 프로젝트
@@ -90,7 +92,8 @@ js/
   # 설정 패널 · 화면
   ui.js               # 설정 패널(렌더링 · 파라미터 · 작업공간 탭) · 파라미터 목록은 행 단위로 맞춘다(buildRow · renderUniforms)
   parameter-tools.js  # 파라미터 패널과 Studio가 함께 쓰는 소스 · 값 처리(순수 함수)
-  parameter-row.js    # 파라미터 목록의 행 하나 만들기(이름 · 버튼 · 값 조작 · 연결 시트) — renderUniforms가 행 단위로 맞추며 부른다
+  parameter-row.js    # 파라미터 목록의 행 하나 만들기(이름 · 버튼 · 값 조작 · 연결 시트, 조작은 타입별 함수) — renderUniforms가 행 단위로 맞추며 부른다
+  parameter-list.js   # 파라미터 목록의 행 캐시: 구조 열쇠 · 행이 보여 주는 값 · 값만 맞추기/다시 만들기 · 미리 만들기
   parameter-controls.js # 파라미터 줄의 값 조작 부품: 숫자 칸 · 끌기 · 방향/위치 패드 · 선택지 · 그라데이션 · 곡선
   value-editor.js     # 실수 · 벡터 정밀 입력 대화상자(적용 전까지 렌더러에 닿지 않음)
   matrix-control.js   # 행렬 파라미터 편집기(행/열로 보여 주고 값은 GLSL 열 우선 순서로 보관)
