@@ -6,8 +6,8 @@
   const until = async read => { for (let i = 0; i < 150; i++, await wait(20)) if (read()) return; throw new Error("메뉴 대기 시간 초과"); };
   const menu = () => document.querySelector('.ui-menu[role="menu"]');
   const labelOf = node => node.querySelector(':scope > span:not([aria-hidden="true"])')?.textContent;
-  const item = text => [...menu().querySelectorAll('[role="menuitem"]')].find(node => labelOf(node) === text);
-  const read = node => ({ label: labelOf(node), keys: [...node.querySelectorAll("kbd")].map(key => key.textContent), pressed: node.getAttribute("aria-pressed"), disabled: node.disabled });
+  const item = text => [...menu().querySelectorAll('[role^="menuitem"]')].find(node => labelOf(node) === text);
+  const read = node => ({ label: labelOf(node), keys: [...node.querySelectorAll("kbd")].map(key => key.textContent), pressed: node.getAttribute("aria-checked") ?? node.getAttribute("aria-pressed"), disabled: node.disabled });
   const close = () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
   const top = async name => { document.querySelector(`#menuBar [data-menu="${name}"]`).click(); await until(menu); };
   const right = target => target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
@@ -27,14 +27,14 @@
         check(JSON.stringify(read(item(name))) === JSON.stringify(snapshots[name]), `${theme}: 보기와 바탕 우클릭의 ${name} 이름·키·상태 일치`);
       item("셰이더 편집기").click();
       await top("view");
-      check(item("셰이더 편집기").getAttribute("aria-pressed") === String(!editorWasOpen), "우클릭 실행 뒤 보기 메뉴 체크 갱신");
+      check(item("셰이더 편집기").getAttribute("aria-checked") === String(!editorWasOpen), "우클릭 실행 뒤 보기 메뉴 체크 갱신");
       item("셰이더 편집기").click();
 
       right($("screen"));
       check(JSON.stringify(read(item("HUD"))) === JSON.stringify(snapshots.HUD), "HUD 이름·키·체크 상태 일치");
       item("HUD").click();
       await top("view");
-      check(item("HUD").getAttribute("aria-pressed") === "false", "HUD를 숨기면 보기 메뉴 체크 해제");
+      check(item("HUD").getAttribute("aria-checked") === "false", "HUD를 숨기면 보기 메뉴 체크 해제");
       item("HUD").click();
       await top("view"); item("메뉴 바").click();
       $("moreToggle").click();

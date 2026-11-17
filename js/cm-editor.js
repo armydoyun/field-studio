@@ -718,10 +718,29 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     });
     return true;
   };
-  // Ctrl+Shift+L · Ctrl+F2: 선택이 비어 있으면 커서 아래 단어로 시작해 같은 항목을 모두 선택
+  // Ctrl+Shift+L · Ctrl+F2: 같은 항목을 모두 선택. 선택이 있으면 그 글자가 들어간 곳 모두,
+  // 선택이 비어 있으면 VS Code처럼 커서 아래 단어와 '단어 전체가 같은' 곳만(a를 고르면 float · main 안의 a는 빼고).
+  const isWordChar = c => /[\w$]/.test(c || "");
   const selectAllOccurrences = editorView => {
-    if (editorView.state.selection.main.empty) CM.selectNextOccurrence(editorView);
-    return CM.selectSelectionMatches(editorView);
+    const state = editorView.state,
+      main = state.selection.main;
+    if (!main.empty) return CM.selectSelectionMatches(editorView);
+    const word = state.wordAt(main.head);
+    if (!word) return false;
+    const doc = state.doc.toString(),
+      text = doc.slice(word.from, word.to),
+      ranges = [];
+    let mainIndex = 0;
+    for (let at = doc.indexOf(text); at >= 0; at = doc.indexOf(text, at + text.length)) {
+      if (isWordChar(doc[at - 1]) || isWordChar(doc[at + text.length])) continue;
+      if (at === word.from) mainIndex = ranges.length;
+      ranges.push(CM.EditorSelection.range(at, at + text.length));
+    }
+    editorView.dispatch({
+      selection: CM.EditorSelection.create(ranges, mainIndex),
+      userEvent: "select.search.matches",
+    });
+    return true;
   };
   // Ctrl+↑ / Ctrl+↓: 커서가 숫자 위면 값 조절(cm-glsl-features), 아니면 VS Code처럼 화면만 한 줄 스크롤
   const scrollLines = direction => editorView => {
@@ -1733,6 +1752,11 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   // ---- 우클릭 메뉴(context-menu.js) ----
   // 누른 자리가 선택 영역 밖이면 커서를 그 자리로 옮긴 뒤(VS Code처럼) 그 자리에 대한 명령을 보인다.
   const clipboardFailed = key => notify(`클립보드에 접근하지 못했습니다. ${key}를 쓰세요`);
+  // 클립보드 API가 없는 곳(보안 연결이 아닌 http 주소 등)에서는 거부된 약속으로 바꿔 실패 안내가 나오게 한다.
+  const clipboard = {
+    writeText: text => Promise.resolve().then(() => navigator.clipboard.writeText(text)),
+    readText: () => Promise.resolve().then(() => navigator.clipboard.readText()),
+  };
   ContextMenu.register(
     ".studio-cm-host .cm-editor",
     (node, event) => {
@@ -1762,8 +1786,8 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
             kbd: "Ctrl+X",
             disabled: readOnly || !text,
             onSelect: () =>
-              navigator.clipboard
-                ?.writeText(text)
+              clipboard
+                .writeText(text)
                 .then(() => view.dispatch(view.state.replaceSelection("")))
                 .catch(() => clipboardFailed("Ctrl+X")),
           },
@@ -1772,15 +1796,15 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
             icon: "copy",
             kbd: "Ctrl+C",
             disabled: !text,
-            onSelect: () => navigator.clipboard?.writeText(text).catch(() => clipboardFailed("Ctrl+C")),
+            onSelect: () => clipboard.writeText(text).catch(() => clipboardFailed("Ctrl+C")),
           },
           {
             label: "붙여넣기",
             kbd: "Ctrl+V",
             disabled: readOnly,
             onSelect: () =>
-              navigator.clipboard
-                ?.readText()
+              clipboard
+                .readText()
                 .then(clip => {
                   view.dispatch(view.state.replaceSelection(clip));
                   view.focus();

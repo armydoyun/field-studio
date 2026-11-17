@@ -3,7 +3,8 @@
      ui-menu        항목이 세로로 놓인 팝오버     ui-menu-item  항목(<button>): [아이콘] 글자 [kbd] [체크]
      ui-context-menu  우클릭 자리에 뜨는 메뉴(js/context-menu.js)
      ui-menu-title  묶음 제목     ui-menu-sep  구분선     ui-menu-row  글자 + 조작(선택 상자 · 스테퍼)     ui-menu-note  작은 설명
-   켜고 끄는 항목은 aria-pressed를 달면 켜졌을 때 오른쪽에 체크가 그려진다. 위험한 항목은 .is-danger.
+   켜고 끄는 항목은 켜졌을 때 오른쪽에 체크가 그려진다: menu()가 만든 항목은 role=menuitemcheckbox + aria-checked,
+   HTML에 직접 둔 항목(토글 버튼)은 aria-pressed. 위험한 항목은 .is-danger.
    새 메뉴는 js/ui-kit.js의 menu()로 만든다(바깥 클릭 · Esc · 방향키를 처리해 준다). */
 .ui-popover { z-index:var(--z-popover);border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--elevated);box-shadow:var(--shadow);color:var(--text); }
 .ui-menu { display:grid;grid-template-columns:minmax(0,1fr);gap:1px;min-width:176px;padding:4px;overflow-y:auto;font-family:var(--sans); }
@@ -21,7 +22,7 @@
 .ui-menu-item>kbd { margin-left:auto; }
 /* 모든 항목이 체크 칸을 비워 둬서 단축키 칸이 한 줄로 맞는다 */
 .ui-menu-item::after { content:"";flex:0 0 14px;width:14px;height:14px;background:currentColor;-webkit-mask:var(--icon-check) center/contain no-repeat;mask:var(--icon-check) center/contain no-repeat;opacity:0; }
-.ui-menu-item[aria-pressed="true"]::after { opacity:1;color:var(--accent-strong); }
+.ui-menu-item:is([aria-pressed="true"],[aria-checked="true"])::after { opacity:1;color:var(--accent-strong); }
 /* 체크는 언제나 오른쪽 끝: 글자만 있는 항목(span · kbd 없음)에서도 글자 옆에 붙지 않는다 */
 .ui-menu-item:not(:has(>kbd,>span))::after { margin-left:auto; }
 .ui-menu-title { margin:8px 8px 2px;color:var(--muted);font:600 var(--text-xs)/1.4 var(--sans); }

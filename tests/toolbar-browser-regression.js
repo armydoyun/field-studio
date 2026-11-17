@@ -72,7 +72,7 @@
     test(JSON.stringify(directs()) === JSON.stringify(TOOLS), `툴바에는 자주 쓰는 버튼만(설정 패널 · 재생 · 편집기 · 스크린샷 · 캡처 펼치기 · 전체화면 — 메뉴 바가 있으면 ⋯는 숨김): ${directs()}`);
     // 메뉴 바를 끄면(보기 > 메뉴 바) ⋯ 더보기가 다시 나타나고, 그 안에 '메뉴 바 보이기'
     document.querySelector('#menuBar [data-menu="view"]').click(); await wait(0);
-    [...document.querySelectorAll('.ui-menu [role="menuitem"]')].find(n => n.textContent.startsWith("메뉴 바")).click(); await wait(0);
+    [...document.querySelectorAll('.ui-menu [role^="menuitem"]')].find(n => n.textContent.startsWith("메뉴 바")).click(); await wait(0);
     test(document.body.classList.contains("menubar-hidden") && !visible($("appBar")), "보기 > 메뉴 바로 메뉴 바를 숨김");
     test(JSON.stringify(directs()) === JSON.stringify([...TOOLS, "moreToggle"]), `메뉴 바를 끄면 ⋯ 더보기가 툴바에: ${directs()}`);
     for (const id of ["galleryToggle", "helpToggle", "hudToggle", "previewPopout", "themeToggle"])

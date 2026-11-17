@@ -1,6 +1,7 @@
 // 코드 편집기 가로 스크롤 여백: 긴 줄을 쓸 때 커서 · 마지막 글자가 편집기 오른쪽 끝에 붙지 않는다.
 //  · 끝까지 스크롤해도 가장 긴 줄 끝 뒤에 빈 곳이 남는다(--editor-scroll-gutter)
 //  · 줄 끝으로 가면(End) 커서가 오른쪽 가장자리에서 여유를 두고 보인다(cursorScrollMargin)
+//  · 커서 줄 강조(.cm-activeLine)가 이 여백까지 이어진다(여백이 .cm-content가 아니라 줄의 안쪽 여백)
 //  · 줄 바꿈 모드에서는 여백을 두지 않는다(가로 스크롤이 없으니 쓸 폭을 줄이지 않는다)
 (async () => {
   const studio = window.shaderStudio,
@@ -50,10 +51,17 @@
     const gap = scroller.getBoundingClientRect().right - cursor.getBoundingClientRect().left;
     test(scroller.scrollLeft > 0, "줄 끝으로 가면 가로로 스크롤한다");
     test(gap >= charWidth * 5, `커서와 오른쪽 가장자리 사이 여유(${Math.round(gap)}px ≥ 약 5글자)`);
+    // 커서 줄 강조가 여백 끝(스크롤 영역 오른쪽 끝)까지 칠해진다
+    scroller.scrollLeft = scroller.scrollWidth;
+    await frames(2);
+    const active = content.querySelector(".cm-activeLine");
+    test(!!active, "커서 줄 강조를 그린다");
+    const activeGap = scroller.getBoundingClientRect().right - active.getBoundingClientRect().right;
+    test(activeGap <= 2, `커서 줄 강조가 가로 스크롤 여백 끝까지 이어진다(남은 틈 ${Math.round(activeGap)}px)`);
     // 3) 줄 바꿈 모드: 여백 없음
     const wrapped = document.querySelector(".studio-cm-host .cm-content");
     wrapped.classList.add("cm-lineWrapping");
-    test(parseFloat(getComputedStyle(wrapped).paddingRight) === 0, "줄 바꿈 모드에서는 여백을 두지 않는다");
+    test(parseFloat(getComputedStyle(wrapped.querySelector(".cm-line")).paddingRight) < 8, "줄 바꿈 모드에서는 여백을 두지 않는다");
     wrapped.classList.remove("cm-lineWrapping");
   } finally {
     studio.setProject(before);

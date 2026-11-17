@@ -451,9 +451,10 @@ const mount = (renderer, input, settings) => {
   );
   // ---- 우클릭 메뉴(context-menu.js) ----
   // 파라미터 줄: 줄에 있는 버튼(되돌리기 · 코드 반영 · 잠금 · 재생 · 연결 · 크게 편집 · 삭제)을 그대로 누르고, 이름 · 값 복사를 더한다.
+  // 클립보드 API가 없는 곳(보안 연결이 아닌 http 주소 등)에서도 조용히 넘어가지 않고 실패를 알린다.
   const copyText = text =>
-    navigator.clipboard
-      ?.writeText(text)
+    Promise.resolve()
+      .then(() => navigator.clipboard.writeText(text))
       .catch(() => showError("클립보드에 복사하지 못했습니다. 브라우저 권한을 확인하세요."));
   const rowButton = (row, selector, label, extra = {}) => {
     const node = row.querySelector(selector);
@@ -1773,6 +1774,22 @@ const mount = (renderer, input, settings) => {
   }
   listen($("screen"), "pointerdown", () => stage.classList.add("has-interacted"));
   listen($("screen"), "wheel", () => stage.classList.add("has-interacted"));
+  // Ctrl+Z · Ctrl+Y(Ctrl+Shift+Z): 편집기 밖(파라미터 · 프리셋 · 뷰포트 · 바탕)에서도 앱의 되돌리기 기록을 쓴다.
+  // 파라미터 값 · 곡선 점 · 무작위 바꾸기도 같은 기록에 있고, 안내 문구와 메뉴(편집 › 되돌리기 Ctrl+Z)가 이 키를 알려 준다.
+  // 글 입력 칸 · 편집기(자기 기록) · 열린 대화상자 · 타임라인(같은 기록을 자기 키 처리로 부른다)은 건드리지 않는다.
+  listen(document, "keydown", event => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing || event.defaultPrevented) return;
+    const key = event.key.toLowerCase();
+    if (key !== "z" && key !== "y") return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("input, textarea, select, .ui-select, [contenteditable], dialog, #timelineDock")
+    )
+      return;
+    event.preventDefault();
+    if (key === "y" || event.shiftKey) window.shaderStudio?.redo?.();
+    else window.shaderStudio?.undo?.();
+  });
   listen(document, "keydown", event => {
     if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     if (

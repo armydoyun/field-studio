@@ -50,5 +50,12 @@ const assert = require('node:assert/strict');
   assert(Math.abs(Math.hypot(...direction)-1)<1e-9 && direction[1]>=0);
   assert.deepEqual(P.varyValue({type:'vec2',value:[0,0],options:{ranges:[[0,1,.1],[-5,5,1]]}},false,()=>1),[1,5]);
   assert.deepEqual(P.varyValue({type:'vec4',value:[2,1,0,0.5],options:{color:true,hdr:10}},false,()=>1),[10,10,10,1]);
+  // 칸(step)이 없는 실수는 바뀔 수 있는 폭의 1/1000 단위까지만: '코드에 반영'이 570.874579536 같은 숫자를 쓰지 않게
+  const digits = value => (String(value).split('.')[1] || '').length;
+  assert.equal(P.varyValue({type:'float',value:570},true,()=>0.987654321),625.6);
+  assert.equal(P.varyValue({type:'float',value:0,options:{min:-2,max:3}},false,()=>0.123456789),-1.383);
+  assert(P.varyValue({type:'vec3',value:[1,0.5,0.25],options:{color:true}},false,()=>0.123456789).every(v=>digits(v)<=3));
+  assert.equal(P.varyValue({type:'float',value:0,options:{min:0.01,max:100,log:true}},false,()=>0.123456789),0.03118);
+  assert.equal(P.varyValue({type:'float',value:0.00012},true,()=>0.123456789),0.00011096);
   console.log('PASS compound conditions, default source roundtrips and constrained random/jitter values');
 })().catch(error => { console.error(error); process.exitCode = 1; });

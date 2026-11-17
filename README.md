@@ -1,4 +1,4 @@
-# FIELD Studio — ES Modules (2026-11-15)
+# FIELD Studio — ES Modules (2026-11-17)
 
 WebGL2 / GLSL ES 3.00 기반 Shader Art Studio. 개발 소스는 **표준 JavaScript ES Modules**, 외부 의존성·npm·CDN 없음. 2026-10-15 `a(1).zip` 실행 소스에서 로더 계층만 교체했으며 기능 구현 로직을 보존했습니다.
 
@@ -40,8 +40,8 @@ css/                  # 스타일시트 — 규칙은 docs/DESIGN_SYSTEM.md
   tokens.css          # 디자인 토큰: 색(다크 · 라이트) · 크기 · 간격 · 글자 · 층
   base.css            # 초기화 · 문서 기본 · 초점
   icons.css           # glyph-icon + icon-* (SVG 마스크 아이콘)
-  components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · select · tag · menu · dialog · notice · surface · matrix · value-editor
-  layout/             # 화면 틀: workspace · panel · stage · dock
+  components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · select · tag · menu · menubar · dialog · notice · surface · matrix · value-editor
+  layout/             # 화면 틀: app-bar(맨 위 메뉴 바 줄) · workspace · panel · stage · dock
   features/           # 기능별 배치: parameters · presets · links · timeline · project-menu · channels · editor · editor-codemirror · video-dialog · gallery · guide · profiler · popout · versions
 js/
   main.js             # type=module 진입점 · 앱 조립
@@ -110,6 +110,7 @@ js/
   stage-menu.js       # 뷰포트 툴바 드롭다운(캡처 펼치기 · ⋯ 더보기)
   menu-bar.js         # 창 맨 위 메뉴 바(파일 · 편집 · 보기 · 재생 · 도움말): 기존 버튼을 누르는 항목 · 최근 프로젝트 · ←→/F10 · 좁으면 '메뉴' 하나 · 명령 팔레트에 등록 · 숨기기(⋯ 더보기로 대신)
   menu-commands.js    # 앱 공통 메뉴 이름·단축키·체크 상태·팔레트 ID (docs/MENU_COMMANDS.md)
+  workspace-view.js   # 화면 표시 상태와 포커스: 설정 패널 · HUD · 툴바 메뉴 · 전체화면(버튼 · 단축키가 같은 함수를 쓴다)
   html-export.js      # HTML로 내보내기: 작품 하나를 재생 전용 HTML 한 파일로(재생기 · 컴파일 직전 GLSL · 이미지 포함)
   recorder.js         # 뷰포트 녹화(MediaRecorder → WebM/MP4 내려받기) — 실시간
   video-render.js     # 영상 렌더링(오프라인) — 프레임마다 정한 시간으로 그려 WebCodecs → WebM 먹서 / PNG ZIP (순수 함수 + 실행기)
@@ -164,6 +165,7 @@ npm run test:list     # 어떤 파일이 어느 묶음인지
 node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 실행
 node tests/run.mjs browser --grep=workspace-view --strict # 화면 상태·메뉴·포커스
 node tests/run.mjs py --grep=workspace-state --strict     # 새로고침·전체화면·분리 창 복귀
+node tests/run.mjs browser --coverage    # browser 묶음이 js/ 파일·함수를 얼마나 지나가는지 → test-results/coverage/summary.txt
 ```
 
 Chromium은 `CHROMIUM_PATH`로 지정한 경로, Playwright 설치본, 시스템 Chromium 순서로 선택합니다.
@@ -183,6 +185,8 @@ HTTP 검사 통과는 `file://` 정책·저장소 차이까지 검증했다는 �
 - 콘솔용 테스트는 던진 오류뿐 아니라 실행 중 `console.error`나 잡히지 않은 오류가 한 번이라도 나와도 FAIL입니다. 그러니 `.catch(console.error)`로 실패를 삼키지 말고, 일부러 남기는 경고는 `console.warn`을 씁니다.
 - browser 묶음은 기본 3개씩 병렬로 돌리지만, 영상을 인코딩하는 테스트(`tests/run.mjs`의 `MEDIA_BROWSER_TESTS`: 녹화·영상 렌더링)는 미디어 인코더를 서로 빼앗지 않게 나머지가 끝난 뒤 하나씩 돌립니다.
 - browser 테스트가 실패하면 `test-results/browser/<테스트>-<시각>/`에 그 순간의 `screenshot.png` · 앱 상태 `state.json` · 전체 콘솔 기록 `console.log`(녹화 테스트는 영상도)를 남깁니다. 가끔만 실패하는 테스트도 한 번 실패하면 원인을 볼 수 있게 하려는 것이고, CI는 이 폴더를 실행 페이지의 Artifacts(`field-studio-browser-failure-<SHA>`)로 올립니다.
+- `--coverage`는 browser 묶음의 V8 커버리지를 파일별로 합쳐 비율과 **한 번도 안 불린 이름 있는 함수**를 남깁니다(`tests/helpers/coverage.mjs`). 비율은 파일끼리 비교하는 용도이고, 확인되지 않은 기능을 찾을 때는 함수 목록을 봅니다. py 묶음이 지나가는 코드는 세지 않습니다.
+- 시스템 Python에 pip로 설치할 수 없는 환경(외부 관리 Python)에서는 가상 환경을 만들어 `PYTHON=<venv>/bin/python`으로 지정합니다. 브라우저는 `CHROMIUM_PATH`의 것을 쓰므로 `playwright install`은 필요 없습니다.
 - 준비되지 않은 묶음(playwright·Python 없음)은 SKIP으로 표시하고 계속합니다. `--strict`(=`npm run test:ci`)는 SKIP도 실패로 칩니다.
 - 개별 검사에서 `SKIP`을 보고해도 PASS로 집계하지 않습니다. 건너뛴 이유를 출력하고 `--strict`에서는 실패로 처리합니다.
 - GitHub Actions(`.github/workflows/test.yml`)는 push·PR마다 `lint` → `test (node)` · `test (browser)` · `test (py)` 세 작업을 나란히 돌리고(각각 `node tests/run.mjs <묶음> --strict`), 모두 통과하면 `build`가 배포본을 올립니다. 의존성은 `package-lock.json` 기준으로 `npm ci`로 설치하고, npm·pip·Playwright Chromium은 캐시합니다.
@@ -198,4 +202,4 @@ HTTP 검사 통과는 `file://` 정책·저장소 차이까지 검증했다는 �
 HUD 숨김과 전체화면·분리 창은 현재 세션의 표시 상태이며 새로고침 후 자동으로 다시 활성화하지 않습니다.
 `js/workspace-view.js`가 패널·HUD·툴바 메뉴·전체화면의 상태 및 포커스 이동을 맡고, `js/ui.js`는 파라미터 화면과 명령 연결을 담당합니다.
 
-기능별 작업 기록(예전 `README_*.md`)은 `docs/history/`에 모아 두었습니다. 원본 2026-10-15 AMD 개발 기록은 `docs/history/README_2026-10-15_AMD_기록.md`입니다.
+기능별 작업 기록(예전 `README_*.md`)은 `docs/history/`에 모아 두었습니다(목록: `docs/history/README.md`). 원본 2026-10-15 AMD 개발 기록은 `docs/history/README_2026-10-15_AMD_기록.md`입니다.

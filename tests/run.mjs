@@ -14,6 +14,7 @@
 //   --strict   준비되지 않아 건너뛴 묶음(SKIP)도 실패로 친다(CI용)
 //   --jobs=N   동시에 돌릴 개수(기본: node 묶음은 CPU 수, 브라우저 묶음은 3)
 //   --list     실행하지 않고 분류만 보여 준다
+//   --coverage 브라우저 묶음이 js/ 파일을 얼마나 지나가는지 재서 test-results/coverage/에 남긴다(tests/helpers/coverage.mjs)
 //
 // 콘솔용 테스트는 끝날 때까지 console.error나 잡히지 않은 오류(pageerror)가 한 번이라도 나오면 실패로 친다.
 // 콘솔용 테스트는 테스트마다 새 브라우저 컨텍스트(빈 localStorage·IndexedDB)에서 돌므로 사용자의 작업 초안을 건드리지 않는다.
@@ -24,6 +25,7 @@ import os from "node:os";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import Browser from "./helpers/browser.cjs";
+import {addCoverage, writeCoverage} from "./helpers/coverage.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TESTS = path.join(ROOT, "tests");
@@ -38,7 +40,7 @@ const option = name => argv.find(a => a.startsWith(`--${name}=`))?.slice(name.le
 const chosen = argv.filter(a => !a.startsWith("--"));
 for(const name of chosen) if(!SUITES.includes(name)) { console.error(`알 수 없는 묶음: ${name} (가능: ${SUITES.join(", ")})`); process.exit(2); }
 const suites = chosen.length ? chosen : SUITES;
-const grep = option("grep"), strict = flag("strict"), jobs = Number(option("jobs")) || 0;
+const grep = option("grep"), strict = flag("strict"), jobs = Number(option("jobs")) || 0, coverage = flag("coverage");
 
 // ---- 분류 ----
 const files = fs.readdirSync(TESTS).filter(name => !HELPERS.has(name)).sort();
@@ -159,6 +161,7 @@ const runBrowser = async () => {
       // 첫 실행 안내(갤러리)가 모달로 뜨지 않게 한다. 나머지 저장소는 비어 있는 새 상태.
       await context.addInitScript(() => { try { if(!localStorage.getItem("field.onboarded.v1")) localStorage.setItem("field.onboarded.v1", "1"); } catch(_) { /* 저장소가 막혀도 테스트는 계속 */ } });
       const page = await context.newPage();
+      if(coverage) await page.coverage.startJSCoverage({resetOnNavigation:false});
       page.on("console", message => {
         logs.push(`[${message.type()}] ${message.text()}`);
         if(message.type() === "error") errors.push(`[console.error] ${message.text()}`);
@@ -217,6 +220,7 @@ const runBrowser = async () => {
         } catch(diagnosticError) { logs.push(`녹화 진단 저장 실패: ${diagnosticError.message}`); }
         record("browser", name, "FAIL", Date.now() - started, `${logs.join("\n")}\n${error.message}`);
       } finally {
+        if(coverage) { try { addCoverage(await page.coverage.stopJSCoverage(), base); } catch(error) { console.log(`      커버리지를 받지 못함: ${error.message}`); } }
         await context.close();
       }
     };
@@ -271,6 +275,11 @@ for(const suite of suites) {
   if(!plan[suite].length) continue;
   console.log(`\n[${suite}] (${plan[suite].length})`);
   await runners[suite]();
+}
+
+if(coverage) {
+  const report = writeCoverage(ROOT, fs.readdirSync(path.join(ROOT, "js")).filter(n => n.endsWith(".js") && n !== "codemirror.js").map(n => `js/${n}`));
+  if(report) console.log(`\n커버리지: ${path.relative(ROOT, report.directory)}/summary.txt (가장 낮은 5개: ${report.rows.slice(0, 5).map(r => `${r.file} ${r.percent}%`).join(" · ")})`);
 }
 
 const count = status => results.filter(r => r.status === status).length;

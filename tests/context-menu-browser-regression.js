@@ -77,7 +77,7 @@
     await frames();
     check(document.querySelector('.uniform-row[data-name="uTint"] .lock-uniform').getAttribute("aria-pressed") === "true", "메뉴로 잠금");
     right(document.querySelector('.uniform-row[data-name="uTint"] .uniform-top'));
-    check(item("잠금").getAttribute("aria-pressed") === "true", "잠금 상태가 체크로 보임");
+    check(item("잠금").getAttribute("aria-checked") === "true", "잠금 상태가 체크로 보임");
     item("잠금").click();
     await frames();
 

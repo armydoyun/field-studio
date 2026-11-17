@@ -246,11 +246,13 @@ const menu = ({
     );
     node.type = "button";
     if (item.id) node.id = item.id;
-    node.setAttribute("role", "menuitem");
+    // 켜고 끄는 항목은 체크 상자 메뉴 항목(menuitemcheckbox + aria-checked) — 화면 낭독기가 켜짐/꺼짐을 읽는다
+    const checkable = item.pressed !== undefined;
+    node.setAttribute("role", checkable ? "menuitemcheckbox" : "menuitem");
+    if (checkable) node.setAttribute("aria-checked", String(!!item.pressed));
     node.append(el("span", "", item.label));
     if (item.kbd) node.append(el("kbd", "", item.kbd));
     if (item.title) node.title = item.title;
-    if (item.pressed !== undefined) node.setAttribute("aria-pressed", String(!!item.pressed));
     node.disabled = !!item.disabled;
     node.addEventListener("click", () => {
       close();
