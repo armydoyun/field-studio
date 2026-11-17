@@ -124,12 +124,6 @@ const createVisibleQueue = ({ margin = "200px", onIdle = () => {} } = {}) => {
       paused = false;
       pump();
     },
-    get pending() {
-      return jobs.size;
-    },
-    get busy() {
-      return running;
-    },
     dispose: () => {
       disposed = true;
       observer?.disconnect();

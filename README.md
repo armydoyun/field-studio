@@ -1,4 +1,4 @@
-# FIELD Studio — ES Modules (2026-11-15)
+# FIELD Studio — ES Modules (2026-11-17)
 
 WebGL2 / GLSL ES 3.00 기반 Shader Art Studio. 개발 소스는 **표준 JavaScript ES Modules**, 외부 의존성·npm·CDN 없음. 2026-10-15 `a(1).zip` 실행 소스에서 로더 계층만 교체했으며 기능 구현 로직을 보존했습니다.
 
@@ -40,8 +40,8 @@ css/                  # 스타일시트 — 규칙은 docs/DESIGN_SYSTEM.md
   tokens.css          # 디자인 토큰: 색(다크 · 라이트) · 크기 · 간격 · 글자 · 층
   base.css            # 초기화 · 문서 기본 · 초점
   icons.css           # glyph-icon + icon-* (SVG 마스크 아이콘)
-  components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · select · tag · menu · dialog · notice · surface · matrix · value-editor
-  layout/             # 화면 틀: workspace · panel · stage · dock
+  components/         # 디자인 시스템 컴포넌트(ui-*): button · field · choice · segmented · select · tag · menu · menubar · dialog · notice · surface · matrix · value-editor
+  layout/             # 화면 틀: app-bar(맨 위 메뉴 바 줄) · workspace · panel · stage · dock
   features/           # 기능별 배치: parameters · presets · links · timeline · project-menu · channels · editor · editor-codemirror · video-dialog · gallery · guide · profiler · popout · versions
 js/
   main.js             # type=module 진입점 · 앱 조립
@@ -110,6 +110,7 @@ js/
   stage-menu.js       # 뷰포트 툴바 드롭다운(캡처 펼치기 · ⋯ 더보기)
   menu-bar.js         # 창 맨 위 메뉴 바(파일 · 편집 · 보기 · 재생 · 도움말): 기존 버튼을 누르는 항목 · 최근 프로젝트 · ←→/F10 · 좁으면 '메뉴' 하나 · 명령 팔레트에 등록 · 숨기기(⋯ 더보기로 대신)
   menu-commands.js    # 앱 공통 메뉴 이름·단축키·체크 상태·팔레트 ID (docs/MENU_COMMANDS.md)
+  workspace-view.js   # 화면 표시 상태와 포커스: 설정 패널 · HUD · 툴바 메뉴 · 전체화면(버튼 · 단축키가 같은 함수를 쓴다)
   html-export.js      # HTML로 내보내기: 작품 하나를 재생 전용 HTML 한 파일로(재생기 · 컴파일 직전 GLSL · 이미지 포함)
   recorder.js         # 뷰포트 녹화(MediaRecorder → WebM/MP4 내려받기) — 실시간
   video-render.js     # 영상 렌더링(오프라인) — 프레임마다 정한 시간으로 그려 WebCodecs → WebM 먹서 / PNG ZIP (순수 함수 + 실행기)
@@ -201,4 +202,4 @@ HTTP 검사 통과는 `file://` 정책·저장소 차이까지 검증했다는 �
 HUD 숨김과 전체화면·분리 창은 현재 세션의 표시 상태이며 새로고침 후 자동으로 다시 활성화하지 않습니다.
 `js/workspace-view.js`가 패널·HUD·툴바 메뉴·전체화면의 상태 및 포커스 이동을 맡고, `js/ui.js`는 파라미터 화면과 명령 연결을 담당합니다.
 
-기능별 작업 기록(예전 `README_*.md`)은 `docs/history/`에 모아 두었습니다. 원본 2026-10-15 AMD 개발 기록은 `docs/history/README_2026-10-15_AMD_기록.md`입니다.
+기능별 작업 기록(예전 `README_*.md`)은 `docs/history/`에 모아 두었습니다(목록: `docs/history/README.md`). 원본 2026-10-15 AMD 개발 기록은 `docs/history/README_2026-10-15_AMD_기록.md`입니다.
