@@ -64,19 +64,7 @@ const mount = (renderer, input, settings) => {
   const liveValue = item =>
     item.read ? item.read() : renderer.getUserUniforms().find(u => u.name === item.name)?.value;
   const parameterControls = ParameterControls.create({ element, listen, signal, showError, liveValue, renderer });
-  const {
-    parseBool,
-    displayNumber,
-    showNumber,
-    rangedWidth,
-    rangeEnds,
-    scrubbable,
-    directionControl,
-    positionControl,
-    enumControl,
-    gradientControl,
-    curveControl,
-  } = parameterControls;
+  const { parseBool, displayNumber } = parameterControls;
   const validNumber = (kind, value) =>
     Number.isFinite(value) &&
     (kind === "f" || kind === "m" || (Number.isInteger(value) && (kind !== "u" || value >= 0)));
@@ -923,6 +911,7 @@ const mount = (renderer, input, settings) => {
   // item은 이 행이 계속 붙잡는 객체다 — 행을 남겨 둔 채 값이 바뀌면 renderUniforms가 같은 객체를 새 값으로 고친다.
   // 행 만들기는 parameter-row.js. 모든 항목을 getter로 넘겨, 아래에서 정의되는 함수도 부를 때 찾는다.
   const buildRow = ParameterRow.create({
+    ...parameterControls, // 컨트롤 만들기(parameter-controls.js)는 위에서 이미 만들어졌다
     renderer,
     get $() {
       return $;
@@ -941,36 +930,6 @@ const mount = (renderer, input, settings) => {
     },
     get liveValue() {
       return liveValue;
-    },
-    get displayNumber() {
-      return displayNumber;
-    },
-    get showNumber() {
-      return showNumber;
-    },
-    get rangedWidth() {
-      return rangedWidth;
-    },
-    get rangeEnds() {
-      return rangeEnds;
-    },
-    get scrubbable() {
-      return scrubbable;
-    },
-    get directionControl() {
-      return directionControl;
-    },
-    get positionControl() {
-      return positionControl;
-    },
-    get enumControl() {
-      return enumControl;
-    },
-    get gradientControl() {
-      return gradientControl;
-    },
-    get curveControl() {
-      return curveControl;
     },
     get parseValue() {
       return parseValue;
@@ -998,6 +957,11 @@ const mount = (renderer, input, settings) => {
     },
     get playButtons() {
       return playButtons;
+    },
+    // 행이 보여 주는 값을 목록에 알린다(값 = 그 값, undefined = 다음 renderUniforms에서 반드시 다시 맞춤)
+    rowShows: (name, value) => {
+      const entry = rowCache.get(name);
+      if (entry) entry.value = value === undefined ? null : JSON.stringify(value);
     },
     get resetSyncs() {
       return resetSyncs;

@@ -23,6 +23,7 @@ import * as Scope from "./glsl-scope.js";
 import * as Prepare from "./glsl-prepare.js";
 import * as Media from "./media-input.js";
 import * as HtmlExport from "./html-export.js";
+import * as Color from "./color.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -210,14 +211,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         spots = tab === COMMON || (uniform && own?.uniform) ? globalSpotsOf(src, name) : [];
       } else spots = (Scope.externalSpots(src, name) || []).map(at => ({ at, decl: false }));
       if (!spots.length) continue;
-      const rows = src.split("\n"),
-        starts = [0];
-      for (const row of rows) starts.push(starts.at(-1) + row.length + 1);
+      const rows = src.split("\n");
       groups.push({
         tab,
         label: tabLabel(tab),
         items: spots.map(spot => {
-          const line = starts.findIndex(start => start > spot.at);
+          const line = Scope.lineOf(src, spot.at);
           return { at: spot.at, line, text: rows[line - 1].trim(), decl: spot.decl };
         }),
       });
@@ -259,13 +258,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     for (const item of renderer.getUserUniforms()) {
       const text = uniformValueText(item);
       if (text === null) continue;
-      const color =
-        item.options?.color && Array.isArray(item.value)
-          ? `rgb(${item.value
-              .slice(0, 3)
-              .map(v => Math.round(Math.max(0, Math.min(1, v)) * 255))
-              .join(" ")})`
-          : "";
+      const color = item.options?.color && Array.isArray(item.value) ? Color.cssRgb(item.value.slice(0, 3)) : "";
       out.set(item.name, { text, color });
     }
     return out;

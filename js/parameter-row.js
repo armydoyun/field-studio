@@ -9,6 +9,7 @@ import * as MatrixControl from "./matrix-control.js";
 import * as Annotations from "./annotations.js";
 import * as Links from "./links.js";
 import * as LinkSheet from "./link-sheet.js";
+import * as Color from "./color.js";
 
 const create = ctx => (item, defaults) => {
   const {
@@ -156,6 +157,8 @@ const create = ctx => (item, defaults) => {
     const restore = () => {
       if (ParameterTools.equalValue(liveValue(item), fallback)) return;
       if (!commit(reset, Array.isArray(fallback) ? [...fallback] : fallback)) return;
+      // 되돌리기 버튼은 행의 조작(정지점 · 곡선 점 · 슬라이더) 밖에서 값을 바꾼다 — 행을 반드시 다시 맞추게 한다
+      ctx.rowShows?.(item.name, undefined);
       renderUniforms();
       $("uniformNotice").textContent = `${item.name} 기본값으로 되돌림`;
       [...userList.querySelectorAll(".uniform-row")]
@@ -289,6 +292,9 @@ const create = ctx => (item, defaults) => {
     try {
       renderer.setUniform(item.name, value);
       item.value = value;
+      // 목록이 기억하는 '이 행이 보여 주는 값'도 갱신한다(렌더러가 정리한 값으로). 그래야 나중에 다른 길로(되돌리기 ·
+      // 프리셋) 처음 값에 돌아왔을 때 목록이 '바뀐 것 없음'으로 보지 않고 이 행의 조작을 다시 맞춘다.
+      ctx.rowShows?.(item.name, liveValue(item));
       if (keyed) recordKey(item.name, value);
       syncReset?.();
       syncChanged();
@@ -418,16 +424,7 @@ const create = ctx => (item, defaults) => {
       hexField.maxLength = 7;
       hexField.setAttribute("aria-label", `${item.name} HEX`);
       const code = element("code");
-      const hex = values =>
-        "#" +
-        values
-          .slice(0, 3)
-          .map(v =>
-            Math.round(Math.max(0, Math.min(1, v)) * 255)
-              .toString(16)
-              .padStart(2, "0")
-          )
-          .join("");
+      const hex = Color.toHex;
       const channels = item.type === "vec4" ? "RGBA" : "RGB";
       // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
       const hdr = item.options.hdr;

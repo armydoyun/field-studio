@@ -9,6 +9,7 @@
 //  · 쓰지 않는 지역 변수를 흐리게 표시하고, removeUnused로 한 번에 지운다(glsl-scope.js unusedLocals).
 // 소스 분석은 glsl-language.js가 맡고, 여기서는 화면·키 동작만 다룬다. 이름이 가리키는 선언(범위)은 glsl-scope.js가 찾는다.
 import * as Scope from "./glsl-scope.js";
+import * as Color from "./color.js";
 
 const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = () => {} }) => {
   const {
@@ -504,21 +505,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     }
     return found;
   };
-  const toHex = values =>
-    "#" +
-    values
-      .slice(0, 3)
-      .map(v =>
-        Math.round(v * 255)
-          .toString(16)
-          .padStart(2, "0")
-      )
-      .join("");
-  const cssColor = values =>
-    `rgb(${values
-      .slice(0, 3)
-      .map(v => Math.round(v * 255))
-      .join(" ")}${values.length > 3 ? ` / ${values[3]}` : ""})`;
+  const { toHex, cssRgb: cssColor } = Color;
   const formatChannel = v => {
     const r = Math.round(v * 1000) / 1000;
     return Number.isInteger(r) ? r.toFixed(1) : String(r);
@@ -536,7 +523,7 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       line = view.state.doc.lineAt(start);
     const color = findColors(src, line.from, line.to).find(c => c.start === start);
     if (!color) return;
-    const rgb = [1, 3, 5].map(i => parseInt(picker.value.slice(i, i + 2), 16) / 255);
+    const rgb = Color.fromHex(picker.value);
     view.dispatch({
       changes: color.args
         .slice(0, 3)
@@ -737,6 +724,46 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     provide: field => CM.EditorView.decorations.from(field, value => value.deco),
   });
 
+  // ==== 잠시 뒤 다시 계산하는 표시의 공통 틀(쓰지 않는 변수 · 파라미터 값 · 같은 기호 강조) ====
+  //   laterPlugin({ delay(update) → 지연 ms | null, compute(view, state, force) → 보낼 효과 | null,
+  //                 first?: 처음 계산까지 ms, every?: 주기 ms(바깥 값이 바뀌는 것을 볼 때), spec?: ViewPlugin 설정 })
+  //   state: 표시마다 따로 쓰는 빈 객체(지난 결과 기억 등). force: 편집 · 처음처럼 반드시 다시 그릴 때 true.
+  //   편집기가 사라진 뒤의 dispatch 오류는 무시한다.
+  const laterPlugin = ({ delay, compute, first = null, every = 0, spec }) =>
+    CM.ViewPlugin.fromClass(
+      class {
+        constructor(view) {
+          this.view = view;
+          this.state = {};
+          this.timer = 0;
+          this.tick = every ? setInterval(() => this.run(false), every) : 0;
+          if (first !== null) this.schedule(first);
+        }
+        schedule(ms) {
+          clearTimeout(this.timer);
+          this.timer = setTimeout(() => this.run(true), ms);
+        }
+        run(force) {
+          const effects = compute(this.view, this.state, force);
+          if (!effects) return;
+          try {
+            this.view.dispatch({ effects });
+          } catch (_) {
+            // 편집기가 이미 사라졌다
+          }
+        }
+        update(update) {
+          const ms = delay(update);
+          if (ms !== null) this.schedule(ms);
+        }
+        destroy() {
+          clearTimeout(this.timer);
+          clearInterval(this.tick);
+        }
+      },
+      spec
+    );
+
   // ==== 쓰지 않는 지역 변수: 이름을 흐리게(마우스를 올리면 설명) · removeUnused로 한 번에 지운다 ====
   // 입력이 멈춘 뒤(0.3초) 다시 센다. 그 사이 편집으로 위치가 바뀌면 표시를 따라 옮긴다.
   const setUnused = CM.StateEffect.define();
@@ -757,32 +784,11 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     CM.Decoration.set(
       Scope.unusedLocals(src).map(item => unusedMark(item.name).range(item.at, item.at + item.name.length))
     );
-  const unusedPlugin = CM.ViewPlugin.fromClass(
-    class {
-      constructor(view) {
-        this.view = view;
-        this.timer = 0;
-        this.schedule(0);
-      }
-      schedule(delay) {
-        clearTimeout(this.timer);
-        this.timer = setTimeout(() => {
-          if (options.unusedHints === false) return;
-          try {
-            this.view.dispatch({ effects: setUnused.of(unusedDecorations(docText(this.view.state))) });
-          } catch (_) {
-            // 편집기가 이미 사라졌다
-          }
-        }, delay);
-      }
-      update(update) {
-        if (update.docChanged) this.schedule(300);
-      }
-      destroy() {
-        clearTimeout(this.timer);
-      }
-    }
-  );
+  const unusedPlugin = laterPlugin({
+    first: 0,
+    delay: update => (update.docChanged ? 300 : null),
+    compute: view => (options.unusedHints === false ? null : setUnused.of(unusedDecorations(docText(view.state)))),
+  });
   // 지울 수 있는 것(그 변수 하나만 선언한 문장)을 한 번에 지운다 — 되돌리기 한 칸. 문장이 지워져 빈 줄이 되면 줄째 지운다.
   // 지운 뒤 다른 변수가 새로 '쓰지 않는' 것이 될 수 있다(그 변수를 쓰던 초기화 식이 사라져서) — 다시 부르면 이어서 지운다.
   const removeUnused = view => {
@@ -877,41 +883,20 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     },
     provide: field => CM.EditorView.decorations.from(field),
   });
-  const valuePlugin = CM.ViewPlugin.fromClass(
-    class {
-      constructor(view) {
-        this.view = view;
-        this.print = "";
-        this.timer = setInterval(() => this.refresh(), 250);
-        this.refresh();
-      }
-      refresh(force = false) {
-        const view = this.view;
-        if (typeof options.uniformValues !== "function" || options.inlineValues === false) return;
-        if (!force && !view.dom.isConnected) return;
-        if (!force && !view.dom.offsetParent) return; // 편집기가 닫혀 있다
-        const values = options.uniformValues(),
-          print = JSON.stringify([...values]) + view.state.doc.length;
-        if (!force && print === this.print) return;
-        this.print = print;
-        try {
-          view.dispatch({ effects: setValues.of(valueDecorations(view.state, values)) });
-        } catch (_) {
-          // 편집기가 이미 사라졌다
-        }
-      }
-      update(update) {
-        if (update.docChanged) {
-          clearTimeout(this.soon);
-          this.soon = setTimeout(() => this.refresh(true), 300);
-        }
-      }
-      destroy() {
-        clearInterval(this.timer);
-        clearTimeout(this.soon);
-      }
+  const valuePlugin = laterPlugin({
+    first: 0,
+    every: 250,
+    delay: update => (update.docChanged ? 300 : null),
+    compute: (view, state, force) => {
+      if (typeof options.uniformValues !== "function" || options.inlineValues === false) return null;
+      if (!force && !view.dom.offsetParent) return null; // 편집기가 닫혀 있다
+      const values = options.uniformValues(),
+        print = JSON.stringify([...values]) + view.state.doc.length;
+      if (!force && print === state.print) return null;
+      state.print = print;
+      return setValues.of(valueDecorations(view.state, values));
     },
-    {
+    spec: {
       eventHandlers: {
         mousedown(event) {
           const button = event.target.closest?.(".cm-param-value");
@@ -921,8 +906,8 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
           return true;
         },
       },
-    }
-  );
+    },
+  });
 
   // ==== 같은 기호 강조: 커서가 이름 위에 있으면 그 기호가 쓰인 곳을 모두(범위를 따른다 — glsl-scope.js referencesAt) ====
   // 커서가 멈춘 뒤(0.15초) 센다. 선택 영역이 있을 때는 기본 '선택한 글자 강조'에 맡긴다. 두 곳 이상일 때만 그린다.
@@ -939,41 +924,23 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     },
     provide: field => CM.EditorView.decorations.from(field),
   });
-  const refPlugin = CM.ViewPlugin.fromClass(
-    class {
-      constructor(view) {
-        this.view = view;
-        this.timer = 0;
+  const refPlugin = laterPlugin({
+    delay: update => (update.selectionSet || update.docChanged ? 150 : null),
+    compute: view => {
+      const range = view.state.selection.main;
+      let deco = CM.Decoration.none;
+      if (range.empty && options.symbolHighlight !== false) {
+        const found = referencesAt(docText(view.state), range.head);
+        if (found.spots?.length > 1)
+          deco = CM.Decoration.set(
+            found.spots.map(spot => (spot.decl ? declMark : refMark).range(spot.at, spot.at + found.name.length))
+          );
       }
-      update(update) {
-        if (!update.selectionSet && !update.docChanged) return;
-        clearTimeout(this.timer);
-        this.timer = setTimeout(() => this.measure(), 150);
-      }
-      measure() {
-        const view = this.view,
-          range = view.state.selection.main;
-        let deco = CM.Decoration.none;
-        if (range.empty && options.symbolHighlight !== false) {
-          const src = docText(view.state),
-            found = referencesAt(src, range.head);
-          if (found.spots?.length > 1)
-            deco = CM.Decoration.set(
-              found.spots.map(spot => (spot.decl ? declMark : refMark).range(spot.at, spot.at + found.name.length))
-            );
-        }
-        if (deco === CM.Decoration.none && view.state.field(refField) === CM.Decoration.none) return;
-        try {
-          view.dispatch({ effects: setRefs.of(deco) });
-        } catch (_) {
-          // 편집기가 이미 사라졌다
-        }
-      }
-      destroy() {
-        clearTimeout(this.timer);
-      }
-    }
-  );
+      // 그릴 것도 지울 것도 없으면 보내지 않는다
+      if (deco === CM.Decoration.none && view.state.field(refField) === CM.Decoration.none) return null;
+      return setRefs.of(deco);
+    },
+  });
   // 참조 찾기(Shift+F12): 커서 자리 이름이 쓰인 곳 목록. cm-editor.js가 팔레트에 띄운다.
   //   → { name, label, items: [{ at, line, text, decl }] } 또는 { reason, message }
   const findReferences = (view, pos = view.state.selection.main.head) => {

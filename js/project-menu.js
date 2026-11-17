@@ -3,6 +3,8 @@
 // 바깥을 누르거나 Esc를 누르면 닫힌다. 이름 입력 대화상자(<dialog>) 안을 누르는 것은 바깥으로 치지 않는다.
 // 미리보기 영역은 overflow:hidden이라, 그 안에서 absolute로 띄우면 편집기 쪽으로 나가는 부분이 잘린다.
 // 그래서 메뉴는 position:fixed로 창 기준에 두고, 열 때·창 크기가 바뀔 때 버튼 바로 아래에 맞춘다(편집기 위로 올라온다).
+import * as UI from "./ui-kit.js";
+
 const create = ({ $, on }) => {
   const toggle = $("projectMenuToggle"),
     menu = $("projectMenu");
@@ -49,26 +51,16 @@ const create = ({ $, on }) => {
     if (refocus && !wasAway) toggle.focus?.();
   };
   on(toggle, "click", () => (isOpen() ? close() : open()));
-  const outside = event => {
-    if (!isOpen()) return;
-    const target = event.target;
-    if (menu.contains?.(target) || toggle.contains?.(target) || target?.closest?.("dialog")) return;
-    close();
-  };
-  const bound = new WeakSet();
-  const bind = () => {
-    const doc = owner();
-    if (bound.has(doc)) return;
-    bound.add(doc);
-    on(doc, "pointerdown", outside);
-    on(doc.defaultView || window, "resize", () => {
-      if (isOpen()) place();
-    });
-  };
-  bind();
-  on(document, "preview-popout-changed", () => {
-    close();
-    bind();
+  // 이름 입력 대화상자(<dialog>) 안을 누르는 것은 바깥으로 치지 않는다
+  const bind = UI.dismissPopover({
+    menu,
+    toggle,
+    owner,
+    isOpen,
+    close,
+    place,
+    on,
+    ignore: target => !!target?.closest?.("dialog"),
   });
   on(menu, "keydown", event => {
     if (event.key !== "Escape") return;

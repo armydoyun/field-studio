@@ -58,6 +58,10 @@ let renderer = null,
   gallery = null,
   guide = null,
   versionHistory = null;
+// 만든 순서의 반대로 정리한다(아직 만들지 않은 것은 건너뛴다). 창을 닫을 때와 시작에 실패했을 때 함께 쓴다.
+const disposeAll = () => {
+  for (const part of [guide, versionHistory, gallery, profiler, studio, settings, ui, input, renderer]) part?.dispose();
+};
 const initialize = async () => {
   try {
     renderer = Renderer.createRenderer(canvas, Shader, message => {
@@ -112,15 +116,7 @@ const initialize = async () => {
     window.addEventListener(
       "beforeunload",
       () => {
-        guide?.dispose();
-        versionHistory?.dispose();
-        gallery?.dispose();
-        profiler?.dispose();
-        studio?.dispose();
-        settings?.dispose();
-        ui?.dispose();
-        input?.dispose();
-        renderer?.dispose();
+        disposeAll();
         delete window.shaderPlayground;
         delete window.shaderInput;
         delete window.shaderSettings;
@@ -129,14 +125,7 @@ const initialize = async () => {
       { once: true }
     );
   } catch (error) {
-    guide?.dispose();
-    gallery?.dispose();
-    profiler?.dispose();
-    studio?.dispose();
-    settings?.dispose();
-    ui?.dispose();
-    input?.dispose();
-    renderer?.dispose();
+    disposeAll();
     console.error(error);
     status.textContent = error.message;
   }

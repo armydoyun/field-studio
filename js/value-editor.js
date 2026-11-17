@@ -75,15 +75,20 @@ const create = ({
       fields = [];
     if (initial.length !== info.count) return;
     context = getContext();
-    dialog = UI.el("dialog", "ui-dialog ui-dialog--md ui-dialog--column");
-    dialog.setAttribute("aria-label", `${name} 값 편집`);
+    const frame = UI.editDialog({
+      label: `${name} 값 편집`,
+      title: "값 편집",
+      description: `${name} · ${type}`,
+      closeLabel: "값 편집 취소",
+      className: "ui-dialog--column",
+      bodyClass: "ui-value-editor",
+      onCancel: () => close(),
+    });
+    dialog = frame.dialog;
     const opened = dialog,
-      head = UI.el("header", "ui-dialog-head"),
-      heading = UI.el("div", "ui-dialog-text"),
-      body = UI.el("div", "ui-dialog-body ui-value-editor"),
+      body = frame.body,
       form = UI.el("div", "ui-value-fields"),
-      error = UI.el("p", "ui-error"),
-      foot = UI.el("footer", "ui-dialog-foot");
+      error = UI.el("p", "ui-error");
     error.id = `value-editor-error-${++serial}`;
     error.setAttribute("role", "alert");
     error.hidden = true;
@@ -112,8 +117,6 @@ const create = ({
               : options.dir
                 ? "0이 아닌 방향 벡터 · 단위 길이로 정규화"
                 : "소수·지수 표기 지원";
-    heading.append(UI.el("h2", "", "값 편집"), UI.el("p", "", `${name} · ${type}`));
-    head.append(heading, UI.iconButton({ icon: "close", label: "값 편집 취소", size: "lg", onClick: () => close() }));
     body.append(UI.hint(hint));
     for (let index = 0; index < info.count; index++) {
       const axis =
@@ -262,17 +265,7 @@ const create = ({
         onApplied();
       },
     });
-    foot.append(UI.button({ label: "취소", size: "lg", onClick: () => close() }), apply);
-    dialog.append(head, body, foot);
-    dialog.addEventListener("cancel", event => {
-      event.preventDefault();
-      close();
-    });
-    dialog.addEventListener("close", () => {
-      if (dialog === opened) close();
-    });
-    button.ownerDocument.body.append(dialog);
-    dialog.showModal();
+    frame.show(apply, button.ownerDocument);
   }
   return {
     button,

@@ -13,7 +13,8 @@
     for (const end = Date.now() + ms; Date.now() < end; await wait(20)) if (check()) return;
     throw new Error(`FAIL: 시간 초과 — ${label}`);
   };
-  const before = studio.getProject();
+  const before = studio.getProject(),
+    live = $("studioLive").checked;
   const code = [
     "float shade(float x) { return x * 0.5; }",
     "void mainImage(out vec4 c, in vec2 p) {",
@@ -32,6 +33,7 @@
     document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true, ...extra }));
   try {
     studio.open();
+    $("studioLive").checked = false; // 실시간 적용이 상태 줄 안내를 덮지 않게
     area.value = code;
     area.dispatchEvent(new Event("input", { bubbles: true }));
     await wait(50);
@@ -77,8 +79,9 @@
     caret(code.indexOf("0.5"));
     key("F12", { code: "F12", shiftKey: true });
     await wait(30);
-    test(palette.hidden && /이름 위에 두세요/.test($("studioMessage").textContent), "이름이 아니면 안내");
+    test(palette.hidden && /이름 위에 두세요/.test($("studioMessage").textContent), `이름이 아니면 안내(${$("studioMessage").textContent})`);
   } finally {
+    $("studioLive").checked = live;
     studio.setProject(before);
   }
   console.log("같은 기호 강조 · 참조 찾기 검사 통과");
