@@ -97,6 +97,12 @@
     await until(() => items().some(item => item.textContent.includes("처음 모습") && item.textContent.includes("보관")), "이름 · 보관 표시");
     const named = (await studio.listVersions()).find(v => v.name === "처음 모습");
     test(!!named, "이름이 저장된다");
+    // 바로 전 버전과의 줄 변화 · 이름 붙인 것만 보기
+    test(items().some(item => /바로 전 버전보다 \+\d+ −\d+줄/.test(item.textContent)), "목록에 바로 전 버전과의 줄 변화");
+    [...document.querySelectorAll(".version-filter button")].find(button => button.textContent === "이름 붙인 것").click();
+    await until(() => items().length === 1 && items()[0].textContent.includes("처음 모습"), "이름 붙인 것만 보기");
+    document.querySelector(".version-filter button").click();
+    await until(() => items().length > 1, "전체 보기로 돌아옴");
     // 버전을 41개 더 쌓아도(내용이 모두 다르게) 이름 붙인 버전은 남고, 이름 없는 버전은 40개까지
     for (let i = 0; i < 41; i++) {
       r.setUniform("uGain", (i + 1) / 100);

@@ -1,6 +1,8 @@
 // 컴파일 오류 빠른 수정: 자주 나는 GLSL 오류의 메시지(브라우저 WebGL · ANGLE 문구)와 코드 줄을 보고 고친 줄을 제안한다(순수 함수).
 // 편집기(cm-editor.js)가 오류 표시의 '고치기' 버튼 · 오류 목록 · Ctrl+.로 보여 준다. 확실한 것만 제안한다 — 모르면 제안하지 않는다.
 //  · float 계산에 정수 리터럴: uA * 2 → uA * 2.0 ('wrong operand types' · 'cannot convert from const int' · 내장 함수 인자)
+//  · 정수 변수를 실수 자리에: float x = i → float(i) · 0.5 * i → 0.5 * float(i) · mod(i, 2.0) → mod(float(i), 2.0)
+//    (이름이 int로 선언됐는지 범위 분석(glsl-scope.js)으로 확인한다) · 반대로 int n = f → int(f)
 //  · 빠진 세미콜론: 다음 줄에서 'syntax error'가 나면 앞 코드 줄 끝에 ;
 //  · 오타 이름: 'undeclared identifier' · 없는 함수 → 비슷한 이름(편집 거리 2 이하 · 대소문자만 다름)
 //  · 벡터 크기: vec4 자리에 vec3 → vec4(…, 1.0) · vec3 자리에 vec4 → (…).xyz
@@ -12,9 +14,37 @@
 //     transform(문서 글) → 고친 글: 여러 수정을 겹쳐 적용할 때(모두 고치기) 쓴다. 줄 수정은 그 줄이 from 그대로일 때만 바꾼다.
 //   applyAll(text, fixes) → { text, applied } — 줄마다 첫 수정 · 문서 전체 수정을 차례로 겹쳐 적용(같은 수정은 한 번)
 
+import * as Scope from "./glsl-scope.js";
+
 const INT = /(?<![\w.])(\d+)(?![\w.])/g; // 소수점 · 지수 · 접미사 없는 정수 리터럴
 const toFloat = text => text.replace(INT, "$1.0");
 const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// 이 줄에서 정수(int · uint)로 선언된 이름이 쓰인 곳(줄 안 위치). 배열 원소 · 필드 · 함수 이름 · [ ] 안(첨자)은 뺀다.
+const intNamesIn = (lines, index, code) => {
+  const doc = lines.join("\n"),
+    start = lines.slice(0, index).reduce((sum, row) => sum + row.length + 1, 0),
+    info = Scope.analyze(doc);
+  if (!info.balanced) return [];
+  return info.refs
+    .filter(ref => ref.at >= start && ref.at < start + code.length && !ref.member)
+    .map(ref => ({ ref, decl: Scope.resolve(info, ref.name, ref.at, ref.scope) }))
+    .filter(({ decl }) => decl && decl.kind !== "function" && /^u?int$/.test(decl.type || ""))
+    .map(({ ref }) => ({ at: ref.at - start, name: ref.name }))
+    .filter(({ at, name }) => {
+      const before = code.slice(0, at),
+        after = code.slice(at + name.length);
+      return (
+        !/^\s*[[(.]/.test(after) &&
+        (before.match(/\[/g) || []).length === (before.match(/\]/g) || []).length &&
+        !/(?:float|int)\s*\(\s*$/.test(before)
+      );
+    });
+};
+// 위치들의 이름을 wrap(이름)으로 감싼다(뒤에서부터 바꿔 위치가 밀리지 않게)
+const wrapAt = (code, spots, wrap) =>
+  [...spots]
+    .sort((a, b) => b.at - a.at)
+    .reduce((out, { at, name }) => out.slice(0, at) + wrap(name) + out.slice(at + name.length), code);
 // 줄을 코드와 줄 끝 주석으로 나눈다(// 뒤는 건드리지 않는다)
 const splitComment = line => {
   const at = line.indexOf("//");
@@ -165,6 +195,19 @@ const quickFixes = ({ message = "", lines = [], index = 0, names = [] } = {}) =>
           `정수를 실수로: ${(code.match(near) || []).map(n => `${n.trim()} → ${n.trim()}.0`).join(", ")}`,
           fixed + comment
         );
+      // 정수 변수가 연산자 바로 옆에 있으면 float(…)로 감싼다
+      else {
+        const spots = intNamesIn(lines, index, code).filter(({ at, name }) => {
+          const before = code.slice(0, at).trimEnd(),
+            after = code.slice(at + name.length).trimStart();
+          return before.endsWith(op) || after.startsWith(op);
+        });
+        if (spots.length)
+          add(
+            `정수 변수를 실수로: ${spots.map(spot => `float(${spot.name})`).join(", ")}`,
+            wrapAt(code, spots, name => `float(${name})`) + comment
+          );
+      }
     }
   }
   // 2) 실수 자리에 정수: float x = 1; · x = 2;
@@ -174,6 +217,23 @@ const quickFixes = ({ message = "", lines = [], index = 0, names = [] } = {}) =>
       const rhs = outsideBrackets(assign[2], toFloat);
       if (rhs !== assign[2])
         add(`정수를 실수로: ${assign[2].trim()} → ${rhs.trim()}`, assign[1] + rhs + assign[3] + comment);
+    }
+  }
+  // 2-1) 실수 자리에 정수 변수(float x = i;) · 정수 자리에 실수(int n = f;): 오른쪽 식을 변환으로 감싼다
+  const typed =
+    /cannot convert from '(?:(?:lowp|mediump|highp) )?(u?int|float)' to '(?:(?:lowp|mediump|highp) )?(u?int|float)'/.exec(
+      message
+    );
+  if (typed && typed[1] !== typed[2] && !/'const /.test(message)) {
+    const assign = ASSIGN.exec(code);
+    if (assign) {
+      const expr = assign[2].trim(),
+        into = typed[2],
+        wrapped = `${into}(${expr})`;
+      add(
+        into === "float" ? `정수를 실수로 변환: ${wrapped}` : `실수를 정수로 변환(소수점 아래 버림): ${wrapped}`,
+        assign[1] + wrapped + assign[3] + comment
+      );
     }
   }
   // 3) 함수: 있는 함수면 정수 인자를 실수로(pow(x, 2) → pow(x, 2.0)), 없는 이름이면 비슷한 이름
@@ -197,6 +257,15 @@ const quickFixes = ({ message = "", lines = [], index = 0, names = [] } = {}) =>
           fixed = outsideBrackets(args, toFloat);
         if (fixed !== args)
           add(`${name}의 정수 인자를 실수로`, code.slice(0, open + 1) + fixed + code.slice(end) + comment);
+        else {
+          // 정수 변수 인자: mod(i, 2.0) → mod(float(i), 2.0)
+          const spots = intNamesIn(lines, index, code).filter(({ at }) => at > open && at < end);
+          if (spots.length)
+            add(
+              `${name}의 정수 변수 인자를 실수로: ${spots.map(spot => `float(${spot.name})`).join(", ")}`,
+              wrapAt(code, spots, name => `float(${name})`) + comment
+            );
+        }
       }
     } else
       for (const candidate of similar(name, names))

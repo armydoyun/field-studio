@@ -30,6 +30,8 @@
 .uniform-row { display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;padding:10px 12px 12px;container:uniform / inline-size; }
 .uniform-row+.uniform-row { border-top:1px solid var(--line); }
 .uniform-row:focus-within { background:color-mix(in srgb,var(--accent) 4%,var(--surface)); }
+/* 편집기의 값 표시를 눌러 찾아온 행(studio.js revealParameter): 잠깐 강조 */
+.uniform-row.is-located { background:var(--accent-soft);transition:background .6s; }
 .uniform-top { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 2px;min-height:24px; }
 .uniform-top>div { display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 8px;min-width:0; }
 .uniform-title { flex:1;margin-right:auto;padding-right:6px; }
