@@ -2,6 +2,10 @@
 
 Read `docs/DESIGN_SYSTEM.md` before changing UI or adding components.
 
+## Change delivery
+
+- After completing and validating a requested change, commit it, push the branch, and open a pull request. If a suitable pull request is already open, update it instead.
+
 ## Required icon policy
 
 - Never use emoji or emoticons anywhere in this project's UI, copy, tooltips, guides, example shader comments, documentation, or generated output.
