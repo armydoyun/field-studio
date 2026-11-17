@@ -238,25 +238,33 @@
                 <div class="ui-hud stage-label"><span class="ui-dot live-indicator" aria-hidden="true"></span><span id="renderState">재생 중</span></div>
                 <button id="hudReveal" type="button" class="ui-hud hud-reveal" title="HUD 다시 보기 (G · Esc)">HUD 다시 보기 <kbd>G</kbd></button>
                 <div class="project-menu-wrap">
-                    <button id="projectMenuToggle" type="button" class="ui-hud project-toggle glyph-icon icon-edit" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 저장·열기·이미지 (Ctrl+O · 저장 Ctrl+S)"><span id="projectMenuLabel">새 작업</span></button>
-                    <!-- 바뀐 내용이 있을 때만 보이는 저장 버튼: 메뉴를 열지 않고 한 번에 저장(이름 없는 작업이면 이름만 묻는다) · Ctrl+S와 같다 -->
-                    <button id="projectMenuState" type="button" class="ui-hud project-save-state" title="지금 작업을 프로젝트로 저장 (Ctrl+S)" hidden>저장</button>
+                    <!-- 프로젝트 막대: [이름 ▾](메뉴) | [저장]. 저장은 늘 같은 자리에 있고, 저장 안 된 변경이 있으면 점으로 알린다(project-menu.js) -->
+                    <div class="ui-toolbar ui-hud project-bar">
+                        <button id="projectMenuToggle" type="button" class="ui-btn--ghost project-toggle" aria-haspopup="dialog" aria-expanded="false" aria-controls="projectMenu" title="프로젝트 · 저장한 프로젝트 열기 · 파일 · 이미지 (Ctrl+O)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="projectMenuLabel">새 작업</span><svg class="project-toggle-caret" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5"/></svg></button>
+                        <button id="projectMenuState" type="button" class="ui-icon-btn project-save" data-modified="false" aria-label="프로젝트 저장" title="지금 작업을 프로젝트로 저장 (Ctrl+S)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 4v5h7V4"/><path d="M8 20v-6h8v6"/></svg></button>
+                    </div>
                     <div id="projectMenu" class="ui-popover project-menu" role="dialog" aria-label="프로젝트" hidden>
-                        <section id="studioFiles" class="project-menu-section" aria-labelledby="projectMenuFilesTitle"><h2 id="projectMenuFilesTitle">프로젝트</h2>
-                            <div class="studio-projects">
-                                <p id="studioProjectCurrent" class="studio-project-current" data-saved="false">프로젝트로 저장하지 않은 작업</p>
-                                <div class="studio-file-actions"><button id="studioProjectSave" type="button" class="ui-btn--primary" title="프로젝트 저장 (Ctrl+S)">프로젝트 저장…</button><button id="studioProjectSaveAs" type="button" title="지금 작업을 보관함에 새 이름으로 저장 (Ctrl+Shift+S)" hidden>다른 이름으로 저장</button></div>
-                                <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
-                            </div>
-
-                            <div class="studio-file-actions"><button id="studioExportPack" type="button" title="프로젝트 파일(Pack) 내보내기">프로젝트 파일 내보내기</button><button id="studioImportPack" type="button" title="내보낸 프로젝트 파일(Pack)을 열어 이미지까지 복원">프로젝트 파일 열기</button></div>
-                            <div class="studio-file-actions"><button id="studioExportHTML" type="button" title="재생 전용 HTML 내보내기">HTML로 내보내기 (재생 전용)</button></div>
-                            <div class="studio-file-actions"><button id="versionOpen" type="button" aria-haspopup="dialog" aria-controls="versionDialog" title="실행할 때마다 남긴 이 작업의 옛 버전 보기 · 비교 · 되돌리기">버전 기록…</button></div>
-                        <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
-                            <details class="ui-disclosure project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="ui-hint">코드·버퍼만 포함합니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="코드·버퍼 JSON 내보내기">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
-                            <button id="studioReset" type="button" title="기본 장면으로 새 프로젝트 시작">새 프로젝트 (기본 장면)</button>
-                        <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
+                        <!-- 지금 작업: 이름 · 상태와 저장 -->
+                        <section id="studioFiles" class="project-menu-section project-current" aria-labelledby="projectMenuFilesTitle">
+                            <div class="project-current-text"><h2 id="projectMenuFilesTitle">지금 작업</h2><p id="studioProjectCurrent" class="studio-project-current" data-saved="false">새 작업</p></div>
+                            <div class="project-current-actions"><button id="studioProjectSaveAs" type="button" class="ui-btn--sm" title="지금 작업을 보관함에 새 이름으로 저장 (Ctrl+Shift+S)" hidden>다른 이름으로…</button><button id="studioProjectSave" type="button" class="ui-btn--primary ui-btn--sm" title="프로젝트 저장 (Ctrl+S)">저장…</button></div>
                         </section>
+                        <!-- 이 브라우저의 프로젝트 보관함 -->
+                        <section class="project-menu-section studio-projects" aria-labelledby="projectMenuListTitle"><h2 id="projectMenuListTitle">저장한 프로젝트</h2>
+                            <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
+                        </section>
+                        <!-- 파일 · 기록: 메뉴 항목 -->
+                        <div class="ui-menu project-actions" role="group" aria-label="파일 · 기록">
+                            <button id="studioReset" type="button" class="ui-menu-item glyph-icon icon-plus" title="기본 장면으로 새 프로젝트 시작"><span>새 프로젝트</span><kbd>기본 장면</kbd></button>
+                            <button id="studioImportPack" type="button" class="ui-menu-item" title="내보낸 프로젝트 파일(Pack)을 열어 이미지까지 복원"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>프로젝트 파일 열기…</span></button>
+                            <button id="studioExportPack" type="button" class="ui-menu-item" title="코드 · 파라미터 · 설정 · 이미지를 한 파일(Pack)로 — 다른 컴퓨터로 옮길 때"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg><span>프로젝트 파일로 내보내기</span></button>
+                            <button id="studioExportHTML" type="button" class="ui-menu-item glyph-icon icon-code" title="재생 전용 HTML 한 파일로 내보내기"><span>HTML로 내보내기</span><kbd>재생 전용</kbd></button>
+                            <hr class="ui-menu-sep">
+                            <button id="versionOpen" type="button" class="ui-menu-item" aria-haspopup="dialog" aria-controls="versionDialog" title="실행할 때마다 남긴 이 작업의 옛 버전 보기 · 비교 · 되돌리기"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span>버전 기록…</span></button>
+                            <details class="ui-disclosure project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="ui-hint">코드·버퍼만 포함합니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="코드·버퍼 JSON 내보내기">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
+                        </div>
+                        <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
+                        <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
                         <section id="studioImages" class="project-menu-section" aria-labelledby="projectMenuImagesTitle"><h2 id="projectMenuImagesTitle">이미지</h2>
                             <button id="studioTextureAdd" type="button" title="로컬 이미지 파일을 불러와 Texture로 등록">+ 이미지 파일 불러오기</button>
                         <input id="studioTextureFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>

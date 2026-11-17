@@ -87,9 +87,9 @@ const create = ({
   };
   const syncCurrent = () => {
     const label = $("studioProjectCurrent");
-    label.textContent = current ? `작업 중: ${current.name}` : "프로젝트로 저장하지 않은 작업";
+    label.textContent = current ? current.name : "새 작업 · 아직 저장하지 않았습니다";
     label.dataset.saved = String(!!current);
-    $("studioProjectSave").textContent = current ? "저장" : "프로젝트 저장…";
+    $("studioProjectSave").textContent = current ? "저장" : "저장…";
     $("studioProjectSave").title = current
       ? `'${current.name}'에 덮어쓰기 (Ctrl+S) · 코드·파라미터·설정·이미지 포함`
       : "이 브라우저의 프로젝트 보관함에 이름을 붙여 저장 (Ctrl+S) · 코드·파라미터·설정·이미지 포함";
@@ -189,7 +189,7 @@ const create = ({
       const hint = element("p");
       hint.className = "ui-hint";
       hint.textContent = available
-        ? "저장한 프로젝트가 없습니다. 저장하면 여기에서 언제든 다시 열 수 있습니다."
+        ? "아직 없습니다. 저장하면 여기에서 다시 열 수 있습니다."
         : "이 브라우저에서는 프로젝트 보관함을 쓸 수 없습니다. Pack 파일로 저장하세요.";
       holder.append(hint);
     }
