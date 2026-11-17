@@ -141,6 +141,7 @@ tools/codemirror/     # js/codemirror.js 생성 도구 (이 파일을 다시 만
 tools/update_sha_manifest.py # 실행 소스 SHA-256 목록 갱신 (npm run sha / sha:check)
 tests/run.mjs         # npm test: 모든 테스트 실행기
 docs/DESIGN_SYSTEM.md # 디자인 시스템: 토큰 · 컴포넌트 표 · 새 기능을 붙이는 법
+docs/UI_LIFECYCLE.md  # UI 이벤트·관찰자·타이머·분리 창의 소유와 종료 기준
 docs/design-system.html # 컴포넌트 카탈로그(앱과 같은 CSS로 그린 견본) — 로컬 서버로 연다
 docs/history/         # 기능별 작업 기록 (예전 루트의 README_*.md)
 docs/THIRD_PARTY_LICENSES.md # 커뮤니티 셰이더의 원작자·라이선스 전문 · 새 예제를 넣는 기준

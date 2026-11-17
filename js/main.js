@@ -21,11 +21,14 @@ import * as WorkspaceLayout from "./workspace-layout.js";
 import * as VersionHistory from "./version-history.js";
 
 // 테마는 WebGL 초기화와 무관하게 먼저 연결한다(렌더러가 실패해도 화면 테마 전환은 동작해야 한다).
-window.shaderTheme = Theme.mount();
+const theme = Theme.mount();
+window.shaderTheme = theme;
 // 미리보기 분리 창(캔버스·상단 도구의 원본을 옮기므로 렌더러보다 먼저 연결해도 된다).
-window.shaderPopout = Popout.mount();
+const popout = Popout.mount();
+window.shaderPopout = popout;
 // 설정 패널 자리·너비(렌더러와 무관하게 먼저 적용해 첫 화면부터 저장한 배치로 그린다).
-window.shaderWorkspace = WorkspaceLayout.mount();
+const workspace = WorkspaceLayout.mount();
+window.shaderWorkspace = workspace;
 
 // 편집기 시그니처 힌트용 사전: "sin · cos · tan", "atan (2인수)"처럼 묶인 항목을 함수 이름별로 펼치고 같은 이름은 합친다.
 const builtinDocs = new Map();
@@ -59,10 +62,29 @@ let renderer = null,
   gallery = null,
   guide = null,
   versionHistory = null,
-  menuBar = null;
+  menuBar = null,
+  appMenus = null,
+  contextMenus = null;
+let stopped = false,
+  runtimeDisposed = false;
 // 만든 순서의 반대로 정리한다(아직 만들지 않은 것은 건너뛴다). 창을 닫을 때와 시작에 실패했을 때 함께 쓴다.
-const disposeAll = () => {
-  for (const part of [menuBar, guide, versionHistory, gallery, profiler, studio, settings, ui, input, renderer])
+const disposeRuntime = () => {
+  if (runtimeDisposed) return;
+  runtimeDisposed = true;
+  contextMenus?.();
+  for (const part of [
+    menuBar,
+    appMenus,
+    guide,
+    versionHistory,
+    gallery,
+    profiler,
+    studio,
+    ui,
+    settings,
+    input,
+    renderer,
+  ])
     part?.dispose();
 };
 const initialize = async () => {
@@ -77,8 +99,11 @@ const initialize = async () => {
     // 프로젝트 채널 연결을 복원하기 전에 지금 작업이 쓰는 이미지만 먼저 복구한다. 나머지는 앱이 뜬 뒤 이어서 복구한다.
     await renderer.restoreTextures({
       priority: Studio.savedTextureIds(),
-      onProgress: detail => document.dispatchEvent(new CustomEvent("shader-textures-restored", { detail })),
+      onProgress: detail => {
+        if (!stopped) document.dispatchEvent(new CustomEvent("shader-textures-restored", { detail }));
+      },
     });
+    if (stopped) return;
     ui = UI.mount(renderer, input, settings);
     studio = Studio.mount(renderer, Shader, settings, {
       lookup,
@@ -107,10 +132,10 @@ const initialize = async () => {
     guide = Guide.mount({ studio, gallery });
     versionHistory = VersionHistory.mount({ studio, renderer });
     // 우클릭 메뉴: 바탕 · 뷰포트(여기) + 각 기능 모듈이 등록한 영역 메뉴
-    AppMenus.mount({ studio: () => studio });
+    appMenus = AppMenus.mount({ studio: () => studio });
     // 창 맨 위 메뉴 바: 항목은 위에서 만든 화면의 버튼을 누른다
     menuBar = MenuBar.mount({ studio, guide });
-    ContextMenu.mount(document);
+    contextMenus = ContextMenu.mount(document);
     renderer.start();
     status.textContent = "";
     // HTML 패널 없이도 사용자 설정과 키 이벤트를 직접 제어할 수 있다.
@@ -118,23 +143,34 @@ const initialize = async () => {
     window.shaderInput = input;
     window.shaderSettings = settings;
     window.shaderStudio = studio;
-    window.addEventListener(
-      "beforeunload",
-      () => {
-        disposeAll();
-        delete window.shaderPlayground;
-        delete window.shaderInput;
-        delete window.shaderSettings;
-        delete window.shaderStudio;
-      },
-      { once: true }
-    );
   } catch (error) {
-    disposeAll();
+    if (stopped) return;
+    disposeRuntime();
     console.error(error);
     status.textContent = error.message;
   }
 };
-CustomSelect.mount();
-Kit.bindSearchClear();
+const selects = CustomSelect.mount();
+const unbindSearch = Kit.bindSearchClear();
+// beforeunload는 사용자가 이동을 취소할 수 있으므로 확정된 페이지 종료에서 정리한다.
+window.addEventListener("pagehide", event => {
+  if (event.persisted || stopped) return; // 뒤로 가기 캐시에 보관된 페이지는 같은 인스턴스로 복귀한다.
+  stopped = true;
+  popout.dispose();
+  disposeRuntime();
+  selects.dispose();
+  unbindSearch();
+  workspace.dispose();
+  theme.dispose();
+  for (const name of [
+    "shaderPlayground",
+    "shaderInput",
+    "shaderSettings",
+    "shaderStudio",
+    "shaderPopout",
+    "shaderWorkspace",
+    "shaderTheme",
+  ])
+    delete window[name];
+});
 initialize();

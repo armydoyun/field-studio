@@ -15,7 +15,7 @@ class El {
   get isConnected() { let node = this; while(node.parent) node = node.parent; return node.isRoot === true; }
   setAttribute(key, value) { this.attrs[key] = String(value); } removeAttribute(key) { delete this.attrs[key]; }
   querySelector() { return null; }
-  addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); } removeEventListener() {}
+  addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); } removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter(value => value !== fn); }
   fire(type, extra = {}) { const event = {type, defaultPrevented:false, preventDefault() { this.defaultPrevented = true; }, ...extra}; for(const fn of this.listeners[type] || []) fn(event); return event; }
   click() { return this.fire("click"); } focus() { this.focused = true; } getBoundingClientRect() { return {width:800, height:450}; }
 }
@@ -28,7 +28,7 @@ const makeDocument = () => {
   return doc;
 };
 const makeWindow = () => { const win = new El("#window"); win.document = makeDocument(); win.closed = false; win.close = function() { this.closed = true; }; win.focus = function() { this.focused = true; }; return win; };
-const setup = ({pip = true, popup} = {}) => {
+const setup = ({pip = true, popup, delayed = false} = {}) => {
   const doc = makeDocument(), ids = {}, add = (id, tag, parent) => { const el = new El(tag); el.id = id; ids[id] = el; parent.append(el); return el; };
   const stage = add("stage", "main", doc.body), viewport = add("renderViewport", "div", stage);
   const canvas = add("screen", "canvas", viewport), notice = add("previewPopoutNotice", "div", viewport); notice.hidden = true;
@@ -38,12 +38,17 @@ const setup = ({pip = true, popup} = {}) => {
   doc.documentElement.dataset.theme = "dark";
   const win = makeWindow(), view = new El("#main-window"), calls = {toggle:0};
   view.shaderStudio = {togglePlayback() { calls.toggle++; }};
-  if(pip) view.documentPictureInPicture = {requestWindow:async options => { calls.options = options; if(pip instanceof Error) throw pip; return win; }};
+  if(pip) view.documentPictureInPicture = {requestWindow:async options => {
+    calls.requests = (calls.requests || 0) + 1; calls.options = options;
+    if(delayed) return new Promise((resolve,reject) => { calls.resolve = resolve; calls.reject = reject; });
+    if(pip instanceof Error) throw pip; return win;
+  }};
   view.open = (url, name, features) => { calls.open = {url, name, features}; return popup === undefined ? win : popup; };
   doc.defaultView = view;
   // 안내 문구 자동 숨김 타이머는 검사에 필요 없으므로 가짜로 넘긴다(프로세스가 6초 기다리지 않게).
-  const api = factory(doc, class { constructor(type, init) { this.type = type; this.detail = init?.detail; } }, () => 0, () => {}).mount({doc});
-  return {doc, view, win, canvas, viewport, notice, button, back, status, header, api, calls};
+  const timers = new Map(); let serial = 0;
+  const api = factory(doc, class { constructor(type, init) { this.type = type; this.detail = init?.detail; } }, fn => { timers.set(++serial, fn); return serial; }, id => timers.delete(id)).mount({doc});
+  return {doc, view, win, canvas, viewport, notice, button, back, status, header, api, calls, timers};
 };
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const check = (ok, name) => { assert(ok, name); console.log("PASS", name); };
@@ -106,6 +111,49 @@ const check = (ok, name) => { assert(ok, name); console.log("PASS", name); };
   {
     const t = setup(); const first = await t.api.open(), second = await t.api.open();
     check(first === second && t.win.focused, "이미 열려 있으면 새 창 대신 기존 창에 초점");
+  }
+  {
+    const t = setup({delayed:true});
+    const first = t.api.open(), second = t.api.open();
+    check(t.calls.requests === 1 && t.canvas.parent === t.viewport, "동시에 열어도 PiP 요청은 하나이고 캔버스는 대기 중 이동하지 않는다");
+    t.calls.resolve(t.win);
+    check(await first === t.win && await second === t.win, "동시 요청이 같은 창을 받는다");
+    t.api.dispose(); t.api.dispose();
+    check(t.canvas.parent === t.viewport && t.win.closed, "반복 dispose에도 원본 복원은 안전하다");
+    check((t.doc.listeners.pointerdown || []).length === 0 && (t.win.document.listeners.keydown || []).length === 0 && (t.view.listeners.pagehide || []).length === 0, "dispose는 메인·분리 창 이벤트를 해제한다");
+    t.button.click(); check(await t.api.open() === null && t.calls.requests === 1, "dispose 후 버튼·API로 새 요청을 만들지 않는다");
+  }
+  {
+    const t = setup({delayed:true}); const pending = t.api.open();
+    t.api.dispose(); t.calls.resolve(t.win);
+    check(await pending === null && t.win.closed && t.canvas.parent === t.viewport, "dispose 뒤 늦게 열린 창은 닫고 원본은 옮기지 않는다");
+    check(!t.doc.events.some(event => event.detail?.open === true), "취소된 비동기 요청은 열림 이벤트를 내지 않는다");
+  }
+  {
+    const t = setup({delayed:true}); const pending = t.api.open();
+    t.api.close(); t.calls.reject(new Error("late PiP failure"));
+    check(await pending === null && !t.calls.open, "닫은 요청이 늦게 실패해도 대체 팝업을 만들지 않는다");
+    t.api.dispose();
+  }
+  {
+    const t = setup(), requests = [];
+    t.view.documentPictureInPicture.requestWindow = () => new Promise(resolve => requests.push(resolve));
+    const old = t.api.open(); t.api.close(); const current = t.api.open(), fresh = makeWindow();
+    requests[1](fresh); await current;
+    requests[0](t.win); await old;
+    check(t.api.isOpen && fresh.closed === false && t.win.closed && t.canvas.parent === fresh.document.body, "이전 요청의 늦은 완료가 새 창을 되돌리지 않는다");
+    t.api.dispose();
+  }
+  {
+    const t = setup({pip:false, popup:null}); t.button.click(); await flush();
+    const [timerId, timer] = [...t.timers.entries()][0];
+    check(t.timers.size === 1, "분리 실패 안내 타이머 생성");
+    t.status.textContent = "다른 안내"; t.timers.delete(timerId); timer();
+    check(t.status.textContent === "다른 안내", "이전 실패 안내 타이머가 다른 기능의 안내를 지우지 않는다");
+    t.button.click(); await flush();
+    check(t.timers.size === 1, "실패 안내를 다시 열면 새 타이머 생성");
+    t.api.dispose();
+    check(t.timers.size === 0, "dispose가 안내 타이머를 취소한다");
   }
   console.log("미리보기 분리 검사 통과");
 })().catch(error => { console.error("FAIL", error.stack); process.exitCode = 1; });

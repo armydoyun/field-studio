@@ -93,6 +93,16 @@ const create = ({ $, on, signal, activeTab, savePanel, showError }) => {
     if (!fullscreenDocs.has(doc)) {
       fullscreenDocs.add(doc);
       on(doc, "fullscreenchange", syncFullscreen);
+      if (doc !== document) {
+        const view = doc.defaultView;
+        const release = event => {
+          if (event.persisted) return;
+          doc.removeEventListener("fullscreenchange", syncFullscreen);
+          view.removeEventListener("pagehide", release);
+          fullscreenDocs.delete(doc);
+        };
+        on(view, "pagehide", release);
+      }
     }
     syncFullscreen();
   };

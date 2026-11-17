@@ -1328,18 +1328,31 @@ const mount = ({ studio, Shader, preview = null }) => {
     },
     { signal }
   );
+  let startFrame = 0,
+    welcomeTimer = 0;
   const startThumbs = () => {
+    startFrame = 0;
+    if (signal.aborted || !dialog.open) return;
     lazy ??= startLazy();
     lazy?.resume();
     for (const id of perfResults.keys()) showPerf(id);
   };
   const open = (welcome = false) => {
+    if (signal.aborted) return;
+    clearTimeout(welcomeTimer);
+    welcomeTimer = 0;
     dialog.dataset.welcome = String(welcome);
     if (!dialog.open) dialog.showModal();
-    requestAnimationFrame(startThumbs);
+    cancelAnimationFrame(startFrame);
+    startFrame = requestAnimationFrame(startThumbs);
     $("galleryClose").focus();
   };
   const close = () => {
+    if (signal.aborted) return;
+    clearTimeout(welcomeTimer);
+    welcomeTimer = 0;
+    cancelAnimationFrame(startFrame);
+    startFrame = 0;
     finishOnboarding();
     dialog.close();
   };
@@ -1407,7 +1420,7 @@ const mount = ({ studio, Shader, preview = null }) => {
   } catch (_) {
     /* 읽기가 막힌 브라우저: 안내를 띄우지 않는다. */
   }
-  if (first) setTimeout(() => open(true), 400);
+  if (first) welcomeTimer = setTimeout(() => open(true), 400);
   return {
     open,
     close,
@@ -1421,8 +1434,12 @@ const mount = ({ studio, Shader, preview = null }) => {
         ])
       ),
     dispose: () => {
+      clearTimeout(welcomeTimer);
+      cancelAnimationFrame(startFrame);
+      startFrame = 0;
       lazy?.stop();
       controller.abort();
+      if (dialog.open) dialog.close();
     },
   };
 };

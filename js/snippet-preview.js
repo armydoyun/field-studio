@@ -384,6 +384,8 @@ const testImage = () => {
 };
 
 const create = ({ plan }) => {
+  const controller = new AbortController();
+  let disposed = false;
   let gl = null,
     surface = null,
     vao = null,
@@ -393,6 +395,7 @@ const create = ({ plan }) => {
   const done = new Map(), // 조각 id → 그린 결과 캔버스(실패하면 null)
     pending = new Map(); // 조각 id → 그리는 중인 Promise
   const init = () => {
+    if (disposed) return false;
     if (ready || unavailable) return ready;
     surface = document.createElement("canvas");
     surface.width = WIDTH;
@@ -463,6 +466,7 @@ const create = ({ plan }) => {
   // 조각 하나를 그려 결과 캔버스를 돌려준다. 컴파일 실패나 WebGL2가 없으면 null. 컴파일을 기다리며 멈추는 동기식이다
   // (테스트·내보내기용). 화면의 조각 카드는 draw()가 비동기로 그린다.
   const render = item => {
+    if (disposed) return null;
     if (done.has(item.id)) return done.get(item.id);
     const fragment = source(item, plan);
     if (!fragment || !init()) {
@@ -486,6 +490,7 @@ const create = ({ plan }) => {
   };
   // 비동기판: 컴파일은 브라우저가 뒤에서 하고(KHR_parallel_shader_compile), 끝나면 그린다. 같은 조각은 한 번만 그린다.
   const renderAsync = item => {
+    if (disposed) return Promise.resolve(null);
     if (done.has(item.id)) return Promise.resolve(done.get(item.id));
     if (pending.has(item.id)) return pending.get(item.id);
     const fragment = source(item, plan);
@@ -493,16 +498,23 @@ const create = ({ plan }) => {
       done.set(item.id, null);
       return Promise.resolve(null);
     }
-    const promise = Lazy.compileProgram(gl, vs, fragment).then(({ program, log }) => {
-      let result = null;
-      if (program && gl) {
-        result = paint(program);
-        gl.deleteProgram(program);
-      } else if (!program) console.warn(`코드 조각 미리보기 실패: ${item.id}`, log);
-      pending.delete(item.id);
-      done.set(item.id, result);
-      return result;
-    });
+    const context = gl;
+    const promise = Lazy.compileProgram(context, vs, fragment, { signal: controller.signal }).then(
+      ({ program, log }) => {
+        if (disposed) {
+          if (program) context.deleteProgram(program);
+          return null;
+        }
+        let result = null;
+        if (program && gl) {
+          result = paint(program);
+          gl.deleteProgram(program);
+        } else if (!program) console.warn(`코드 조각 미리보기 실패: ${item.id}`, log);
+        pending.delete(item.id);
+        done.set(item.id, result);
+        return result;
+      }
+    );
     pending.set(item.id, promise);
     return promise;
   };
@@ -514,26 +526,31 @@ const create = ({ plan }) => {
   };
   // 카드가 화면에 보일 때만, 한 프레임에 하나씩 그린다(lazy-render.js). 범주를 바꾸거나 검색해 목록을 다시 그려도
   // 이미 그린 조각은 바로 붙이고, 사라진 카드는 대기열에서 빠진다.
-  let lazy = Lazy.createVisibleQueue({ margin: "240px" });
+  const lazy = Lazy.createVisibleQueue({ margin: "240px" });
   const draw = (item, canvas) => {
-    if (!PREVIEWS[item.id] || unavailable) return false;
+    if (disposed || !PREVIEWS[item.id] || unavailable) return false;
     if (done.has(item.id)) {
       apply(canvas, done.get(item.id));
       return true;
     }
     lazy.add(canvas, async () => {
       const image = await renderAsync(item);
-      if (canvas.isConnected) apply(canvas, image);
+      if (!disposed && canvas.isConnected) apply(canvas, image);
     });
     return true;
   };
   const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    controller.abort();
     lazy.dispose();
-    lazy = Lazy.createVisibleQueue({ margin: "240px" });
     pending.clear();
     done.clear();
     gl?.getExtension("WEBGL_lose_context")?.loseContext();
     gl = null;
+    surface = null;
+    vao = null;
+    vs = null;
     ready = false;
   };
   return { draw, render, renderAsync, has: id => !!PREVIEWS[id] && !unavailable, dispose };

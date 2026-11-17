@@ -6,13 +6,17 @@
 import * as UI from "./ui-kit.js";
 
 const providers = [];
-const mounted = new WeakSet();
-let current = null;
+const mounted = new WeakMap();
+let current = null,
+  currentProvider = null;
 
 const register = (selector, build, { signal } = {}) => {
+  if (signal?.aborted) return () => {};
   const entry = { selector, build };
   providers.push(entry);
   const remove = () => {
+    signal?.removeEventListener("abort", remove);
+    if (currentProvider === entry) close();
     const at = providers.indexOf(entry);
     if (at >= 0) providers.splice(at, 1);
   };
@@ -45,6 +49,7 @@ const tidy = items => {
 const close = () => {
   current?.close({ focus: false });
   current = null;
+  currentProvider = null;
 };
 
 const open = (event, items, label, node) => {
@@ -68,7 +73,10 @@ const open = (event, items, label, node) => {
     focusFirst: byKeyboard,
     label: label || "메뉴",
     items,
-    onClose: () => (current = null),
+    onClose: () => {
+      current = null;
+      currentProvider = null;
+    },
   });
   current.element.classList.add("ui-context-menu");
   return current;
@@ -95,16 +103,32 @@ const handle = event => {
       if (!items?.length) continue;
       event.preventDefault();
       open(event, items, result?.label, node);
+      currentProvider = provider;
       return;
     }
   }
 };
 
 // 문서마다 한 번(분리 창으로 옮긴 미리보기도 같은 메뉴를 쓴다).
-const mount = (doc = document) => {
-  if (!doc || mounted.has(doc)) return;
-  mounted.add(doc);
+const mount = (doc = document, { signal } = {}) => {
+  if (!doc || signal?.aborted) return () => {};
+  if (mounted.has(doc)) return mounted.get(doc);
+  const dispose = () => {
+    if (mounted.get(doc) !== dispose) return;
+    if (current?.element.ownerDocument === doc) close();
+    doc.removeEventListener("contextmenu", handle);
+    doc.defaultView?.removeEventListener("pagehide", onHide);
+    signal?.removeEventListener("abort", dispose);
+    mounted.delete(doc);
+  };
+  const onHide = event => {
+    if (!event.persisted) dispose();
+  };
+  mounted.set(doc, dispose);
   doc.addEventListener("contextmenu", handle);
+  doc.defaultView?.addEventListener("pagehide", onHide);
+  signal?.addEventListener("abort", dispose, { once: true });
+  return dispose;
 };
 
 const isOpen = () => !!current;
