@@ -986,6 +986,24 @@ const mount = ({ studio, gallery }) => {
     nav = $("guideNav"),
     content = $("guideContent"),
     search = $("guideSearch");
+  const timers = new Set(),
+    frames = new Set();
+  const delay = (fn, ms) => {
+    const id = setTimeout(() => {
+      timers.delete(id);
+      if (!signal.aborted) fn();
+    }, ms);
+    timers.add(id);
+    return id;
+  };
+  const afterFrame = fn => {
+    const id = requestAnimationFrame(() => {
+      frames.delete(id);
+      if (!signal.aborted) fn();
+    });
+    frames.add(id);
+    return id;
+  };
   const blockingDialog = () =>
     [...document.querySelectorAll("dialog[open]")].find(node => node !== dialog && node.id !== "gallery");
   const element = UI.el;
@@ -1080,7 +1098,7 @@ const mount = ({ studio, gallery }) => {
     const before = button.textContent;
     button.textContent = text;
     button.disabled = true;
-    setTimeout(() => {
+    delay(() => {
       button.textContent = before;
       button.disabled = false;
     }, 1400);
@@ -1559,6 +1577,7 @@ const mount = ({ studio, gallery }) => {
       button.classList.toggle("is-done", done.has(button.dataset.topic));
   };
   const show = id => {
+    if (signal.aborted) return;
     const topic = ALL.find(item => item.id === id) || ALL[0];
     current = topic.id;
     Store.write(LAST_KEY, topic.id);
@@ -1675,6 +1694,7 @@ const mount = ({ studio, gallery }) => {
   const touchOnly = window.matchMedia?.("(hover:none) and (pointer:coarse)").matches === true;
   if (touchOnly) content.autofocus = true;
   const open = (id = current, { focusSearch = true } = {}) => {
+    if (signal.aborted) return;
     window.focus?.();
     setNavOpen(false);
     search.value = "";
@@ -1685,7 +1705,7 @@ const mount = ({ studio, gallery }) => {
       // 닫힌 채로 주제를 고르면 스크롤할 수 없으므로 열린 뒤 선택 문서를 보이는 자리로 옮긴다.
       nav.querySelector("button.is-active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     }
-    if (!touchOnly && focusSearch) setTimeout(() => search.focus(), 0);
+    if (!touchOnly && focusSearch) delay(() => search.focus(), 0);
   };
   listen(search, "input", () => {
     renderNav();
@@ -1878,7 +1898,7 @@ const mount = ({ studio, gallery }) => {
     next.textContent = step === activeTour.steps.length - 1 ? "완료" : "다음";
     targetOf(item)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     // 패널·편집기가 열리며 레이아웃이 바뀌므로 다음 프레임에 위치를 계산한다.
-    requestAnimationFrame(() => requestAnimationFrame(place));
+    afterFrame(() => afterFrame(place));
     next.focus({ preventScroll: true });
     card.scrollTop = 0;
   };
@@ -1965,6 +1985,7 @@ const mount = ({ studio, gallery }) => {
       )?.focus({ preventScroll: true });
   };
   const startTour = (id = "overview") => {
+    if (signal.aborted) return;
     if (blockingDialog()) return false;
     if (!tourActive) beforeTour = uiState();
     if (dialog.open) dialog.close();
@@ -2045,8 +2066,13 @@ const mount = ({ studio, gallery }) => {
       if (tourActive) endTour();
       dialogWatch.disconnect();
       controller.abort();
+      for (const id of timers) clearTimeout(id);
+      for (const id of frames) cancelAnimationFrame(id);
+      timers.clear();
+      frames.clear();
       overlay.remove();
       previews.dispose();
+      if (dialog.open) dialog.close();
     },
   };
 };

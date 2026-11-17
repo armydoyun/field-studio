@@ -59,8 +59,8 @@ const create = ({ toggle, menu, signal, beforeOpen = () => {} }) => {
     place,
     on,
     // 다른 메뉴가 열리면 닫는다(키보드로 열면 pointerdown이 없다)
-    bindExtra: doc =>
-      on(doc, OPEN_EVENT, event => {
+    bindExtra: (doc, listen) =>
+      listen(doc, OPEN_EVENT, event => {
         if (event.detail !== menu) close();
       }),
   });

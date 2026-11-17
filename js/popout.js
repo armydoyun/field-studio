@@ -18,19 +18,32 @@ const mount = ({ doc = document } = {}) => {
       open: async () => null,
       close() {},
       toggle() {},
+      dispose() {},
       get isOpen() {
         return false;
       },
       activeDocument: () => doc,
       place: () => doc,
     };
+  const listeners = [],
+    windowListeners = [];
+  const listen = (target, type, fn, options, group = listeners) => {
+    target.addEventListener(type, fn, options);
+    group.push(() => target.removeEventListener(type, fn, options));
+  };
+  const clearListeners = group => {
+    for (const remove of group.splice(0)) remove();
+  };
+  let disposed = false,
+    pending = null,
+    generation = 0;
   // 마지막으로 사용자가 조작한(누르거나 키를 친) 창의 문서. 대화상자·프로젝트 메뉴는 이 창에 띄운다
   // (분리 창의 프로젝트 메뉴에서 저장하면 분리 창에, 메인 창 편집기에서 F2를 누르면 메인 창에).
   let lastInput = doc;
   const noteInput = d => () => {
     lastInput = d;
   };
-  for (const type of ["pointerdown", "keydown", "focusin"]) doc.addEventListener(type, noteInput(doc), true);
+  for (const type of ["pointerdown", "keydown", "focusin"]) listen(doc, type, noteInput(doc), true);
   let target = null,
     marker = null,
     moved = [],
@@ -101,14 +114,18 @@ const mount = ({ doc = document } = {}) => {
   };
 
   const tell = message => {
-    if (!status) return;
+    if (disposed || !status) return;
     clearTimeout(statusTimer);
     status.textContent = message;
     status.hidden = !message;
     if (message)
       statusTimer = setTimeout(() => {
-        status.hidden = true;
-        status.textContent = "";
+        if (disposed) return;
+        statusTimer = 0;
+        if (status.textContent === message) {
+          status.hidden = true;
+          status.textContent = "";
+        }
       }, 6000);
   };
   // 새 창은 빈 문서이므로 이 페이지의 스타일을 그대로 복사한다. 읽을 수 없는 외부 시트는 링크로 건다.
@@ -154,6 +171,8 @@ const mount = ({ doc = document } = {}) => {
   };
   // 창을 닫으면(직접 닫기 · 되돌리기 · 메인 페이지 이동) 캔버스를 원래 자리에 다시 꽂는다.
   const restore = () => {
+    generation++;
+    pending = null;
     if (!target) return;
     const win = target;
     target = null;
@@ -175,16 +194,12 @@ const mount = ({ doc = document } = {}) => {
     moved = [];
     hudObserver?.disconnect();
     hudObserver = null;
-    doc.removeEventListener("theme-changed", syncTheme);
+    clearListeners(windowListeners);
     if (!win.closed) win.close();
     sync();
     canvas.focus?.({ preventScroll: true });
   };
-  const open = async () => {
-    if (target) {
-      target.focus();
-      return target;
-    }
+  const createWindow = async ticket => {
     const rect = canvas.getBoundingClientRect(),
       aspect = rect.width && rect.height ? rect.height / rect.width : 9 / 16;
     const width = Math.round(Math.min(Math.max(rect.width * 0.5, 320), 960)),
@@ -196,10 +211,15 @@ const mount = ({ doc = document } = {}) => {
       try {
         win = await view.documentPictureInPicture.requestWindow({ width, height });
       } catch (error) {
+        if (disposed || ticket !== generation) return null;
         if (error?.name === "NotAllowedError") throw error;
         win = popup();
       }
     } else win = popup();
+    if (disposed || ticket !== generation) {
+      if (win && !win.closed) win.close();
+      return null;
+    }
     if (!win) throw new Error("팝업이 차단되었습니다. 주소창에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.");
     const d = win.document;
     d.head.replaceChildren();
@@ -211,89 +231,123 @@ const mount = ({ doc = document } = {}) => {
     d.documentElement.lang = "ko";
     copyStyles(win);
     d.body.className = "preview-popout-window";
-    for (const type of ["pointerdown", "keydown", "focusin"]) d.addEventListener(type, noteInput(d), true);
+    for (const type of ["pointerdown", "keydown", "focusin"]) listen(d, type, noteInput(d), true, windowListeners);
     // 분리 창 문서를 알린다(우클릭 메뉴 등 문서마다 거는 기능이 이 창에도 붙도록 — app-menus.js).
     doc.dispatchEvent(new CustomEvent("preview-popout-window", { detail: { document: d } }));
     target = win;
     syncTheme();
-    doc.addEventListener("theme-changed", syncTheme);
+    listen(doc, "theme-changed", syncTheme, undefined, windowListeners);
     marker = doc.createComment("preview canvas");
     canvas.replaceWith(marker);
     d.body.append(canvas);
     moveControls(d);
     attachHud(win, d);
     // 분리 창 안에서도 Space로 재생/정지, G로 HUD 보이기/숨기기, Esc로 되돌리기.
-    d.addEventListener("keydown", event => {
-      if (event.defaultPrevented || event.repeat || event.isComposing) return;
-      if (event.target?.closest?.("input, textarea, select, .ui-select, [contenteditable], dialog[open]")) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) {
-        if ((event.ctrlKey || event.metaKey) && !event.altKey) {
-          const key = event.key.toLowerCase();
-          if (key === "s" && event.shiftKey) {
-            event.preventDefault();
-            header?.querySelector("#studioProjectSave:not(:disabled)")?.click();
-          } else if (key === "o") {
-            event.preventDefault();
-            header?.querySelector("#projectMenuToggle")?.click();
+    listen(
+      d,
+      "keydown",
+      event => {
+        if (event.defaultPrevented || event.repeat || event.isComposing) return;
+        if (event.target?.closest?.("input, textarea, select, .ui-select, [contenteditable], dialog[open]")) return;
+        if (event.ctrlKey || event.metaKey || event.altKey) {
+          if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+            const key = event.key.toLowerCase();
+            if (key === "s" && event.shiftKey) {
+              event.preventDefault();
+              header?.querySelector("#studioProjectSave:not(:disabled)")?.click();
+            } else if (key === "o") {
+              event.preventDefault();
+              header?.querySelector("#projectMenuToggle")?.click();
+            }
           }
+          return;
         }
-        return;
-      }
-      if (event.code === "Space") {
-        if (event.target?.closest?.("button")) return;
-        event.preventDefault();
-        view.shaderStudio?.togglePlayback();
-      } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
-        // 미리보기 분리 + 편집기 확대를 끝낸다(메인 창과 같은 키).
-        event.preventDefault();
-        view.shaderStudio?.splitEdit?.();
-      } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        event.preventDefault();
-        header?.querySelector("#hudToggle")?.click();
-      } else if (event.key === "Escape" && d.body.classList.contains("hud-hidden")) {
-        // HUD를 숨긴 동안의 Esc는 HUD만 되돌린다(창은 그대로).
-        event.preventDefault();
-        header?.querySelector("#hudReveal")?.click();
-      } else if (event.key === "Escape") {
-        // 저장 뒤 초점이 본문으로 돌아와도, 먼저 열린 메뉴만 닫는다.
-        for (const [menuId, toggleId] of [
-          ["projectMenu", "projectMenuToggle"],
-          ["captureMenu", "captureToggle"],
-          ["moreMenu", "moreToggle"],
-        ]) {
-          if (header?.querySelector(`#${menuId}:not([hidden])`)) {
-            event.preventDefault();
-            header.querySelector(`#${toggleId}`).click();
-            return;
+        if (event.code === "Space") {
+          if (event.target?.closest?.("button")) return;
+          event.preventDefault();
+          view.shaderStudio?.togglePlayback();
+        } else if (event.key.toLowerCase() === "p" && !event.shiftKey) {
+          // 미리보기 분리 + 편집기 확대를 끝낸다(메인 창과 같은 키).
+          event.preventDefault();
+          view.shaderStudio?.splitEdit?.();
+        } else if (event.key.toLowerCase() === "g" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          event.preventDefault();
+          header?.querySelector("#hudToggle")?.click();
+        } else if (event.key === "Escape" && d.body.classList.contains("hud-hidden")) {
+          // HUD를 숨긴 동안의 Esc는 HUD만 되돌린다(창은 그대로).
+          event.preventDefault();
+          header?.querySelector("#hudReveal")?.click();
+        } else if (event.key === "Escape") {
+          // 저장 뒤 초점이 본문으로 돌아와도, 먼저 열린 메뉴만 닫는다.
+          for (const [menuId, toggleId] of [
+            ["projectMenu", "projectMenuToggle"],
+            ["captureMenu", "captureToggle"],
+            ["moreMenu", "moreToggle"],
+          ]) {
+            if (header?.querySelector(`#${menuId}:not([hidden])`)) {
+              event.preventDefault();
+              header.querySelector(`#${toggleId}`).click();
+              return;
+            }
           }
+          restore();
         }
-        restore();
-      }
-    });
+      },
+      undefined,
+      windowListeners
+    );
     // 편집기·설정·갤러리·가이드는 메인 창에 열리므로 해당 도구를 누르면 그 창을 보여 준다.
-    d.addEventListener("click", event => {
-      if (
-        ["studioToggle", "panelToggle", "galleryToggle", "helpToggle"].includes(event.target?.closest?.("button")?.id)
-      )
-        view.focus();
-    });
-    win.addEventListener("pagehide", restore, { once: true });
+    listen(
+      d,
+      "click",
+      event => {
+        if (
+          ["studioToggle", "panelToggle", "galleryToggle", "helpToggle"].includes(event.target?.closest?.("button")?.id)
+        )
+          view.focus();
+      },
+      undefined,
+      windowListeners
+    );
+    listen(win, "pagehide", restore, { once: true }, windowListeners);
     sync();
     return win;
   };
+  const open = () => {
+    if (disposed) return Promise.resolve(null);
+    if (target) {
+      target.focus();
+      return Promise.resolve(target);
+    }
+    if (pending) return pending;
+    const ticket = ++generation;
+    pending = createWindow(ticket).finally(() => {
+      if (ticket === generation) pending = null;
+    });
+    return pending;
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    restore();
+    clearTimeout(statusTimer);
+    statusTimer = 0;
+    clearListeners(listeners);
+  };
   const toggle = () =>
-    target
+    target || pending
       ? restore()
       : open().catch(error => {
           tell(`미리보기 분리 실패: ${error.message}`);
         });
-  button.addEventListener("click", toggle);
-  back?.addEventListener("click", restore);
-  view.addEventListener("pagehide", restore);
+  listen(button, "click", toggle);
+  if (back) listen(back, "click", restore);
+  listen(view, "pagehide", restore);
   return {
     open,
     close: restore,
     toggle,
+    dispose,
     get isOpen() {
       return !!target;
     },
