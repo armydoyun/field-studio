@@ -9,15 +9,16 @@
 .glsl-builtin { color:var(--syn-builtin); }
 .glsl-string { color:var(--syn-string); }
 /* CodeMirror 6 편집기: #studioCode(숨은 textarea)는 studio.js용 소스 창구이고, 화면은 CodeMirror가 그린다. */
-.studio-cm-host { position:relative;display:flex;flex:1;min-width:0;min-height:0; }
+.studio-cm-host { position:relative;display:flex;flex:1;min-width:0;min-height:0;container-type:inline-size; }
 /* Ctrl+K 연속 키 대기 표시: 초점을 받아 다음 키를 읽는다(글자 입력 칸이 아니어서 한글 조합이 시작되지 않는다) */
 .studio-chord { position:absolute;right:12px;bottom:12px;z-index:6;padding:5px 10px;border:1px solid var(--accent);border-radius:6px;background:var(--elevated);color:var(--text);font:600 11px/1.5 var(--mono);box-shadow:var(--shadow);pointer-events:none; }
 .studio-chord:focus { outline:none; }
 .studio-cm-host>.cm-editor { flex:1;min-width:0;height:100%; }
 .studio-cm-host .cm-editor.cm-focused { outline:none; }
 /* 가로 스크롤 여백: 가장 긴 줄 끝 뒤에도 빈 곳을 두어, 끝까지 스크롤해도 마지막 글자 · 커서가 편집기 오른쪽 끝에 붙지 않는다.
+   여백은 .cm-content가 아니라 각 줄의 안쪽 여백이라, 커서 줄 강조 · 줄 배경이 이 여백까지 이어진다(폭은 편집기 폭 기준 cqw — 위 container-type).
    줄 바꿈 모드에서는 가로 스크롤이 없으니 쓸 폭을 줄이지 않는다. 입력 중 커서 여백은 cm-editor.js(cursorScrollMargin). */
-.studio-cm-host .cm-content:not(.cm-lineWrapping) { padding-right:var(--editor-scroll-gutter); }
+.studio-cm-host .cm-content:not(.cm-lineWrapping)>.cm-line { padding-right:var(--editor-scroll-gutter); }
 .studio-cm-host .cm-selectionLayer:not(.studio-selection-layer) { display:none; }
 /* 찾기 · 바꾸기 창(cm-search-panel.js): 1줄 찾기 + 도구, 2줄 바꿀 내용 + 바꾸기. DOM 순서(찾기 → 바꿀 내용 → 도구)가 Tab 순서다. */
 .studio-cm-host .cm-panel.studio-find { display:grid;grid-template-columns:22px minmax(100px,1fr) auto 24px;grid-template-areas:"mode find find-tools close" ". replace replace-tools .";align-items:center;gap:6px;padding:7px 6px 7px 6px;font:12px var(--sans); }
