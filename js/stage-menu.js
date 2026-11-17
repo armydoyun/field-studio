@@ -5,7 +5,7 @@
 import * as UI from "./ui-kit.js";
 
 const OPEN_EVENT = "stage-menu-open";
-const create = ({ toggle, menu, signal }) => {
+const create = ({ toggle, menu, signal, beforeOpen = () => {} }) => {
   const on = (target, type, fn, options = {}) => target?.addEventListener(type, fn, { ...options, signal });
   const GAP = 6,
     MARGIN = 8;
@@ -31,6 +31,7 @@ const create = ({ toggle, menu, signal }) => {
     menu.style.maxHeight = `${Math.max(0, view.innerHeight - top - MARGIN)}px`;
   };
   const open = ({ focus = true } = {}) => {
+    beforeOpen();
     // 키보드로 다른 메뉴 버튼을 누르면 pointerdown이 없어 먼저 열린 메뉴가 남는다. 열 때 다른 메뉴에 닫으라고 알린다.
     owner().dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: menu }));
     menu.hidden = false;

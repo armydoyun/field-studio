@@ -24,7 +24,8 @@ def ready(page):
 
 
 def view_command(page, label):
-    page.locator('#menuBar [data-menu="view"]').click()
+    view = page.locator('#menuBar [data-menu="view"]')
+    (view if view.is_visible() else page.locator('#menuBar [data-menu="all"]')).click()
     page.locator('.ui-menu[role="menu"] [role="menuitem"]').filter(has_text=re.compile("^" + label)).click()
 
 
@@ -71,10 +72,17 @@ try:
                 expect(page.locator("#appBar")).to_be_visible()
 
                 # 좁은 화면의 서랍은 새로고침 후 닫히고, 다시 열고 닫을 때 inert와 초점도 복구된다.
-                page.set_viewport_size({"width": 760, "height": 900})
+                page.set_viewport_size({"width": 560, "height": 900})
                 page.reload()
                 ready(page)
                 expect(page.locator("#panelToggle")).to_have_attribute("aria-pressed", "false")
+                # 접힌 메뉴에서도 이름과 단축키는 별도 요소로 유지한다.
+                page.locator('#menuBar [data-menu="all"]').click()
+                compact = page.locator('.ui-menu[role="menu"] [role="menuitem"]').filter(has_text=re.compile("^설정 패널"))
+                expect(compact.locator("span")).to_have_text("설정 패널")
+                expect(compact.locator("kbd")).to_have_text("H")
+                expect(compact).to_have_attribute("aria-pressed", "false")
+                page.keyboard.press("Escape")
                 page.locator("#panelToggle").click()
                 assert page.locator("#stage").evaluate("node => node.inert")
                 page.locator("#panelClose").click()
@@ -108,6 +116,22 @@ try:
                     popup.keyboard.press("F10")
                     expect(page.locator("#appBar")).to_be_visible()
                     expect(popup.locator("#menuBarShow")).to_be_hidden()
+                    # 분리 뒤 보기와 우클릭은 모두 현재 동작(원래 자리로 복귀)을 표시한다.
+                    page.locator('#menuBar [data-menu="view"]').click()
+                    return_item = page.locator('.ui-menu[role="menu"] [role="menuitem"]').filter(has_text=re.compile("^미리보기를 원래 자리로 되돌리기"))
+                    expect(return_item.locator("span")).to_have_text("미리보기를 원래 자리로 되돌리기")
+                    expect(return_item).to_have_attribute("aria-pressed", "true")
+                    page.keyboard.press("Escape")
+                    popup.locator("#screen").click(button="right")
+                    return_item = popup.locator('.ui-context-menu [role="menuitem"]').filter(has_text=re.compile("^미리보기를 원래 자리로 되돌리기"))
+                    expect(return_item).to_have_attribute("aria-pressed", "true")
+                    popup.keyboard.press("Escape")
+                    popup.evaluate("document.body.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:10,clientY:10}))")
+                    editor_item = popup.locator('.ui-context-menu [role="menuitem"]').filter(has_text=re.compile("^셰이더 편집기"))
+                    expect(editor_item.locator("span")).to_have_text("셰이더 편집기")
+                    expect(editor_item.locator("kbd")).to_have_text("E")
+                    expect(editor_item).to_have_attribute("aria-pressed", "false")
+                    popup.keyboard.press("Escape")
                     # 분리된 상태에서도 보기 > HUD가 원본 버튼에 연결된다.
                     view_command(page, "HUD")
                     popup.wait_for_function("document.body.classList.contains('hud-hidden')")

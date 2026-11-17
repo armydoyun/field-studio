@@ -76,7 +76,8 @@ const open = (event, items, label, node) => {
 
 const handle = event => {
   if (event.defaultPrevented || event.shiftKey) return;
-  const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+  // 분리 창의 body와 메인 창에서 옮긴 canvas는 서로 다른 Element 생성자를 쓴다.
+  const target = event.target?.nodeType === 1 ? event.target : event.target?.parentElement;
   if (!target) return;
   // 메뉴 위를 다시 우클릭해도 기본 메뉴를 띄우지 않는다.
   if (target.closest(".ui-menu")) {

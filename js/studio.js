@@ -20,6 +20,7 @@ import * as Projects from "./studio-projects.js";
 import * as ProjectMenu from "./project-menu.js";
 import * as ChannelPicker from "./channel-picker.js";
 import * as PreviewDOM from "./preview-dom.js";
+import * as MenuCommands from "./menu-commands.js";
 import * as Scope from "./glsl-scope.js";
 import * as Prepare from "./glsl-prepare.js";
 import * as Media from "./media-input.js";
@@ -1973,6 +1974,9 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     button.setAttribute("aria-pressed", String(!playing));
     button.setAttribute("aria-label", label);
     button.title = `${label} · 뷰포트에서는 Space`;
+    const preview = $("previewPause");
+    preview.setAttribute("aria-pressed", String(!playing));
+    preview.setAttribute("aria-label", playing ? "일시정지" : "재생");
   };
   const maximize = () => {
     if (!expanded) {
@@ -2916,15 +2920,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 명령 팔레트(Ctrl+Shift+P)에 편집기 바깥 기능도 등록한다. 대부분 기존 버튼을 누르는 것과 같다.
   // bind: 편집기 안에서 이 명령을 실행할 VS Code식 키(CodeMirror 키 이름). key는 팔레트에 보이는 표기.
   const press = (label, id, key, bind) => ({
-    id, // 같은 버튼을 누르는 명령은 팔레트에 하나만(메뉴 바도 등록한다 — cm-editor.js registerCommands)
-    label,
-    key,
+    ...MenuCommands.command(id, label, key),
     bind,
     run: () => {
       const button = $(id);
       if (button && !button.disabled) button.click();
     },
   });
+  const common = (id, bind) => press(undefined, id, undefined, bind);
   const stepPass = step => {
     const tabs = [...$("studioPassTabs").children],
       at = tabs.findIndex(tab => tab.classList.contains("is-active"));
@@ -2962,43 +2965,42 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   syncPreviewControls();
   editor.registerCommands?.([
     press("셰이더 실행 (적용)", "studioRun", "Alt+Enter"),
-    { label: "프로젝트 저장", key: "Ctrl+S", run: () => saveProject() },
-    { label: "버전 기록 (옛 버전 보기 · 비교 · 되돌리기)", run: () => $("versionOpen")?.click() },
+    { ...MenuCommands.command("studioProjectSave"), run: () => saveProject() },
+    { ...MenuCommands.command("versionOpen"), run: () => $("versionOpen")?.click() },
     {
       label: "Ctrl+S로 실행 (이전 방식) 켜기/끄기",
       run: () => setCtrlSRuns(!ctrlSRuns()),
     },
-    press("되돌리기", "studioUndo", "Ctrl+Z"),
-    press("다시 실행", "studioRedo", "Ctrl+Y"),
+    common("studioUndo"),
+    common("studioRedo"),
     { label: "자동 적용 켜기/끄기", run: () => $("studioLive").click() },
     { label: "미리보기: Image ~ 편집 중인 패스", run: togglePreview },
     { label: "미리보기 고정 켜기/끄기", run: () => setPreviewPinned(!previewPinned) },
     press("버퍼 패스 추가", "studioAdd"),
     { label: "다음 패스로", key: "Alt+PageDown · Alt+.", run: () => stepPass(1) },
     { label: "이전 패스로", key: "Alt+PageUp · Alt+,", run: () => stepPass(-1) },
-    press("재생 / 일시정지", "studioPause"),
-    press("시간·프레임 초기화", "studioResetFrames"),
-    press("프로젝트 메뉴 열기", "projectMenuToggle", "Ctrl+O"),
-    press("집중 모드 전환", "studioMaximize", "Ctrl+K Z", ["Mod-k z", "Mod-k Z"]),
+    common("studioPause"),
+    common("studioResetFrames"),
+    common("projectMenuToggle"),
+    common("studioMaximize", ["Mod-k z", "Mod-k Z"]),
     {
-      label: "미리보기 분리 + 편집기 확대 (전환)",
-      key: "Ctrl+K P · 편집기 밖에서는 P",
+      ...MenuCommands.command("studioSplitEdit"),
       bind: ["Mod-k p", "Mod-k P"],
       run: () => splitEdit(),
     },
-    press("편집기 배치 바꾸기 (옆 ~ 위아래)", "studioLayout", "Ctrl+\\", "Mod-\\"),
+    common("studioLayout", "Mod-\\"),
     press("편집기 닫기", "studioHide", "E"),
     press("코드 조각 모음 열기", "studioSnippets"),
     press("파라미터 패널 열기", "studioParameters"),
-    press("도움말 · 단축키", "studioHelp", "?"),
+    common("studioHelp"),
     press(".frag 파일로 저장", "studioSaveGLSL"),
     press(".frag 파일 열기", "studioOpenGLSL"),
-    press("다른 이름으로 프로젝트 저장", "studioProjectSaveAs", "Ctrl+Shift+S"),
-    press("프로젝트 파일 내보내기 (코드·파라미터·이미지)", "studioExportPack"),
-    press("HTML로 내보내기 (재생 전용 한 파일)", "studioExportHTML"),
-    press("프로젝트 파일 열기", "studioImportPack"),
-    press("이미지 파일 불러오기", "studioTextureAdd"),
-    press("새 프로젝트 (기본 장면)", "studioReset"),
+    common("studioProjectSaveAs"),
+    common("studioExportPack"),
+    common("studioExportHTML"),
+    common("studioImportPack"),
+    common("studioTextureAdd"),
+    common("studioReset"),
   ]);
   // Ctrl+P: VS Code의 '파일로 이동' 자리에 패스(Image · Buffer A…) 목록을 둔다.
   editor.setFiles?.(() =>

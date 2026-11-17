@@ -2,11 +2,19 @@
 // 렌더링·파라미터 UI와 분리하고, 버튼·단축키가 같은 상태 변경 함수를 쓴다.
 import * as StageMenu from "./stage-menu.js";
 import * as PreviewDOM from "./preview-dom.js";
+import * as MenuCommands from "./menu-commands.js";
 
 const create = ({ $, on, signal, activeTab, savePanel, showError }) => {
   const stage = $("stage");
-  const captureMenu = StageMenu.create({ toggle: $("captureToggle"), menu: $("captureMenu"), signal }),
-    moreMenu = StageMenu.create({ toggle: $("moreToggle"), menu: $("moreMenu"), signal });
+  const menu = name =>
+    StageMenu.create({
+      toggle: $(name + "Toggle"),
+      menu: $(name + "Menu"),
+      signal,
+      beforeOpen: () => MenuCommands.syncMenu($(name + "Menu")),
+    });
+  const captureMenu = menu("capture"),
+    moreMenu = menu("more");
   const focusToolbar = id => {
     const node = $(id);
     const toggle = node?.closest?.("#moreMenu") ? moreMenu.toggle : captureMenu.toggle;
