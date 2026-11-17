@@ -172,6 +172,123 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         },
       }
     : null;
+  // 다른 탭에서 쓰인 곳(참조 찾기 Shift+F12가 지금 탭 다음에 붙인다). 여러 탭이 함께 쓰는 이름만:
+  //   · Common의 전역 이름(함수 · 변수 · 구조체 · #define · Uniform): Common의 선언 · 쓰는 곳과, 각 패스에서 그 이름을
+  //     스스로 선언하지 않고 쓰는 곳 · 패스의 Uniform: 같은 Uniform을 선언한 다른 패스(파라미터 하나를 나눠 쓴다)
+  //   → [{ tab, label, items: [{ at, line, text, decl }] }]. 함께 쓰는 이름이 아니면 [].
+  const globalSpotsOf = (src, name) => {
+    const decl = Scope.analyze(src).decls.find(d => d.scope === 0 && d.name === name && d.kind !== "field");
+    if (decl) return Scope.referencesAt(src, decl.at).spots || [];
+    return Scope.definesGlobal(src, name)
+      ? Scope.referencesAt(src, Scope.macroSpots(src, name)[0] ?? 0, { macros: [name] }).spots || []
+      : [];
+  };
+  const projectReferences = ({ name, pos }) => {
+    if (disposed) return [];
+    const code = $("studioCode").value,
+      macro = Scope.definesGlobal(code, name) && !Scope.analyze(code).decls.some(d => d.name === name),
+      found = Scope.symbolAt(code, pos, { macros: macro ? [name] : [] }),
+      symbol = found.symbol,
+      global = (symbol && symbol.scope === 0 && symbol.kind !== "field") || macro,
+      commonDefines = hasCommon() && Scope.definesGlobal(project.common, name),
+      shared =
+        (selected === COMMON && global) ||
+        (selected !== COMMON && !global && found.reason === "undeclared" && commonDefines) ||
+        (global && symbol?.uniform);
+    if (!shared) return [];
+    const uniform =
+      symbol?.uniform ||
+      (commonDefines && Scope.analyze(project.common).decls.some(d => d.scope === 0 && d.name === name && d.uniform));
+    const groups = [];
+    for (const tab of tabNames()) {
+      if (tab === selected) continue;
+      const src = sourceOf(project, tab) || "";
+      let spots;
+      if (Scope.definesGlobal(src, name)) {
+        const own = Scope.analyze(src).decls.find(d => d.scope === 0 && d.name === name && d.kind === "var");
+        // 이 탭이 스스로 선언한 이름: Common이거나, 같은 Uniform이면 함께 쓰는 것
+        spots = tab === COMMON || (uniform && own?.uniform) ? globalSpotsOf(src, name) : [];
+      } else spots = (Scope.externalSpots(src, name) || []).map(at => ({ at, decl: false }));
+      if (!spots.length) continue;
+      const rows = src.split("\n"),
+        starts = [0];
+      for (const row of rows) starts.push(starts.at(-1) + row.length + 1);
+      groups.push({
+        tab,
+        label: tabLabel(tab),
+        items: spots.map(spot => {
+          const line = starts.findIndex(start => start > spot.at);
+          return { at: spot.at, line, text: rows[line - 1].trim(), decl: spot.decl };
+        }),
+      });
+    }
+    return groups;
+  };
+  // 다른 탭의 그 자리로(참조 찾기에서 고를 때)
+  const openReference = (tab, at, length) => {
+    if (!tabExists(tab)) return false;
+    open();
+    select(tab);
+    const src = $("studioCode").value,
+      line = src.slice(0, at).split("\n").length,
+      column = at - src.lastIndexOf("\n", at - 1);
+    editor.goToLine(line, column);
+    $("studioCode").setSelectionRange(at, at + length);
+    setStatus(`${tabLabel(tab)} ${line}번째 줄로 이동했습니다`);
+    return true;
+  };
+  // 편집기 줄 끝에 보일 파라미터 현재 값: 이름 → { text, color? }. 그라데이션 · 곡선(sampler2D)은 글자로 줄일 수 없어 뺀다.
+  const shortNumber = (value, integer) =>
+    integer ? String(Math.round(value)) : String(Number(Number(value).toFixed(3))).replace(/^(-?\d+)$/, "$1.0");
+  const uniformValueText = item => {
+    const integer = /^(?:int|uint|[iu]vec\d)$/.test(item.type),
+      value = item.value;
+    if (item.type === "sampler2D") return null;
+    if (item.type === "bool" || item.type.startsWith("bvec"))
+      return Array.isArray(value) ? `(${value.map(v => String(!!v)).join(", ")})` : String(!!value);
+    if (/^mat/.test(item.type)) return "행렬";
+    if (Array.isArray(value) && value.some(Array.isArray)) return `[${value.length}개]`;
+    if (Array.isArray(value)) {
+      if (!/vec/.test(item.type)) return `[${value.length}개]`;
+      return `(${value.map(v => shortNumber(v, integer)).join(", ")})`;
+    }
+    return typeof value === "number" ? shortNumber(value, integer) : null;
+  };
+  const uniformValues = () => {
+    const out = new Map();
+    for (const item of renderer.getUserUniforms()) {
+      const text = uniformValueText(item);
+      if (text === null) continue;
+      const color =
+        item.options?.color && Array.isArray(item.value)
+          ? `rgb(${item.value
+              .slice(0, 3)
+              .map(v => Math.round(Math.max(0, Math.min(1, v)) * 255))
+              .join(" ")})`
+          : "";
+      out.set(item.name, { text, color });
+    }
+    return out;
+  };
+  // 파라미터 패널에서 그 행을 보이고 잠깐 표시한 뒤 첫 조작에 초점(편집기의 값 표시를 눌렀을 때)
+  const revealParameter = name => {
+    const tab = document.querySelector('#panelTabs [data-tab="uniforms"]');
+    if (tab && tab.getAttribute("aria-selected") !== "true") tab.click();
+    const row = [...($("uniformList")?.querySelectorAll(".uniform-row") || [])].find(
+      node => node.dataset.name === name
+    );
+    if (!row || row.hidden || !row.offsetParent) {
+      setStatus(`${name} 파라미터 행을 찾지 못했습니다(검색 · 접힌 묶음 · 조건으로 숨겨져 있을 수 있습니다)`);
+      return false;
+    }
+    row.scrollIntoView?.({ block: "nearest" });
+    row.classList.remove("is-located");
+    void row.offsetWidth;
+    row.classList.add("is-located");
+    setTimeout(() => row.classList.remove("is-located"), 1200);
+    row.querySelector("input,button,select,[tabindex='0']")?.focus({ preventScroll: true });
+    return true;
+  };
   // 편집기: CodeMirror 6 (js/cm-editor.js). #studioCode textarea는 소스를 읽고 쓰는 창구다.
   const editor = Editor.mount(
     $("studioCode"),
@@ -188,6 +305,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       renameShared: request => renameShared(request),
       isSharedTab: () => selected === COMMON,
       notify: text => setStatus(text, "is-dirty"),
+      uniformValues,
+      revealParameter,
+      projectReferences: request => projectReferences(request),
+      openReference: (tab, at, length) => openReference(tab, at, length),
       // 다른 탭의 편집기가 Common의 이름을 알도록(자동 완성 · 설명 · 정의로 이동). Common 탭 자신에게는 넘기지 않는다.
       shared: () => (selected !== COMMON && hasCommon() ? project.common : ""),
       openShared: (line, column) => {

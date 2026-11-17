@@ -38,6 +38,11 @@
     ["오타 이름", "void mainImage(out vec4 c, in vec2 p) {\n  c = vec4(uGian);\n}", "vec4(uGain)"],
     ["오타 함수", "void mainImage(out vec4 c, in vec2 p) {\n  c = vec4(smothstep(0.0, 1.0, uGain));\n}", "smoothstep("],
     ["vec4 자리에 vec3", "void mainImage(out vec4 c, in vec2 p) {\n  c = vec3(uGain, 0.0, 0.0);\n}", "c = vec4(vec3(uGain, 0.0, 0.0), 1.0);"],
+    // 정수 변수(범위 분석으로 int 선언 확인)
+    ["실수 자리에 정수 변수", "void mainImage(out vec4 c, in vec2 p) {\n  int i = 3;\n  float x = i;\n  c = vec4(x * uGain);\n}", "float x = float(i);"],
+    ["내장 함수에 정수 변수", "void mainImage(out vec4 c, in vec2 p) {\n  int i = 3;\n  float x = mod(i, 2.0);\n  c = vec4(x * uGain);\n}", "mod(float(i), 2.0)"],
+    ["연산에 정수 변수", "void mainImage(out vec4 c, in vec2 p) {\n  int i = 3;\n  c = vec4(i / 3.0 * uGain);\n}", "vec4(float(i) / 3.0 * uGain)"],
+    ["정수 자리에 실수", "void mainImage(out vec4 c, in vec2 p) {\n  float f = uGain * 4.0;\n  int n = f;\n  c = vec4(float(n));\n}", "int n = int(f);"],
   ];
   try {
     test(studio.setProject({ image: header + "void mainImage(out vec4 c, in vec2 p) { c = vec4(uGain); }", passes: [], imageChannels: {} }), "검사 장면");

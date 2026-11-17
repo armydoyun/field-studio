@@ -1430,17 +1430,27 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   const paletteEntries = () => {
     const value = paletteInput.value;
     if (paletteRefs) {
-      const { name, items } = paletteRefs;
-      return {
-        items: items.map(item => ({
+      const { name, items, others = [] } = paletteRefs;
+      const elsewhere = others.flatMap(group =>
+        group.items.map(item => ({
           label: item.text || "(빈 줄)",
-          hint: `Ln ${item.line}${item.decl ? " · 선언" : ""}`,
+          hint: `${group.label} · Ln ${item.line}${item.decl ? " · 선언" : ""}`,
           kind: item.decl ? "definition" : "reference",
-          offset: item.at,
-          length: name.length,
-          symbol: true,
-          run: () => jumpTo(item.at, name.length),
-        })),
+          run: () => options.openReference?.(group.tab, item.at, name.length),
+        }))
+      );
+      return {
+        items: items
+          .map(item => ({
+            label: item.text || "(빈 줄)",
+            hint: `Ln ${item.line}${item.decl ? " · 선언" : ""}`,
+            kind: item.decl ? "definition" : "reference",
+            offset: item.at,
+            length: name.length,
+            symbol: true,
+            run: () => jumpTo(item.at, name.length),
+          }))
+          .concat(elsewhere),
         query: value.trim(),
       };
     }
@@ -1599,7 +1609,11 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     paletteChoice = 0;
     paletteOrigin = { selection: view.state.selection, top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
     paletteInput.placeholder = paletteRefs
-      ? `${paletteRefs.name} — ${paletteRefs.label} · ${paletteRefs.items.length}곳 (줄 내용으로 거르기)`
+      ? `${paletteRefs.name} — ${paletteRefs.label} · ${paletteRefs.items.length}곳${
+          paletteRefs.others.length
+            ? ` · 다른 탭 ${paletteRefs.others.reduce((sum, group) => sum + group.items.length, 0)}곳`
+            : ""
+        } (줄 내용으로 거르기)`
       : PALETTE_PLACEHOLDER;
     if (paletteRefs) {
       // 커서가 들어 있는 자리를 먼저 고른다
@@ -1632,7 +1646,9 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
       notify(found.message);
       return true;
     }
-    paletteRefs = found;
+    // 여러 탭이 함께 쓰는 이름(Common의 이름 · 같은 Uniform)이면 다른 탭에서 쓰인 곳을 뒤에 붙인다
+    const others = options.projectReferences?.({ name: found.name, pos }) || [];
+    paletteRefs = { ...found, others };
     openPalette("");
     return true;
   };

@@ -37,6 +37,20 @@ const summaryOf = version => {
   if (version.presets?.length) parts.push(`프리셋 ${version.presets.length}개`);
   return parts.join(" · ");
 };
+// 바로 전(더 오래된) 버전과 견준 줄 수 변화: 탭마다 줄 단위 비교를 더한다. { add, del }
+const changeOf = (version, older) => {
+  if (!older) return null;
+  const before = new Map(tabsOf(older.project)),
+    after = new Map(tabsOf(version.project));
+  let add = 0,
+    del = 0;
+  for (const name of new Set([...before.keys(), ...after.keys()]))
+    for (const op of LineDiff.diff(before.get(name) || "", after.get(name) || "")) {
+      if (op.type === "add") add++;
+      else if (op.type === "del") del++;
+    }
+  return { add, del };
+};
 const TONE = { 실행: "", "직접 남김": "accent", "되돌리기 전": "warning", "다른 작업을 열기 전": "warning" };
 
 const mount = ({ studio, renderer } = {}) => {
@@ -45,7 +59,24 @@ const mount = ({ studio, renderer } = {}) => {
   if (!dialog) return { open() {}, dispose() {} };
   const controller = new AbortController(),
     listen = (target, type, callback) => target?.addEventListener(type, callback, { signal: controller.signal });
-  let comparing = null;
+  let comparing = null,
+    only = "all"; // 목록 보기: 전체 · 이름 붙인 것만
+  const filter = UI.segmented({
+    label: "보일 버전",
+    size: "sm",
+    className: "version-filter",
+    value: only,
+    options: [
+      { value: "all", label: "전체" },
+      { value: "named", label: "이름 붙인 것", title: "이름을 붙여 계속 보관하는 버전만" },
+    ],
+    onChange: value => {
+      only = value;
+      render();
+    },
+  });
+  $("versionList").before(filter.element);
+  const changes = new Map(); // 버전 id → 바로 전 버전과의 줄 변화(버전은 바뀌지 않으므로 한 번만 센다)
   const setSummary = text => ($("versionSummary").textContent = text);
   // 한 탭의 비교를 줄 요소로
   const diffLines = (before, after, budget, heading) => {
@@ -144,21 +175,32 @@ const mount = ({ studio, renderer } = {}) => {
     return changedTabs;
   };
   const render = async () => {
-    const versions = await studio.listVersions(),
-      list = $("versionList");
+    const all = await studio.listVersions(),
+      list = $("versionList"),
+      versions = only === "named" ? all.filter(item => item.name) : all;
+    all.forEach((version, index) => {
+      if (!changes.has(version.id)) changes.set(version.id, changeOf(version, all[index + 1]));
+    });
     if (comparing && !versions.some(item => item.id === comparing)) comparing = null;
     setSummary(
-      versions.length
-        ? `이 작업의 버전 ${versions.length}개 · 실행에 성공할 때(1분에 한 번까지) · 다른 작업을 열기 전 · 되돌리기 전에 남깁니다. 이 브라우저에만 보관합니다.`
+      all.length
+        ? `이 작업의 버전 ${all.length}개 · 실행에 성공할 때(1분에 한 번까지) · 다른 작업을 열기 전 · 되돌리기 전에 남깁니다. 이 브라우저에만 보관합니다.`
         : "아직 남긴 버전이 없습니다. 실행에 성공하면 자동으로 남고, 아래 '지금 버전 남기기'로 직접 남길 수도 있습니다."
     );
     list.replaceChildren(
-      ...versions.map((version, index) => {
+      ...versions.map(version => {
+        const index = all.indexOf(version);
         const item = UI.el("div", "version-item"),
           info = UI.el("div", "version-info"),
           when = UI.el("span", "version-when", relative(version.time)),
           label = UI.tag(version.label || "실행", { tone: TONE[version.label] || "" }),
-          detail = UI.el("span", "version-detail", summaryOf(version)),
+          change = changes.get(version.id),
+          detail = UI.el(
+            "span",
+            "version-detail",
+            summaryOf(version) +
+              (change && (change.add || change.del) ? ` · 바로 전 버전보다 +${change.add} −${change.del}줄` : "")
+          ),
           actions = UI.el("div", "version-actions");
         item.setAttribute("role", "listitem");
         when.title = new Date(version.time).toLocaleString("ko-KR");
@@ -229,7 +271,16 @@ const mount = ({ studio, renderer } = {}) => {
         return item;
       })
     );
-    if (!versions.length) list.append(UI.el("p", "ui-empty version-empty", "남긴 버전이 없습니다"));
+    if (!versions.length)
+      list.append(
+        UI.el(
+          "p",
+          "ui-empty version-empty",
+          only === "named" && all.length
+            ? "이름 붙인 버전이 없습니다 · '이름 붙이기…'로 남겨 둘 버전을 고르세요"
+            : "남긴 버전이 없습니다"
+        )
+      );
     const still = comparing && versions.find(item => item.id === comparing);
     comparing = null;
     if (still) compare(still);

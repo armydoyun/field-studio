@@ -1,5 +1,6 @@
 /* 버전 기록 대화상자(version-history.js · index.html #versionDialog): 목록(때 · 까닭 · 요약 | 비교 · 되돌리기) + 지금 작업과의 비교.
    모양은 ui-dialog · ui-btn · ui-tag가 정한다. 여기에는 배치와 비교 줄의 색(뜻 있는 색 토큰)만 둔다. */
+.version-filter { width:max-content;margin:0 var(--space-2) var(--space-2); }
 .version-list { display:grid;gap:var(--space-2);max-height:min(320px,40vh);overflow:auto;padding:var(--space-2); }
 .version-item { display:flex;align-items:center;gap:var(--space-6);min-height:var(--control-lg);padding:var(--space-3) var(--space-4);border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--sunken); }
 .version-info { display:flex;flex:1;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-4);min-width:0; }

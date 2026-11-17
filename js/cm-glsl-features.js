@@ -4,6 +4,7 @@
 //  · 색 견본: vec3/vec4(0~1 숫자) 앞에 색 견본을 끼워 넣고, 누르면 색상 선택기로 값을 바꾼다(VS Code식 인라인 위젯).
 //  · 정의로 이동(F12 · Ctrl+클릭), 이름 바꾸기(F2, 범위를 따름 — glsl-scope.js).
 //  · 들여쓰기 안내선, 컴파일 오류 메시지를 줄 끝에 표시(Error Lens).
+//  · 파라미터 현재 값을 uniform 선언 줄 끝에(누르면 파라미터 패널의 그 행으로).
 //  · 같은 기호 강조(커서 자리 이름이 쓰인 곳 · 범위를 따름) · 참조 찾기 목록(findReferences, Shift+F12).
 //  · 쓰지 않는 지역 변수를 흐리게 표시하고, removeUnused로 한 번에 지운다(glsl-scope.js unusedLocals).
 // 소스 분석은 glsl-language.js가 맡고, 여기서는 화면·키 동작만 다룬다. 이름이 가리키는 선언(범위)은 glsl-scope.js가 찾는다.
@@ -814,6 +815,115 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
     return removable.length;
   };
 
+  // ==== 파라미터 현재 값: uniform 선언 줄 끝에 지금 값(색이면 견본)을 흐리게 · 누르면 파라미터 패널의 그 행으로 ====
+  // options.uniformValues() → Map(이름 → { text, color? }) · options.revealParameter(이름). 값이 바뀌었는지는 편집기가
+  // 화면에 있는 동안 0.25초마다 글자로 견주어, 바뀐 때만 다시 그린다(렌더러에는 값 변경 알림이 없다).
+  const setValues = CM.StateEffect.define();
+  class ValueWidget extends CM.WidgetType {
+    constructor(name, text, color) {
+      super();
+      this.name = name;
+      this.text = text;
+      this.color = color || "";
+    }
+    eq(other) {
+      return other.name === this.name && other.text === this.text && other.color === this.color;
+    }
+    toDOM() {
+      // 줄 높이를 바꾸지 않도록(아래 줄이 밀리지 않게) 버튼이 아닌 글자 조각으로 둔다 — 누르기는 mousedown이 받는다
+      const button = document.createElement("span");
+      button.setAttribute("role", "button");
+      button.className = "cm-param-value";
+      button.dataset.name = this.name;
+      button.title = `${this.name}의 지금 값 · 누르면 파라미터 패널에서 보기`;
+      if (this.color) {
+        const swatch = document.createElement("span");
+        swatch.className = "cm-param-swatch";
+        swatch.style.background = this.color;
+        button.append(swatch);
+      }
+      button.append(document.createTextNode(`= ${this.text}`));
+      return button;
+    }
+    ignoreEvent() {
+      return false;
+    }
+  }
+  const valueDecorations = (state, values) => {
+    if (!values?.size) return CM.Decoration.none;
+    const src = docText(state),
+      info = Scope.analyze(src),
+      byLine = new Map();
+    for (const decl of info.decls) {
+      if (!decl.uniform || !decl.global || !values.has(decl.name)) continue;
+      const line = state.doc.lineAt(decl.at);
+      byLine.set(line.to, [...(byLine.get(line.to) || []), decl.name]);
+    }
+    const ranges = [];
+    for (const [to, names] of [...byLine].sort((a, b) => a[0] - b[0]))
+      names.forEach((name, index) => {
+        const value = values.get(name);
+        ranges.push(
+          CM.Decoration.widget({ widget: new ValueWidget(name, value.text, value.color), side: 2 + index }).range(to)
+        );
+      });
+    return CM.Decoration.set(ranges, true);
+  };
+  const valueField = CM.StateField.define({
+    create: () => CM.Decoration.none,
+    update(deco, tr) {
+      for (const effect of tr.effects) if (effect.is(setValues)) return effect.value;
+      return tr.docChanged ? deco.map(tr.changes) : deco;
+    },
+    provide: field => CM.EditorView.decorations.from(field),
+  });
+  const valuePlugin = CM.ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.view = view;
+        this.print = "";
+        this.timer = setInterval(() => this.refresh(), 250);
+        this.refresh();
+      }
+      refresh(force = false) {
+        const view = this.view;
+        if (typeof options.uniformValues !== "function" || options.inlineValues === false) return;
+        if (!force && !view.dom.isConnected) return;
+        if (!force && !view.dom.offsetParent) return; // 편집기가 닫혀 있다
+        const values = options.uniformValues(),
+          print = JSON.stringify([...values]) + view.state.doc.length;
+        if (!force && print === this.print) return;
+        this.print = print;
+        try {
+          view.dispatch({ effects: setValues.of(valueDecorations(view.state, values)) });
+        } catch (_) {
+          // 편집기가 이미 사라졌다
+        }
+      }
+      update(update) {
+        if (update.docChanged) {
+          clearTimeout(this.soon);
+          this.soon = setTimeout(() => this.refresh(true), 300);
+        }
+      }
+      destroy() {
+        clearInterval(this.timer);
+        clearTimeout(this.soon);
+      }
+    },
+    {
+      eventHandlers: {
+        mousedown(event) {
+          const button = event.target.closest?.(".cm-param-value");
+          if (!button) return false;
+          event.preventDefault();
+          options.revealParameter?.(button.dataset.name);
+          return true;
+        },
+      },
+    }
+  );
+
   // ==== 같은 기호 강조: 커서가 이름 위에 있으면 그 기호가 쓰인 곳을 모두(범위를 따른다 — glsl-scope.js referencesAt) ====
   // 커서가 멈춘 뒤(0.15초) 센다. 선택 영역이 있을 때는 기본 '선택한 글자 강조'에 맡긴다. 두 곳 이상일 때만 그린다.
   const macrosOf = src => symbolsOf(src).defines.map(d => d.name);
@@ -953,6 +1063,8 @@ const create = ({ CM, language, options = {}, ask, notify = () => {}, onScrub = 
       unusedPlugin,
       refField,
       refPlugin,
+      valueField,
+      valuePlugin,
       mouse,
       CM.keymap.of(keys),
     ],
