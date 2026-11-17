@@ -1,9 +1,11 @@
 // node tests/build-regression.js — 한 파일짜리 배포본(tools/build.mjs)을 임시 폴더에 만들어 검사한다.
 //  · 정적 검사: 바깥 파일 참조 없음, 인라인 style·script, DOM id 보존, 크기
-//  · 실행 검사: 만든 HTML을 file://로 Chromium에서 열어 앱이 오류 없이 뜨는지(playwright가 있을 때)
+//  · 실행 검사: 만든 HTML 하나를 HTTP로 제공하고 추가 요청을 차단해 번들의 독립 실행을 검사한다.
+//    실제 file:// 검사는 FIELD_BUILD_PROTOCOL=file로 별도 실행한다(로컬 파일 탐색을 금지한 환경도 있음).
 // esbuild·playwright가 없으면 SKIP하고 끝낸다. CI(환경 변수 CI)에서는 실패로 처리한다.
 'use strict';
-const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict'),{pathToFileURL}=require('node:url');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),{pathToFileURL}=require('node:url');
+const {launchOptions}=require('./helpers/browser.cjs');
 const root=path.resolve(__dirname,'..');
 const missing=(name,hint)=>{
   if(process.env.CI){console.error(`FAIL ${name}이(가) 없습니다: ${hint}`);process.exit(1);}
@@ -32,32 +34,47 @@ const has=name=>{try{require.resolve(name);return true;}catch{return false;}};
 
     if(!has('playwright'))return missing('playwright','npm install && npx playwright install chromium');
     const {chromium}=require('playwright');
-    const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,
-      args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+    const protocol=process.env.FIELD_BUILD_PROTOCOL || 'http';
+    assert(['http','file'].includes(protocol),'FIELD_BUILD_PROTOCOL은 http 또는 file');
+    const browser=await chromium.launch(launchOptions(chromium));
+    let server;
     try{
+      let url=pathToFileURL(outFile).href;
+      if(protocol==='http'){
+        server=http.createServer((req,res)=>{
+          assert.equal(req.url,'/index.html','빌드한 HTML 한 파일만 제공');
+          res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(html);
+        });
+        await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+        url=`http://127.0.0.1:${server.address().port}/index.html`;
+      }
       const context=await browser.newContext({viewport:{width:1440,height:900}}),errors=[],requests=[];
+      await context.route('**/*',route=>{
+        if(route.request().url()===url && route.request().isNavigationRequest())return route.continue();
+        requests.push(route.request().url());return route.abort();
+      });
       // 첫 실행 안내(갤러리 모달)가 E 키를 가로채지 않게 한다.
       await context.addInitScript(()=>{try{localStorage.setItem('field.onboarded.v1','1');}catch(_){/* 저장소가 막혀도 테스트는 계속 */}});
       const page=await context.newPage();
       page.on('pageerror',error=>errors.push(error.message));
-      page.on('request',request=>{if(!/^(file|data|blob):/.test(request.url()))requests.push(request.url());});
-      await page.goto(pathToFileURL(outFile).href);
+      await page.goto(url);
       // shaderStudio는 렌더러·UI 초기화가 끝까지 성공해야 생긴다(main.js). 실패하면 #status에 오류가 남는다.
       await page.waitForFunction(()=>window.shaderStudio&&window.shaderPlayground,null,{timeout:30000}).catch(()=>{});
       await page.waitForTimeout(500);
       const state=await page.evaluate(()=>({ready:!!window.shaderStudio,status:document.getElementById('status').textContent,
         width:document.getElementById('screen').width,styled:getComputedStyle(document.body).backgroundColor!=='rgba(0, 0, 0, 0)'}));
       assert(state.ready,`앱 초기화 성공 (#status: ${state.status})`);
-      assert.deepEqual(errors,[],'file://에서 페이지 오류 없음');
-      assert.deepEqual(requests,[],'네트워크 요청 없음(완전 오프라인)');
+      assert.deepEqual(errors,[],`${protocol}에서 페이지 오류 없음`);
+      assert.deepEqual(requests,[],'추가 파일·외부 네트워크 요청 없음');
       assert(state.width>0,'캔버스 크기가 잡힌다');
       assert(state.styled,'인라인 CSS가 적용된다');
       // 편집기(CodeMirror)도 번들 안에서 뜨는지: E로 연다.
       await page.keyboard.press('e');
       await page.waitForSelector('.studio-cm-host .cm-editor',{timeout:10000});
       assert.deepEqual(errors,[],'편집기를 열어도 오류 없음');
-      console.log('PASS file://로 연 배포본이 오류 없이 시작하고 편집기(CodeMirror)가 열린다');
+      assert.deepEqual(requests,[],'편집기를 열어도 추가 요청 없음');
+      console.log(`PASS ${protocol}로 연 단일 파일 배포본 시작 · 편집기(CodeMirror) 열기 · 추가 요청 없음`);
       await context.close();
-    }finally{await browser.close();}
+    }finally{await browser.close();if(server)await new Promise(resolve=>server.close(resolve));}
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exit(1);});

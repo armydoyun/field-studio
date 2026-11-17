@@ -53,6 +53,7 @@ const mount = ({ studio = () => window.shaderStudio, signal } = {}) => {
           press(doc, "fullscreenToggle", { icon: "expand", kbd: "F" }),
           press(doc, "hudToggle", { kbd: "G" }),
           press(doc, "previewPopout", { icon: "popout" }),
+          press(doc, "menuBarShow", { kbd: "F10" }),
         ],
       };
     },
@@ -113,6 +114,7 @@ const mount = ({ studio = () => window.shaderStudio, signal } = {}) => {
           }),
           { separator: true },
           press(doc, "themeToggle"),
+          press(doc, "menuBarShow", { kbd: "F10" }),
         ],
       };
     },

@@ -160,7 +160,17 @@ npm test              # 세 묶음 모두
 npm run test:node     # node 묶음만 — 설치 없이 Node만 있으면 됨
 npm run test:list     # 어떤 파일이 어느 묶음인지
 node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 실행
+node tests/run.mjs browser --grep=workspace-view --strict # 화면 상태·메뉴·포커스
+node tests/run.mjs py --grep=workspace-state --strict     # 새로고침·전체화면·분리 창 복귀
 ```
+
+Chromium은 `CHROMIUM_PATH`로 지정한 경로, Playwright 설치본, 시스템 Chromium 순서로 선택합니다.
+실행기는 선택한 경로를 Node·browser·Python 묶음에 함께 전달합니다. Python 환경이 여러 개면 `PYTHON`으로 지정할 수 있습니다.
+명시한 `CHROMIUM_PATH`가 잘못된 경우에는 다른 브라우저로 바꾸지 않고 오류를 보고합니다.
+
+단일 파일 빌드 검사는 임시 HTTP 서버에서 생성한 HTML만 제공하고 추가 파일·외부 요청을 차단해 독립 실행을 확인합니다.
+로컬 파일 탐색을 허용하는 환경에서는 `FIELD_BUILD_PROTOCOL=file node tests/run.mjs node --grep=build --strict`로 `file://` 실행도 별도 확인합니다.
+HTTP 검사 통과는 `file://` 정책·저장소 차이까지 검증했다는 뜻은 아닙니다.
 
 | 묶음 | 대상 | 방식 |
 |---|---|---|
@@ -172,6 +182,7 @@ node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 �
 - browser 묶음은 기본 3개씩 병렬로 돌리지만, 영상을 인코딩하는 테스트(`tests/run.mjs`의 `MEDIA_BROWSER_TESTS`: 녹화·영상 렌더링)는 미디어 인코더를 서로 빼앗지 않게 나머지가 끝난 뒤 하나씩 돌립니다.
 - browser 테스트가 실패하면 `test-results/browser/<테스트>-<시각>/`에 그 순간의 `screenshot.png` · 앱 상태 `state.json` · 전체 콘솔 기록 `console.log`(녹화 테스트는 영상도)를 남깁니다. 가끔만 실패하는 테스트도 한 번 실패하면 원인을 볼 수 있게 하려는 것이고, CI는 이 폴더를 실행 페이지의 Artifacts(`field-studio-browser-failure-<SHA>`)로 올립니다.
 - 준비되지 않은 묶음(playwright·Python 없음)은 SKIP으로 표시하고 계속합니다. `--strict`(=`npm run test:ci`)는 SKIP도 실패로 칩니다.
+- 개별 검사에서 `SKIP`을 보고해도 PASS로 집계하지 않습니다. 건너뛴 이유를 출력하고 `--strict`에서는 실패로 처리합니다.
 - GitHub Actions(`.github/workflows/test.yml`)는 push·PR마다 `lint` → `test (node)` · `test (browser)` · `test (py)` 세 작업을 나란히 돌리고(각각 `node tests/run.mjs <묶음> --strict`), 모두 통과하면 `build`가 배포본을 올립니다. 의존성은 `package-lock.json` 기준으로 `npm ci`로 설치하고, npm·pip·Playwright Chromium은 캐시합니다.
 - 개발 도구를 추가·변경할 때는 `npm install -D <패키지>@<버전>`으로 `package-lock.json`도 함께 갱신해 커밋합니다.
 - 새 테스트는 `tests/`에 두기만 하면 위 규칙으로 자동 분류됩니다. 다른 파일이 불러 쓰는 도우미는 `tests/run.mjs`의 `HELPERS`에 추가합니다.
@@ -179,6 +190,10 @@ node tests/run.mjs browser --grep=undo   # 묶음·파일 이름으로 골라 �
 - 커밋 전에 `npm run lint`(경고도 실패), `npm run format:check`를 돌립니다. 포맷은 `npm run format`으로 맞춥니다.
 - 콘솔용 테스트는 예전처럼 개발자 콘솔에 붙여 넣어 돌릴 수도 있고, `tests/gpu-validation.html`도 브라우저에서 직접 열어 실제 GPU로 검사할 수 있습니다.
 
-**검증 한계:** 자동화 테스트 환경은 페이지 네비게이션 및 WebGL2가 제한되어 개발용 ES Module의 실제 HTTP 구동, `file://`로 연 배포본의 실제 GPU 렌더링은 대상 브라우저에서 직접 최종 확인해야 합니다.
+**검증 한계:** 자동화 브라우저는 SwiftShader를 사용하므로 실제 GPU·드라이버별 렌더링은 대상 브라우저에서 최종 확인해야 합니다. `file://` 검사는 실행 환경에서 로컬 파일 탐색을 허용할 때만 가능합니다.
+
+화면 상태 검사는 패널·메뉴 바·편집기·타임라인의 저장과 복원을 확인합니다. 좁은 화면의 설정 패널은 저장 상태와 관계없이 닫힌 채로 시작합니다.
+HUD 숨김과 전체화면·분리 창은 현재 세션의 표시 상태이며 새로고침 후 자동으로 다시 활성화하지 않습니다.
+`js/workspace-view.js`가 패널·HUD·툴바 메뉴·전체화면의 상태 및 포커스 이동을 맡고, `js/ui.js`는 파라미터 화면과 명령 연결을 담당합니다.
 
 기능별 작업 기록(예전 `README_*.md`)은 `docs/history/`에 모아 두었습니다. 원본 2026-10-15 AMD 개발 기록은 `docs/history/README_2026-10-15_AMD_기록.md`입니다.

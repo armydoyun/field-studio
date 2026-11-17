@@ -73,7 +73,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {   // 픽셀마다 실행
           rows: [
             [
               "메뉴 바(창 맨 위)",
-              "파일 · 편집 · 보기 · 재생 · 도움말 — 모든 기능을 단축키와 함께 모아 둔 곳입니다. 파일 메뉴에서 **최근 프로젝트**를 바로 열고, 보기 메뉴에서 편집기 배치를 바꿉니다. `F10`으로 키보드로 열고, 보기 › 메뉴 바로 숨길 수 있습니다(숨기면 툴바에 ⋯ 더보기가 나타납니다). 좁은 화면에서는 **메뉴** 버튼 하나로 접힙니다. 명령 팔레트(`F1`)에서도 '파일 › 저장'처럼 메뉴 항목을 이름으로 찾아 실행합니다.",
+              "파일 · 편집 · 보기 · 재생 · 도움말 — 모든 기능을 단축키와 함께 모아 둔 곳입니다. 파일 메뉴에서 **최근 프로젝트**를 바로 열고, 보기 메뉴에서 편집기 배치를 바꿉니다. `F10`으로 메뉴 바로 이동하고, 보기 › 메뉴 바로 숨길 수 있습니다. 숨긴 메뉴 바는 `F10`, 툴바 더보기 › 메뉴 바 보이기, 또는 바탕·뷰포트 우클릭 › 메뉴 바 보이기로 다시 표시합니다. 좁은 화면에서는 **메뉴** 버튼 하나로 접힙니다. 명령 팔레트(`F1`)에서도 '파일 › 저장'처럼 메뉴 항목을 이름으로 찾아 실행합니다.",
             ],
             ["뷰포트", "셰이더 결과. 3D 예제에서는 드래그로 회전, 휠로 확대합니다."],
             [
@@ -843,7 +843,7 @@ vec3 debugValue(float v) { return v < 0.0 ? vec3(-v, 0, 0) : v > 1.0 ? vec3(0, v
           ["프로젝트 메뉴 (저장·열기·이미지)", "Ctrl+O"],
           ["프로젝트 저장 / 다른 이름으로 저장", "Ctrl+S / Ctrl+Shift+S"],
           ["명령 팔레트 (어디서나)", "Ctrl+Shift+P / F1"],
-          ["메뉴 바로 이동", "F10"],
+          ["메뉴 바 보이기 · 이동", "F10"],
           ["예제 갤러리", "X"],
           ["재생/일시정지 (뷰포트 선택 시)", "Space"],
           ["한 프레임 진행 (멈춘 채로)", "."],
@@ -1171,13 +1171,13 @@ const mount = ({ studio, gallery }) => {
     head.append(element("strong", "", item.title), element("small", "", item.desc));
     const tags = element("span", "snippet-tags");
     tags.append(
-      element(
-        "em",
-        item.replace ? "is-replace" : item.scope === "main" ? "is-main" : "is-global",
-        item.replace ? "패스 교체" : item.scope === "main" ? "main() 안" : "전역 함수"
-      )
+      UI.tag(item.replace ? "패스 교체" : item.scope === "main" ? "main() 안" : "전역 함수", {
+        tone: item.replace ? "warning" : item.scope === "main" ? "success" : "accent",
+        pill: true,
+      })
     );
-    if (item.requires?.length) tags.append(element("em", "is-dep", `+ ${item.requires.map(titleOf).join(", ")}`));
+    if (item.requires?.length)
+      tags.append(UI.tag(`+ ${item.requires.map(titleOf).join(", ")}`, { plain: true, pill: true }));
     const copy = copyButton(() => {
       const plan = Snippets.plan(item.id, "");
       return [...plan.globals.map(entry => entry.code), plan.mainCode].filter(Boolean).join("\n\n");

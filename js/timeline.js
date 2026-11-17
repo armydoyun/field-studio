@@ -13,6 +13,7 @@ import * as Links from "./links.js";
 import * as Store from "./storage.js";
 import * as UI from "./ui-kit.js";
 import * as ContextMenu from "./context-menu.js";
+import * as PreviewDOM from "./preview-dom.js";
 
 const KEY = "field.timeline.v1";
 const EPS = 5e-4;
@@ -1258,6 +1259,7 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
   // 웹 글꼴이 늦게 들어오면 글자 폭이 바뀌므로 그때 한 번 더 잰다
   document.fonts?.ready?.then(() => !root.hidden && fitSelects());
   const setOpen = (open, { focus = false } = {}) => {
+    const returnFocus = !open && root.contains?.(document.activeElement);
     root.hidden = !open;
     document.body.classList.toggle("timeline-open", open);
     for (const toggle of toggles) toggle.setAttribute("aria-pressed", String(open));
@@ -1268,6 +1270,14 @@ const mount = ({ renderer, settings, root, studio = () => window.shaderStudio })
       fitSelects();
       if (!frame) frame = requestAnimationFrame(loop);
       if (focus) body.focus({ preventScroll: true });
+    } else if (returnFocus) {
+      PreviewDOM.focusVisible([
+        ...toggles,
+        document.querySelector('#menuBar [data-menu="view"]'),
+        document.getElementById("moreToggle"),
+        document.getElementById("hudReveal"),
+        document.getElementById("screen"),
+      ]);
     }
     window.dispatchEvent?.(new Event("resize")); // 미리보기 캔버스 크기를 다시 맞춘다
   };
