@@ -268,8 +268,10 @@ const menu = ({
     const top =
       below + size.height > view.innerHeight - 8 && box.top - 6 - size.height > 8 ? box.top - 6 - size.height : below;
     element.style.left = `${Math.max(8, Math.min(left, view.innerWidth - size.width - 8))}px`;
-    element.style.top = `${Math.max(8, top)}px`;
-    element.style.maxHeight = `${view.innerHeight - 16}px`;
+    const placed = Math.max(8, top);
+    element.style.top = `${placed}px`;
+    // 높이는 놓인 자리부터 창 아래까지 — 넘치면 메뉴 안에서 스크롤한다(창이 낮으면 아래 항목이 창 밖으로 잘리던 것)
+    element.style.maxHeight = `${Math.max(0, view.innerHeight - placed - 8)}px`;
     anchor.setAttribute("aria-haspopup", "menu");
     anchor.setAttribute("aria-expanded", "true");
   } else if (at) {

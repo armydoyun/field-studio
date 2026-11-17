@@ -135,6 +135,19 @@
     test([...openMenu().querySelectorAll(".ui-menu-title")].some(n => n.textContent === "최근 프로젝트") && item(name).getAttribute("aria-pressed") === "true", "최근 프로젝트 제목 · 지금 작업에 체크");
     key("Escape");
     await until(() => !openMenu(), "파일 닫기");
+    // 창보다 긴 메뉴: 놓인 자리부터 창 아래까지만 차지하고 안에서 스크롤한다(창이 낮으면 아래 항목이 잘리던 것)
+    {
+      const UI = await import("./js/ui-kit.js");
+      const tall = UI.menu({ anchor: top("view"), items: Array.from({ length: 80 }, (_, i) => ({ label: `항목 ${i + 1}`, onSelect() {} })) });
+      const box = tall.element.getBoundingClientRect();
+      test(box.top >= top("view").getBoundingClientRect().bottom && box.bottom <= innerHeight - 8 + 0.5, `긴 메뉴도 창 안에(아래 ${Math.round(box.bottom)} / 창 ${innerHeight})`);
+      test(tall.element.scrollHeight > tall.element.clientHeight, "넘치는 항목은 메뉴 안에서 스크롤");
+      const last = [...tall.element.querySelectorAll('[role="menuitem"]')].at(-1);
+      last.focus();
+      const lastBox = last.getBoundingClientRect();
+      test(lastBox.bottom <= tall.element.getBoundingClientRect().bottom + 0.5, "마지막 항목으로 가면 스크롤되어 보임");
+      tall.close({ focus: false });
+    }
     // F10: 메뉴 바로 초점 · →로 옆 이름 · ↓로 열기
     document.body.focus();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", bubbles: true, cancelable: true }));
