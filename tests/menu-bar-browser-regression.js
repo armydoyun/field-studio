@@ -69,6 +69,25 @@
     await until(() => openMenu(), "편집");
     item("찾기").click();
     await until(() => $("studioToggle").getAttribute("aria-expanded") === "true", "찾기를 고르면 편집기가 열림");
+    // 메뉴 바와 겹치는 UI는 숨는다(버튼은 남아 단축키 · 메뉴 바가 누른다) — 메뉴 바를 끄면 다시 보인다
+    const shown = id => !!$(id) && getComputedStyle($(id)).display !== "none";
+    const overlap = () => ["studioUndo", "studioRedo", "studioResetFrames"].map(shown).concat(shown("moreToggle"), getComputedStyle(document.querySelector(".project-actions")).display !== "none");
+    test(overlap().every(v => !v), "메뉴 바가 있으면 되돌리기 · 다시 실행 · 시간 초기화 · ⋯ · 프로젝트 메뉴 파일 작업은 숨김");
+    document.body.classList.add("menubar-hidden");
+    test(overlap().every(Boolean), "메뉴 바를 끄면 다시 보임");
+    document.body.classList.remove("menubar-hidden");
+    top("play").click();
+    await until(() => openMenu(), "재생");
+    test(item("시간 · 프레임 초기화"), "재생 › 시간 · 프레임 초기화");
+    key("Escape");
+    await until(() => !openMenu(), "재생 닫기");
+    // 프로젝트 메뉴의 '파일 메뉴로' 항목: 프로젝트 메뉴를 닫고 메뉴 바의 파일 메뉴를 연다
+    $("projectMenuToggle").click();
+    await until(() => !$("projectMenu").hidden, "프로젝트 메뉴");
+    $("projectFileMenu").click();
+    await until(() => top("file").getAttribute("aria-expanded") === "true" && $("projectMenu").hidden, "파일 메뉴로 넘어감");
+    key("Escape");
+    await until(() => !openMenu(), "파일 닫기");
     // F10: 메뉴 바로 초점 · →로 옆 이름 · ↓로 열기
     document.body.focus();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", bubbles: true, cancelable: true }));
@@ -77,7 +96,7 @@
     key("ArrowRight");
     test(document.activeElement === first.nextElementSibling, "메뉴 바에서 →로 옆 이름");
     key("ArrowDown");
-    await until(() => openMenu() && document.activeElement === items()[0], "↓로 열고 첫 항목");
+    await until(() => openMenu() && document.activeElement === items().find(node => !node.disabled), "↓로 열고 첫 항목(꺼진 항목은 건너뜀)");
     key("Escape");
     await until(() => !openMenu(), "닫기");
   } finally {

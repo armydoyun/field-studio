@@ -62,6 +62,11 @@ const create = ({ $, on }) => {
     on,
     ignore: target => !!target?.closest?.("dialog"),
   });
+  // 파일 작업은 메뉴 바의 파일 메뉴에 있다: 이 메뉴를 닫고 그 메뉴를 연다(menu-bar.js)
+  on($("projectFileMenu"), "click", () => {
+    close();
+    document.dispatchEvent(new CustomEvent("menubar-open", { detail: "file" }));
+  });
   on(menu, "keydown", event => {
     if (event.key !== "Escape") return;
     event.preventDefault();
