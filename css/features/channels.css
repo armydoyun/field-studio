@@ -62,15 +62,20 @@
 /* 이미지 목록(프로젝트 메뉴): 이름 · 삭제 / 연결 버튼 / 샘플링 설정 */
 .studio-textures { display:grid;gap:8px;margin:0; }
 .studio-textures>.ui-hint { margin:0; }
-.studio-texture { display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:10px;padding:12px; }
-.studio-texture span { min-width:0;color:var(--text-soft);font-size:var(--text-xs);overflow-wrap:anywhere; }
-.studio-texture small { color:var(--muted);font-size:var(--text-2xs); }
-.studio-texture[data-usage="unused"] { border-style:dashed; }
-.studio-texture[data-usage="unused"] span { color:var(--muted); }
+.studio-texture { display:grid;grid-template-columns:32px minmax(0,1fr) 28px;align-items:center;column-gap:var(--space-5);row-gap:var(--space-2);padding:var(--space-2) 0; }
+.studio-texture+.studio-texture { padding-top:var(--space-4);border-top:1px solid var(--line); }
+.studio-texture-thumb { width:32px;height:32px;border:1px solid var(--line);border-radius:4px;background:var(--sunken);object-fit:cover; }
+.studio-texture-info { display:grid;gap:2px;min-width:0; }
+.studio-texture-info strong { min-width:0;overflow:hidden;color:var(--text-soft);font-size:var(--text-sm);font-weight:600;text-overflow:ellipsis;white-space:nowrap; }
+.studio-texture-info small { color:var(--muted);font-size:var(--text-2xs); }
+.studio-texture[data-usage="unused"] .studio-texture-info strong { color:var(--muted); }
 .studio-texture-summary { display:flex;align-items:center;flex-wrap:wrap;gap:8px;justify-content:space-between;color:var(--muted);font-size:var(--text-xs); }
-.studio-texture .icon-close { grid-column:2;grid-row:1; }
-.studio-texture .texture-connect { grid-column:1/-1;grid-row:2;min-width:0;white-space:normal;overflow-wrap:anywhere; }
-.studio-sampling { grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
+/* 연결 · 샘플링은 이름 아래 줄(썸네일 오른쪽)에 */
+.studio-texture .texture-connect { grid-column:2/-1;justify-self:start;max-width:100%;min-width:0;margin-left:calc(var(--space-5) * -1);white-space:normal;overflow-wrap:anywhere; }
+.studio-texture-sampling { grid-column:2/-1;min-width:0; }
+.studio-texture-sampling>summary { font-size:var(--text-xs); }
+.studio-texture-sampling>.studio-sampling { margin-top:var(--space-2); }
+.studio-sampling { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .studio-sampling label { min-width:0;color:var(--muted);font-size:var(--text-2xs); }
 .studio-sampling :is(select,.ui-select) { width:100%;margin-top:6px;padding-left:6px;font-size:var(--text-xs); }
 @media (max-width:600px) {
