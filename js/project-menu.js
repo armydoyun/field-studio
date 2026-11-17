@@ -68,20 +68,35 @@ const create = ({ $, on }) => {
     event.stopPropagation();
     close({ refocus: true });
   });
-  // 머리줄 버튼에 지금 작업 이름을 보여 준다. saved: 보관함의 항목과 이어져 있는지
-  // 보관함에 없는 작업은 '새 작업'으로 부른다(저장 여부는 옆의 저장 버튼이 말한다).
-  const setLabel = (text, saved) => {
-    $("projectMenuLabel").textContent = saved ? text : "새 작업";
-    toggle.dataset.saved = String(saved);
+  // 머리줄: [이름 ▾] | [저장]. 저장 버튼은 늘 같은 자리에 있고 상태만 바뀐다(자리가 생겼다 사라지며 이름이 밀리지 않게).
+  //   saved: 보관함의 항목과 이어져 있는지 · modified: 저장한 뒤(이름 없는 작업은 시작한 뒤) 바뀌었는지
+  //   · 바뀐 내용이 있으면 저장 아이콘에 점 · 저장한 프로젝트가 그대로면 '저장됨'으로 꺼 둔다
+  let saved = false,
+    modified = false;
+  const syncSave = () => {
+    const button = $("projectMenuState");
+    if (!button) return;
+    button.dataset.modified = String(modified);
+    button.disabled = saved && !modified;
+    const label = saved && !modified ? "저장됨" : saved ? "변경 내용 저장" : "프로젝트로 저장";
+    button.setAttribute("aria-label", label);
+    button.title = saved && !modified ? "저장됨 · 바뀐 내용이 없습니다" : `${label} (Ctrl+S)`;
   };
-  // modified: 보관함에 저장한 뒤 바뀌었는지(이름 옆 점). 저장하면 사라진다.
-  const setModified = modified => {
-    if (toggle.dataset.modified === String(modified)) return;
-    toggle.dataset.modified = String(modified);
-    const badge = $("projectMenuState");
-    if (badge) badge.hidden = !modified;
-    toggle.setAttribute("aria-description", modified ? "저장 안 된 변경 있음 · Ctrl+S로 저장" : "");
+  // 보관함에 없는 작업은 '새 작업'으로 부른다
+  const setLabel = (text, isSaved) => {
+    $("projectMenuLabel").textContent = isSaved ? text : "새 작업";
+    toggle.dataset.saved = String(isSaved);
+    saved = !!isSaved;
+    syncSave();
   };
+  const setModified = next => {
+    if (toggle.dataset.modified === String(next)) return;
+    toggle.dataset.modified = String(next);
+    modified = !!next;
+    syncSave();
+    toggle.setAttribute("aria-description", next ? "저장 안 된 변경 있음 · Ctrl+S로 저장" : "");
+  };
+  syncSave();
   return { open, close, isOpen, setLabel, setModified };
 };
 

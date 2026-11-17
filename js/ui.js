@@ -14,6 +14,7 @@ import * as Timeline from "./timeline.js";
 import * as LinkSheet from "./link-sheet.js";
 import * as Store from "./storage.js";
 import * as ContextMenu from "./context-menu.js";
+import * as ParameterList from "./parameter-list.js";
 const mount = (renderer, input, settings) => {
   const $ = PreviewDOM.createLookup();
   const controller = new AbortController(),
@@ -907,7 +908,7 @@ const mount = (renderer, input, settings) => {
       .map(item => item.name);
   };
   // 파라미터 행 하나를 만든다. 행이 쓰는 등록표(playViews · resetSyncs · changeSyncs · playButtons · liveLinks ·
-  // parameterViews · 패드 다시 그리기)는 이름(배열은 이름[i])으로 남고, 행을 버릴 때 dropRow가 그 행 것만 지운다.
+  // parameterViews · 패드 다시 그리기)는 이름(배열은 이름[i])으로 남고, 행을 버릴 때 parameter-list.js가 그 행 것만 지운다.
   // item은 이 행이 계속 붙잡는 객체다 — 행을 남겨 둔 채 값이 바뀌면 renderUniforms가 같은 객체를 새 값으로 고친다.
   // 행 만들기는 parameter-row.js. 모든 항목을 getter로 넘겨, 아래에서 정의되는 함수도 부를 때 찾는다.
   const buildRow = ParameterRow.create({
@@ -959,10 +960,7 @@ const mount = (renderer, input, settings) => {
       return playButtons;
     },
     // 행이 보여 주는 값을 목록에 알린다(값 = 그 값, undefined = 다음 renderUniforms에서 반드시 다시 맞춤)
-    rowShows: (name, value) => {
-      const entry = rowCache.get(name);
-      if (entry) entry.value = value === undefined ? null : JSON.stringify(value);
-    },
+    rowShows: (name, value) => rows.shows(name, value),
     get resetSyncs() {
       return resetSyncs;
     },
@@ -1060,39 +1058,27 @@ const mount = (renderer, input, settings) => {
   //  · 검색 · 변경만 보기 · @if로 걸러진 행은 떼어 두기만 하고(다시 보이면 그대로 쓴다) 새로 만들지 않는다.
   //  · 순서가 그대로면 DOM을 옮기지 않는다(옮기면 초점 · 누르고 있던 조작이 풀린다).
   // 이전에는 무엇이 바뀌든 목록 전체를 새로 만들어, 깜빡이고 눌러 둔 곳을 잃고, 검색 한 글자마다 수십 개 행을 다시 만들었다.
-  const rowCache = new Map(); // 이름 → { row, group, key, item, value }
   const groupViews = new Map(); // 묶음 이름 → { section, head, count, body }
-  const rowKey = (item, spec) =>
-    JSON.stringify([
-      item.type,
-      item.options,
-      spec ?? null,
-      Links.LINKABLE.has(item.type) ? linkOf(item.name) : null,
-      openLink === item.name,
-      lockedParameters.has(item.name),
-    ]);
-  const ownedBy = (key, name) => key === name || key.startsWith(`${name}[`);
-  const dropRow = name => {
-    const entry = rowCache.get(name);
-    if (!entry) return;
-    rowCache.delete(name);
-    for (const registry of [playViews, resetSyncs, changeSyncs, playButtons, liveLinks])
-      for (const key of [...registry.keys()]) if (ownedBy(key, name)) registry.delete(key);
-    for (const view of entry.views) {
-      view.dispose();
-      const at = parameterViews.indexOf(view);
-      if (at >= 0) parameterViews.splice(at, 1);
-    }
-    parameterControls.forget(entry.row);
-    entry.row.remove();
-  };
-  const makeRow = (item, defaults, key) => {
-    const before = parameterViews.length,
-      { row, group } = buildRow(item, defaults);
-    const entry = { row, group, key, item, value: JSON.stringify(item.value), views: parameterViews.slice(before) };
-    rowCache.set(item.name, entry);
-    return entry;
-  };
+  const rows = ParameterList.create({
+    build: (item, specs) => buildRow(item, specs),
+    keyOf: (item, spec) =>
+      JSON.stringify([
+        item.type,
+        item.options,
+        spec ?? null,
+        Links.LINKABLE.has(item.type) ? linkOf(item.name) : null,
+        openLink === item.name,
+        lockedParameters.has(item.name),
+      ]),
+    linked: item => Links.LINKABLE.has(item.type) && !!linkOf(item.name),
+    views: { play: playViews, reset: resetSyncs, change: changeSyncs },
+    registries: [playViews, resetSyncs, changeSyncs, playButtons, liveLinks],
+    parameterViews,
+    forget: row => parameterControls.forget(row),
+    source: () => renderer.getUserUniforms(),
+    defaults: () => annotatedDefaults(),
+    signal,
+  });
   // 부모의 자식을 이 순서로(이미 그 자리에 있으면 건드리지 않는다)
   const arrange = (parent, nodes) => {
     const current = [...parent.children];
@@ -1128,24 +1114,6 @@ const mount = (renderer, input, settings) => {
     groupViews.set(group, view);
     return view;
   };
-  // 걸러져 아직 만들지 않은 행(검색 · @if · 변경만 보기)을 브라우저가 한가할 때 하나씩 미리 만들어 둔다 — 첫 검색에서
-  // 수십 개 행을 한꺼번에 만드느라 늦던 것. 문서에 붙지 않은 채 만든 패드는 붙을 때 다시 그려진다(renderUniforms 끝의 redraw).
-  let prebuildHandle = 0;
-  const prebuildStep = deadline => {
-    prebuildHandle = 0;
-    if (signal.aborted) return;
-    const defaults = annotatedDefaults();
-    for (const item of renderer.getUserUniforms()) {
-      if (rowCache.has(item.name)) continue;
-      if (deadline.timeRemaining() < 4) return schedulePrebuild();
-      makeRow(item, defaults, rowKey(item, defaults.get(item.name)));
-    }
-  };
-  const schedulePrebuild = () => {
-    if (prebuildHandle || typeof window.requestIdleCallback !== "function") return;
-    prebuildHandle = window.requestIdleCallback(prebuildStep, { timeout: 3000 });
-  };
-  signal.addEventListener("abort", () => prebuildHandle && window.cancelIdleCallback?.(prebuildHandle));
   const renderUniforms = () => {
     const userList = $("uniformList"),
       items = renderer.getUserUniforms();
@@ -1159,7 +1127,7 @@ const mount = (renderer, input, settings) => {
     renderPresets();
     $("uniformCreate").disabled = items.length >= 64;
     const names = new Set(items.map(item => item.name));
-    for (const name of [...rowCache.keys()]) if (!names.has(name)) dropRow(name);
+    rows.prune(names);
     // @group: 묶음 없는 파라미터가 먼저, 묶음은 처음 나온 순서대로. 검색 중에는 접힌 묶음도 펼쳐 보여 준다.
     const loose = [],
       groups = new Map();
@@ -1167,31 +1135,7 @@ const mount = (renderer, input, settings) => {
       if (changedOnly && !ParameterTools.changedFromDefault(item, defaults.get(item.name))) continue;
       if (search && !`${item.name} ${item.type}`.toLowerCase().includes(search)) continue;
       if (hidden.has(item.name)) continue;
-      const spec = defaults.get(item.name),
-        key = rowKey(item, spec);
-      let entry = rowCache.get(item.name);
-      if (entry && entry.key === key) {
-        const value = JSON.stringify(item.value);
-        if (value !== entry.value) {
-          Object.assign(entry.item, item); // 행의 처리기들이 붙잡은 객체를 새 값으로
-          entry.value = value;
-          // 연결이 정하는 값은 연결 미터 · 내비게이터가 따로 따라간다
-          const refresh = playViews.get(item.name);
-          if (Links.LINKABLE.has(item.type) && linkOf(item.name)) {
-            // 그대로 둔다
-          } else if (refresh && refresh(item.value) !== false) {
-            resetSyncs.get(item.name)?.(item.value);
-            changeSyncs.get(item.name)?.(item.value);
-          } else {
-            dropRow(item.name);
-            entry = null;
-          }
-        }
-      } else if (entry) {
-        dropRow(item.name);
-        entry = null;
-      }
-      entry ??= makeRow(item, defaults, key);
+      const entry = rows.entryFor(item, defaults);
       if (!entry.group) loose.push(entry.row);
       else {
         if (!groups.has(entry.group)) groups.set(entry.group, []);
@@ -1219,7 +1163,7 @@ const mount = (renderer, input, settings) => {
       }
     arrange(userList, [...loose, ...sections]);
     const shown = loose.length + [...groups.values()].reduce((sum, rows) => sum + rows.length, 0);
-    if (shown < items.length) schedulePrebuild();
+    if (shown < items.length) rows.prebuild();
     // 방향 패드는 문서에 붙은 뒤에야 테마 색을 읽을 수 있으므로 한 번 더 그린다.
     parameterControls.redraw();
     const count = shown;

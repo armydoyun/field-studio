@@ -383,196 +383,391 @@ const create = ctx => (item, defaults) => {
     });
   }
   // 값 편집기(위젯). 배열이면 원소마다 하나씩 그린다: 원소 몫만 읽고(read) 바꾸면 전체 배열을 고쳐 올린다.
+  // 켜고 끄기(bool)
+  const boolWidget = (row, item, commit) => {
+    const label = element("label");
+    label.className = "ui-switch ui-switch--field uniform-switch";
+    const input = element("input");
+    input.type = "checkbox";
+    input.checked = item.value;
+    input.setAttribute("role", "switch");
+    const text = element("span");
+    text.textContent = item.value ? "켜짐 · true" : "꺼짐 · false";
+    input.setAttribute("aria-label", item.name);
+    input.addEventListener("change", () => {
+      if (!commit(input, input.checked)) input.checked = item.value;
+      text.textContent = input.checked ? "켜짐 · true" : "꺼짐 · false";
+    });
+    label.append(input, text);
+    row.append(label);
+    // 밖에서 바뀐 값(프리셋 · 되돌리기)을 행을 다시 만들지 않고 보여 준다
+    playViews.set(item.name, value => {
+      input.checked = !!value;
+      text.textContent = value ? "켜짐 · true" : "꺼짐 · false";
+    });
+  };
+  // 색(@color): 견본 · HEX · 성분 값(@color hdr이면 밝기 배율)
+  const colorWidget = (row, item, commit) => {
+    // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
+    const wrap = element("div");
+    wrap.className = "uniform-color";
+    const picker = element("input");
+    picker.type = "color";
+    picker.setAttribute("aria-label", `${item.name} 색상`);
+    const hexField = element("input");
+    hexField.type = "text";
+    hexField.className = "uniform-hex";
+    hexField.spellcheck = false;
+    hexField.maxLength = 7;
+    hexField.setAttribute("aria-label", `${item.name} HEX`);
+    const code = element("code");
+    const hex = Color.toHex;
+    const channels = item.type === "vec4" ? "RGBA" : "RGB";
+    // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
+    const hdr = item.options.hdr;
+    // 0~1 숫자 줄은 HEX와 같은 말이라 HDR(1을 넘는 값)일 때만 보인다
+    wrap.classList.toggle("is-hdr", !!hdr);
+    let alpha = null,
+      alphaNumber = null,
+      intensity = null,
+      intensityNumber = null,
+      lastBase = [1, 1, 1];
+    const split = values => {
+      const level = Math.max(0, ...values.slice(0, 3));
+      if (level > 0) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
+      return { level, base: lastBase };
+    };
+    const show = values => {
+      if (hdr) {
+        const { level, base } = split(values);
+        picker.value = hex(base);
+        intensity.value = String(level);
+        showNumber(intensityNumber, level);
+      } else picker.value = hex(values);
+      hexField.value = picker.value;
+      hexField.removeAttribute("aria-invalid");
+      code.textContent = values
+        .slice(0, 3)
+        .map(v => Number(v).toFixed(2))
+        .join(" ");
+      code.title = `${channels} ${values.map(v => Number(v).toFixed(4)).join(", ")}`;
+      if (alpha) {
+        alpha.value = String(values[3]);
+        showNumber(alphaNumber, values[3]);
+      }
+    };
+    const current = () => [...(liveValue(item) || item.value)];
+    const setRGB = (field, text) => {
+      const match = /^#?([0-9a-f]{6})$/i.exec(text.trim());
+      if (!match) {
+        field.setAttribute("aria-invalid", "true");
+        showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`);
+        return;
+      }
+      const values = current(),
+        picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
+      // HDR stores peak-normalized color × I. Raw picker RGB would attenuate I on every input.
+      // Normalize the picked color first; an explicit black remains black, and zero I revives at 1.
+      const level = hdr ? split(values).level || 1 : 1,
+        peak = Math.max(...picked),
+        base = hdr && peak > 0 ? picked.map(v => v / peak) : picked;
+      // Keep HDR radiance precision: fixed decimal rounding can turn small nonzero I into zero.
+      values.splice(0, 3, ...base.map(v => (hdr ? v * level : Number(v.toFixed(6)))));
+      if (commit(field, values)) show(values);
+    };
+    picker.addEventListener("input", () => setRGB(picker, picker.value));
+    hexField.addEventListener("change", () => setRGB(hexField, hexField.value));
+    hexField.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        setRGB(hexField, hexField.value);
+      } else if (event.key === "Escape") {
+        show(current());
+        showError("");
+      }
+    });
+    wrap.append(picker, hexField, code);
+    row.append(wrap);
+    if (hdr) {
+      const line = element("div");
+      line.className = "uniform-axis is-ranged uniform-alpha uniform-intensity";
+      const label = element("label");
+      label.className = "uniform-axis-label";
+      label.textContent = "I";
+      label.title = "밝기 배율";
+      intensity = element("input");
+      intensity.type = "range";
+      intensity.min = "0";
+      intensity.max = String(hdr);
+      intensity.step = String(Number((hdr / 1000).toPrecision(2)));
+      intensity.setAttribute("aria-label", `${item.name} 밝기 배율`);
+      intensityNumber = element("input");
+      intensityNumber.type = "number";
+      intensityNumber.min = "0";
+      intensityNumber.step = "any";
+      intensityNumber.setAttribute("aria-label", `${item.name} 밝기 배율 값`);
+      const setLevel = (field, level) => {
+        if (!Number.isFinite(level)) return show(current());
+        const values = current(),
+          { base } = split(values);
+        values.splice(0, 3, ...base.map(v => v * Math.max(0, level)));
+        if (commit(field, values)) show(values);
+        else show(current());
+      };
+      intensity.addEventListener("input", () => setLevel(intensity, Number(intensity.value)));
+      intensityNumber.addEventListener("change", () =>
+        setLevel(intensityNumber, intensityNumber.value.trim() ? Number(intensityNumber.value) : NaN)
+      );
+      scrubbable(label, {
+        kind: "f",
+        read: () => Number(split(current()).level.toFixed(3)),
+        write: value => setLevel(intensity, value),
+        min: 0,
+        step: hdr / 200,
+      });
+      line.append(label, intensity, intensityNumber);
+      row.append(line);
+    }
+    if (item.type === "vec4") {
+      const line = element("div");
+      line.className = "uniform-axis is-ranged uniform-alpha";
+      const label = element("label");
+      label.className = "uniform-axis-label";
+      label.textContent = "A";
+      alpha = element("input");
+      alpha.type = "range";
+      alpha.min = "0";
+      alpha.max = "1";
+      alpha.step = "0.001";
+      alpha.setAttribute("aria-label", `${item.name} 알파`);
+      alphaNumber = element("input");
+      alphaNumber.type = "number";
+      alphaNumber.min = "0";
+      alphaNumber.max = "1";
+      alphaNumber.step = "0.01";
+      alphaNumber.setAttribute("aria-label", `${item.name} 알파 값`);
+      const setAlpha = (field, value) => {
+        const values = current();
+        values[3] = Math.max(0, Math.min(1, value));
+        if (Number.isFinite(value) && commit(field, values)) show(values);
+        else show(current());
+      };
+      alpha.addEventListener("input", () => setAlpha(alpha, Number(alpha.value)));
+      alphaNumber.addEventListener("change", () =>
+        setAlpha(alphaNumber, alphaNumber.value.trim() ? Number(alphaNumber.value) : NaN)
+      );
+      scrubbable(label, {
+        kind: "f",
+        read: () => current()[3],
+        write: value => setAlpha(alpha, value),
+        min: 0,
+        max: 1,
+        step: 0.01,
+      });
+      line.append(label, alpha, alphaNumber);
+      row.append(line);
+    }
+    show(item.value);
+    // 프리셋 전환 · 재생처럼 밖에서 바뀐 값을 목록을 다시 그리지 않고 보여 준다
+    playViews.set(item.name, values => Array.isArray(values) && show(values));
+  };
+  // 벡터: 성분마다(bvec은 토글 칩, 범위가 있으면 슬라이더 + 숫자)
+  const vectorWidget = (row, item, commit) => {
+    // 벡터는 X/Y/Z/W 성분별로 편집한다. bvec 성분은 체크박스.
+    // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
+    const { kind } = typeInfo(item.type);
+    // 배치: bvec은 X·Y… 토글 칩 두 칸씩, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
+    // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자].
+    const opts = item.options || {},
+      ranged = kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
+    const layout =
+      kind === "b" ? "is-bool" : ranged ? "is-ranged" : item.value.length <= 2 ? "is-inline" : "is-stacked";
+    const grid = element("div");
+    grid.className = `uniform-vector ${layout}`;
+    // 성분마다 밖에서 바뀐 값을 보여 주는 함수(프리셋 전환). 입력 중인 숫자 칸은 showNumber가 건드리지 않는다.
+    const refreshers = [];
+    item.value.forEach((value, index) => {
+      const field = element(kind === "b" ? "label" : "div");
+      field.className =
+        kind === "b"
+          ? "ui-chip ui-chip--lg uniform-axis"
+          : ranged
+            ? "uniform-axis is-ranged"
+            : "ui-input-group ui-input-group--prefix uniform-axis";
+      const label = element(kind === "b" ? "span" : "label");
+      label.className = kind === "b" || ranged ? "uniform-axis-label" : "ui-unit uniform-axis-label";
+      label.textContent = ["X", "Y", "Z", "W"][index];
+      const input = element("input");
+      input.setAttribute("aria-label", `${item.name} ${label.textContent}`);
+      input.id = `uniform-component-${++ctx.componentSerial}`;
+      label.htmlFor = input.id;
+      if (kind === "b") {
+        input.type = "checkbox";
+        input.checked = value;
+      } else {
+        input.type = "number";
+        input.step = kind === "f" || kind === "m" ? "any" : "1";
+        if (kind === "u") input.min = "0";
+        showNumber(input, value, () => liveValue(item)?.[index]);
+      }
+      const update = (source, next) => {
+        const values = liveValue(item);
+        if (!values) return renderUniforms();
+        item.value = [...values];
+        values[index] = next;
+        if (!commit(source, values)) {
+          if (kind === "b") input.checked = item.value[index];
+          else showNumber(input, item.value[index]);
+          return false;
+        }
+        if (kind !== "b") showNumber(input, liveValue(item)?.[index] ?? next);
+        return true;
+      };
+      let slider = null;
+      input.addEventListener("change", () => {
+        if (update(input, kind === "b" ? input.checked : input.value.trim() ? Number(input.value) : NaN) && slider)
+          slider.value = input.value;
+      });
+      // 성분별 범위(@range를 성분마다)면 이 성분의 범위를 쓴다.
+      const axis = opts.ranges?.[index]
+        ? { min: opts.ranges[index][0], max: opts.ranges[index][1], step: opts.ranges[index][2] }
+        : opts;
+      if (kind !== "b")
+        scrubbable(label, {
+          kind,
+          min: axis.min,
+          max: axis.max,
+          step: axis.step,
+          read: () => liveValue(item)?.[index],
+          write: next => {
+            if (update(label, next)) {
+              showNumber(input, next);
+              if (slider) slider.value = String(next);
+            }
+          },
+        });
+      if (ranged) {
+        slider = element("input");
+        slider.type = "range";
+        slider.min = String(axis.min);
+        slider.max = String(axis.max);
+        slider.step = String(axis.step);
+        slider.value = String(value);
+        slider.setAttribute("aria-label", `${item.name} ${label.textContent} 슬라이더`);
+        if (opts.ranges) field.title = `${label.textContent}: ${displayNumber(axis.min)} ~ ${displayNumber(axis.max)}`;
+        slider.addEventListener("input", () => {
+          if (update(slider, Number(slider.value))) showNumber(input, Number(slider.value));
+        });
+        field.append(label, slider, input);
+      } else if (kind === "b") field.append(input, label);
+      else field.append(label, input);
+      grid.append(field);
+      refreshers.push(values => {
+        const next = values[index];
+        if (kind === "b") input.checked = !!next;
+        else showNumber(input, next);
+        if (slider && document.activeElement !== slider) slider.value = String(next);
+      });
+    });
+    row.append(grid);
+    playViews.set(item.name, values => Array.isArray(values) && refreshers.forEach(refresh => refresh(values)));
+    if (ranged) {
+      row.style.setProperty("--number-width", rangedWidth(opts));
+      if (!opts.ranges) row.append(rangeEnds(opts, true));
+    }
+  };
+  // 숫자 하나(float · int · uint): 슬라이더 + 숫자 칸, 범위가 없으면 끌어서 조절하는 숫자
+  const scalarWidget = (row, item, commit, name) => {
+    // 숫자 하나: 범위가 있으면 [슬라이더 | 숫자] + 아래에 최소·최대, 없으면 숫자 칸이 줄 전체를 쓴다. 이름을 끌면 값이 바뀐다.
+    const pair = element("div");
+    const { kind } = typeInfo(item.type);
+    const number = element("input");
+    number.type = "number";
+    number.step = kind === "f" ? "any" : "1";
+    if (item.type === "uint") number.min = "0";
+    showNumber(number, item.value, () => liveValue(item));
+    number.setAttribute("aria-label", item.name);
+    const opts = item.options || {},
+      ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
+    // @log: 슬라이더는 0~1 위치를 쓰고 값은 min·(max/min)^t로 바꾼다. 0.001~100처럼 넓은 범위의 아래쪽도 고르게 다룬다.
+    const logScale = ranged && opts.log === true && opts.min > 0,
+      logSpan = logScale ? Math.log(opts.max / opts.min) : 1,
+      toSlider = value =>
+        logScale ? Math.min(1, Math.max(0, Math.log(Math.max(value, opts.min) / opts.min) / logSpan)) : value,
+      fromSlider = t => (logScale ? Number((opts.min * Math.exp(t * logSpan)).toPrecision(4)) : t);
+    let range;
+    pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
+    const changeNumber = () => {
+      let value;
+      try {
+        value = parseValue(item.type, number.value);
+      } catch (error) {
+        showError(`${item.name}: ${error.message}`);
+        number.setAttribute("aria-invalid", "true");
+        showNumber(number, liveValue(item) ?? item.value);
+        return;
+      }
+      if (commit(number, value)) {
+        if (range) range.value = String(toSlider(value));
+        showNumber(number, value);
+      } else showNumber(number, liveValue(item) ?? item.value);
+    };
+    number.addEventListener("change", changeNumber);
+    if (ranged) {
+      range = element("input");
+      range.type = "range";
+      range.min = String(logScale ? 0 : opts.min);
+      range.max = String(logScale ? 1 : opts.max);
+      range.step = logScale ? "0.001" : String(opts.step);
+      range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
+      if (logScale) {
+        range.classList.add("is-log");
+        range.title = "로그 눈금";
+      }
+      range.value = String(toSlider(item.value));
+      range.addEventListener("input", () => {
+        if (commit(range, fromSlider(Number(range.value)))) showNumber(number, item.value);
+      });
+      pair.append(range);
+    }
+    pair.append(number);
+    row.append(pair);
+    if (ranged) {
+      row.style.setProperty("--number-width", rangedWidth(opts));
+      row.append(rangeEnds(opts, false));
+    }
+    const readValue = () => liveValue(item);
+    scrubbable(name, {
+      kind,
+      // 로그 눈금이면 이름 끌기도 슬라이더 위치(0~1)로 움직여 배율 단위로 바뀌게 한다.
+      min: logScale ? 0 : opts.min,
+      max: logScale ? 1 : opts.max,
+      step: logScale ? 0.005 : opts.step,
+      read: () => (logScale ? Number(toSlider(readValue()).toFixed(3)) : readValue()),
+      write: next => {
+        const value = fromSlider(next);
+        if (commit(number, value)) {
+          showNumber(number, value);
+          if (range) range.value = String(toSlider(value));
+        }
+      },
+    });
+    // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
+    playViews.set(item.name, value => {
+      showNumber(number, value);
+      if (range) range.value = String(toSlider(value));
+    });
+  };
   const widget = (row, item, commit, name) => {
     if (item.type === "bool") {
-      const label = element("label");
-      label.className = "ui-switch ui-switch--field uniform-switch";
-      const input = element("input");
-      input.type = "checkbox";
-      input.checked = item.value;
-      input.setAttribute("role", "switch");
-      const text = element("span");
-      text.textContent = item.value ? "켜짐 · true" : "꺼짐 · false";
-      input.setAttribute("aria-label", item.name);
-      input.addEventListener("change", () => {
-        if (!commit(input, input.checked)) input.checked = item.value;
-        text.textContent = input.checked ? "켜짐 · true" : "꺼짐 · false";
-      });
-      label.append(input, text);
-      row.append(label);
-      // 밖에서 바뀐 값(프리셋 · 되돌리기)을 행을 다시 만들지 않고 보여 준다
-      playViews.set(item.name, value => {
-        input.checked = !!value;
-        text.textContent = value ? "켜짐 · true" : "꺼짐 · false";
-      });
+      boolWidget(row, item, commit);
     } else if (item.type === "sampler2D") {
       const current = () => [...(liveValue(item) || item.value)],
         ramp = item.options?.gradient ? gradientControl(item, commit, current) : curveControl(item, commit, current);
       playViews.set(item.name, ramp.refresh);
       row.append(ramp);
     } else if (item.options?.color) {
-      // 색상: 견본(컬러 피커) · 직접 고칠 수 있는 HEX · 0~1 선형 값. vec4의 A는 이름이 붙은 슬라이더 줄로 따로 둔다.
-      const wrap = element("div");
-      wrap.className = "uniform-color";
-      const picker = element("input");
-      picker.type = "color";
-      picker.setAttribute("aria-label", `${item.name} 색상`);
-      const hexField = element("input");
-      hexField.type = "text";
-      hexField.className = "uniform-hex";
-      hexField.spellcheck = false;
-      hexField.maxLength = 7;
-      hexField.setAttribute("aria-label", `${item.name} HEX`);
-      const code = element("code");
-      const hex = Color.toHex;
-      const channels = item.type === "vec4" ? "RGBA" : "RGB";
-      // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
-      const hdr = item.options.hdr;
-      // 0~1 숫자 줄은 HEX와 같은 말이라 HDR(1을 넘는 값)일 때만 보인다
-      wrap.classList.toggle("is-hdr", !!hdr);
-      let alpha = null,
-        alphaNumber = null,
-        intensity = null,
-        intensityNumber = null,
-        lastBase = [1, 1, 1];
-      const split = values => {
-        const level = Math.max(0, ...values.slice(0, 3));
-        if (level > 0) lastBase = values.slice(0, 3).map(v => Math.max(0, v) / level);
-        return { level, base: lastBase };
-      };
-      const show = values => {
-        if (hdr) {
-          const { level, base } = split(values);
-          picker.value = hex(base);
-          intensity.value = String(level);
-          showNumber(intensityNumber, level);
-        } else picker.value = hex(values);
-        hexField.value = picker.value;
-        hexField.removeAttribute("aria-invalid");
-        code.textContent = values
-          .slice(0, 3)
-          .map(v => Number(v).toFixed(2))
-          .join(" ");
-        code.title = `${channels} ${values.map(v => Number(v).toFixed(4)).join(", ")}`;
-        if (alpha) {
-          alpha.value = String(values[3]);
-          showNumber(alphaNumber, values[3]);
-        }
-      };
-      const current = () => [...(liveValue(item) || item.value)];
-      const setRGB = (field, text) => {
-        const match = /^#?([0-9a-f]{6})$/i.exec(text.trim());
-        if (!match) {
-          field.setAttribute("aria-invalid", "true");
-          showError(`${item.name}: #RRGGBB 형식의 HEX 색을 입력하세요.`);
-          return;
-        }
-        const values = current(),
-          picked = match[1].match(/../g).map(h => parseInt(h, 16) / 255);
-        // HDR stores peak-normalized color × I. Raw picker RGB would attenuate I on every input.
-        // Normalize the picked color first; an explicit black remains black, and zero I revives at 1.
-        const level = hdr ? split(values).level || 1 : 1,
-          peak = Math.max(...picked),
-          base = hdr && peak > 0 ? picked.map(v => v / peak) : picked;
-        // Keep HDR radiance precision: fixed decimal rounding can turn small nonzero I into zero.
-        values.splice(0, 3, ...base.map(v => (hdr ? v * level : Number(v.toFixed(6)))));
-        if (commit(field, values)) show(values);
-      };
-      picker.addEventListener("input", () => setRGB(picker, picker.value));
-      hexField.addEventListener("change", () => setRGB(hexField, hexField.value));
-      hexField.addEventListener("keydown", event => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          setRGB(hexField, hexField.value);
-        } else if (event.key === "Escape") {
-          show(current());
-          showError("");
-        }
-      });
-      wrap.append(picker, hexField, code);
-      row.append(wrap);
-      if (hdr) {
-        const line = element("div");
-        line.className = "uniform-axis is-ranged uniform-alpha uniform-intensity";
-        const label = element("label");
-        label.className = "uniform-axis-label";
-        label.textContent = "I";
-        label.title = "밝기 배율";
-        intensity = element("input");
-        intensity.type = "range";
-        intensity.min = "0";
-        intensity.max = String(hdr);
-        intensity.step = String(Number((hdr / 1000).toPrecision(2)));
-        intensity.setAttribute("aria-label", `${item.name} 밝기 배율`);
-        intensityNumber = element("input");
-        intensityNumber.type = "number";
-        intensityNumber.min = "0";
-        intensityNumber.step = "any";
-        intensityNumber.setAttribute("aria-label", `${item.name} 밝기 배율 값`);
-        const setLevel = (field, level) => {
-          if (!Number.isFinite(level)) return show(current());
-          const values = current(),
-            { base } = split(values);
-          values.splice(0, 3, ...base.map(v => v * Math.max(0, level)));
-          if (commit(field, values)) show(values);
-          else show(current());
-        };
-        intensity.addEventListener("input", () => setLevel(intensity, Number(intensity.value)));
-        intensityNumber.addEventListener("change", () =>
-          setLevel(intensityNumber, intensityNumber.value.trim() ? Number(intensityNumber.value) : NaN)
-        );
-        scrubbable(label, {
-          kind: "f",
-          read: () => Number(split(current()).level.toFixed(3)),
-          write: value => setLevel(intensity, value),
-          min: 0,
-          step: hdr / 200,
-        });
-        line.append(label, intensity, intensityNumber);
-        row.append(line);
-      }
-      if (item.type === "vec4") {
-        const line = element("div");
-        line.className = "uniform-axis is-ranged uniform-alpha";
-        const label = element("label");
-        label.className = "uniform-axis-label";
-        label.textContent = "A";
-        alpha = element("input");
-        alpha.type = "range";
-        alpha.min = "0";
-        alpha.max = "1";
-        alpha.step = "0.001";
-        alpha.setAttribute("aria-label", `${item.name} 알파`);
-        alphaNumber = element("input");
-        alphaNumber.type = "number";
-        alphaNumber.min = "0";
-        alphaNumber.max = "1";
-        alphaNumber.step = "0.01";
-        alphaNumber.setAttribute("aria-label", `${item.name} 알파 값`);
-        const setAlpha = (field, value) => {
-          const values = current();
-          values[3] = Math.max(0, Math.min(1, value));
-          if (Number.isFinite(value) && commit(field, values)) show(values);
-          else show(current());
-        };
-        alpha.addEventListener("input", () => setAlpha(alpha, Number(alpha.value)));
-        alphaNumber.addEventListener("change", () =>
-          setAlpha(alphaNumber, alphaNumber.value.trim() ? Number(alphaNumber.value) : NaN)
-        );
-        scrubbable(label, {
-          kind: "f",
-          read: () => current()[3],
-          write: value => setAlpha(alpha, value),
-          min: 0,
-          max: 1,
-          step: 0.01,
-        });
-        line.append(label, alpha, alphaNumber);
-        row.append(line);
-      }
-      show(item.value);
-      // 프리셋 전환 · 재생처럼 밖에서 바뀐 값을 목록을 다시 그리지 않고 보여 준다
-      playViews.set(item.name, values => Array.isArray(values) && show(values));
+      colorWidget(row, item, commit);
     } else if (item.options?.enum) {
       const choices = enumControl(item, commit);
       playViews.set(item.name, choices.refresh);
@@ -604,189 +799,9 @@ const create = ctx => (item, defaults) => {
       playViews.set(item.name, () => view.refresh());
       row.append(view.node);
     } else if (typeInfo(item.type).components > 1) {
-      // 벡터는 X/Y/Z/W 성분별로 편집한다. bvec 성분은 체크박스.
-      // 범위가 지정된 벡터는 성분마다 슬라이더 + 숫자 입력을 둔다.
-      const { kind } = typeInfo(item.type);
-      // 배치: bvec은 X·Y… 토글 칩 두 칸씩, 범위 없는 vec2는 두 칸 한 줄, vec3·vec4는 성분마다 한 줄(긴 값도 잘리지 않음),
-      // 범위가 있으면 성분마다 [글자 | 슬라이더 | 숫자].
-      const opts = item.options || {},
-        ranged = kind !== "b" && Number.isFinite(opts.min) && Number.isFinite(opts.max);
-      const layout =
-        kind === "b" ? "is-bool" : ranged ? "is-ranged" : item.value.length <= 2 ? "is-inline" : "is-stacked";
-      const grid = element("div");
-      grid.className = `uniform-vector ${layout}`;
-      // 성분마다 밖에서 바뀐 값을 보여 주는 함수(프리셋 전환). 입력 중인 숫자 칸은 showNumber가 건드리지 않는다.
-      const refreshers = [];
-      item.value.forEach((value, index) => {
-        const field = element(kind === "b" ? "label" : "div");
-        field.className =
-          kind === "b"
-            ? "ui-chip ui-chip--lg uniform-axis"
-            : ranged
-              ? "uniform-axis is-ranged"
-              : "ui-input-group ui-input-group--prefix uniform-axis";
-        const label = element(kind === "b" ? "span" : "label");
-        label.className = kind === "b" || ranged ? "uniform-axis-label" : "ui-unit uniform-axis-label";
-        label.textContent = ["X", "Y", "Z", "W"][index];
-        const input = element("input");
-        input.setAttribute("aria-label", `${item.name} ${label.textContent}`);
-        input.id = `uniform-component-${++ctx.componentSerial}`;
-        label.htmlFor = input.id;
-        if (kind === "b") {
-          input.type = "checkbox";
-          input.checked = value;
-        } else {
-          input.type = "number";
-          input.step = kind === "f" || kind === "m" ? "any" : "1";
-          if (kind === "u") input.min = "0";
-          showNumber(input, value, () => liveValue(item)?.[index]);
-        }
-        const update = (source, next) => {
-          const values = liveValue(item);
-          if (!values) return renderUniforms();
-          item.value = [...values];
-          values[index] = next;
-          if (!commit(source, values)) {
-            if (kind === "b") input.checked = item.value[index];
-            else showNumber(input, item.value[index]);
-            return false;
-          }
-          if (kind !== "b") showNumber(input, liveValue(item)?.[index] ?? next);
-          return true;
-        };
-        let slider = null;
-        input.addEventListener("change", () => {
-          if (update(input, kind === "b" ? input.checked : input.value.trim() ? Number(input.value) : NaN) && slider)
-            slider.value = input.value;
-        });
-        // 성분별 범위(@range를 성분마다)면 이 성분의 범위를 쓴다.
-        const axis = opts.ranges?.[index]
-          ? { min: opts.ranges[index][0], max: opts.ranges[index][1], step: opts.ranges[index][2] }
-          : opts;
-        if (kind !== "b")
-          scrubbable(label, {
-            kind,
-            min: axis.min,
-            max: axis.max,
-            step: axis.step,
-            read: () => liveValue(item)?.[index],
-            write: next => {
-              if (update(label, next)) {
-                showNumber(input, next);
-                if (slider) slider.value = String(next);
-              }
-            },
-          });
-        if (ranged) {
-          slider = element("input");
-          slider.type = "range";
-          slider.min = String(axis.min);
-          slider.max = String(axis.max);
-          slider.step = String(axis.step);
-          slider.value = String(value);
-          slider.setAttribute("aria-label", `${item.name} ${label.textContent} 슬라이더`);
-          if (opts.ranges)
-            field.title = `${label.textContent}: ${displayNumber(axis.min)} ~ ${displayNumber(axis.max)}`;
-          slider.addEventListener("input", () => {
-            if (update(slider, Number(slider.value))) showNumber(input, Number(slider.value));
-          });
-          field.append(label, slider, input);
-        } else if (kind === "b") field.append(input, label);
-        else field.append(label, input);
-        grid.append(field);
-        refreshers.push(values => {
-          const next = values[index];
-          if (kind === "b") input.checked = !!next;
-          else showNumber(input, next);
-          if (slider && document.activeElement !== slider) slider.value = String(next);
-        });
-      });
-      row.append(grid);
-      playViews.set(item.name, values => Array.isArray(values) && refreshers.forEach(refresh => refresh(values)));
-      if (ranged) {
-        row.style.setProperty("--number-width", rangedWidth(opts));
-        if (!opts.ranges) row.append(rangeEnds(opts, true));
-      }
+      vectorWidget(row, item, commit);
     } else {
-      // 숫자 하나: 범위가 있으면 [슬라이더 | 숫자] + 아래에 최소·최대, 없으면 숫자 칸이 줄 전체를 쓴다. 이름을 끌면 값이 바뀐다.
-      const pair = element("div");
-      const { kind } = typeInfo(item.type);
-      const number = element("input");
-      number.type = "number";
-      number.step = kind === "f" ? "any" : "1";
-      if (item.type === "uint") number.min = "0";
-      showNumber(number, item.value, () => liveValue(item));
-      number.setAttribute("aria-label", item.name);
-      const opts = item.options || {},
-        ranged = Number.isFinite(opts.min) && Number.isFinite(opts.max);
-      // @log: 슬라이더는 0~1 위치를 쓰고 값은 min·(max/min)^t로 바꾼다. 0.001~100처럼 넓은 범위의 아래쪽도 고르게 다룬다.
-      const logScale = ranged && opts.log === true && opts.min > 0,
-        logSpan = logScale ? Math.log(opts.max / opts.min) : 1,
-        toSlider = value =>
-          logScale ? Math.min(1, Math.max(0, Math.log(Math.max(value, opts.min) / opts.min) / logSpan)) : value,
-        fromSlider = t => (logScale ? Number((opts.min * Math.exp(t * logSpan)).toPrecision(4)) : t);
-      let range;
-      pair.className = ranged ? "uniform-pair is-ranged" : "uniform-pair";
-      const changeNumber = () => {
-        let value;
-        try {
-          value = parseValue(item.type, number.value);
-        } catch (error) {
-          showError(`${item.name}: ${error.message}`);
-          number.setAttribute("aria-invalid", "true");
-          showNumber(number, liveValue(item) ?? item.value);
-          return;
-        }
-        if (commit(number, value)) {
-          if (range) range.value = String(toSlider(value));
-          showNumber(number, value);
-        } else showNumber(number, liveValue(item) ?? item.value);
-      };
-      number.addEventListener("change", changeNumber);
-      if (ranged) {
-        range = element("input");
-        range.type = "range";
-        range.min = String(logScale ? 0 : opts.min);
-        range.max = String(logScale ? 1 : opts.max);
-        range.step = logScale ? "0.001" : String(opts.step);
-        range.setAttribute("aria-label", `${item.name} 슬라이더${logScale ? "(로그 눈금)" : ""}`);
-        if (logScale) {
-          range.classList.add("is-log");
-          range.title = "로그 눈금";
-        }
-        range.value = String(toSlider(item.value));
-        range.addEventListener("input", () => {
-          if (commit(range, fromSlider(Number(range.value)))) showNumber(number, item.value);
-        });
-        pair.append(range);
-      }
-      pair.append(number);
-      row.append(pair);
-      if (ranged) {
-        row.style.setProperty("--number-width", rangedWidth(opts));
-        row.append(rangeEnds(opts, false));
-      }
-      const readValue = () => liveValue(item);
-      scrubbable(name, {
-        kind,
-        // 로그 눈금이면 이름 끌기도 슬라이더 위치(0~1)로 움직여 배율 단위로 바뀌게 한다.
-        min: logScale ? 0 : opts.min,
-        max: logScale ? 1 : opts.max,
-        step: logScale ? 0.005 : opts.step,
-        read: () => (logScale ? Number(toSlider(readValue()).toFixed(3)) : readValue()),
-        write: next => {
-          const value = fromSlider(next);
-          if (commit(number, value)) {
-            showNumber(number, value);
-            if (range) range.value = String(toSlider(value));
-          }
-        },
-      });
-      // 재생 값은 이미 step 단위라 반올림 없이 그대로 보여 준다(보이는 값 = 셰이더에 들어간 값).
-      playViews.set(item.name, value => {
-        showNumber(number, value);
-        if (range) range.value = String(toSlider(value));
-      });
+      scalarWidget(row, item, commit, name);
     }
   };
   const array = typeInfo(item.type).count;

@@ -1,6 +1,7 @@
 import * as ParameterTools from "./parameter-tools.js";
 import * as Presets from "./presets.js";
 import * as Versions from "./version-store.js";
+import * as StudioVersions from "./studio-versions.js";
 // 사용자 편집 상태만 소유한다. GPU 자원과 연결 규칙은 Renderer/PassManager가 검증한다.
 // 외부 코드 에디터나 네트워크 요청은 사용하지 않는다. file:// 배포는 deploy/ 번들을 사용한다.
 // 나눠 둔 모듈: 프로젝트 데이터 규칙(project-model) · 예제(studio-examples) · 대화상자(studio-dialog) · 코드 삽입 위치(code-insert) · 저장소(storage)
@@ -23,7 +24,7 @@ import * as Scope from "./glsl-scope.js";
 import * as Prepare from "./glsl-prepare.js";
 import * as Media from "./media-input.js";
 import * as HtmlExport from "./html-export.js";
-import * as Color from "./color.js";
+import * as Symbols from "./studio-symbols.js";
 
 // localStorage 키. 작업 상태(project·draft)만 여기서 다룬다. 화면 배치(height·layout·workspace) 키는 studio-layout.js에 있다.
 const STORAGE_KEY = "webgl.shader-studio.project.v1",
@@ -173,56 +174,20 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
         },
       }
     : null;
-  // 다른 탭에서 쓰인 곳(참조 찾기 Shift+F12가 지금 탭 다음에 붙인다). 여러 탭이 함께 쓰는 이름만:
-  //   · Common의 전역 이름(함수 · 변수 · 구조체 · #define · Uniform): Common의 선언 · 쓰는 곳과, 각 패스에서 그 이름을
-  //     스스로 선언하지 않고 쓰는 곳 · 패스의 Uniform: 같은 Uniform을 선언한 다른 패스(파라미터 하나를 나눠 쓴다)
-  //   → [{ tab, label, items: [{ at, line, text, decl }] }]. 함께 쓰는 이름이 아니면 [].
-  const globalSpotsOf = (src, name) => {
-    const decl = Scope.analyze(src).decls.find(d => d.scope === 0 && d.name === name && d.kind !== "field");
-    if (decl) return Scope.referencesAt(src, decl.at).spots || [];
-    return Scope.definesGlobal(src, name)
-      ? Scope.referencesAt(src, Scope.macroSpots(src, name)[0] ?? 0, { macros: [name] }).spots || []
-      : [];
-  };
-  const projectReferences = ({ name, pos }) => {
-    if (disposed) return [];
-    const code = $("studioCode").value,
-      macro = Scope.definesGlobal(code, name) && !Scope.analyze(code).decls.some(d => d.name === name),
-      found = Scope.symbolAt(code, pos, { macros: macro ? [name] : [] }),
-      symbol = found.symbol,
-      global = (symbol && symbol.scope === 0 && symbol.kind !== "field") || macro,
-      commonDefines = hasCommon() && Scope.definesGlobal(project.common, name),
-      shared =
-        (selected === COMMON && global) ||
-        (selected !== COMMON && !global && found.reason === "undeclared" && commonDefines) ||
-        (global && symbol?.uniform);
-    if (!shared) return [];
-    const uniform =
-      symbol?.uniform ||
-      (commonDefines && Scope.analyze(project.common).decls.some(d => d.scope === 0 && d.name === name && d.uniform));
-    const groups = [];
-    for (const tab of tabNames()) {
-      if (tab === selected) continue;
-      const src = sourceOf(project, tab) || "";
-      let spots;
-      if (Scope.definesGlobal(src, name)) {
-        const own = Scope.analyze(src).decls.find(d => d.scope === 0 && d.name === name && d.kind === "var");
-        // 이 탭이 스스로 선언한 이름: Common이거나, 같은 Uniform이면 함께 쓰는 것
-        spots = tab === COMMON || (uniform && own?.uniform) ? globalSpotsOf(src, name) : [];
-      } else spots = (Scope.externalSpots(src, name) || []).map(at => ({ at, decl: false }));
-      if (!spots.length) continue;
-      const rows = src.split("\n");
-      groups.push({
-        tab,
-        label: tabLabel(tab),
-        items: spots.map(spot => {
-          const line = Scope.lineOf(src, spot.at);
-          return { at: spot.at, line, text: rows[line - 1].trim(), decl: spot.decl };
-        }),
-      });
-    }
-    return groups;
-  };
+  // 다른 탭에서 쓰인 곳(참조 찾기 Shift+F12) — 계산은 studio-symbols.js
+  const projectReferences = ({ name, pos }) =>
+    disposed
+      ? []
+      : Symbols.projectReferences({
+          project,
+          selected,
+          code: $("studioCode").value,
+          tabs: tabNames(),
+          name,
+          pos,
+          sourceOf,
+          tabLabel,
+        });
   // 다른 탭의 그 자리로(참조 찾기에서 고를 때)
   const openReference = (tab, at, length) => {
     if (!tabExists(tab)) return false;
@@ -236,33 +201,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     setStatus(`${tabLabel(tab)} ${line}번째 줄로 이동했습니다`);
     return true;
   };
-  // 편집기 줄 끝에 보일 파라미터 현재 값: 이름 → { text, color? }. 그라데이션 · 곡선(sampler2D)은 글자로 줄일 수 없어 뺀다.
-  const shortNumber = (value, integer) =>
-    integer ? String(Math.round(value)) : String(Number(Number(value).toFixed(3))).replace(/^(-?\d+)$/, "$1.0");
-  const uniformValueText = item => {
-    const integer = /^(?:int|uint|[iu]vec\d)$/.test(item.type),
-      value = item.value;
-    if (item.type === "sampler2D") return null;
-    if (item.type === "bool" || item.type.startsWith("bvec"))
-      return Array.isArray(value) ? `(${value.map(v => String(!!v)).join(", ")})` : String(!!value);
-    if (/^mat/.test(item.type)) return "행렬";
-    if (Array.isArray(value) && value.some(Array.isArray)) return `[${value.length}개]`;
-    if (Array.isArray(value)) {
-      if (!/vec/.test(item.type)) return `[${value.length}개]`;
-      return `(${value.map(v => shortNumber(v, integer)).join(", ")})`;
-    }
-    return typeof value === "number" ? shortNumber(value, integer) : null;
-  };
-  const uniformValues = () => {
-    const out = new Map();
-    for (const item of renderer.getUserUniforms()) {
-      const text = uniformValueText(item);
-      if (text === null) continue;
-      const color = item.options?.color && Array.isArray(item.value) ? Color.cssRgb(item.value.slice(0, 3)) : "";
-      out.set(item.name, { text, color });
-    }
-    return out;
-  };
+  // 편집기 줄 끝에 보일 파라미터 현재 값(studio-symbols.js)
+  const uniformValues = () => Symbols.uniformValues(renderer.getUserUniforms());
   // 파라미터 패널에서 그 행을 보이고 잠깐 표시한 뒤 첫 조작에 초점(편집기의 값 표시를 눌렀을 때)
   const revealParameter = name => {
     const tab = document.querySelector('#panelTabs [data-tab="uniforms"]');
@@ -1679,12 +1619,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     // Common이 선언한 Uniform은 패스가 선언 없이 쓴다(glsl-prepare가 Common 앞으로 모은다): 그런 패스는 쓰는 곳만 바꾼다.
     const commonUniform = hasCommon() && !!Scope.planGlobal(project.common, from, to)?.symbol?.uniform;
     const renameIn = source => {
-      const plan = Scope.planGlobal(source, from, to);
-      const spots =
-        plan?.ok && plan.symbol.uniform ? plan.spots : commonUniform ? Scope.externalSpots(source, from) : null;
-      if (!spots?.length) return source;
+      const renamed = Symbols.uniformRenameIn(source, from, to, commonUniform);
+      if (renamed === null) return source;
       passes++;
-      return Scope.applyRename(source, spots, from, to);
+      return renamed;
     };
     const current = Scope.applyRename(code, spots, from, to);
     if (selected === "Image") project.image = current;
@@ -1712,30 +1650,15 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const before = copy(project),
       head = $("studioCode").selectionStart,
       tabs = tabNames();
-    const clash = tabs.find(name => Scope.definesGlobal(sourceOf(project, name), to));
-    if (clash) {
-      setStatus(`${tabLabel(clash)}에 이미 '${to}'이(가) 있어 이름을 바꾸지 않았습니다`, "is-error");
+    const plan = Symbols.sharedRename({ project, tabs, from, to, macro, sourceOf });
+    if (plan?.clash) {
+      setStatus(`${tabLabel(plan.clash)}에 이미 '${to}'이(가) 있어 이름을 바꾸지 않았습니다`, "is-error");
       return { refused: true };
     }
-    const commonSpots = macro
-      ? Scope.macroSpots(project.common, from)
-      : Scope.planShared(project.common, from, to)?.spots;
-    if (!commonSpots?.length) return null;
-    let passes = 0,
-      skipped = [],
-      current = [];
-    for (const name of tabs) {
-      const src = sourceOf(project, name);
-      let spots;
-      if (name === COMMON) spots = commonSpots;
-      else if (macro) spots = Scope.definesGlobal(src, from) ? [] : Scope.macroSpots(src, from);
-      else spots = Scope.definesGlobal(src, from) ? [] : Scope.externalSpots(src, from);
-      if (spots === null) skipped.push(name); // 괄호 짝이 안 맞아(작성 중) 범위를 알 수 없음
-      if (!spots?.length) continue;
-      if (name === selected) current = spots;
-      if (name !== COMMON) passes++;
-      setSourceOf(project, name, Scope.applyRename(src, spots, from, to));
-    }
+    if (!plan) return null;
+    for (const [name, source] of plan.sources) setSourceOf(project, name, source);
+    const { passes, skipped, commonSpots } = plan,
+      current = plan.spots.get(selected) || [];
     const shift = current.filter(at => at < head).length * (to.length - from.length);
     renderEditor();
     $("studioCode").setSelectionRange(head + shift, head + shift);
@@ -1805,12 +1728,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   };
   // 프로젝트 메뉴에서 프로젝트를 바꾸면 메뉴를 닫아 새 화면을 보여 준다.
   const revealCode = () => projectMenu.close();
-  // ---- 버전 기록(version-store.js): 되돌리기보다 긴 안전망. 작업 전체(코드 · 파라미터 · 프리셋 · 연결)를 남긴다 ----
-  //  · 실행에 성공할 때(마지막 버전과 다르고 1분이 지났을 때) · 다른 작업을 열기 전 · 버전을 되돌리기 전 · 직접 남길 때
-  //  · 작업 열쇠는 보관함 프로젝트 id(저장 안 한 작업은 "work") — 프로젝트마다 따로 쌓인다
-  const versions = options.versions === false ? null : Versions.create(options.versions || {});
-  let lastVersion = { key: null, print: "", time: 0 };
-  const versionKey = () => projects?.current()?.id || "work";
+  // ---- 버전 기록: 되돌리기보다 긴 안전망. 흐름은 studio-versions.js, 저장은 version-store.js ----
+  // 작업 전체(코드 · 파라미터 · 프리셋 · 연결)를 그 버전으로 바꾸는 일(adoptVersion)만 여기서 한다.
   const versionState = () => ({
     project: copy(project),
     users: renderer.getUserUniforms(),
@@ -1818,119 +1737,76 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     links: settings?.getLinks?.() ?? [],
     selected,
   });
-  const versionPrint = state =>
-    JSON.stringify([
-      state.project,
-      state.users.map(user => [user.name, user.type, user.value]),
-      state.presets,
-      state.links,
-    ]);
-  // force: 1분 간격을 따지지 않는다(그래도 마지막 버전과 같으면 남기지 않는다). 상태는 부른 순간 잡아 둔다.
-  const keepVersion = async (label, { force = false } = {}) => {
-    if (!versions?.available || disposed) return null;
-    const key = versionKey(),
-      state = versionState(),
-      print = versionPrint(state),
-      now = Date.now();
+  const adoptVersion = version => {
+    rememberEditor();
+    checkpoint = historyState();
+    renderer.applyPortable(version.project, version.users);
+    quietSettings = true;
     try {
-      if (lastVersion.key !== key) {
-        const [newest] = await versions.list(key);
-        lastVersion = { key, print: newest ? versionPrint(newest) : "", time: newest?.time || 0 };
-      }
-      if (lastVersion.print === print || (!force && now - lastVersion.time < 60000)) return null;
-      lastVersion = { key, print, time: now };
-      const saved = await versions.add({ key, label, ...state });
-      document.dispatchEvent(new CustomEvent("shader-versions-changed", { detail: { key } }));
-      return saved;
-    } catch (error) {
-      console.warn("버전 기록 저장 실패:", error);
-      return null;
+      settings?.setPresets?.(version.presets || []);
+      settings?.setLinks?.(version.links || []);
+    } finally {
+      quietSettings = false;
     }
+    workEpoch++;
+    clearChange();
+    views.clear();
+    shown = null;
+    project = copy(version.project);
+    selected = tabExists(version.selected) ? version.selected : "Image";
+    dirty = false;
+    clearError();
+    clearDraft();
+    renderEditor();
+    recordEdit(false, true);
+    Object.assign(checkpoint, { selected, ...cursorState() });
+    preview(true);
+    syncInputs();
+    saveLocal();
+    settings?.save();
+    document.dispatchEvent(new Event("shader-settings-applied"));
   };
-  const listVersions = async () => (versions?.available ? versions.list(versionKey()) : []);
-  const changedVersions = () =>
-    document.dispatchEvent(new CustomEvent("shader-versions-changed", { detail: { key: versionKey() } }));
-  // 이름 붙이기: 이름이 있는 버전은 자동 정리(최근 40개)에서 빠져 계속 남는다. 빈 이름이면 이름을 뗀다.
-  const nameVersion = async (id, name) => {
-    const saved = await versions?.update(id, {
-      name: String(name ?? "")
-        .trim()
-        .slice(0, 60),
-    });
-    changedVersions();
-    return saved;
-  };
-  const removeVersion = async id => {
-    const done = await versions?.remove(id);
-    changedVersions();
-    return !!done;
-  };
-  // 탭 하나만 되돌리기: 그 탭의 코드를 그 버전의 코드로 바꾼다. 편집기에서 직접 고친 것과 같아서(Ctrl+Z 한 번)
-  // 파라미터 · 다른 탭은 그대로이고, 평소처럼 고친 코드를 미리 본다. 그 탭이 지금 없으면 false.
-  const restoreTab = async (id, name) => {
-    const version = (await listVersions()).find(item => item.id === id),
-      code = version ? sourceOf(version.project, name) : null;
-    if (typeof code !== "string" || !tabExists(name) || disposed) return false;
-    open();
-    select(name);
-    if (code === $("studioCode").value) return true;
-    const area = $("studioCode");
-    area.setRangeText(code, 0, area.value.length, "start");
-    area.dispatchEvent(new Event("input", { bubbles: true }));
-    setStatus(
-      `${name} 탭을 ${new Date(version.time).toLocaleString("ko-KR")} 버전으로 바꿨습니다 · Ctrl+Z로 되돌리기`,
-      "is-dirty"
-    );
-    return true;
-  };
-  // 버전으로 되돌리기: 지금 작업을 먼저 버전으로 남기고, 뒤에서 컴파일한 뒤 프로젝트 전체를 그 버전으로 바꾼다.
-  // 보관함 프로젝트와의 연결은 그대로 두고(같은 프로젝트의 옛 모습), Ctrl+Z 한 번으로 바로 전 작업으로 돌아간다.
-  const restoreVersion = async id => {
-    const version = (await listVersions()).find(item => item.id === id);
-    if (!version || disposed) return false;
-    await keepVersion("되돌리기 전", { force: true });
-    const ticket = ++warming,
-      ready = renderer.prepareProject?.(version.project, { all: true });
-    if (ready) {
+  const versionHistory = StudioVersions.create({
+    store: options.versions === false ? null : Versions.create(options.versions || {}),
+    key: () => projects?.current()?.id || "work",
+    state: versionState,
+    disposed: () => disposed,
+    // 버전 코드를 뒤에서 미리 컴파일한다. 그사이 다른 작업이 시작되면 false
+    prepare: async next => {
+      const ticket = ++warming,
+        ready = renderer.prepareProject?.(next, { all: true });
+      if (!ready) return true;
       setStatus("버전 컴파일 중… · 화면은 계속 움직입니다", "is-dirty");
-      if ((await ready) === false || ticket !== warming || disposed) return false;
-    }
-    try {
-      rememberEditor();
-      checkpoint = historyState();
-      renderer.applyPortable(version.project, version.users);
-      quietSettings = true;
-      try {
-        settings?.setPresets?.(version.presets || []);
-        settings?.setLinks?.(version.links || []);
-      } finally {
-        quietSettings = false;
-      }
-      workEpoch++;
-      clearChange();
-      views.clear();
-      shown = null;
-      project = copy(version.project);
-      selected = tabExists(version.selected) ? version.selected : "Image";
-      dirty = false;
-      clearError();
-      clearDraft();
-      renderEditor();
-      recordEdit(false, true);
-      Object.assign(checkpoint, { selected, ...cursorState() });
-      preview(true);
-      syncInputs();
-      saveLocal();
-      settings?.save();
-      document.dispatchEvent(new Event("shader-settings-applied"));
-      lastVersion = { key: versionKey(), print: versionPrint(versionState()), time: Date.now() };
-      setStatus(`${new Date(version.time).toLocaleString("ko-KR")} 버전으로 되돌렸습니다 · Ctrl+Z로 바로 전 작업`);
+      return (await ready) !== false && ticket === warming && !disposed;
+    },
+    adopt: adoptVersion,
+    // 탭 하나만: 편집기에서 직접 고친 것처럼(Ctrl+Z 한 번) — 그 탭이 지금 없으면 false
+    replaceTab: (name, code, version) => {
+      if (!tabExists(name)) return false;
+      open();
+      select(name);
+      if (code === $("studioCode").value) return true;
+      const area = $("studioCode");
+      area.setRangeText(code, 0, area.value.length, "start");
+      area.dispatchEvent(new Event("input", { bubbles: true }));
+      setStatus(
+        `${name} 탭을 ${new Date(version.time).toLocaleString("ko-KR")} 버전으로 바꿨습니다 · Ctrl+Z로 되돌리기`,
+        "is-dirty"
+      );
       return true;
-    } catch (error) {
-      showError(error);
-      return false;
-    }
-  };
+    },
+    sourceOf,
+    setStatus,
+    showError,
+  });
+  const {
+    keep: keepVersion,
+    list: listVersions,
+    name: nameVersion,
+    remove: removeVersion,
+    restore: restoreVersion,
+    restoreTab,
+  } = versionHistory;
   const replaceProject = (next, users = []) => {
     keepVersion("다른 작업을 열기 전", { force: true });
     try {
@@ -2794,7 +2670,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     const button = $("studioProjectSave");
     if (!button.disabled) button.click();
   };
-  // 프로젝트 이름 옆 '저장' 버튼(바뀐 내용이 있을 때만 보인다) = Ctrl+S
+  // 프로젝트 이름 옆 저장 버튼 = Ctrl+S
   if ($("projectMenuState")) on($("projectMenuState"), "click", saveProject);
   const saveShortcut = () => {
     if (ctrlSRuns()) applyWhenReady();
