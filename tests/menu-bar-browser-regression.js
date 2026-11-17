@@ -93,7 +93,7 @@
     // 보기 › 편집기 배치 · 도움말 항목
     top("view").click();
     await until(() => openMenu(), "보기");
-    test(item("편집기를 캔버스 오른쪽에") && item("집중 모드") && item("미리보기는 별도 창"), "보기 › 편집기 배치 세 가지");
+    test(item($("studioLayout").textContent) && item("집중 모드") && item("미리보기는 별도 창"), "보기 › 편집기 배치 세 가지(실제 다음 배치와 일치)");
     key("Escape");
     await until(() => !openMenu(), "보기 닫기");
     top("help").click();
@@ -119,7 +119,7 @@
     test(frames.filter(text => /시간.*프레임 초기화/.test(text)).length === 1, "같은 버튼(시간 초기화)을 누르는 명령은 팔레트에 하나만");
     test((await search("둘러보기")).some(text => text.startsWith("도움말 › 둘러보기")), "팔레트에 도움말 › 둘러보기");
     const exports = await search("프로젝트 파일");
-    test(!exports.some(text => text.startsWith("파일 › 프로젝트 파일로 내보내기")) && exports.some(text => text.startsWith("프로젝트 파일 내보내기")), `같은 버튼을 누르는 명령은 하나만(${exports.join(" | ")})`);
+    test(!exports.some(text => text.startsWith("파일 › 프로젝트 파일로 내보내기")) && exports.some(text => text.startsWith("프로젝트 파일로 내보내기")), `같은 버튼을 누르는 명령은 하나만(${exports.join(" | ")})`);
     paletteInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     // 파일 › 최근 프로젝트: 저장하면 보관함의 최근 항목이 파일 메뉴에(지금 작업에 체크)
     const P = window.shaderStudio.projects, name = `메뉴 바 최근 ${Date.now().toString(36)}`;

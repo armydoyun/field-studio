@@ -12,6 +12,7 @@
 import * as UI from "./ui-kit.js";
 import * as Store from "./storage.js";
 import * as PreviewDOM from "./preview-dom.js";
+import * as MenuCommands from "./menu-commands.js";
 
 const HIDDEN_KEY = "field.menubar-hidden.v1";
 
@@ -31,23 +32,7 @@ const mount = ({ studio, guide, signal: parentSignal } = {}) => {
   // 기존 버튼을 누르는 항목. 버튼이 없거나 숨겨져 있으면(지금 쓸 수 없는 동작) 빼고, 꺼져 있으면 흐리게.
   //   command: 팔레트에 쓸 바뀌지 않는 이름(켜고 끄는 버튼은 메뉴에서는 지금 상태 이름 — '일시정지' — 을 쓴다)
   let collecting = false; // 팔레트 목록을 모을 때는 지금 숨은 버튼도 넣는다(누를 때 다시 본다)
-  const press = (id, { label, command, kbd, pressed, before, keepHidden = false } = {}) => {
-    const node = $(id);
-    if (!node || (node.hidden && !keepHidden && !collecting)) return null;
-    return {
-      button: id, // 누를 버튼의 id(UI.menu는 항목의 id를 메뉴 버튼 id로 쓴다 — 같은 id가 둘 생기면 안 된다)
-      command: command || label,
-      label: label || node.getAttribute("aria-label") || node.textContent.trim(),
-      kbd,
-      pressed: pressed === undefined ? undefined : pressed(node),
-      disabled: !!node.disabled,
-      onSelect: () => {
-        before?.();
-        node.click();
-      },
-    };
-  };
-  const isOn = node => node.getAttribute("aria-pressed") === "true" || node.getAttribute("aria-expanded") === "true";
+  const press = (id, options = {}) => MenuCommands.item($, id, { ...options, collecting });
   // 편집 명령은 편집기 안에서 일한다: 닫혀 있으면 먼저 연다
   const openEditor = () => {
     if ($("studioToggle")?.getAttribute("aria-expanded") !== "true") $("studioToggle")?.click();
@@ -68,27 +53,27 @@ const mount = ({ studio, guide, signal: parentSignal } = {}) => {
 
   const MENUS = {
     file: () => [
-      press("studioReset", { label: "새 프로젝트 (기본 장면)" }),
-      press("projectMenuToggle", { label: "프로젝트 열기…", kbd: "Ctrl+O" }),
+      press("studioReset"),
+      press("projectMenuToggle"),
       ...recentItems(),
       separator,
-      press("studioProjectSave", { label: "저장", kbd: "Ctrl+S", keepHidden: true }),
-      press("studioProjectSaveAs", { label: "다른 이름으로 저장…", kbd: "Ctrl+Shift+S" }),
+      press("studioProjectSave", { keepHidden: true }),
+      press("studioProjectSaveAs"),
       separator,
-      press("studioImportPack", { label: "프로젝트 파일 열기…", keepHidden: true }),
-      press("studioExportPack", { label: "프로젝트 파일로 내보내기", keepHidden: true }),
-      press("studioExportHTML", { label: "HTML로 내보내기 (재생 전용)", keepHidden: true }),
+      press("studioImportPack", { keepHidden: true }),
+      press("studioExportPack", { keepHidden: true }),
+      press("studioExportHTML", { keepHidden: true }),
       separator,
       title("코드만(JSON)"),
       press("studioExport", { label: "코드만 내보내기", keepHidden: true }),
       press("studioImport", { label: "코드 JSON 열기…", keepHidden: true }),
       separator,
-      press("studioTextureAdd", { label: "이미지 파일 불러오기…", keepHidden: true }),
-      press("versionOpen", { label: "버전 기록…", keepHidden: true }),
+      press("studioTextureAdd", { keepHidden: true }),
+      press("versionOpen", { keepHidden: true }),
     ],
     edit: () => [
-      press("studioUndo", { label: "되돌리기 (코드 · 버퍼)", kbd: "Ctrl+Z", keepHidden: true }),
-      press("studioRedo", { label: "다시 실행", kbd: "Ctrl+Y", keepHidden: true }),
+      press("studioUndo", { keepHidden: true }),
+      press("studioRedo", { keepHidden: true }),
       separator,
       press("studioFind", { label: "찾기", kbd: "Ctrl+F", before: openEditor, keepHidden: true }),
       press("studioReplace", { label: "찾아 바꾸기", kbd: "Ctrl+H", before: openEditor, keepHidden: true }),
@@ -97,19 +82,10 @@ const mount = ({ studio, guide, signal: parentSignal } = {}) => {
       press("studioPaletteOpen", { label: "명령 팔레트…", kbd: "F1", before: openEditor, keepHidden: true }),
     ],
     view: () => [
-      press("panelToggle", {
-        label: "설정 패널",
-        kbd: "H",
-        pressed: node => node.getAttribute("aria-pressed") === "true",
-      }),
-      press("studioToggle", { label: "셰이더 편집기", kbd: "E", pressed: isOn }),
-      press("timelineToggle", { label: "타임라인", kbd: "T", pressed: isOn, keepHidden: true }),
-      press("hudToggle", {
-        label: "HUD (뷰포트 위 정보)",
-        kbd: "G",
-        pressed: () => !$("stage")?.classList.contains("hud-hidden"),
-        keepHidden: true,
-      }),
+      press("panelToggle"),
+      press("studioToggle"),
+      press("timelineToggle", { keepHidden: true }),
+      press("hudToggle", { keepHidden: true }),
       separator,
       title("설정 패널"),
       tab("tab-uniforms", "파라미터"),
@@ -118,39 +94,37 @@ const mount = ({ studio, guide, signal: parentSignal } = {}) => {
       tab("tab-input", "작업공간"),
       separator,
       title("편집기 배치"),
-      press("studioLayout", { label: "편집기를 캔버스 오른쪽에", pressed: isOn, before: openEditor, keepHidden: true }),
-      press("studioMaximize", { label: "집중 모드 (코드 크게)", pressed: isOn, before: openEditor, keepHidden: true }),
+      press("studioLayout", { before: openEditor, keepHidden: true }),
+      press("studioMaximize", { before: openEditor, keepHidden: true }),
       press("studioSplitEdit", {
-        label: "미리보기는 별도 창 · 편집기는 화면 가득",
-        pressed: isOn,
         before: openEditor,
         keepHidden: true,
       }),
       separator,
-      press("fullscreenToggle", { label: "전체화면", kbd: "F" }),
-      press("previewPopout", { label: "미리보기를 별도 창으로", keepHidden: true }),
-      press("themeToggle", { command: "테마 바꾸기 (라이트 · 다크)", keepHidden: true }),
+      press("fullscreenToggle"),
+      press("previewPopout", { keepHidden: true }),
+      press("themeToggle", { keepHidden: true }),
       separator,
       { label: "메뉴 바", kbd: "F10", pressed: true, onSelect: () => setHidden(true, { focus: true }) },
     ],
     play: () => [
-      press("previewPause", { command: "재생 / 일시정지", kbd: "Space" }),
-      press("stepFrame", { label: "한 프레임 진행", kbd: ".", keepHidden: true }),
-      press("studioResetFrames", { label: "시간 · 프레임 초기화", keepHidden: true }),
+      press("previewPause"),
+      press("stepFrame", { keepHidden: true }),
+      press("studioResetFrames", { keepHidden: true }),
       separator,
-      press("screenshotButton", { label: "스크린샷 저장 (PNG)", keepHidden: true }),
+      press("screenshotButton", { keepHidden: true }),
       press("screenshot2x", { label: "2배 해상도로 저장", keepHidden: true }),
       press("screenshot4k", { label: "4K로 저장", keepHidden: true }),
       separator,
-      press("recordButton", { command: "녹화 시작 / 중지", keepHidden: true }),
-      press("videoRenderOpen", { label: "영상 렌더링…", keepHidden: true }),
+      press("recordButton", { keepHidden: true }),
+      press("videoRenderOpen", { keepHidden: true }),
     ],
     help: () => [
-      press("helpToggle", { label: "가이드", kbd: "?", keepHidden: true }),
+      press("helpToggle", { keepHidden: true }),
       guide && { label: "단축키 목록", onSelect: () => guide.open("shortcuts") },
       press("guideTour", { label: "둘러보기 (화면 안내 투어)", keepHidden: true }),
       separator,
-      press("galleryToggle", { label: "예제 갤러리", kbd: "X", keepHidden: true }),
+      press("galleryToggle", { keepHidden: true }),
       $("galleryLessons") && {
         label: "기법 배우기 (레슨)",
         // 갤러리를 열고 레슨 묶음으로 내린다

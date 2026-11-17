@@ -109,6 +109,7 @@ js/
   input.js            # 뷰포트 포인터·키 입력 → 키보드 채널 전달
   stage-menu.js       # 뷰포트 툴바 드롭다운(캡처 펼치기 · ⋯ 더보기)
   menu-bar.js         # 창 맨 위 메뉴 바(파일 · 편집 · 보기 · 재생 · 도움말): 기존 버튼을 누르는 항목 · 최근 프로젝트 · ←→/F10 · 좁으면 '메뉴' 하나 · 명령 팔레트에 등록 · 숨기기(⋯ 더보기로 대신)
+  menu-commands.js    # 앱 공통 메뉴 이름·단축키·체크 상태·팔레트 ID (docs/MENU_COMMANDS.md)
   html-export.js      # HTML로 내보내기: 작품 하나를 재생 전용 HTML 한 파일로(재생기 · 컴파일 직전 GLSL · 이미지 포함)
   recorder.js         # 뷰포트 녹화(MediaRecorder → WebM/MP4 내려받기) — 실시간
   video-render.js     # 영상 렌더링(오프라인) — 프레임마다 정한 시간으로 그려 WebCodecs → WebM 먹서 / PNG ZIP (순수 함수 + 실행기)
