@@ -261,12 +261,16 @@
                             <button id="studioExportHTML" type="button" class="ui-menu-item glyph-icon icon-code" title="재생 전용 HTML 한 파일로 내보내기"><span>HTML로 내보내기</span><kbd>재생 전용</kbd></button>
                             <hr class="ui-menu-sep">
                             <button id="versionOpen" type="button" class="ui-menu-item" aria-haspopup="dialog" aria-controls="versionDialog" title="실행할 때마다 남긴 이 작업의 옛 버전 보기 · 비교 · 되돌리기"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span>버전 기록…</span></button>
-                            <details class="ui-disclosure project-advanced"><summary>고급 · 코드만 주고받기</summary><p class="ui-hint">코드·버퍼만 포함합니다.</p><div class="studio-file-actions"><button id="studioExport" type="button" title="코드·버퍼 JSON 내보내기">코드만 내보내기</button><button id="studioImport" type="button" title="코드만 담은 JSON 파일 불러오기">코드 JSON 열기</button></div></details>
+                            <details class="ui-disclosure project-advanced"><summary>고급 · 코드만 주고받기</summary>
+                                <button id="studioExport" type="button" class="ui-menu-item" title="코드·버퍼 JSON 내보내기"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg><span>코드만 내보내기</span><kbd>JSON</kbd></button>
+                                <button id="studioImport" type="button" class="ui-menu-item" title="코드만 담은 JSON 파일 불러오기"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>코드 JSON 열기…</span></button>
+                                <p class="ui-menu-note">코드 · 버퍼만 담습니다. 파라미터 값 · 이미지는 빠집니다.</p>
+                            </details>
                         </div>
                         <input id="studioPackFile" type="file" accept=".json,application/json" hidden>
                         <input id="studioImportFile" type="file" accept=".json,application/json" hidden>
-                        <section id="studioImages" class="project-menu-section" aria-labelledby="projectMenuImagesTitle"><h2 id="projectMenuImagesTitle">이미지</h2>
-                            <button id="studioTextureAdd" type="button" title="로컬 이미지 파일을 불러와 Texture로 등록">+ 이미지 파일 불러오기</button>
+                        <section id="studioImages" class="project-menu-section project-images" aria-labelledby="projectMenuImagesTitle"><h2 id="projectMenuImagesTitle">이미지</h2>
+                            <button id="studioTextureAdd" type="button" class="ui-menu-item glyph-icon icon-image project-image-add" title="로컬 이미지 파일을 불러와 Texture로 등록"><span>이미지 파일 불러오기…</span><kbd>PNG · JPEG · WebP</kbd></button>
                         <input id="studioTextureFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
                         <div id="studioTextureList" class="studio-textures"></div>
                         </section>

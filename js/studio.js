@@ -1019,7 +1019,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     if (!assets.length) {
       const hint = element("p");
       hint.className = "ui-hint";
-      hint.textContent = "등록된 이미지가 없습니다. PNG·JPEG·WebP 파일을 추가하고 입력 채널에 연결하세요.";
+      hint.textContent = "아직 없습니다. 불러온 이미지는 편집기의 입력 채널(iChannel)에 연결해 씁니다.";
       holder.append(hint);
     } else {
       // 전체 용량: 이 브라우저에 보관한 원본 파일과 GPU 메모리 어림값. 쓰지 않는 이미지가 있으면 정리 버튼을 보인다.
