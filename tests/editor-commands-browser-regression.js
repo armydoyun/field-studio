@@ -1,6 +1,7 @@
 // 코드 편집기 명령(cm-editor.js)의 결과 — 실제 앱에서 키를 눌러 문서가 어떻게 바뀌는지 본다.
 //  · Ctrl+Shift+L / Ctrl+F2: 선택이 비어 있으면 커서 아래 단어와 단어 전체가 같은 곳만 고른다(float · main 안의 a는 빼고)
 //  · 선택이 있으면 그 글자가 들어간 곳을 모두 고른다
+//  · 찾기 창: '결과 없음' 뒤에 정규식이 틀리면 개수 글자가 빨갛고, 일치가 생기면 다시 보통 색이다(앞 상태 색이 남지 않는다)
 (async () => {
   const studio = window.shaderStudio,
     $ = id => document.getElementById(id);
@@ -50,6 +51,36 @@
     await frames(1);
     await type("OAT");
     test((area.value.match(/flOAT/g) || []).length === 3, "선택한 글자 oat가 들어간 곳 모두 바뀐다");
+    // 찾기 창의 개수 색
+    await setDoc(src, 0);
+    key("f", { code: "KeyF", ctrlKey: true });
+    await frames(2);
+    const panel = document.querySelector(".studio-find"),
+      field = panel?.querySelector("[name=search]"),
+      regexp = panel?.querySelector("[name=re]");
+    test(!!field && !!regexp, "찾기 창이 열린다");
+    const search = async text => {
+      field.value = text;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      await frames(1);
+      return { count: panel.querySelector(".studio-find-count").textContent, red: panel.classList.contains("has-no-match") };
+    };
+    regexp.click();
+    let state = await search("vec\\d");
+    test(state.count.endsWith("/2") && !state.red, `정규식 일치 2개는 보통 색(${state.count})`);
+    state = await search("(");
+    test(state.count === "잘못된 식" && state.red, "틀린 정규식은 빨간 글자로 '잘못된 식'");
+    state = await search("vec\\d");
+    test(!state.red, "다시 일치하면 빨간색이 풀린다");
+    state = await search("zzz");
+    test(state.count === "결과 없음" && state.red, "일치가 없으면 빨간 '결과 없음'");
+    state = await search("(");
+    test(state.red, "결과 없음 다음의 틀린 정규식도 빨갛다");
+    state = await search("");
+    test(state.count === "" && !state.red, "찾기 칸을 비우면 표시가 없다");
+    regexp.click();
+    key("Escape", { code: "Escape" });
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
   } finally {
     studio.setProject(before);
     if (!wasOpen) studio.close();

@@ -97,14 +97,12 @@ const createSearchPanel = CM => view => {
     for (const [node, key] of toggles) node.setAttribute("aria-pressed", String(!!q[key]));
   };
   // 일치 개수와 현재 위치("3/12"). 정규식이 틀렸으면 그렇게 알린다.
+  // 결과 없음 · 잘못된 식은 개수를 빨갛게(has-no-match) — 앞 상태의 색이 남지 않게 매번 정한다.
   const refreshCount = () => {
     search.classList.toggle("is-invalid", !query.valid && !!query.search);
-    if (!query.search) {
-      count.textContent = "";
-      return;
-    }
-    if (!query.valid) {
-      count.textContent = "잘못된 식";
+    if (!query.search || !query.valid) {
+      count.textContent = query.search ? "잘못된 식" : "";
+      dom.classList.toggle("has-no-match", !!query.search);
       return;
     }
     const main = view.state.selection.main,
