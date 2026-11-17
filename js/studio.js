@@ -475,10 +475,14 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       else setStorage("draft", `복구본 저장됨 · ${clock()} · 실행 전 코드`);
     }, 550);
   };
-  const saveLocal = () => {
+  const saveLocal = ({ clearRecovery = false } = {}) => {
     const error = Store.writeTabJSON(STORAGE_KEY, { version: 1, project, selected });
     if (error) setStorage("error", "복구본 기록 실패 · 새로 고치면 복구되지 않을 수 있음", error.message);
-    else setStorage("saved", `복구본 저장됨 · ${clock()}`);
+    else {
+      if (clearRecovery) clearDraft();
+      setStorage("saved", `복구본 저장됨 · ${clock()}`);
+    }
+    return !error;
   };
   // 미리보기(뷰포트에 보이는 패스).
   //  · 탭을 바꾸면 그 패스를 따라간다(처음 쓰는 사람이 "내가 고치는 버퍼"를 바로 보게). 단, 고정(previewPinned)을 켜면 그대로 둔다.
@@ -588,12 +592,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       keepPreview(); // 적용할 때는 미리보기를 바꾸지 않는다(위 preview 설명)
       dirty = false;
       clearError();
-      clearDraft();
       const timing = since
         ? `걸린 시간 ${took(now() - since)}(뒤에서 컴파일 · 화면은 멈추지 않음)`
         : `걸린 시간 ${took(now() - started)}`;
       setStatus(touched ? `적용됨 · ${timing}` : "변경 사항 없음");
-      saveLocal();
+      saveLocal({ clearRecovery: true });
       const synced = syncAnnotations();
       if (synced) setStatus(`${synced} · ${timing}`);
       keepVersion("실행"); // 어노테이션으로 등록된 파라미터까지 담기게 그 뒤에
@@ -1790,12 +1793,11 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     selected = tabExists(tab) ? tab : "Image";
     dirty = false;
     clearError();
-    clearDraft();
     renderEditor();
     recordEdit(false, true);
     Object.assign(checkpoint, { selected, ...cursorState() });
     preview(true); // 새 프로젝트: 고정과 상관없이 고른 탭을 보여 준다
-    saveLocal();
+    saveLocal({ clearRecovery: true });
     revealCode();
   };
   // 프로젝트 메뉴에서 프로젝트를 바꾸면 메뉴를 닫아 새 화면을 보여 준다.
@@ -1828,13 +1830,12 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     selected = tabExists(version.selected) ? version.selected : "Image";
     dirty = false;
     clearError();
-    clearDraft();
     renderEditor();
     recordEdit(false, true);
     Object.assign(checkpoint, { selected, ...cursorState() });
     preview(true);
     syncInputs();
-    saveLocal();
+    saveLocal({ clearRecovery: true });
     settings?.save();
     document.dispatchEvent(new Event("shader-settings-applied"));
   };
@@ -1941,11 +1942,10 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       recordEdit();
       clearError();
       dirty = false;
-      clearDraft();
       workEpoch++;
       syncInputs();
       setStatus("렌더러의 현재 버퍼 구성을 불러왔습니다.");
-      saveLocal();
+      saveLocal({ clearRecovery: true });
       return true;
     });
   const open = () => {
@@ -2310,7 +2310,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
       const migrated = declareRegistered(next, renderer.getUserUniforms());
       const detached = detachMissing(next);
       project = next;
-      selected = "Image";
+      selected = tabExists(data.selected) ? data.selected : "Image";
       renderEditor();
       if (!apply()) {
         project = before;

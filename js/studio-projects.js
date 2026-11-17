@@ -169,9 +169,12 @@ const create = ({
     const serial = ++renderSerial,
       holder = $("studioProjectList");
     try {
-      items = await store.list();
+      const next = await store.list();
+      if (serial !== renderSerial) return;
+      items = next;
       available = true;
     } catch (error) {
+      if (serial !== renderSerial) return;
       items = [];
       available = false;
       // IndexedDB가 아예 없는 환경(일부 사생활 보호 창 등)은 안내 문구로 충분하다.
@@ -232,14 +235,15 @@ const create = ({
     return true;
   };
   // 덮어쓰기 충돌(다른 탭이 먼저 저장 · 지움)을 묻는다. 사본으로 저장 · 덮어쓰기 · 취소
-  const resolveConflict = async (error, name, pack) => {
+  const resolveConflict = async (error, target, name, pack) => {
+    if (pack.epoch !== undefined && pack.epoch !== epoch()) return false;
     if (error.code === "missing") {
       const ok = await ask({
         title: "보관함에서 사라진 프로젝트",
         message: `'${name}'은(는) 다른 탭(창)에서 지워졌습니다. 지금 작업을 새 항목으로 저장할까요?`,
         ok: "새 항목으로 저장",
       });
-      if (!ok) return false;
+      if (!ok || (pack.epoch !== undefined && pack.epoch !== epoch())) return false;
       return adopt(await store.save({ name, text: pack.text, passes: pack.passes, images: pack.images }), pack);
     }
     const choice = await ask({
@@ -248,9 +252,10 @@ const create = ({
       ok: "사본으로 저장",
       alt: "덮어쓰기",
     });
+    if (pack.epoch !== undefined && pack.epoch !== epoch()) return false;
     if (choice === "alt")
       return adopt(
-        await store.save({ id: current.id, name, text: pack.text, passes: pack.passes, images: pack.images }),
+        await store.save({ id: target.id, name, text: pack.text, passes: pack.passes, images: pack.images }),
         pack
       );
     if (choice === true)
@@ -262,29 +267,31 @@ const create = ({
   };
   // asNew: 지금 프로젝트가 있어도 새 항목으로 저장한다.
   const saveNow = async (asNew = false) => {
-    const overwrite = current && !asNew;
+    const target = current ? { ...current } : null,
+      requestEpoch = epoch(),
+      overwrite = target && !asNew;
     const name = overwrite
-      ? current.name
+      ? target.name
       : await askName(
           asNew ? "다른 이름으로 저장" : "프로젝트 저장",
           asNew ? `${current?.name || suggestName()} 사본` : suggestName()
         );
-    if (name === null || name === undefined) return false;
+    if (name === null || name === undefined || requestEpoch !== epoch()) return false;
     const pack = await buildPack();
-    if (!pack) return false;
+    if (!pack || (pack.epoch !== undefined && pack.epoch !== requestEpoch)) return false;
     try {
       const record = await store.save({
-        id: overwrite ? current.id : null,
+        id: overwrite ? target.id : null,
         name,
         text: pack.text,
         passes: pack.passes,
         images: pack.images,
-        expectedRevision: overwrite ? current.revision : null,
+        expectedRevision: overwrite ? target.revision : null,
       });
       return adopt(record, pack);
     } catch (error) {
       if (overwrite && (error.code === "conflict" || error.code === "missing"))
-        return resolveConflict(error, name, pack);
+        return resolveConflict(error, target, name, pack);
       throw error;
     }
   };
@@ -292,15 +299,17 @@ const create = ({
   const openItem = item =>
     exclusive(async () => {
       opening = true;
-      let ok;
+      let ok, entry;
       try {
-        // 열기 직전의 최신 요약(revision)을 함께 읽는다. 다른 탭이 그 사이 저장했어도 연 내용과 revision이 맞도록 본문 뒤에 읽는다.
-        ok = await openPack(() => store.load(item.id));
+        ok = await openPack(async () => {
+          entry = await store.loadEntry(item.id);
+          return entry.text;
+        });
       } finally {
         opening = false;
       }
       if (!ok) return false;
-      const latest = (await store.get(item.id).catch(() => null)) || item;
+      const latest = entry.record;
       current = { id: item.id, name: latest.name, fingerprint: fingerprint(), revision: latest.revision ?? null };
       cleanWork = null;
       remember();

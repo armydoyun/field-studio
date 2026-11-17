@@ -46,14 +46,17 @@ const session = () => {
     return null;
   }
 };
+const sharedValues = new Map();
 const readTab = key => {
   try {
     const value = session()?.getItem(key);
-    if (value !== null && value !== undefined) return value;
+    if (value !== null && value !== undefined) return value === "" ? null : value;
   } catch (_) {
     /* 탭 저장소를 못 읽으면 공용 값을 쓴다. */
   }
-  return read(key);
+  const value = read(key);
+  if (value !== null) sharedValues.set(key, value);
+  return value;
 };
 const readTabJSON = (key, fallback = null) => {
   const raw = readTab(key);
@@ -64,28 +67,37 @@ const readTabJSON = (key, fallback = null) => {
     return fallback;
   }
 };
-// 공용(localStorage) 쓰기의 결과를 돌려준다. 탭 저장소 실패는 공용 값이 대신하므로 무시한다.
+// 어느 저장소든 실패하면 알린다. 탭 쓰기 실패 후 남은 옛 값은 지워 공용의 최신 값을 가리지 않게 한다.
 const writeTab = (key, value) => {
+  let tabError = null;
   try {
     session()?.setItem(key, value);
-  } catch (_) {
-    /* 공용 값이 대신한다. */
+  } catch (error) {
+    tabError = error;
+    try {
+      session()?.removeItem(key);
+    } catch (_) {
+      /* 삭제도 막혔으면 오류 표시를 유지한다. */
+    }
   }
-  return write(key, value);
+  const sharedError = write(key, value);
+  if (!sharedError) sharedValues.set(key, String(value));
+  return tabError || sharedError;
 };
 const writeTabJSON = (key, value) => writeTab(key, JSON.stringify(value));
-// 공용 값은 이 탭이 마지막으로 쓴 것일 때만 지운다(다른 탭의 복구본을 지우지 않게).
+// 공용 값은 이 탭이 읽거나 쓴 값과 같을 때만 지운다. 탭에는 빈 값을 남겨 새로고침 때 다른 탭의 복구본으로 돌아가지 않게 한다.
 const removeTab = key => {
-  let mine = null;
+  let mine = sharedValues.get(key) ?? null;
   try {
     const store = session();
-    mine = store ? store.getItem(key) : null;
-    store?.removeItem(key);
+    mine = store?.getItem(key) ?? mine;
+    store?.setItem(key, "");
   } catch (_) {
-    mine = null;
+    /* 읽지 못한 탭의 공용 복구본은 소유 여부를 확인한 값만 지운다. */
   }
+  sharedValues.delete(key);
   const shared = read(key);
-  if (shared !== null && (mine === null || shared === mine)) remove(key);
+  if (shared !== null && mine !== null && shared === mine) remove(key);
 };
 
 export { read, readJSON, write, writeJSON, remove, readTab, readTabJSON, writeTab, writeTabJSON, removeTab };
