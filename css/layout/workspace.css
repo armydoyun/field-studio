@@ -1,6 +1,6 @@
-/* 작업 공간 격자: [설정 패널 | 크기 조절 막대 | 뷰포트] 아래에 타임라인. 패널은 왼쪽(기본) · 오른쪽, 숨길 수 있다.
+/* 작업 공간 격자: [설정 패널 | 크기 조절 막대 | 뷰포트] 아래에 타임라인. 높이는 앱 막대(app-bar.css) 아래 남은 만큼. 패널은 왼쪽(기본) · 오른쪽, 숨길 수 있다.
    크기 조절 막대의 모양은 ui-resizer(components/surface.css)이고 여기서는 격자 자리만 정한다. */
-#workspace { display:grid;grid-template-columns:var(--panel-width) auto minmax(0,1fr);grid-template-areas:"panel resize stage" "panel resize timeline";grid-template-rows:minmax(0,1fr) auto;width:100%;height:100dvh; }
+#workspace { display:grid;grid-template-columns:var(--panel-width) auto minmax(0,1fr);grid-template-areas:"panel resize stage" "panel resize timeline";grid-template-rows:minmax(0,1fr) auto;flex:1 1 auto;width:100%;min-height:0; }
 .panel-right #workspace { grid-template-columns:minmax(0,1fr) auto var(--panel-width);grid-template-areas:"stage resize panel" "timeline resize panel"; }
 .panel-hidden #workspace,html.panel-right body.panel-hidden #workspace { grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "timeline"; }
 .panel-hidden #panel { display:none; }

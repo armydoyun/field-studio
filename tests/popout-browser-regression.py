@@ -49,9 +49,10 @@ try:
             }""")
 
             def open_preview():
-                page.click("#moreToggle")
+                # 메인 창에서는 메뉴 바(보기 > 미리보기를 별도 창으로)로 연다 — ⋯ 더보기는 메뉴 바가 있으면 숨는다
+                page.click('#menuBar [data-menu="view"]')
                 with page.expect_popup() as opened:
-                    page.click("#previewPopout")
+                    page.click('.ui-menu [role="menuitem"]:has-text("미리보기를 별도 창으로")')
                 result = opened.value
                 result.wait_for_selector("#stageHeader")
                 return result

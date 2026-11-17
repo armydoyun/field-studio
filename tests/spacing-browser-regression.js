@@ -178,6 +178,18 @@
   $("projectMenuToggle").click();
   await audit("프로젝트 메뉴");
   $("projectMenuToggle").click();
+  // 메뉴 바: 막대 자체와 펼친 메뉴(파일 · 보기)
+  await audit("메뉴 바");
+  for (const name of ["file", "view"]) {
+    document.querySelector(`#menuBar [data-menu="${name}"]`).click();
+    await until(() => document.querySelector('.ui-menu[role="menu"]'), `메뉴 바: ${name}`);
+    await audit(`메뉴 바: ${name} 메뉴`);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    await until(() => !document.querySelector('.ui-menu[role="menu"]'), `메뉴 바: ${name} 닫힘`);
+  }
+  // ⋯ 더보기는 메뉴 바를 껐을 때만 보인다 — 끈 상태에서 잰 뒤 되돌린다
+  document.body.classList.add("menubar-hidden");
+  $("menuBarShow").hidden = false;
   for (const [id, menu, label] of [["captureToggle", "captureMenu", "캡처 메뉴"], ["moreToggle", "moreMenu", "더보기 메뉴"]]) {
     $(id).click();
     await until(() => !$(menu).hidden, label);
@@ -185,6 +197,8 @@
     $(id).click();
     await until(() => $(menu).hidden, `${label} 닫힘`);
   }
+  $("menuBarShow").click();
+  await until(() => !document.body.classList.contains("menubar-hidden"), "메뉴 바 다시 보이기");
   {
     const box = $("renderViewport").getBoundingClientRect();
     $("renderViewport").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 }));

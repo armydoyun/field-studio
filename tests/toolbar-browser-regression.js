@@ -67,18 +67,24 @@
   const hudBefore = stage.classList.contains("hud-hidden");
   let probeRecorder;
   try {
-    const direct = [...$("stageToolbar").children].filter(n => n.tagName === "BUTTON" && visible(n)).map(n => n.id);
-    test(JSON.stringify(direct) === JSON.stringify(["panelToggle", "previewPause", "studioToggle", "quickShot", "captureToggle", "fullscreenToggle", "moreToggle"]), `툴바에는 자주 쓰는 버튼만(설정 패널 · 재생 · 편집기 · 스크린샷 · 캡처 펼치기 · 전체화면 · 더보기): ${direct}`);
+    const directs = () => [...$("stageToolbar").children].filter(n => n.tagName === "BUTTON" && visible(n)).map(n => n.id);
+    const TOOLS = ["panelToggle", "previewPause", "studioToggle", "quickShot", "captureToggle", "fullscreenToggle"];
+    test(JSON.stringify(directs()) === JSON.stringify(TOOLS), `툴바에는 자주 쓰는 버튼만(설정 패널 · 재생 · 편집기 · 스크린샷 · 캡처 펼치기 · 전체화면 — 메뉴 바가 있으면 ⋯는 숨김): ${directs()}`);
+    // 메뉴 바를 끄면(보기 > 메뉴 바) ⋯ 더보기가 다시 나타나고, 그 안에 '메뉴 바 보이기'
+    document.querySelector('#menuBar [data-menu="view"]').click(); await wait(0);
+    [...document.querySelectorAll('.ui-menu [role="menuitem"]')].find(n => n.textContent.startsWith("메뉴 바")).click(); await wait(0);
+    test(document.body.classList.contains("menubar-hidden") && !visible($("appBar")), "보기 > 메뉴 바로 메뉴 바를 숨김");
+    test(JSON.stringify(directs()) === JSON.stringify([...TOOLS, "moreToggle"]), `메뉴 바를 끄면 ⋯ 더보기가 툴바에: ${directs()}`);
     for (const id of ["galleryToggle", "helpToggle", "hudToggle", "previewPopout", "themeToggle"])
       test($("moreMenu").contains($(id)) && !visible($(id)), `${id}는 닫힌 ⋯ 메뉴 안에`);
     test($("captureMenu").contains($("screenshotButton")) && $("captureMenu").contains($("recordButton")), "스크린샷·녹화는 캡처 메뉴 안에");
 
     // ⋯ 메뉴: 열면 첫 항목에 초점, ↓로 이동, Esc로 닫고 메뉴 버튼에 초점
     $("moreToggle").click(); await wait(0);
-    test(visible($("moreMenu")) && $("moreToggle").getAttribute("aria-expanded") === "true" && document.activeElement === $("galleryToggle"), "⋯ 메뉴 열기 → 첫 항목에 초점");
+    test(visible($("moreMenu")) && $("moreToggle").getAttribute("aria-expanded") === "true" && document.activeElement === $("menuBarShow"), "⋯ 메뉴 열기 → 첫 항목('메뉴 바 보이기')에 초점");
     const r = $("moreMenu").getBoundingClientRect(), t = $("moreToggle").getBoundingClientRect();
     test(r.top >= t.bottom && r.right <= window.innerWidth && r.left >= 0, "메뉴는 버튼 아래, 화면 안에");
-    key("ArrowDown"); test(document.activeElement === $("helpToggle"), "↓로 다음 항목");
+    key("ArrowDown"); test(document.activeElement === $("galleryToggle"), "↓로 다음 항목");
     key("End"); test(document.activeElement === $("themeToggle"), "End로 마지막 항목");
     key("Escape"); await wait(0);
     test(!visible($("moreMenu")) && document.activeElement === $("moreToggle"), "Esc로 닫고 메뉴 버튼에 초점");
@@ -92,6 +98,10 @@
     test(!visible($("moreMenu")), "바깥을 누르면 닫힘");
     $("moreToggle").click(); $("captureToggle").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })); $("captureToggle").click(); await wait(0);
     test(visible($("captureMenu")) && !visible($("moreMenu")), "캡처 메뉴를 열면 ⋯ 메뉴는 닫힘");
+    $("captureToggle").click(); await wait(0);
+    // ⋯ 안의 '메뉴 바 보이기'로 되돌린다
+    $("moreToggle").click(); await wait(0); $("menuBarShow").click(); await wait(0);
+    test(!document.body.classList.contains("menubar-hidden") && visible($("appBar")) && !visible($("moreToggle")), "'메뉴 바 보이기'로 메뉴 바가 돌아오고 ⋯는 다시 숨음");
 
     // 녹화: 시작 → 툴바에 경과 시간 → 중지하면 영상 파일을 내려받는다
     test(!$("recordButton").disabled, "녹화 지원(Chromium)");
@@ -146,6 +156,7 @@
     const pixel = await readVideo(saved, 96, 64);
     test(pixel[0] > 200 && pixel[1] < 50 && pixel[2] < 50, `늦게 온 빨간 프레임이 녹화됨: ${[...pixel]}`);
   } finally {
+    if (document.body.classList.contains("menubar-hidden")) $("menuBarShow")?.click(); // 메뉴 바를 끈 채 끝나지 않게
     probeRecorder?.dispose();
     HTMLCanvasElement.prototype.captureStream = originalCapture;
     URL.createObjectURL = originalUrl;
