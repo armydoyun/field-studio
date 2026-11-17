@@ -718,10 +718,29 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
     });
     return true;
   };
-  // Ctrl+Shift+L · Ctrl+F2: 선택이 비어 있으면 커서 아래 단어로 시작해 같은 항목을 모두 선택
+  // Ctrl+Shift+L · Ctrl+F2: 같은 항목을 모두 선택. 선택이 있으면 그 글자가 들어간 곳 모두,
+  // 선택이 비어 있으면 VS Code처럼 커서 아래 단어와 '단어 전체가 같은' 곳만(a를 고르면 float · main 안의 a는 빼고).
+  const isWordChar = c => /[\w$]/.test(c || "");
   const selectAllOccurrences = editorView => {
-    if (editorView.state.selection.main.empty) CM.selectNextOccurrence(editorView);
-    return CM.selectSelectionMatches(editorView);
+    const state = editorView.state,
+      main = state.selection.main;
+    if (!main.empty) return CM.selectSelectionMatches(editorView);
+    const word = state.wordAt(main.head);
+    if (!word) return false;
+    const doc = state.doc.toString(),
+      text = doc.slice(word.from, word.to),
+      ranges = [];
+    let mainIndex = 0;
+    for (let at = doc.indexOf(text); at >= 0; at = doc.indexOf(text, at + text.length)) {
+      if (isWordChar(doc[at - 1]) || isWordChar(doc[at + text.length])) continue;
+      if (at === word.from) mainIndex = ranges.length;
+      ranges.push(CM.EditorSelection.range(at, at + text.length));
+    }
+    editorView.dispatch({
+      selection: CM.EditorSelection.create(ranges, mainIndex),
+      userEvent: "select.search.matches",
+    });
+    return true;
   };
   // Ctrl+↑ / Ctrl+↓: 커서가 숫자 위면 값 조절(cm-glsl-features), 아니면 VS Code처럼 화면만 한 줄 스크롤
   const scrollLines = direction => editorView => {
