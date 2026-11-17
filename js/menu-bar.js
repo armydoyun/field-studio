@@ -5,13 +5,19 @@
 //  · F10: 메뉴 바로 초점(Alt는 브라우저 메뉴와 부딪혀 쓰지 않는다) · 메뉴 바에서 ←→ 이동 · ↓/Enter 열기
 //  · document에 'menubar-open'(detail: 메뉴 이름) 이벤트를 보내면 그 메뉴를 연다(프로젝트 메뉴의 '파일 메뉴로')
 //  · 보기 > 메뉴 바: 끄면 숨기고 툴바의 ⋯ 더보기가 다시 나타난다(⋯ 안의 '메뉴 바 보이기'로 되돌림). 이 브라우저에 기억한다.
-//   mount({ signal }) → { open(name), dispose }
+//  · 좁은 화면(600px 이하): 메뉴 이름 대신 '메뉴' 버튼 하나(data-menu="all") — 다섯 메뉴를 묶음 제목과 함께 한 목록으로
+//  · 파일 메뉴에 최근 프로젝트(보관함의 최근 5개) — 열 때마다 보관함을 다시 읽는다
+//  · 명령 팔레트(F1)에 모든 항목을 '파일 › 저장'처럼 등록한다(studio.registerCommands, 같은 버튼을 누르는 명령은 하나만)
+//   mount({ studio, guide, signal }) → { open(name), close, dispose }
 import * as UI from "./ui-kit.js";
 import * as Store from "./storage.js";
 
 const HIDDEN_KEY = "field.menubar-hidden.v1";
 
-const mount = ({ signal } = {}) => {
+const TITLES = { file: "파일", edit: "편집", view: "보기", play: "재생", help: "도움말" };
+const RECENT = 5;
+
+const mount = ({ studio, guide, signal } = {}) => {
   const $ = id => document.getElementById(id),
     bar = $("menuBar");
   if (!bar) return { open() {}, dispose() {} };
@@ -19,10 +25,14 @@ const mount = ({ signal } = {}) => {
   const buttons = [...bar.querySelectorAll(".ui-menubar-item")];
 
   // 기존 버튼을 누르는 항목. 버튼이 없거나 숨겨져 있으면(지금 쓸 수 없는 동작) 빼고, 꺼져 있으면 흐리게.
-  const press = (id, { label, kbd, pressed, before, keepHidden = false } = {}) => {
+  //   command: 팔레트에 쓸 바뀌지 않는 이름(켜고 끄는 버튼은 메뉴에서는 지금 상태 이름 — '일시정지' — 을 쓴다)
+  let collecting = false; // 팔레트 목록을 모을 때는 지금 숨은 버튼도 넣는다(누를 때 다시 본다)
+  const press = (id, { label, command, kbd, pressed, before, keepHidden = false } = {}) => {
     const node = $(id);
-    if (!node || (node.hidden && !keepHidden)) return null;
+    if (!node || (node.hidden && !keepHidden && !collecting)) return null;
     return {
+      button: id, // 누를 버튼의 id(UI.menu는 항목의 id를 메뉴 버튼 id로 쓴다 — 같은 id가 둘 생기면 안 된다)
+      command: command || label,
       label: label || node.getAttribute("aria-label") || node.textContent.trim(),
       kbd,
       pressed: pressed === undefined ? undefined : pressed(node),
@@ -56,6 +66,7 @@ const mount = ({ signal } = {}) => {
     file: () => [
       press("studioReset", { label: "새 프로젝트 (기본 장면)" }),
       press("projectMenuToggle", { label: "프로젝트 열기…", kbd: "Ctrl+O" }),
+      ...recentItems(),
       separator,
       press("studioProjectSave", { label: "저장", kbd: "Ctrl+S", keepHidden: true }),
       press("studioProjectSaveAs", { label: "다른 이름으로 저장…", kbd: "Ctrl+Shift+S" }),
@@ -102,14 +113,24 @@ const mount = ({ signal } = {}) => {
       tab("tab-profile", "성능"),
       tab("tab-input", "작업공간"),
       separator,
+      title("편집기 배치"),
+      press("studioLayout", { label: "편집기를 캔버스 오른쪽에", pressed: isOn, before: openEditor, keepHidden: true }),
+      press("studioMaximize", { label: "집중 모드 (코드 크게)", pressed: isOn, before: openEditor, keepHidden: true }),
+      press("studioSplitEdit", {
+        label: "미리보기는 별도 창 · 편집기는 화면 가득",
+        pressed: isOn,
+        before: openEditor,
+        keepHidden: true,
+      }),
+      separator,
       press("fullscreenToggle", { label: "전체화면", kbd: "F" }),
       press("previewPopout", { label: "미리보기를 별도 창으로", keepHidden: true }),
-      press("themeToggle", { keepHidden: true }),
+      press("themeToggle", { command: "테마 바꾸기 (라이트 · 다크)", keepHidden: true }),
       separator,
       { label: "메뉴 바", pressed: true, onSelect: () => setHidden(true) },
     ],
     play: () => [
-      press("previewPause", { kbd: "Space" }),
+      press("previewPause", { command: "재생 / 일시정지", kbd: "Space" }),
       press("stepFrame", { label: "한 프레임 진행", kbd: ".", keepHidden: true }),
       press("studioResetFrames", { label: "시간 · 프레임 초기화", keepHidden: true }),
       separator,
@@ -117,25 +138,74 @@ const mount = ({ signal } = {}) => {
       press("screenshot2x", { label: "2배 해상도로 저장", keepHidden: true }),
       press("screenshot4k", { label: "4K로 저장", keepHidden: true }),
       separator,
-      press("recordButton", { keepHidden: true }),
+      press("recordButton", { command: "녹화 시작 / 중지", keepHidden: true }),
       press("videoRenderOpen", { label: "영상 렌더링…", keepHidden: true }),
     ],
     help: () => [
-      press("helpToggle", { label: "가이드 · 단축키", kbd: "?", keepHidden: true }),
+      press("helpToggle", { label: "가이드", kbd: "?", keepHidden: true }),
+      guide && { label: "단축키 목록", onSelect: () => guide.open("shortcuts") },
+      press("guideTour", { label: "둘러보기 (화면 안내 투어)", keepHidden: true }),
+      separator,
       press("galleryToggle", { label: "예제 갤러리", kbd: "X", keepHidden: true }),
+      $("galleryLessons") && {
+        label: "기법 배우기 (레슨)",
+        // 갤러리를 열고 레슨 묶음으로 내린다
+        onSelect: () => {
+          if (!$("gallery")?.open) $("galleryToggle")?.click();
+          requestAnimationFrame(() => $("galleryLessons")?.scrollIntoView?.({ block: "start" }));
+        },
+      },
     ],
   };
+  // 좁은 화면의 '메뉴' 하나: 다섯 메뉴를 묶음 제목과 함께
+  MENUS.all = () =>
+    Object.keys(TITLES).flatMap((name, index) => [
+      ...(index ? [separator] : []),
+      title(TITLES[name]),
+      ...MENUS[name]().filter(item => !(item?.title && !item.label)), // 메뉴 안의 작은 제목은 빼고 메뉴 이름을 제목으로
+    ]);
 
-  let current = null; // { name, menu }
+  // 최근 프로젝트: 보관함 목록(최근 저장 순)을 메뉴를 열기 전에 읽어 둔다. 지금 작업 중인 프로젝트에는 체크.
+  let recent = [];
+  const loadRecent = async () => {
+    try {
+      const [items, current] = await Promise.all([
+        studio?.projects?.list?.() ?? [],
+        Promise.resolve(studio?.projects?.current?.()),
+      ]);
+      recent = items.slice(0, RECENT).map(item => ({ ...item, current: current?.id === item.id }));
+    } catch (_) {
+      recent = [];
+    }
+  };
+  const recentItems = () =>
+    recent.length
+      ? [
+          separator,
+          title("최근 프로젝트"),
+          ...recent.map(item => ({
+            label: item.name,
+            title: `${item.name} 열기`,
+            pressed: item.current || undefined,
+            onSelect: () => studio.projects.open(item.id),
+          })),
+        ]
+      : [];
+
+  let current = null, // { name, menu }
+    ticket = 0; // 늦게 끝난 '최근 프로젝트' 읽기가 그 사이 연 다른 메뉴를 덮지 않게
   const close = ({ focus = false } = {}) => {
     const open = current;
     current = null;
     open?.menu.close({ focus });
   };
-  const open = (name, { focusFirst = true } = {}) => {
+  const open = async (name, { focusFirst = true } = {}) => {
     const anchor = buttons.find(button => button.dataset.menu === name);
     if (!anchor || !MENUS[name]) return;
     if (current?.name === name) return;
+    const mine = ++ticket;
+    if (name === "file" || name === "all") await loadRecent();
+    if (mine !== ticket) return;
     close();
     const items = MENUS[name]()
       .filter(Boolean)
@@ -155,8 +225,9 @@ const mount = ({ signal } = {}) => {
         if (current?.menu === menu) current = null;
       },
       onSideKey: step => {
-        const at = buttons.indexOf(anchor);
-        open(buttons[(at + step + buttons.length) % buttons.length].dataset.menu);
+        const visible = buttons.filter(button => button.offsetParent !== null),
+          at = visible.indexOf(anchor);
+        if (visible.length > 1) open(visible[(at + step + visible.length) % visible.length].dataset.menu);
       },
     });
     current = { name, menu };
@@ -170,11 +241,12 @@ const mount = ({ signal } = {}) => {
       if (current && current.name !== button.dataset.menu) open(button.dataset.menu, { focusFirst: false });
     });
     on(button, "keydown", event => {
-      const at = buttons.indexOf(button),
+      const visible = buttons.filter(item => item.offsetParent !== null),
+        at = visible.indexOf(button),
         step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
       if (step) {
         event.preventDefault();
-        buttons[(at + step + buttons.length) % buttons.length].focus();
+        visible[(at + step + visible.length) % visible.length].focus();
       } else if (event.key === "ArrowDown") {
         event.preventDefault();
         open(button.dataset.menu);
@@ -192,7 +264,8 @@ const mount = ({ signal } = {}) => {
     if (document.body.classList.contains("menubar-hidden")) return;
     event.preventDefault();
     close();
-    (buttons.find(button => button.tabIndex === 0) || buttons[0])?.focus();
+    const visible = buttons.filter(button => button.offsetParent !== null);
+    (visible.find(button => button.tabIndex === 0) || visible[0])?.focus();
   });
 
   // 보이기 · 숨기기(이 브라우저에 기억). 숨기면 툴바의 ⋯ 더보기가 대신 나타난다(CSS).
@@ -212,7 +285,28 @@ const mount = ({ signal } = {}) => {
     open(event.detail);
   });
 
-  return { open, close, dispose: () => close() };
+  // 명령 팔레트: 모든 항목을 '메뉴 › 항목'으로. 누를 때 버튼 상태를 다시 보고, 같은 버튼을 누르는 기존 명령이 있으면
+  // 팔레트가 하나만 둔다(registerCommands가 id로 거른다). 탭 · 최근 프로젝트 · 메뉴 바 켜고 끄기는 넣지 않는다.
+  collecting = true;
+  const commands = Object.keys(TITLES).flatMap(name =>
+    MENUS[name]()
+      .filter(item => item && !item.separator && item.label && item.onSelect && !/^tab-/.test(item.button || ""))
+      .filter(item => item.label !== "메뉴 바")
+      .map(item => ({
+        id: item.button,
+        label: `${TITLES[name]} › ${item.command || item.label}`,
+        key: item.kbd || "",
+        run: () => {
+          const node = item.button ? $(item.button) : null;
+          if (node && (node.disabled || node.hidden)) return;
+          item.onSelect();
+        },
+      }))
+  );
+  collecting = false;
+  studio?.registerCommands?.(commands);
+
+  return { open, close, commands: () => commands, dispose: () => close() };
 };
 
 export { mount };

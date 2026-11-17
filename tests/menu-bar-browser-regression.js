@@ -20,8 +20,10 @@
   const key = (name, target = document.activeElement) =>
     target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
   const editorWasOpen = $("studioToggle").getAttribute("aria-expanded") === "true";
+  let savedId = null;
   try {
-    test([...$("menuBar").querySelectorAll(".ui-menubar-item")].map(b => b.textContent).join() === "파일,편집,보기,재생,도움말", "메뉴 다섯 개");
+    test([...$("menuBar").querySelectorAll(".ui-menubar-item:not(.menubar-compact)")].map(b => b.textContent).join() === "파일,편집,보기,재생,도움말", "메뉴 다섯 개");
+    test(getComputedStyle(document.querySelector(".menubar-compact")).display === "none", "넓은 화면에서는 '메뉴' 하나로 접은 버튼이 숨음");
     test(document.querySelector(".app-brand") && !document.querySelector("#panel .brand-lockup"), "브랜드는 앱 막대로(패널 머리에는 없음)");
     const bar = $("appBar").getBoundingClientRect(), ws = $("workspace").getBoundingClientRect();
     test(Math.abs(ws.top - bar.bottom) < 1 && Math.abs(ws.bottom - innerHeight) < 1, `작업 공간은 메뉴 바 아래 남은 높이(${bar.height}px 막대)`);
@@ -88,6 +90,51 @@
     await until(() => top("file").getAttribute("aria-expanded") === "true" && $("projectMenu").hidden, "파일 메뉴로 넘어감");
     key("Escape");
     await until(() => !openMenu(), "파일 닫기");
+    // 보기 › 편집기 배치 · 도움말 항목
+    top("view").click();
+    await until(() => openMenu(), "보기");
+    test(item("편집기를 캔버스 오른쪽에") && item("집중 모드") && item("미리보기는 별도 창"), "보기 › 편집기 배치 세 가지");
+    key("Escape");
+    await until(() => !openMenu(), "보기 닫기");
+    top("help").click();
+    await until(() => openMenu(), "도움말");
+    test(item("둘러보기") && item("기법 배우기") && item("단축키 목록"), "도움말 › 둘러보기 · 기법 배우기 · 단축키 목록");
+    item("단축키 목록").click();
+    await until(() => $("quickHelp").open && /단축키/.test($("guideContent").textContent), "단축키 목록을 가이드에서 연다");
+    $("quickHelp").close();
+    // 명령 팔레트: 메뉴 항목이 '메뉴 › 항목'으로, 같은 버튼을 누르는 명령은 하나만
+    $("studioToggle").getAttribute("aria-expanded") !== "true" && $("studioToggle").click();
+    await wait(50);
+    $("studioPaletteOpen").click();
+    await until(() => !document.querySelector(".studio-palette").hidden, "팔레트");
+    const paletteInput = document.querySelector(".studio-palette-input");
+    const search = async query => {
+      paletteInput.value = `>${query}`;
+      paletteInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(30);
+      return [...document.querySelectorAll(".studio-palette-list button")].map(b => b.textContent);
+    };
+    const frames = await search("프레임");
+    test(frames.some(text => text.startsWith("재생 › 한 프레임 진행")), `팔레트에 메뉴 바 항목(재생 › 한 프레임 진행): ${frames.join(" | ")}`);
+    test(frames.filter(text => /시간.*프레임 초기화/.test(text)).length === 1, "같은 버튼(시간 초기화)을 누르는 명령은 팔레트에 하나만");
+    test((await search("둘러보기")).some(text => text.startsWith("도움말 › 둘러보기")), "팔레트에 도움말 › 둘러보기");
+    const exports = await search("프로젝트 파일");
+    test(!exports.some(text => text.startsWith("파일 › 프로젝트 파일로 내보내기")) && exports.some(text => text.startsWith("프로젝트 파일 내보내기")), `같은 버튼을 누르는 명령은 하나만(${exports.join(" | ")})`);
+    paletteInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    // 파일 › 최근 프로젝트: 저장하면 보관함의 최근 항목이 파일 메뉴에(지금 작업에 체크)
+    const P = window.shaderStudio.projects, name = `메뉴 바 최근 ${Date.now().toString(36)}`;
+    await P.ready();
+    const saving = P.save(false);
+    await until(() => $("studioPromptDialog").open, "이름 묻기");
+    $("studioDialogInput").value = name;
+    $("studioDialogForm").requestSubmit();
+    test(await saving, "보관함에 저장");
+    savedId = P.current()?.id;
+    top("file").click();
+    await until(() => item(name), "파일 › 최근 프로젝트에 저장한 이름");
+    test([...openMenu().querySelectorAll(".ui-menu-title")].some(n => n.textContent === "최근 프로젝트") && item(name).getAttribute("aria-pressed") === "true", "최근 프로젝트 제목 · 지금 작업에 체크");
+    key("Escape");
+    await until(() => !openMenu(), "파일 닫기");
     // F10: 메뉴 바로 초점 · →로 옆 이름 · ↓로 열기
     document.body.focus();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", bubbles: true, cancelable: true }));
@@ -101,6 +148,14 @@
     await until(() => !openMenu(), "닫기");
   } finally {
     openMenu()?.remove();
+    if ($("quickHelp").open) $("quickHelp").close();
+    // 만든 프로젝트는 지운다(지우기 확인에 답한다)
+    if (savedId) {
+      const removing = window.shaderStudio.projects.remove(savedId);
+      await until(() => $("studioPromptDialog").open, "지우기 확인").catch(() => {});
+      if ($("studioPromptDialog").open) $("studioDialogOK").click();
+      await removing;
+    }
     if (!editorWasOpen && $("studioToggle").getAttribute("aria-expanded") === "true") $("studioToggle").click();
     $("tab-uniforms").click();
   }
