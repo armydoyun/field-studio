@@ -1705,7 +1705,12 @@ const mount = (textarea, ask, beforeEdit = () => {}, uniformNames = () => [], op
   });
   // 명령에 bind(CodeMirror 키 이름 또는 그 배열)가 있으면 편집기 안에서 그 키로도 실행한다.
   const registerCommands = list => {
-    commands = [...commands, ...list.filter(c => c && typeof c.run === "function" && c.label)];
+    // id가 같은 명령(같은 버튼을 누른다)은 먼저 등록한 것 하나만 둔다
+    const ids = new Set(commands.map(c => c.id).filter(Boolean));
+    commands = [
+      ...commands,
+      ...list.filter(c => c && typeof c.run === "function" && c.label && !(c.id && ids.has(c.id))),
+    ];
     const bindings = commands.flatMap(c =>
       [].concat(c.bind || []).map(key => ({
         key,

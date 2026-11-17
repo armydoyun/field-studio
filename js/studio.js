@@ -2910,6 +2910,7 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
   // 명령 팔레트(Ctrl+Shift+P)에 편집기 바깥 기능도 등록한다. 대부분 기존 버튼을 누르는 것과 같다.
   // bind: 편집기 안에서 이 명령을 실행할 VS Code식 키(CodeMirror 키 이름). key는 팔레트에 보이는 표기.
   const press = (label, id, key, bind) => ({
+    id, // 같은 버튼을 누르는 명령은 팔레트에 하나만(메뉴 바도 등록한다 — cm-editor.js registerCommands)
     label,
     key,
     bind,
@@ -3026,6 +3027,8 @@ const mount = (renderer, Shader, settings = null, options = {}) => {
     setParameterValues,
     beginParameterChange,
     getEditorSource: () => $("studioCode").value,
+    // 명령 팔레트에 명령 더하기(메뉴 바 항목 등): [{ id?, label, key, run }]
+    registerCommands: list => editor.registerCommands?.(list),
     undo: () => historyMove(true),
     // 버전 기록(version-history.js 화면이 쓴다)
     listVersions,

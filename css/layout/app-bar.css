@@ -21,6 +21,12 @@ body:is(.menubar-hidden,.preview-popout-window) .project-file-link { display:non
 @media (max-width:420px) {
  .app-brand strong { display:none; }
 }
+/* 좁은 화면: 메뉴 이름 다섯 개 대신 '메뉴' 하나(menu-bar.js의 all) */
+.menubar-compact { display:none; }
+@media (max-width:600px) {
+ #menuBar>.menubar-compact { display:inline-flex; }
+ #menuBar>[data-menu]:not(.menubar-compact) { display:none; }
+}
 @media (max-width:760px) {
  #storageStatus { display:none; }
 }

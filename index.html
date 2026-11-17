@@ -54,6 +54,8 @@
     <header id="appBar" class="app-bar">
         <div class="app-brand" aria-label="FIELD studio"><span class="app-brand-mark" aria-hidden="true"><svg aria-hidden="true" focusable="false" viewBox="0 0 32 32"><path fill="currentColor" fill-rule="evenodd" d="M10 3h12a7 7 0 0 1 7 7v12a7 7 0 0 1-7 7H10a7 7 0 0 1-7-7V10a7 7 0 0 1 7-7Zm6 7.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></svg></span><strong aria-hidden="true">FIELD<span>studio</span></strong></div>
         <nav id="menuBar" class="ui-menubar" role="menubar" aria-label="메뉴">
+            <!-- 좁은 화면(600px 이하)에서는 메뉴 이름 대신 이것 하나 — 다섯 메뉴를 한 목록으로 -->
+            <button type="button" class="ui-menubar-item glyph-icon icon-more menubar-compact" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="all">메뉴</button>
             <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="file">파일</button>
             <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="edit">편집</button>
             <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="view">보기</button>

@@ -109,7 +109,7 @@ const initialize = async () => {
     // 우클릭 메뉴: 바탕 · 뷰포트(여기) + 각 기능 모듈이 등록한 영역 메뉴
     AppMenus.mount({ studio: () => studio });
     // 창 맨 위 메뉴 바: 항목은 위에서 만든 화면의 버튼을 누른다
-    menuBar = MenuBar.mount();
+    menuBar = MenuBar.mount({ studio, guide });
     ContextMenu.mount(document);
     renderer.start();
     status.textContent = "";
