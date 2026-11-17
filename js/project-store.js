@@ -137,11 +137,18 @@ const create = ({ dbName = DB_NAME, now = () => Date.now() } = {}) => {
       return record;
     });
   };
-  const load = async id => {
-    const entry = await run("readonly", ({ packs }) => requestValue(packs.get(id)));
-    if (!entry) throw new Error("보관함에서 프로젝트를 찾을 수 없습니다. 다른 탭에서 지웠을 수 있습니다.");
-    return entry.text;
+  // 본문과 revision은 같은 읽기 트랜잭션에서 가져온다. 따로 읽으면 다른 탭의 저장이 사이에 끼어들 수 있다.
+  const loadEntry = async id => {
+    const entry = await run("readonly", ({ meta, packs }) => {
+      const record = meta.get(id),
+        pack = packs.get(id);
+      return () => ({ record: record.result, text: pack.result?.text });
+    });
+    if (!entry.record || typeof entry.text !== "string")
+      throw conflict("missing", "보관함에서 프로젝트를 찾을 수 없습니다. 다른 탭에서 지웠을 수 있습니다.");
+    return entry;
   };
+  const load = async id => (await loadEntry(id)).text;
   // 이름만 바꾼다(본문 revision은 그대로). 읽기와 쓰기를 한 트랜잭션에서 해 동시 저장·삭제와 엇갈리지 않는다.
   const rename = async (id, name) => {
     const title = cleanName(name);
@@ -166,7 +173,7 @@ const create = ({ dbName = DB_NAME, now = () => Date.now() } = {}) => {
       request.onblocked = () => resolve();
     });
 
-  return { list, get, save, load, rename, remove, destroy };
+  return { list, get, save, load, loadEntry, rename, remove, destroy };
 };
 
 export { create, cleanName, DB_NAME, NAME_LIMIT };

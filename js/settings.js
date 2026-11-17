@@ -80,12 +80,14 @@ const mount = renderer => {
     message: available ? "렌더링·파라미터 설정 자동 저장" : errorMessage,
   });
   const save = () => {
-    if (disposed || !available) return false;
+    if (disposed) return false;
     const text = JSON.stringify(readState());
-    if (text === savedText) return true;
+    if (available && text === savedText) return true;
     try {
       window.localStorage.setItem(KEY, text);
       savedText = text;
+      available = true;
+      errorMessage = "";
       return true;
     } catch (error) {
       failStorage(error);
