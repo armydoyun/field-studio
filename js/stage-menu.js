@@ -2,6 +2,8 @@
 // 툴바에는 자주 쓰는 버튼만 두고, 나머지 버튼은 id를 그대로 둔 채 메뉴 항목으로 옮겼다(동작은 ui.js · theme.js 등이 그대로 단다).
 // 미리보기 영역은 overflow:hidden이라 메뉴는 position:fixed로 창 기준에 두고, 열 때·창 크기가 바뀔 때 버튼 아래에 맞춘다.
 // 항목을 누르면 닫힌다. 바깥을 누르거나 Esc를 누르면 닫히고, ↑↓·Home·End로 항목 사이를 옮긴다.
+import * as UI from "./ui-kit.js";
+
 const OPEN_EVENT = "stage-menu-open";
 const create = ({ toggle, menu, signal }) => {
   const on = (target, type, fn, options = {}) => target?.addEventListener(type, fn, { ...options, signal });
@@ -42,29 +44,19 @@ const create = ({ toggle, menu, signal }) => {
   on(menu, "click", event => {
     if (event.target?.closest?.("button")) close();
   });
-  const outside = event => {
-    if (!isOpen()) return;
-    const target = event.target;
-    if (menu.contains(target) || toggle.contains(target)) return;
-    close();
-  };
-  const bound = new WeakSet();
-  const bind = () => {
-    const doc = owner();
-    if (bound.has(doc)) return;
-    bound.add(doc);
-    on(doc, "pointerdown", outside);
-    on(doc, OPEN_EVENT, event => {
-      if (event.detail !== menu) close();
-    });
-    on(doc.defaultView || window, "resize", () => {
-      if (isOpen()) place();
-    });
-  };
-  bind();
-  on(document, "preview-popout-changed", () => {
-    close();
-    bind();
+  UI.dismissPopover({
+    menu,
+    toggle,
+    owner,
+    isOpen,
+    close,
+    place,
+    on,
+    // 다른 메뉴가 열리면 닫는다(키보드로 열면 pointerdown이 없다)
+    bindExtra: doc =>
+      on(doc, OPEN_EVENT, event => {
+        if (event.detail !== menu) close();
+      }),
   });
   on(menu, "keydown", event => {
     const list = items(),

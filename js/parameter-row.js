@@ -9,6 +9,7 @@ import * as MatrixControl from "./matrix-control.js";
 import * as Annotations from "./annotations.js";
 import * as Links from "./links.js";
 import * as LinkSheet from "./link-sheet.js";
+import * as Color from "./color.js";
 
 const create = ctx => (item, defaults) => {
   const {
@@ -418,16 +419,7 @@ const create = ctx => (item, defaults) => {
       hexField.maxLength = 7;
       hexField.setAttribute("aria-label", `${item.name} HEX`);
       const code = element("code");
-      const hex = values =>
-        "#" +
-        values
-          .slice(0, 3)
-          .map(v =>
-            Math.round(Math.max(0, Math.min(1, v)) * 255)
-              .toString(16)
-              .padStart(2, "0")
-          )
-          .join("");
+      const hex = Color.toHex;
       const channels = item.type === "vec4" ? "RGBA" : "RGB";
       // @color hdr: 견본은 가장 밝은 성분을 1로 맞춘 색(base), 밝기 배율 I = 가장 큰 성분. 값 = base × I.
       const hdr = item.options.hdr;

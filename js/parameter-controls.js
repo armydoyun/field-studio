@@ -3,6 +3,7 @@
 // 부품은 commit(값)으로만 값을 바꾸고, 렌더러는 liveValue로 읽기만 한다.
 //   create(ctx) → { ...부품, reset(): 목록을 다시 그리기 전 패드 다시 그리기 목록 비우기, redraw(): 방향 패드 다시 그리기 }
 import * as UI from "./ui-kit.js";
+import * as Color from "./color.js";
 
 const create = ({ element, listen, signal, showError, liveValue, renderer }) => {
   const parseBool = (raw, type) => {
@@ -772,16 +773,7 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
     input.setAttribute("aria-label", label);
     return input;
   };
-  const toHex = rgb =>
-    "#" +
-    rgb
-      .slice(0, 3)
-      .map(v =>
-        Math.round(Math.max(0, Math.min(1, v)) * 255)
-          .toString(16)
-          .padStart(2, "0")
-      )
-      .join("");
+  const { toHex } = Color;
   // 그라데이션: 미리보기 막대(투명은 체크무늬 위) + 정지점 손잡이 줄 + 선택한 정지점 편집 줄.
   const gradientControl = (item, commit, current) => {
     const mode = item.options.gradient,
@@ -970,7 +962,7 @@ const create = ({ element, listen, signal, showError, liveValue, renderer }) => 
       added?.focus?.({ preventScroll: true });
     });
     picker.addEventListener("input", () => {
-      const rgb = picker.value.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16) / 255);
+      const rgb = Color.fromHex(picker.value);
       selected.c = [...rgb, selected.c[3]];
       apply(picker);
     });

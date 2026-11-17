@@ -228,17 +228,14 @@ const create = ({ name, size, read, onChange, getContext = () => null, expanded 
         dialogContext = getContext();
         const initial = [...read()];
         let draft = [...initial];
-        dialog = UI.el("dialog", "ui-dialog ui-dialog--md");
-        dialog.setAttribute("aria-label", `${name} 행렬 확대 편집`);
-        const head = UI.el("header", "ui-dialog-head"),
-          heading = UI.el("div", "ui-dialog-text"),
-          body = UI.el("div", "ui-dialog-body"),
-          foot = UI.el("footer", "ui-dialog-foot");
-        heading.append(UI.el("h2", "", "행렬 편집"), UI.el("p", "", `${name} · 셀을 선택해 값을 고치고 적용하세요.`));
-        head.append(
-          heading,
-          UI.iconButton({ icon: "close", label: "행렬 편집 취소", size: "lg", onClick: () => close() })
-        );
+        const frame = UI.editDialog({
+          label: `${name} 행렬 확대 편집`,
+          title: "행렬 편집",
+          description: `${name} · 셀을 선택해 값을 고치고 적용하세요.`,
+          closeLabel: "행렬 편집 취소",
+          onCancel: () => close(),
+        });
+        dialog = frame.dialog;
         expandedView = create({
           name,
           size,
@@ -250,7 +247,7 @@ const create = ({ name, size, read, onChange, getContext = () => null, expanded 
           expanded: true,
           selected: current,
         });
-        body.append(expandedView.node);
+        frame.body.append(expandedView.node);
         const apply = UI.button({
           label: "적용",
           variant: "primary",
@@ -269,18 +266,7 @@ const create = ({ name, size, read, onChange, getContext = () => null, expanded 
             close();
           },
         });
-        foot.append(UI.button({ label: "취소", size: "lg", onClick: () => close() }), apply);
-        dialog.append(head, body, foot);
-        dialog.addEventListener("cancel", event => {
-          event.preventDefault();
-          close();
-        });
-        const opened = dialog;
-        dialog.addEventListener("close", () => {
-          if (dialog === opened) close();
-        });
-        node.ownerDocument.body.append(dialog);
-        dialog.showModal();
+        frame.show(apply, node.ownerDocument);
         expandedView.refresh();
       },
     });

@@ -465,6 +465,32 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     }
     uploadCustomUniforms(target);
   };
+  // Image 패스를 지금 묶인 Framebuffer에 그린다(채널 텍스처를 묶고 · 그린 뒤 풀기까지)
+  const drawImage = (w, h) => {
+    gl.useProgram(program);
+    uploadGlobals(uniforms, w, h);
+    passManager.bindImage(uniforms);
+    try {
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    } finally {
+      passManager.unbindImage();
+    }
+  };
+  // 한 프레임을 그리기 전: 키보드 · 미디어 텍스처를 올리고 파라미터 연결을 한 단계 진행한다
+  const prepareFrame = () => {
+    keyboard.upload();
+    media.update(mediaKindsForFrame());
+    applyLinks(lastDelta);
+    gl.bindVertexArray(vao);
+  };
+  // 영상 렌더링의 한 프레임: 정해진 시간 · 간격 · 번호로 시계를 맞춘다(uFrameRate는 영상의 초당 프레임 수)
+  const beginOfflineFrame = (at, delta, index) => {
+    time = at;
+    lastDelta = delta;
+    frameCount = index;
+    if (delta > 0) frameRate = 1 / delta;
+    prepareFrame();
+  };
   // 컴파일할 소스: 등록한 Uniform 중 코드에 없는 선언을 넣고, 짧은 머리말 · 가짜 진입점(mainImage)을 붙인다(glsl-prepare.js).
   // Common: 모든 패스(Image · Buffer) 앞에 붙는 공용 코드. 바뀌면 모든 프로그램을 다시 만든다(applyProject).
   // 공유 문맥: { common: Common 코드, uniforms: 모든 패스가 선언한 Uniform(projectUniforms) }.
@@ -557,22 +583,14 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     try {
       if (passManager.ensureTargets(gl.drawingBufferWidth, gl.drawingBufferHeight)) frameCount = 0;
       lastDelta = delta;
-      keyboard.upload();
-      media.update(mediaKindsForFrame());
-      applyLinks(lastDelta);
-      gl.bindVertexArray(vao);
+      prepareFrame();
       passManager.drawPasses(gl.drawingBufferWidth, gl.drawingBufferHeight, uploadGlobals, gpuTimer);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       gpuTimer.begin(passManager.getPreview() ? "Preview" : "Image");
       try {
-        if (!passManager.drawPreview(gl.drawingBufferWidth, gl.drawingBufferHeight)) {
-          gl.useProgram(program);
-          uploadGlobals(uniforms, gl.drawingBufferWidth, gl.drawingBufferHeight);
-          passManager.bindImage(uniforms);
-          gl.drawArrays(gl.TRIANGLES, 0, 3);
-          passManager.unbindImage();
-        }
+        if (!passManager.drawPreview(gl.drawingBufferWidth, gl.drawingBufferHeight))
+          drawImage(gl.drawingBufferWidth, gl.drawingBufferHeight);
       } finally {
         gpuTimer.end();
       }
@@ -752,14 +770,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
           throw new Error("캡처용 Framebuffer를 만들지 못했습니다(GPU 메모리 부족일 수 있음).");
         gl.viewport(0, 0, width, height);
         gl.bindVertexArray(vao);
-        gl.useProgram(program);
-        uploadGlobals(uniforms, width, height);
-        passManager.bindImage(uniforms);
-        try {
-          gl.drawArrays(gl.TRIANGLES, 0, 3);
-        } finally {
-          passManager.unbindImage();
-        }
+        drawImage(width, height);
         pixels = new Uint8Array(width * height * 4);
         gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
         const error = gl.getError();
@@ -839,25 +850,11 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     const w = gl.drawingBufferWidth,
       h = gl.drawingBufferHeight;
     passManager.ensureTargets(w, h);
-    time = at;
-    lastDelta = delta;
-    frameCount = index;
-    if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
-    keyboard.upload();
-    media.update(mediaKindsForFrame());
-    applyLinks(lastDelta);
-    gl.bindVertexArray(vao);
+    beginOfflineFrame(at, delta, index);
     passManager.drawPasses(w, h, uploadGlobals);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
-    gl.useProgram(program);
-    uploadGlobals(uniforms, w, h);
-    passManager.bindImage(uniforms);
-    try {
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    } finally {
-      passManager.unbindImage();
-    }
+    drawImage(w, h);
     clickPending = false;
     keyboard.endFrame();
     frameCount = index + 1;
@@ -996,14 +993,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
       h = gl.drawingBufferHeight;
     passManager.ensureTargets(w, h);
     const target = ensureOfflineTarget(w, h);
-    time = at;
-    lastDelta = delta;
-    frameCount = index;
-    if (delta > 0) frameRate = 1 / delta; // uFrameRate: 영상의 초당 프레임 수
-    keyboard.upload();
-    media.update(mediaKindsForFrame());
-    applyLinks(lastDelta);
-    gl.bindVertexArray(vao);
+    beginOfflineFrame(at, delta, index);
     const measure = tileStats.frames < 3 || tileStats.frames % REMEASURE === 0 || !!offline.tilePixels;
     // 잴 프레임은 앞에서 기다리지 않고 쌓아 둔 GPU 작업을 먼저 비운다(그 시간이 첫 타일의 비용으로 잡히지 않게).
     if (measure && !(await waitGPU())) throw lostError();
@@ -1104,16 +1094,7 @@ const createRenderer = (canvas, sources, onStatus = () => {}) => {
     gl.bindVertexArray(vao);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
-    if (!passManager.drawPreview(w, h)) {
-      gl.useProgram(program);
-      uploadGlobals(uniforms, w, h);
-      passManager.bindImage(uniforms);
-      try {
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-      } finally {
-        passManager.unbindImage();
-      }
-    }
+    if (!passManager.drawPreview(w, h)) drawImage(w, h);
     return true;
   };
   // 일시정지 중에 한 프레임만 진행한다(시간·프레임 수·피드백 버퍼가 함께 나아간다). 재생 중이면 아무것도 하지 않는다.

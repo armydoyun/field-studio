@@ -67,7 +67,8 @@ js/
   channel-picker.js   # 입력 채널 칩(iChannel0–3)과 고르기 팝오버 · 코드 사용 여부 표시
   studio-examples.js  # Studio가 만드는 예제 프로젝트
   studio-dialog.js    # 공용 입력·확인 대화상자
-  ui-kit.js           # 디자인 시스템의 JS 쪽: 컴포넌트 클래스 이름 · 요소 만들기(button · segmented · select · menu …)
+  ui-kit.js           # 디자인 시스템의 JS 쪽: 컴포넌트 클래스 이름 · 요소 만들기(button · segmented · select · menu · editDialog …) · 팝오버 닫기 동작(dismissPopover)
+  color.js            # 색 변환: 0~1 실수와 #rrggbb · rgb() 사이 (순수 함수)
   custom-select.js    # 공용 드롭다운 모양(값 · 이벤트의 출처는 원래 <select>)
   context-menu.js     # 우클릭 메뉴: 영역(선택자)마다 기능 모듈이 메뉴를 등록 · 글 입력 칸 · 선택한 글자 · Shift+우클릭은 브라우저 기본
   app-menus.js        # 바탕 · 뷰포트 · 패스 탭의 우클릭 메뉴(툴바 버튼을 그대로 누른다)

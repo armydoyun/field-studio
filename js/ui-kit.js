@@ -300,8 +300,88 @@ const bindSearchClear = (doc = document) => {
   return () => doc.removeEventListener("click", onClick);
 };
 
+// 팝오버 메뉴(position:fixed)의 공통 닫기 동작: 바깥을 누르면 닫기 · 창 크기가 바뀌면 다시 놓기 ·
+// 미리보기 분리 창이 열리고 닫히면(문서가 바뀌면) 닫고 그 문서에 다시 연결한다. 이미 연결한 문서는 건너뛴다.
+//   dismissPopover({ menu, toggle, owner, isOpen, close, place, on, ignore?(target), bindExtra?(doc) }) → bind()
+//   bind: 메뉴를 다른 문서로 옮긴 뒤 부르면 그 문서에도 연결한다.
+const dismissPopover = ({
+  menu,
+  toggle,
+  owner,
+  isOpen,
+  close,
+  place,
+  on,
+  ignore = () => false,
+  bindExtra = () => {},
+}) => {
+  const outside = event => {
+    if (!isOpen()) return;
+    const target = event.target;
+    if (menu.contains?.(target) || toggle.contains?.(target) || ignore(target)) return;
+    close();
+  };
+  const bound = new WeakSet();
+  const bind = () => {
+    const doc = owner();
+    if (bound.has(doc)) return;
+    bound.add(doc);
+    on(doc, "pointerdown", outside);
+    bindExtra(doc);
+    on(doc.defaultView || window, "resize", () => {
+      if (isOpen()) place();
+    });
+  };
+  bind();
+  on(document, "preview-popout-changed", () => {
+    close();
+    bind();
+  });
+  return bind;
+};
+
+// 편집 대화상자(행렬 · 값 편집)의 뼈대: <dialog class="ui-dialog ui-dialog--md"> · 머리(제목 · 설명 · 닫기) · 본문 · 실행 줄(취소 · 적용).
+// Esc(cancel)와 다른 이유로 닫힐 때(close)도 onCancel을 부른다. onCancel(부르는 쪽의 닫기)은 대화상자를 닫고 문서에서 떼어 내야 한다.
+//   editDialog({ label, title, description, closeLabel, className, bodyClass, onCancel })
+//     → { dialog, body, show(apply, doc) }: show는 실행 줄에 취소 · apply를 놓고 문서에 붙여 모달로 연다
+const editDialog = ({
+  label,
+  title,
+  description = "",
+  closeLabel = "취소",
+  className = "",
+  bodyClass = "",
+  onCancel,
+}) => {
+  const dialog = el("dialog", cx("ui-dialog ui-dialog--md", className)),
+    head = el("header", "ui-dialog-head"),
+    heading = el("div", "ui-dialog-text"),
+    body = el("div", cx("ui-dialog-body", bodyClass)),
+    foot = el("footer", "ui-dialog-foot");
+  dialog.setAttribute("aria-label", label);
+  heading.append(el("h2", "", title), ...(description ? [el("p", "", description)] : []));
+  head.append(heading, iconButton({ icon: "close", label: closeLabel, size: "lg", onClick: () => onCancel() }));
+  dialog.append(head, body, foot);
+  dialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    onCancel();
+  });
+  // close 이벤트는 나중에 온다: 부르는 쪽이 이미 닫고 문서에서 뗀 대화상자면(그사이 새 대화상자가 열렸을 수 있다) 무시한다
+  dialog.addEventListener("close", () => {
+    if (dialog.isConnected) onCancel();
+  });
+  const show = (apply, doc = document) => {
+    foot.append(button({ label: "취소", size: "lg", onClick: () => onCancel() }), apply);
+    doc.body.append(dialog);
+    dialog.showModal();
+  };
+  return { dialog, body, show };
+};
+
 export {
   bindSearchClear,
+  editDialog,
+  dismissPopover,
   cx,
   el,
   buttonClass,

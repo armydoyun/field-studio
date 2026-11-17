@@ -155,6 +155,11 @@ UI.field({ label: "이름", control: input, hint: "설명" });
 UI.tag("반복 4초", { tone: "accent" });
 UI.notice("저장했습니다.", { tone: "success" });
 UI.menu({ anchor: button, items: [{ label: "이름 바꾸기…", onSelect }, { separator: true }, { label: "삭제", danger: true, onSelect }] });
+// 편집 대화상자 뼈대(머리 · 본문 · 취소/적용): 본문을 채우고 show(적용 버튼)로 연다. Esc · 닫기 · 취소는 모두 onCancel
+const frame = UI.editDialog({ label: "uGain 값 편집", title: "값 편집", description: "uGain · float", onCancel: () => close() });
+frame.body.append(fields); frame.show(applyButton);
+// position:fixed 팝오버 메뉴의 바깥 누르기 · 창 크기 · 분리 창 처리
+UI.dismissPopover({ menu, toggle, owner, isOpen, close, place, on });
 
 UI.el("div", "my-feature-row", "글자");                 // 요소 하나 만들기
 UI.buttonClass({ variant: "ghost", size: "sm" });       // 클래스 글자만 필요할 때
