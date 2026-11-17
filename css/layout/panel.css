@@ -1,4 +1,4 @@
-/* 설정 패널의 틀: 머리(탭 · 손잡이) · 스크롤 본문 · 바닥(저장소 상태).
+/* 설정 패널의 틀: 머리(탭 · 손잡이) · 스크롤 본문(저장소 상태는 앱 막대 app-bar.css).
    좌우 기준선은 --panel-inset. 구역 · 라벨 · 버튼 모양은 컴포넌트(ui-section · ui-field · ui-btn …)가 정한다. */
 #panel { grid-area:panel;position:relative;z-index:var(--z-panel);display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;border-right:1px solid var(--line);background:var(--panel);container:settings / inline-size; }
 /* 패널 머리: 탭 + 위치 옮기기 손잡이 · 닫기(브랜드는 앱 막대로 옮겼다). 아래 선은 스크롤 본문이 그린다 */
@@ -9,11 +9,6 @@
 .panel-tabs>button { min-width:0;padding-inline:4px; }
 /* 탭과 본문 사이의 선은 스크롤 영역이 그린다(탭에서 12px 아래). 그래서 본문의 첫 구역은 위 선을 그리지 않는다(ui-section:first-child) — 선이 탭에 붙거나 두 줄이 되지 않게. */
 .panel-scroll { flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;border-top:1px solid var(--line);scrollbar-gutter:stable; }
-.panel-footer { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;min-height:44px;padding:10px var(--panel-inset);border-top:1px solid var(--line);background:var(--panel); }
-.storage-indicator { display:flex;align-items:center;gap:8px;min-width:0; }
-#storageStatus { color:var(--muted);font-size:var(--text-xs);line-height:1.5; }
-#storageStatus.unavailable { color:var(--danger); }
-.storage-indicator:has(.unavailable) .ui-dot { background:var(--danger); }
 /* 렌더링 탭 */
 .fps-control { margin-top:8px; }
 .step-frame { margin-top:8px; }
@@ -31,9 +26,6 @@
  .panel-header { gap:8px; }
  .panel-tabs>button { padding-inline:2px; }
  .ui-section-head { flex-wrap:wrap; }
- .panel-footer { flex-wrap:wrap;gap:4px 12px; }
- .storage-indicator { flex-basis:100%; }
- #storageStatus { word-break:keep-all;overflow-wrap:anywhere;text-wrap:balance; }
 }
 @container settings (max-width:252px) {
  .panel-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); }

@@ -3,6 +3,7 @@
 // 툴바 · 프로젝트 메뉴 · 편집기 버튼과 늘 같다. 메뉴를 열 때마다 그 순간의 버튼 상태로 항목을 만든다.
 //  · 누르면 열림 · 하나가 열린 동안 옆 메뉴에 마우스를 올리면 그 메뉴로 · ←→ 옆 메뉴 · ↑↓ 항목 · Esc 닫기(UI.menu)
 //  · F10: 메뉴 바로 초점(Alt는 브라우저 메뉴와 부딪혀 쓰지 않는다) · 메뉴 바에서 ←→ 이동 · ↓/Enter 열기
+//  · document에 'menubar-open'(detail: 메뉴 이름) 이벤트를 보내면 그 메뉴를 연다(프로젝트 메뉴의 '파일 메뉴로')
 //  · 보기 > 메뉴 바: 끄면 숨기고 툴바의 ⋯ 더보기가 다시 나타난다(⋯ 안의 '메뉴 바 보이기'로 되돌림). 이 브라우저에 기억한다.
 //   mount({ signal }) → { open(name), dispose }
 import * as UI from "./ui-kit.js";
@@ -110,6 +111,7 @@ const mount = ({ signal } = {}) => {
     play: () => [
       press("previewPause", { kbd: "Space" }),
       press("stepFrame", { label: "한 프레임 진행", kbd: ".", keepHidden: true }),
+      press("studioResetFrames", { label: "시간 · 프레임 초기화", keepHidden: true }),
       separator,
       press("screenshotButton", { label: "스크린샷 저장 (PNG)", keepHidden: true }),
       press("screenshot2x", { label: "2배 해상도로 저장", keepHidden: true }),
@@ -204,6 +206,11 @@ const mount = ({ signal } = {}) => {
   };
   setHidden(Store.read(HIDDEN_KEY) === "1");
   on($("menuBarShow"), "click", () => setHidden(false));
+  // 다른 화면이 메뉴를 열어 달라고 할 때(프로젝트 메뉴의 '파일 메뉴로' 항목): detail = 메뉴 이름
+  on(document, "menubar-open", event => {
+    if (document.body.classList.contains("menubar-hidden")) return;
+    open(event.detail);
+  });
 
   return { open, close, dispose: () => close() };
 };

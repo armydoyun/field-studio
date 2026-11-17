@@ -8,8 +8,19 @@ body { display:flex;flex-direction:column; }
 .app-brand-mark svg { width:16px;height:16px; }
 .app-brand strong { font-size:var(--text-sm);font-weight:750;letter-spacing:-.2px; }
 .app-brand strong span { margin-left:2px;color:var(--muted);font-weight:450; }
-/* 메뉴 바가 보이는 메인 창에서는 ⋯ 더보기가 겹치므로 숨긴다(분리 창 · 메뉴 바를 끈 때만 보인다) */
-body:not(.menubar-hidden):not(.preview-popout-window) #moreToggle { display:none; }
+/* 메뉴 바와 겹치는 UI는 메뉴 바가 보이는 메인 창에서 숨긴다(분리 창 · 메뉴 바를 끈 때만 보인다). 버튼은 남아 있어
+   단축키 · 메뉴 바 · 명령 팔레트가 그대로 누른다: ⋯ 더보기 · 편집기의 되돌리기 · 다시 실행 · 시간 초기화 · 프로젝트 메뉴의 파일 작업 */
+body:not(.menubar-hidden):not(.preview-popout-window) :is(#moreToggle,#studioUndo,#studioRedo,#studioResetFrames,.project-actions) { display:none; }
+body:is(.menubar-hidden,.preview-popout-window) .project-file-link { display:none; }
+/* 설정 저장 상태: 메뉴 바 오른쪽 끝. 좁으면 점만 */
+.storage-indicator { display:flex;align-items:center;gap:var(--space-3);min-width:0; }
+.app-status { margin-left:auto; }
+#storageStatus { overflow:hidden;color:var(--muted);font-size:var(--text-xs);line-height:1.5;text-overflow:ellipsis;white-space:nowrap; }
+#storageStatus.unavailable { color:var(--danger); }
+.storage-indicator:has(.unavailable) .ui-dot { background:var(--danger); }
 @media (max-width:420px) {
  .app-brand strong { display:none; }
+}
+@media (max-width:760px) {
+ #storageStatus { display:none; }
 }

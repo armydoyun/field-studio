@@ -33,7 +33,7 @@
 .project-current-text>h2 { margin:0;color:var(--muted);font:600 var(--text-xs)/1.4 var(--sans); }
 .project-current-actions { display:flex;gap:var(--space-3); }
 /* 파일 · 기록: 메뉴 항목(ui-menu-item). 팝오버 안이라 면 · 그림자 없이 구분선만 */
-.project-actions { padding:var(--space-2) var(--space-3);border-top:1px solid var(--line);overflow:visible; }
+.project-actions,.project-file-link { padding:var(--space-2) var(--space-3);border-top:1px solid var(--line);overflow:visible; }
 .project-advanced { display:grid;gap:1px; }
 /* 고급 · 코드만 주고받기: 접는 제목도 메뉴 항목처럼(같은 높이 · 왼쪽 줄 · 눌렀을 때 배경) */
 .project-advanced>summary { width:100%;min-height:var(--control-md);padding:4px 8px;border-radius:4px;gap:10px;color:var(--text-soft);font-size:var(--text-sm); }

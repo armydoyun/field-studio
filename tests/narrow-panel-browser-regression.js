@@ -32,8 +32,9 @@
       const desc = row.querySelector(".uniform-desc");
       if (desc) test(desc.getBoundingClientRect().width >= row.clientWidth-26, `${label} ${name}: 설명은 행 전체 너비 사용`);
     }
-    const footer = document.querySelector(".panel-footer"), status = $("storageStatus"), version = footer.querySelector(".footer-version");
-    test(contained(status,footer) && (!version || (contained(version,footer) && !overlaps(status,version))), `${label}: 저장 상태가 바닥줄 안에 온전히 표시됨`);
+    // 설정 저장 상태는 패널 바닥줄이 아니라 메뉴 바 오른쪽 끝(app-bar.css)에 있다 — 패널 폭과 상관없이 막대 안에
+    const status = $("storageStatus"), bar = $("appBar");
+    test(!document.querySelector(".panel-footer") && contained(status,bar), `${label}: 저장 상태는 메뉴 바 안에(패널 바닥줄 없음)`);
     test($("panel").scrollWidth <= $("panel").clientWidth+1, `${label}: 패널 가로 넘침 없음`);
   };
   const handle = $("panelResize");

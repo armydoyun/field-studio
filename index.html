@@ -60,6 +60,8 @@
             <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="play">재생</button>
             <button type="button" class="ui-menubar-item" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu="help">도움말</button>
         </nav>
+        <!-- 설정 저장 상태(예전 패널 바닥줄): 명령이 아니라 상태라 메뉴 바 오른쪽 끝에 작게 -->
+        <div class="storage-indicator app-status"><span class="ui-dot ui-dot--success" aria-hidden="true"></span><span id="storageStatus" role="status">설정 저장소 확인 중</span></div>
     </header>
     <div id="workspace">
         <aside id="panel" aria-label="셰이더 설정 패널">
@@ -230,7 +232,6 @@
                 </div>
             </div>
 
-            <footer class="panel-footer"><div class="storage-indicator"><span class="ui-dot ui-dot--success" aria-hidden="true"></span><span id="storageStatus" role="status">설정 저장소 확인 중</span></div></footer>
         </aside>
 
         <div id="panelResize" class="ui-resizer panel-resizer" role="separator" aria-label="설정 패널 너비 조절" aria-orientation="vertical" aria-controls="panel" tabindex="0" aria-valuemin="240" aria-valuemax="560" aria-valuenow="300" title="패널 너비 조절 · ←→"></div>
@@ -262,6 +263,8 @@
                         <section class="project-menu-section studio-projects" aria-labelledby="projectMenuListTitle"><h2 id="projectMenuListTitle">저장한 프로젝트</h2>
                             <div id="studioProjectList" class="studio-project-list" role="list" aria-label="저장한 프로젝트"></div>
                         </section>
+                        <!-- 메뉴 바가 보이면 파일 작업은 메뉴 바의 파일 메뉴에 있다 — 여기서는 그 메뉴로 가는 한 줄만(메뉴 바를 끄거나 분리 창이면 아래 목록이 그대로 보인다) -->
+                        <div class="ui-menu project-file-link"><button id="projectFileMenu" type="button" class="ui-menu-item" title="새 프로젝트 · 파일 열기/내보내기 · HTML · 코드 JSON · 버전 기록은 메뉴 바의 파일 메뉴에"><span>파일 열기 · 내보내기 · 버전 기록</span><kbd>파일 메뉴</kbd></button></div>
                         <!-- 파일 · 기록: 메뉴 항목 -->
                         <div class="ui-menu project-actions" role="group" aria-label="파일 · 기록">
                             <button id="studioReset" type="button" class="ui-menu-item glyph-icon icon-plus" title="기본 장면으로 새 프로젝트 시작"><span>새 프로젝트</span><kbd>기본 장면</kbd></button>
